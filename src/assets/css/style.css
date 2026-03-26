@@ -1,0 +1,142 @@
+/* --- 1. 核心配色方案 (CSS 变量) --- */
+:root {
+  /* 品牌主色 (Vant 绿风格，代表财务健康) */
+  --app-primary: #07c160;
+
+  /* 状态色 (支出/收入) */
+  --app-expense: #ff9900; /* 类似微信支出的金黄色 */
+  --app-income: #07c160; /* 微信绿 */
+
+  /* 背景与中性色 */
+  --app-bg: #f7f8fa; /* 页面全局背景色 */
+  --app-card-bg: #ffffff; /* 卡片背景色 */
+  --app-text-main: #323233; /* 主文字 */
+
+  /* 装饰属性 */
+  --app-radius: 12px; /* 标准圆角 */
+  --app-shadow: 0 4px 16px rgba(0, 0, 0, 0.06); /* 柔和阴影 */
+
+  /* 字体族 (数字推荐用 DIN) */
+  --app-font-number: 'DIN Alternate', 'PingFang SC', -apple-system, sans-serif;
+
+  /* === 全局主题变量 (可动态修改) === */
+  --theme-primary: #07c160;           /* 主题色 - 主品牌色 */
+  --theme-primary-light: #e6f9ed;     /* 主题色浅色背景 */
+  --theme-secondary: #1989fa;         /* 辅助色 - 蓝色系 */
+  --theme-secondary-light: #ecf5fe;   /* 辅助色浅色背景 */
+  --theme-success: #07c160;           /* 成功色 */
+  --theme-warning: #ff976a;           /* 警告色 */
+  --theme-danger: #ee0a24;            /* 危险色 */
+  --theme-info: #969799;              /* 信息色 */
+
+  --theme-bg-primary: #f7f8fa;        /* 主要背景色 */
+  --theme-bg-secondary: #ffffff;      /* 次要背景色/卡片背景 */
+  --theme-bg-tertiary: #f2f3f5;       /* 第三背景色/分割线 */
+
+  --theme-text-primary: #323233;     /* 主要文字 */
+  --theme-text-secondary: #646566;    /* 次要文字 */
+  --theme-text-tertiary: #969799;     /* 提示文字 */
+  --theme-text-placeholder: #c8c9cc;  /* 占位符文字 */
+
+  --theme-border: #ebedf0;            /* 边框颜色 */
+  --theme-border-light: #f7f8fa;     /* 浅边框 */
+}
+
+/* --- 2. 覆盖 Vant 组件的主题色 --- */
+:root {
+  --van-primary-color: var(--theme-primary);
+  --van-success-color: var(--theme-success);
+  --van-warning-color: var(--theme-warning);
+  --van-danger-color: var(--theme-danger);
+  --van-info-color: var(--theme-info);
+
+  --van-nav-bar-title-text-color: var(--theme-text-primary);
+  --van-nav-bar-icon-color: var(--theme-text-primary);
+  --van-nav-bar-text-color: var(--theme-primary);
+
+  --van-tabbar-item-active-color: var(--theme-primary);
+  --van-button-primary-background: var(--theme-primary);
+  --van-button-primary-border-color: var(--theme-primary);
+
+  --van-field-label-color: var(--theme-text-secondary);
+  --van-field-input-text-color: var(--theme-text-primary);
+  --van-field-placeholder-text-color: var(--theme-text-placeholder);
+
+  --van-cell-text-color: var(--theme-text-primary);
+  --van-cell-label-color: var(--theme-text-tertiary);
+  --van-cell-background: var(--theme-bg-secondary);
+  --van-cell-group-background: var(--theme-bg-primary);
+  --van-cell-group-title-color: var(--theme-text-tertiary);
+
+  --van-divider-content-left-color: var(--theme-text-tertiary);
+  --van-divider-content-right-color: var(--theme-text-tertiary);
+
+  --van-switch-on-background: var(--theme-primary);
+
+  --van-tag-default-background: var(--theme-bg-tertiary);
+  --van-tag-default-color: var(--theme-text-secondary);
+}
+
+/* --- 3. 全局基础样式 --- */
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--app-bg);
+  font-family: 'PingFang SC', 'Helvetica Neue', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  color: var(--app-text-main);
+}
+
+/* --- 4. 万能辅助类 (可以直接在 class 中使用) --- */
+
+/* 卡片容器 */
+.app-card {
+  background: var(--theme-bg-secondary);
+  border-radius: var(--app-radius);
+  padding: 16px;
+  margin: 12px;
+  box-shadow: var(--app-shadow);
+}
+
+/* 金额专用字体 */
+.num-font {
+  font-family: var(--app-font-number);
+  font-weight: bold;
+}
+
+/* 支出/收入文字颜色 */
+.text-expense {
+  color: var(--theme-warning) !important;
+}
+.text-income {
+  color: var(--theme-success) !important;
+}
+
+/* 文字颜色类 */
+.text-primary { color: var(--theme-text-primary) !important; }
+.text-secondary { color: var(--theme-text-secondary) !important; }
+.text-tertiary { color: var(--theme-text-tertiary) !important; }
+
+/* 背景类 */
+.bg-primary { background: var(--theme-bg-primary) !important; }
+.bg-secondary { background: var(--theme-bg-secondary) !important; }
+.bg-tertiary { background: var(--theme-bg-tertiary) !important; }
+.bg-theme { background: var(--theme-primary) !important; color: white; }
+
+/* 主题色文字 */
+.text-theme { color: var(--theme-primary) !important; }
+
+/* 页面切换动画 (配合 <transition name="fade">) */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.25s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+/* 隐藏滚动条但保留滚动功能 */
+::-webkit-scrollbar {
+  display: none;
+}
