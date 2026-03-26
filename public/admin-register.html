@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>管理员注册 - 首次设置</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+      max-width: 450px;
+      width: 100%;
+      overflow: hidden;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 30px;
+      text-align: center;
+    }
+
+    .header h1 {
+      font-size: 28px;
+      margin-bottom: 10px;
+    }
+
+    .header p {
+      opacity: 0.9;
+      font-size: 14px;
+    }
+
+    .content {
+      padding: 40px;
+    }
+
+    .form-group {
+      margin-bottom: 25px;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+      color: #2d3748;
+      font-size: 14px;
+    }
+
+    .form-group input {
+      width: 100%;
+      padding: 12px 15px;
+      border: 2px solid #e2e8f0;
+      border-radius: 8px;
+      font-size: 14px;
+      transition: all 0.3s;
+    }
+
+    .form-group input:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .form-group input::placeholder {
+      color: #a0aec0;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 14px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+    }
+
+    .btn:active {
+      transform: translateY(0);
+    }
+
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .info-box {
+      background: #ebf8ff;
+      border-left: 4px solid #4299e1;
+      padding: 15px;
+      margin-bottom: 20px;
+      border-radius: 4px;
+      font-size: 13px;
+      color: #2b6cb0;
+    }
+
+    .info-box strong {
+      display: block;
+      margin-bottom: 5px;
+    }
+
+    .error {
+      background: #fed7d7;
+      color: #c53030;
+      padding: 12px 15px;
+      border-radius: 6px;
+      margin-bottom: 20px;
+      font-size: 14px;
+      display: none;
+    }
+
+    .success {
+      background: #c6f6d5;
+      color: #2f855a;
+      padding: 12px 15px;
+      border-radius: 6px;
+      margin-bottom: 20px;
+      font-size: 14px;
+      display: none;
+    }
+
+    .error.show,
+    .success.show {
+      display: block;
+    }
+
+    .loading {
+      display: none;
+      text-align: center;
+      padding: 20px;
+    }
+
+    .loading.show {
+      display: block;
+    }
+
+    .spinner {
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #667eea;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 15px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .requirements {
+      background: #fff5f5;
+      border-left: 4px solid #fc8181;
+      padding: 12px 15px;
+      margin-bottom: 20px;
+      border-radius: 4px;
+      font-size: 12px;
+      color: #c53030;
+    }
+
+    .requirements ul {
+      margin-left: 20px;
+      margin-top: 5px;
+    }
+
+    .requirements li {
+      margin: 3px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>👨‍💼 管理员注册</h1>
+      <p>首次设置 - 仅限一次</p>
+    </div>
+
+    <div class="content">
+      <div class="info-box">
+        <strong>📌 重要提示</strong>
+        此页面仅在系统首次初始化时可用。注册完成后将无法再次访问。
+      </div>
+
+      <div class="error" id="errorMessage"></div>
+      <div class="success" id="successMessage"></div>
+
+      <form id="registerForm">
+        <div class="form-group">
+          <label for="username">用户名</label>
+          <input
+            type="text"
+            id="username"
+            name="username"
+            placeholder="请输入管理员用户名"
+            required
+            minlength="3"
+            maxlength="20"
+          >
+        </div>
+
+        <div class="form-group">
+          <label for="email">邮箱地址</label>
+          <input
+            type="email"
+            id="email"
+            name="email"
+            placeholder="请输入管理员邮箱"
+            required
+          >
+        </div>
+
+        <div class="form-group">
+          <label for="password">密码</label>
+          <input
+            type="password"
+            id="password"
+            name="password"
+            placeholder="请输入管理员密码"
+            required
+            minlength="6"
+          >
+        </div>
+
+        <div class="form-group">
+          <label for="confirmPassword">确认密码</label>
+          <input
+            type="password"
+            id="confirmPassword"
+            name="confirmPassword"
+            placeholder="请再次输入密码"
+            required
+            minlength="6"
+          >
+        </div>
+
+        <div class="requirements">
+          <strong>🔒 密码要求:</strong>
+          <ul>
+            <li>至少 6 个字符</li>
+            <li>建议包含字母、数字和特殊字符</li>
+            <li>请妥善保管,忘记密码需要重置数据库</li>
+          </ul>
+        </div>
+
+        <button type="submit" class="btn" id="submitBtn">
+          🚀 注册管理员账号
+        </button>
+      </form>
+
+      <div class="loading" id="loading">
+        <div class="spinner"></div>
+        <p>正在注册...</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="/public/admin-register.js"></script>
+</body>
+</html>

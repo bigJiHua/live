@@ -1,0 +1,28 @@
+# 日志文件
+logs/*.log
+
+# 依赖
+node_modules/
+
+# 环境变量
+.env
+
+# 上传文件
+public/uploads/*
+
+# 编辑器
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 操作系统
+.DS_Store
+Thumbs.db
+
+# 测试覆盖率
+coverage/
+
+# 构建输出
+dist/
+build/
