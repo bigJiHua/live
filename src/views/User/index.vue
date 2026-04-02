@@ -5,14 +5,14 @@
         round
         width="64"
         height="64"
-        src="https://fastly.jsdelivr.net/npm/@vant/assets/cat.jpeg"
+        :src="userData.avatar"
         class="profile-avatar"
       />
       <div class="profile-info">
         <div class="nickname-row">
-          <span class="nickname">Gemini 大师</span>
+          <span class="nickname">{{ userData.username }}</span>
         </div>
-        <div class="user-id">账号 ID: 88886666</div>
+        <div class="user-id">邮箱： {{ userData.email }}</div>
       </div>
       <van-icon name="arrow" color="#969799" size="16" />
     </div>
@@ -29,12 +29,7 @@
             />
           </template>
         </van-cell>
-        <van-cell
-          title="PIN 码管理"
-          is-link
-          center
-          @click="goToPinManage"
-        />
+        <van-cell title="PIN 码管理" is-link center @click="goToPinManage" />
       </van-cell-group>
 
       <div class="section-title">系统管理</div>
@@ -46,16 +41,10 @@
           @click="$router.push('/settings')"
         />
         <van-cell
-          title="UI 主题配色"
-          icon="color-o"
+          title="设备信息"
+          icon="phone-o"
           is-link
-          @click="$router.push('/user/theme-settings')"
-        />
-        <van-cell
-          title="修改登录密码"
-          icon="shield-check-o"
-          is-link
-          @click="handleUpdatePassword"
+          @click="$router.push('/user/device-info')"
         />
       </van-cell-group>
     </div>
@@ -69,48 +58,98 @@
 </template>
 
 <script setup>
-import { reactive, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
-import { showConfirmDialog, showToast } from 'vant'
+import { computed, onMounted, reactive } from "vue";
+import { useRouter } from "vue-router";
+import { showConfirmDialog, showToast } from "vant";
+import { useUserStore } from "@/stores/user";
+import { authApi } from "@/utils/api/auth";
+import { securityApi } from "@/utils/api/security";
 
-const router = useRouter()
-const security = reactive({ pinEnabled: false, hasPinSet: false })
+const router = useRouter();
+const userStore = useUserStore();
 
-// 初始化时检查本地存储的 PIN 状态
-onMounted(() => {
-  security.pinEnabled = localStorage.getItem('pin_enabled') === 'true'
-  security.hasPinSet = !!localStorage.getItem('user_pin')
-})
+const security = reactive({ pinEnabled: false, hasPinSet: false });
 
-// 跳转修改密码页面
-const handleUpdatePassword = () => {
-  router.push('/update-password')
-}
+// 检查 PIN 设置状态（后端 + 本地双校验）
+const checkPinStatus = async () => {
+  try {
+    await securityApi.checkPin();
+    // 200 = 已设置 PIN
+    security.hasPinSet = true;
+  } catch (err) {
+    // 400 = 未设置 PIN
+    if (err.response?.status === 400) {
+      security.hasPinSet = false;
+    } else {
+      console.error("检查 PIN 状态失败:", err);
+      // 其他错误降级为本地校验
+      security.hasPinSet = localStorage.getItem("pin_enabled") === "true";
+    }
+  }
+  // 同步本地状态与后端一致
+  localStorage.setItem("pin_enabled", security.hasPinSet ? "true" : "false");
+  security.pinEnabled = security.hasPinSet;
+};
 
-const handleEditProfile = () => {
-  showToast('进入个人资料编辑')
-}
+// 计算属性显示用户信息
+const userData = computed(() => ({
+  username: userStore.username,
+  email: userStore.email,
+  avatar: userStore.actualAvatar,
+}));
 
+// 获取用户信息（优先使用缓存，手动触发或刷新时获取最新数据）
+const getUserInfo = async () => {
+  // 如果不是强制刷新且已有缓存，则跳过
+  if (userStore.hasUserInfo) return;
+
+  try {
+    const res = await authApi.getUserinfo();
+    // 使用后端返回的完整用户数据更新 store
+    userStore.setUserInfo(res.data);
+  } catch (err) {
+    console.error("获取用户信息失败:", err);
+  }
+};
+
+// PIN码开关
 const onPinSwitch = (checked) => {
   if (checked && !security.hasPinSet) {
-    showToast('请先设置 PIN 码')
-    security.pinEnabled = false
+    showToast("请先设置 PIN 码");
+    security.pinEnabled = false;
   } else {
-    localStorage.setItem('pin_enabled', checked ? 'true' : 'false')
+    security.pinEnabled = true;
+    showToast("请到设置PIN码页面修改");
   }
-}
-
+};
+// 跳转个人资料编辑页面
+const handleEditProfile = () => {
+  router.push("/profile-edit");
+};
+// 管理PIN码跳转
 const goToPinManage = () => {
-  router.push('/user/pin-manage')
-}
+  router.push("/user/pin-manage");
+};
+// 退出登录
+const onLogout = async () => {
+  showConfirmDialog({ title: "提醒", message: "确定退出登录？" }).then(
+    async () => {
+      try {
+        await authApi.logout();
+      } catch (err) {
+        console.error("登出请求失败:", err);
+      }
+      userStore.clearUserInfo();
+      router.push("/login");
+      showToast("已安全退出");
+    }
+  );
+};
 
-const onLogout = () => {
-  showConfirmDialog({ title: '提醒', message: '确定退出登录？' }).then(() => {
-    localStorage.removeItem('finance_token')
-    router.push('/login')
-    showToast('已安全退出')
-  })
-}
+onMounted(() => {
+  getUserInfo();
+  checkPinStatus();
+});
 </script>
 
 <style scoped>

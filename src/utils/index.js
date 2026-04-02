@@ -5,13 +5,13 @@
  */
 
 // 认证相关 API
-export * as authApi from './api/auth'
+export * as authApi from './api/v1/auth'
 
 // 安全相关 API (PIN 码管理）
-export * as securityApi from './api/security'
+export * as securityApi from './api/v1/security'
 
 // 账务管理 API (需要 PIN 验证）
-export * as accountApi from './api/account'
+export * as accountApi from './api/v1/account'
 
 // 用户管理 API
-export * as userApi from './api/user'
+export * as userApi from './api/v1/user'

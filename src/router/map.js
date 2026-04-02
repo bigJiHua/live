@@ -3,7 +3,15 @@ const RouterMap = [
   {
     path: '/login',
     name: 'Login',
-    component: () => import('@/views/Login/index.vue'),
+    component: () => import('@/views/Auth/Login.vue'),
+    meta: { title: '登录' }
+  },
+
+  // --- 注册页面 (独立于布局之外，实现全屏展示) ---
+  {
+    path: '/register',
+    name: 'register',
+    component: () => import('@/views/Auth/register.vue'),
     meta: { title: '登录' }
   },
 
@@ -65,10 +73,16 @@ const RouterMap = [
         meta: { title: '设置 PIN 码', hideTabbar: true }
       },
       {
-        path: 'user/theme-settings',
-        name: 'ThemeSettings',
-        component: () => import('../views/User/ThemeSettings.vue'),
-        meta: { title: '主题配色', hideTabbar: true }
+        path: 'user/device-info',
+        name: 'DeviceInfo',
+        component: () => import('../views/User/DeviceInfo.vue'),
+        meta: { title: '设备信息', hideTabbar: true }
+      },
+      {
+        path: 'profile-edit',
+        name: 'ProfileEdit',
+        component: () => import('../views/User/ProfileEdit.vue'),
+        meta: { title: '编辑资料', hideTabbar: true }
       },
     ],
   },

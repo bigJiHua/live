@@ -5,17 +5,17 @@ import request from '@/utils/request'
  *
  * | 方法 | 路径 | 说明 | 中间件 |
  * |------|------|------|--------|
- * | GET | `/api/account/transactions` | 获取账务流水列表 | authGuard + pinLockGuard |
- * | GET | `/api/account/transactions/:id` | 获取账务流水详情 | authGuard + pinLockGuard |
- * | POST | `/api/account/transactions` | 创建账务流水 | authGuard + pinLockGuard |
- * | PUT | `/api/account/transactions/:id` | 更新账务流水 | authGuard + pinLockGuard |
- * | DELETE | `/api/account/transactions/:id` | 删除账务流水 | authGuard + pinLockGuard |
- * | GET | `/api/account/categories` | 获取分类列表 | authGuard + pinLockGuard |
- * | POST | `/api/account/categories` | 创建分类 | authGuard + pinLockGuard |
- * | PUT | `/api/account/categories/:id` | 更新分类 | authGuard + pinLockGuard |
- * | DELETE | `/api/account/categories/:id` | 删除分类 | authGuard + pinLockGuard |
- * | GET | `/api/account/report` | 获取财务报表 | authGuard + pinLockGuard |
- * | POST | `/api/account/calculate-irr` | 计算 IRR | authGuard + pinLockGuard |
+ * | GET | `/api/v1/account/transactions` | 获取账务流水列表 | authGuard + pinLockGuard |
+ * | GET | `/api/v1/account/transactions/:id` | 获取账务流水详情 | authGuard + pinLockGuard |
+ * | POST | `/api/v1/account/transactions` | 创建账务流水 | authGuard + pinLockGuard |
+ * | PUT | `/api/v1/account/transactions/:id` | 更新账务流水 | authGuard + pinLockGuard |
+ * | DELETE | `/api/v1/account/transactions/:id` | 删除账务流水 | authGuard + pinLockGuard |
+ * | GET | `/api/v1/account/categories` | 获取分类列表 | authGuard + pinLockGuard |
+ * | POST | `/api/v1/account/categories` | 创建分类 | authGuard + pinLockGuard |
+ * | PUT | `/api/v1/account/categories/:id` | 更新分类 | authGuard + pinLockGuard |
+ * | DELETE | `/api/v1/account/categories/:id` | 删除分类 | authGuard + pinLockGuard |
+ * | GET | `/api/v1/account/report` | 获取财务报表 | authGuard + pinLockGuard |
+ * | POST | `/api/v1/account/calculate-irr` | 计算 IRR | authGuard + pinLockGuard |
  *
  * **重要**: 所有账务接口都会先检查 PIN 验证状态，如果未验证会返回 423 状态码。
  */

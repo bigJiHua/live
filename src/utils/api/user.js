@@ -5,10 +5,10 @@ import request from '@/utils/request'
  *
  * | 方法 | 路径 | 说明 | 中间件 |
  * |------|------|------|--------|
- * | PUT | `/api/user/profile` | 更新用户资料 | authGuard |
- * | POST | `/api/user/password/change` | 修改密码 | authGuard |
- * | GET | `/api/user/settings` | 获取用户设置 | authGuard |
- * | PUT | `/api/user/settings` | 更新用户设置 | authGuard |
+ * | PUT | `/api/v1/user/profile` | 更新用户资料 | authGuard |
+ * | POST | `/api/v1/user/password/change` | 修改密码 | authGuard |
+ * | GET | `/api/v1/user/settings` | 获取用户设置 | authGuard |
+ * | PUT | `/api/v1/user/settings` | 更新用户设置 | authGuard |
  */
 export const userApi = {
   // 更新用户资料

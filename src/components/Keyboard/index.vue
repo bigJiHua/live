@@ -1,16 +1,11 @@
 <template>
   <div class="safe-keyboard" @selectstart.prevent @click.stop>
     <div class="keyboard-toolbar">
-      <div class="tool-btn close-btn" @click="$emit('confirm')">
-        <svg class="icon-kb-down" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
-          <path d="M896 640H128a32 32 0 0 0 0 64h768a32 32 0 0 0 0-64zM73.376 348.16l406.4 330.24a40 40 0 0 0 50.464 0l420.384-330.24A32 32 0 1 0 910.624 298.24L512 612.16 113.376 298.24a32 32 0 1 0-40 50.016z" fill="currentColor"/>
-        </svg>
-        收起
-      </div>
       <div class="tool-btn mode-toggle" @click="toggleMode">
         <span :class="['status-dot', { 'is-secure': isSecure }]"></span>
-        {{ isSecure ? '安全模式' : '普通模式' }}
+        {{ isSecure ? "安全模式" : "普通模式" }}
       </div>
+      <div class="tool-btn"></div>
     </div>
 
     <div class="keyboard-grid">
@@ -20,7 +15,7 @@
         class="key-item"
         :class="{
           'is-empty': item === '',
-          'is-functional': item === 'del' || item === '.',
+          'is-functional': item === 'del' || item === 'close',
         }"
         @click="handleKeyClick(item)"
       >
@@ -33,7 +28,9 @@
           />
         </template>
         <template v-else-if="item === 'del'">删除</template>
-        <template v-else-if="item === '.'">·</template>
+        <template v-else-if="item === 'close'">
+          <img :src="closeIcon" class="close-icon" alt="收起" />
+        </template>
         <template v-else>{{ item }}</template>
       </div>
     </div>
@@ -41,88 +38,116 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick, watch } from 'vue'
-import JSEncrypt from 'jsencrypt'
+import { ref, onMounted, nextTick } from "vue";
+import JSEncrypt from "jsencrypt";
+import closeIcon from "@/assets/icon/keyboard.svg";
 
 const props = defineProps({
-  publicKey: { type: String, default: '' },
-})
+  publicKey: { type: String, default: "" },
+});
 
-const emit = defineEmits(['input', 'secure-payload', 'confirm'])
+const emit = defineEmits(["input", "secure-payload", "confirm"]);
 
-const uid = Math.random().toString(36).substring(2, 8)
-const isSecure = ref(true) 
-const keyConfig = ref([])
+const uid = Math.random().toString(36).substring(2, 8);
+const isSecure = ref(true);
+const keyConfig = ref([]);
 
-let encryptor = null
+let encryptor = null;
 const getEncryptor = (key) => {
   if (!encryptor && key) {
-    encryptor = new JSEncrypt()
-    encryptor.setPublicKey(key.trim())
+    encryptor = new JSEncrypt();
+    encryptor.setPublicKey(key.trim());
   }
-  return encryptor
-}
+  return encryptor;
+};
 
 /**
  * 核心布局逻辑
- * 保证：最后一行左边是 . 中间是 0 (或随机) 右边是 删除
+ * 保证：最后一行左边是收起 中间是 0 (或随机) 右边是 删除
  */
 const initLayout = () => {
-  const nums = [1, 2, 3, 4, 5, 6, 7, 8, 9]
-  
+  const nums = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+
   if (isSecure.value) {
     // 安全模式：打乱 1-9
-    const shuffled9 = [...nums].sort(() => Math.random() - 0.5)
-    // 布局：[shuffled 1-9] + [.] + [0] + [删除]
-    keyConfig.value = [...shuffled9, '.', 0, 'del']
+    const shuffled9 = [...nums].sort(() => Math.random() - 0.5);
+    // 布局：[shuffled 1-9] + [收起] + [0] + [删除]
+    keyConfig.value = [...shuffled9, "close", 0, "del"];
   } else {
-    // 普通模式：[1-9 顺序] + [.] + [0] + [删除]
-    keyConfig.value = [...nums, '.', 0, 'del']
+    // 普通模式：[1-9 顺序] + [收起] + [0] + [删除]
+    keyConfig.value = [...nums, "close", 0, "del"];
   }
 
-  nextTick(drawKeys)
-}
+  nextTick(drawKeys);
+};
 
 const drawKeys = () => {
-  keyConfig.value.forEach((val, idx) => {
-    if (typeof val !== 'number') return
-    const canvas = document.getElementById(`canvas-${uid}-${idx}`)
-    if (!canvas) return
-    const ctx = canvas.getContext('2d')
-    ctx.clearRect(0, 0, 40, 40)
-    ctx.font = 'bold 22px sans-serif'
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.fillStyle = '#111'
+  // 获取设备像素比（核心！解决模糊）
+  const dpr = window.devicePixelRatio || 1;
 
-    const offset = isSecure.value ? 1.5 : 0
-    const ox = (Math.random() - 0.5) * offset
-    const oy = (Math.random() - 0.5) * offset
-    ctx.fillText(val, 20 + ox, 20 + oy)
-  })
-}
+  keyConfig.value.forEach((val, idx) => {
+    if (typeof val !== "number") return;
+    const canvas = document.getElementById(`canvas-${uid}-${idx}`);
+    if (!canvas) return;
+
+    // 关键：按高清屏放大画布尺寸
+    const w = 40;
+    const h = 40;
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    canvas.style.width = w + "px";
+    canvas.style.height = h + "px";
+
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // 缩放上下文，适配高清
+    ctx.scale(dpr, dpr);
+
+    // 字体、位置不变
+    ctx.font =
+      'bold 26px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "#111";
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+
+    if (isSecure.value) {
+      const ox = (Math.random() - 0.5) * 1.5;
+      const oy = (Math.random() - 0.5) * 1.5;
+      ctx.fillText(val, 20 + ox, 20 + oy);
+    } else {
+      ctx.fillText(val, 20, 20);
+    }
+  });
+};
 
 const toggleMode = () => {
-  isSecure.value = !isSecure.value
-  initLayout()
-}
+  isSecure.value = !isSecure.value;
+  initLayout();
+};
 
 const handleKeyClick = (val) => {
-  if (val === '') return
-  emit('input', val)
-
-  if (props.publicKey && typeof val === 'number') {
-    Promise.resolve().then(() => {
-      const crypt = getEncryptor(props.publicKey)
-      if (crypt) {
-        const encrypted = crypt.encrypt(val.toString())
-        emit('secure-payload', encrypted)
-      }
-    })
+  if (val === "") return;
+  if (val === "close") {
+    emit("confirm");
+    return;
   }
-}
+  emit("input", val);
 
-onMounted(initLayout)
+  if (props.publicKey && typeof val === "number") {
+    Promise.resolve().then(() => {
+      const crypt = getEncryptor(props.publicKey);
+      if (crypt) {
+        const encrypted = crypt.encrypt(val.toString());
+        emit("secure-payload", encrypted);
+      }
+    });
+  }
+};
+
+onMounted(initLayout);
 </script>
 
 <style scoped>
@@ -148,12 +173,6 @@ onMounted(initLayout)
   display: flex;
   align-items: center;
   gap: 4px;
-}
-
-.icon-kb-down {
-  width: 18px;
-  height: 18px;
-  color: #666;
 }
 
 .mode-toggle {
@@ -208,5 +227,10 @@ onMounted(initLayout)
 
 .key-canvas {
   pointer-events: none;
+}
+
+.close-icon {
+  width: 50px;
+  height: 38px;
 }
 </style>

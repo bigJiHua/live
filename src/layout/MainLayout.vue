@@ -60,6 +60,8 @@ const pageTitle = computed(() => {
     "/user/pin-setup":
       route.query.mode === "modify" ? "修改 PIN 码" : "设置 PIN 码",
     "/user/theme-settings": "主题配色",
+    "/user/device-info": "设备信息",
+    "/profile-edit": "编辑资料",
   };
   return map[route.path] || "人生记录";
 });
@@ -122,7 +124,7 @@ const onBack = () => {
 
   /* ———— 阴影与边框，增加精致感和悬浮感 ———— */
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
-  border: 1px solid rgba(128, 128, 128, 0.696); /* 超细的高亮边框 */
+  border: 1px solid rgba(182, 182, 182, 0.696); /* 超细的高亮边框 */
 }
 
 /* 5. 导航项 (nav-item) 样式 */
