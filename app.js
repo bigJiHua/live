@@ -12,7 +12,12 @@ const path = require("path");
 const app = express();
 
 // --- 中间件层 ---
-app.use(helmet()); // 安全头
+// 安全头
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+  })
+);
 const allowedOrigin = [
   "http://192.168.0.103:5173",
   "http://192.168.0.103:3000",

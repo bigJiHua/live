@@ -30,7 +30,7 @@ router.post(
   createValidator(AuthRules.changePin),
   securityController.changePin
 );
-
+// 【未启用】
 // 重置 PIN
 router.post(
   "/pin/reset",
