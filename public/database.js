@@ -49,7 +49,7 @@ function setupTableActions() {
 // 加载表列表
 async function loadTables() {
   try {
-    const response = await fetch('/api/v1/database/tables');
+    const response = await fetch('/api/database/tables');
     const data = await response.json();
 
     const tableList = document.getElementById('tableList');
@@ -95,7 +95,7 @@ async function selectTable(tableName, element) {
 // 加载表结构
 async function loadTableStructure(tableName) {
   try {
-    const response = await fetch('/api/v1/database/table/' + tableName + '/structure');
+    const response = await fetch('/api/database/table/' + tableName + '/structure');
     const data = await response.json();
 
     const content = document.getElementById('structureContent');
@@ -120,7 +120,7 @@ async function loadTableStructure(tableName) {
 
     // 获取创建语句
     try {
-      const createRes = await fetch('/api/v1/database/table/' + tableName + '/show-create');
+      const createRes = await fetch('/api/database/table/' + tableName + '/show-create');
       const createData = await createRes.json();
       html += '<h3 style="margin-top: 20px;">📝 创建语句</h3>';
       html += '<div class="code-block"><pre>' + escapeHtml(createData.createStatement) + '</pre></div>';
@@ -140,7 +140,7 @@ async function loadTableData(tableName, page) {
   if (!page) page = 1;
 
   try {
-    const response = await fetch('/api/v1/database/table/' + tableName + '/data?page=' + page + '&limit=50');
+    const response = await fetch('/api/database/table/' + tableName + '/data?page=' + page + '&limit=50');
     const data = await response.json();
 
     const content = document.getElementById('dataContent');
@@ -239,7 +239,7 @@ function confirmAndDropTable() {
 // 清空表数据
 async function truncateTable(tableName) {
   try {
-    const response = await fetch('/api/v1/database/table/' + tableName + '/data', {
+    const response = await fetch('/api/database/table/' + tableName + '/data', {
       method: 'DELETE'
     });
 
@@ -260,7 +260,7 @@ async function truncateTable(tableName) {
 // 删除表
 async function dropTable(tableName) {
   try {
-    const response = await fetch('/api/v1/database/table/' + tableName, {
+    const response = await fetch('/api/database/table/' + tableName, {
       method: 'DELETE'
     });
 
@@ -322,7 +322,7 @@ async function executeSQLInternal(sql) {
   resultContent.innerHTML = '<div class="loading">执行中...</div>';
 
   try {
-    const response = await fetch('/api/v1/database/execute', {
+    const response = await fetch('/api/database/execute', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'

@@ -1,18 +1,42 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const securityController = require('../controllers/securityController');
-const authGuard = require('../middlewares/authGuard');
+const securityController = require("../controllers/securityController");
+const authGuard = require("../middlewares/authGuard");
+const createValidator = require("../middlewares/validate");
+const AuthRules = require("../Rules/auth");
 
-// 验证 PIN 码
-router.post('/pin/verify', authGuard, securityController.verifyPin);
+// 获取 PIN状态
+router.get("/pin/check", authGuard, securityController.PinStatus);
+// 验证 PIN
+router.post(
+  "/pin/verify",
+  authGuard,
+  createValidator(AuthRules.verifyPin),
+  securityController.verifyPin
+);
 
-// 设置 PIN 码
-router.post('/pin/set', authGuard, securityController.setPin);
+// 设置 PIN
+router.post(
+  "/pin/set",
+  authGuard,
+  createValidator(AuthRules.setPin),
+  securityController.setPin
+);
 
-// 修改 PIN 码
-router.post('/pin/change', authGuard, securityController.changePin);
+// 修改 PIN
+router.post(
+  "/pin/change",
+  authGuard,
+  createValidator(AuthRules.changePin),
+  securityController.changePin
+);
 
-// 重置 PIN 码 (需要邮箱验证)
-router.post('/pin/reset', securityController.resetPin);
+// 重置 PIN
+router.post(
+  "/pin/reset",
+  authGuard,
+  createValidator(AuthRules.resetPin),
+  securityController.resetPin
+);
 
 module.exports = router;

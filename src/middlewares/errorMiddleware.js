@@ -25,7 +25,7 @@ function errorHandler(err, req, res, next) {
 function notFoundHandler(req, res) {
   res.status(404).json({
     code: 404,
-    message: `接口不存在: ${req.method} ${req.path}`
+    message: `非法访问: ${req.method} ${req.path}！`
   });
 }
 

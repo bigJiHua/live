@@ -1,7 +1,7 @@
 // 检查是否已有管理员
 async function checkAdminExists() {
   try {
-    const response = await fetch('/api/v1/auth/check-admin');
+    const response = await fetch('/api/auth/check-admin');
     const result = await response.json();
 
     if (result.hasAdmin) {
@@ -15,7 +15,7 @@ async function checkAdminExists() {
           <div class="info-box" style="background: #fed7d7; border-color: #fc8181; color: #c53030;">
             <strong>❌ 系统已存在管理员账号</strong>
             <p style="margin-top: 10px;">管理员注册页面仅在系统首次初始化时可用。</p>
-            <p style="margin-top: 10px;">请使用已有账号 <a href="/public/database.html" style="color: #667eea;">登录系统</a></p>
+            <p style="margin-top: 10px;">请使用已有账号 <a href="/api/public/database.html" style="color: #667eea;">登录系统</a></p>
           </div>
         </div>
       `;
@@ -62,7 +62,7 @@ async function handleSubmit(event) {
   hideSuccess();
 
   try {
-    const response = await fetch('/api/v1/auth/admin-register', {
+    const response = await fetch('/api/auth/admin-register', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -84,7 +84,7 @@ async function handleSubmit(event) {
 
       // 3秒后跳转
       setTimeout(() => {
-        window.location.href = '/public/database.html';
+        window.location.href = '/api/public/database.html';
       }, 3000);
     } else {
       // 注册失败
