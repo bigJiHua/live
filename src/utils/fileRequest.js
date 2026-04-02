@@ -3,20 +3,15 @@ import { showToast, showSuccessToast, showFailToast } from "vant";
 import { UAParser } from "ua-parser-js";
 import { generateBrowserFingerprint } from "./device-hash";
 import { getFullNetworkInfo } from "./network";
-import { aesUtil } from "./aes";
 import router from "@/router";
 
 const baseUrl = "/api/v1";
-const TIMEOUT = 15000;
+const TIMEOUT = 60000; // 文件上传超时时间设置为 60s
 
 const clientContext = {
   data: null,
   initPromise: null,
 };
-
-// 握手状态控制
-let sessionAesKey = null;
-let handshakePromise = null;
 
 async function getClientFullData() {
   if (clientContext.data) return clientContext.data;
@@ -30,9 +25,7 @@ async function getClientFullData() {
 
       clientContext.data = {
         login_ip: net.external?.ip || "unknown",
-        login_location: `${net.external?.country || ""}-${
-          net.external?.region || ""
-        }-${net.external?.city || ""}`,
+        login_location: `${net.external?.country || ""}-${net.external?.region || ""}-${net.external?.city || ""}`,
         login_isp: net.external?.isp || "",
         user_agent: ua.ua,
         os_info: `${ua.os.name} ${ua.os.version}`,
@@ -54,95 +47,35 @@ async function getClientFullData() {
   return clientContext.initPromise;
 }
 
-// 核心：单例握手逻辑，防止并发冲突
-async function doHandshake(fp, deviceData) {
-  if (handshakePromise) return handshakePromise;
-
-  handshakePromise = (async () => {
-    try {
-      const now = Date.now();
-      const hRes = await axios.get(`${baseUrl}/auth/handshake`, {
-        params: { fp },
-        headers: {
-          "X-Requested-With": "XMLHttpRequest",
-          "x-client-timestamp": now,
-          "x-fingerprint-hash": fp,
-          "x-user-agent-custom": deviceData.user_agent,
-          "x-device-model": deviceData.device_model,
-          "x-os-name": deviceData.os_info,
-          "x-device-type": deviceData.device_type,
-        },
-      });
-
-      if (hRes.data.status === 200) {
-        const newKey = hRes.data.key;
-        sessionStorage.setItem(`aes_${fp}`, newKey);
-        sessionAesKey = newKey;
-        return newKey;
-      }
-      throw new Error("Handshake Failed");
-    } finally {
-      handshakePromise = null; // 请求结束，清空锁
-    }
-  })();
-  return handshakePromise;
-}
-
-const request = axios.create({
+const requestfile = axios.create({
   baseURL: baseUrl,
   withCredentials: true,
   timeout: TIMEOUT,
 });
 
-request.interceptors.request.use(
+requestfile.interceptors.request.use(
   async (config) => {
     const deviceData = await getClientFullData();
-    const fp = deviceData.fingerprint;
 
     // 1. 注入安检 Headers
     config.headers["X-Requested-With"] = "XMLHttpRequest";
     config.headers["x-client-timestamp"] = Date.now();
-    config.headers["x-fingerprint-hash"] = fp;
+    config.headers["x-fingerprint-hash"] = deviceData.fingerprint;
     config.headers["x-user-agent-custom"] = deviceData.user_agent;
     config.headers["x-device-model"] = deviceData.device_model;
     config.headers["x-os-name"] = deviceData.os_info;
     config.headers["x-device-type"] = deviceData.device_type;
 
+    // 2. 注入 Token
     const token = localStorage.getItem("finance_token");
     if (token) config.headers["Authorization"] = `Bearer ${token}`;
 
-    if (config.url.includes("/auth/handshake")) return config;
-
-    // 2. 加密写操作
-    const isWrite = ["post", "put", "delete"].includes(
-      config.method?.toLowerCase()
-    );
-    if (isWrite) {
-      const rawData = {
-        ...deviceData,
-        data: config.data,
-        path: window.location.pathname,
-      };
-
-      // 自动维护 AES Key
-      if (!sessionAesKey) sessionAesKey = sessionStorage.getItem(`aes_${fp}`);
-      if (!sessionAesKey) {
-        sessionAesKey = await doHandshake(fp, deviceData);
-      }
-
-      if (sessionAesKey) {
-        config.data = {
-          _p: aesUtil.encrypt(JSON.stringify(rawData), sessionAesKey),
-        };
-        config.headers["X-FP-ID"] = fp;
-      }
-    }
     return config;
   },
   (error) => Promise.reject(error)
 );
 
-request.interceptors.response.use(
+requestfile.interceptors.response.use(
   (response) => {
     const res = response.data || {};
     // 如果有 ismessage 字段且为 true，不显示任何 toast
@@ -150,13 +83,6 @@ request.interceptors.response.use(
       return res;
     }
     if (res.status === 200 || res.success) {
-      if (
-        ["post", "put", "delete"].includes(
-          response.config.method?.toLowerCase()
-        )
-      ) {
-        showSuccessToast(res.message || "成功");
-      }
       return res;
     }
     showToast({
@@ -177,7 +103,7 @@ request.interceptors.response.use(
         message: "非法闯入",
         position: "top",
       });
-      sessionStorage.clear(); // 清理旧 Key
+      sessionStorage.clear();
       localStorage.removeItem("finance_token");
       router.push("/login");
     } else {
@@ -187,4 +113,4 @@ request.interceptors.response.use(
   }
 );
 
-export default request;
+export default requestfile;

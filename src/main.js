@@ -22,6 +22,10 @@ app.use(pinia);
 app.use(router);
 app.use(Vant);
 
+// 4. 初始化路由守卫（需在 router 初始化之后）
+import { setupRouterGuard } from "./router/middleware";
+setupRouterGuard();
+
 // 3. 注册 Lazyload 插件
 app.use(Lazyload, {
   loading: 'https://fastly.jsdelivr.net/npm/@vant/assets/icon-demo.png',

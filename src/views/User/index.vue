@@ -41,6 +41,12 @@
           @click="$router.push('/settings')"
         />
         <van-cell
+          title="文件资源管理"
+          icon="photograph"
+          is-link
+          @click="$router.push('/user/resource-manage')"
+        />
+        <van-cell
           title="设备信息"
           icon="phone-o"
           is-link

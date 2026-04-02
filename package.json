@@ -9,10 +9,12 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@amap/amap-jsapi-loader": "^1.0.1",
     "axios": "^1.13.6",
     "crypto-js": "^4.2.0",
     "jsencrypt": "^3.5.4",
     "jwt-decode": "^4.0.0",
+    "leaflet": "^1.9.4",
     "pinia": "^3.0.4",
     "ua-parser-js": "^2.0.9",
     "vant": "^4.9.22",
@@ -20,6 +22,7 @@
     "vue-router": "^5.0.4"
   },
   "devDependencies": {
+    "@types/leaflet": "^1.9.21",
     "@vitejs/plugin-vue": "^6.0.5",
     "vite": "^8.0.1"
   }

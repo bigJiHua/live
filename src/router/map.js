@@ -53,6 +53,12 @@ const RouterMap = [
         component: () => import('../views/Diary/Add.vue'),
         meta: { title: '发布动态', hideTabbar: true }
       },
+      {
+        path: 'diary/detail',
+        name: 'DiaryDetail',
+        component: () => import('../views/Diary/Detail.vue'),
+        meta: { title: '动态详情', hideTabbar: true }
+      },
       // 个人中心
       {
         path: 'user',
@@ -77,6 +83,18 @@ const RouterMap = [
         name: 'DeviceInfo',
         component: () => import('../views/User/DeviceInfo.vue'),
         meta: { title: '设备信息', hideTabbar: true }
+      },
+      {
+        path: 'user/resource-manage',
+        name: 'ResourceManage',
+        component: () => import('../views/User/ResourceManage.vue'),
+        meta: { title: '文件资源管理', hideTabbar: true }
+      },
+      {
+        path: 'user/resource-list',
+        name: 'ResourceList',
+        component: () => import('../views/User/ResourceList.vue'),
+        meta: { title: '资源列表', hideTabbar: true }
       },
       {
         path: 'profile-edit',

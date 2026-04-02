@@ -47,23 +47,20 @@ import { useRoute, useRouter } from "vue-router";
 const route = useRoute();
 const router = useRouter();
 
-// 映射路由标题 (保持原样)
+// 映射路由标题 - 优先从 meta.title 获取
 const pageTitle = computed(() => {
-  const map = {
-    "/home": "仪表盘",
-    "/finance": "记账本",
-    "/finance/add": "新增记录",
-    "/diary": "生活动态",
-    "/diary/add": "发布动态",
-    "/user": "个人中心",
-    "/user/pin-manage": "PIN 码管理",
-    "/user/pin-setup":
-      route.query.mode === "modify" ? "修改 PIN 码" : "设置 PIN 码",
-    "/user/theme-settings": "主题配色",
-    "/user/device-info": "设备信息",
-    "/profile-edit": "编辑资料",
-  };
-  return map[route.path] || "人生记录";
+  // 特殊处理：PIN 码设置页面根据 mode 动态显示
+  if (route.path === "/user/pin-setup") {
+    return route.query.mode === "modify" ? "修改 PIN 码" : "设置 PIN 码";
+  }
+
+  // 从路由 meta.title 获取标题
+  if (route.meta?.title) {
+    return route.meta.title;
+  }
+
+  // 默认标题
+  return "人生记录";
 });
 
 // 判断是否显示返回键 (保持原样)

@@ -1,7 +1,18 @@
 <template>
   <div class="page-diary">
     <van-pull-refresh v-model="refreshing" @refresh="onRefresh">
-      <div class="waterfall-container">
+      <!-- 加载中 -->
+      <van-loading v-if="loading && !refreshing" class="loading-center" />
+
+      <!-- 空状态 -->
+      <van-empty
+        v-else-if="!loading && diaryList.length === 0"
+        description="还没有动态，快来发布第一条吧"
+        image="search"
+      />
+
+      <!-- 瀑布流列表 -->
+      <div v-else class="waterfall-container">
         <div class="waterfall-column">
           <DiaryCard v-for="item in leftList" :key="item.id" :data="item" />
         </div>
@@ -9,7 +20,14 @@
           <DiaryCard v-for="item in rightList" :key="item.id" :data="item" />
         </div>
       </div>
-      
+
+      <!-- 加载更多 -->
+      <div class="load-more">
+        <van-loading v-if="loadingMore">加载中...</van-loading>
+        <span v-else-if="noMore">没有更多了</span>
+        <span v-else @click="loadMore">加载更多</span>
+      </div>
+
       <van-back-top bottom="100px" />
       <div style="height: 100px"></div>
     </van-pull-refresh>
@@ -21,76 +39,115 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import DiaryCard from '../../components/Diary/DiaryCard.vue' // 抽离组件保持代码整洁
+import { ref, computed, onMounted } from 'vue'
+import { showToast } from 'vant'
+import DiaryCard from '@/components/Diary/DiaryCard.vue'
+import { momentApi } from '@/utils/api/moment'
 
 const refreshing = ref(false)
-const leftList = ref([])
-const rightList = ref([])
+const loading = ref(false)
+const diaryList = ref([])
 
-// 模拟数据 (包含大纲要求的：评分、追文、图文、定位)
-const mockData = [
-  {
-    id: 1,
-    author: { name: 'Gemini', avatar: 'https://fastly.jsdelivr.net/npm/@vant/assets/cat.jpeg' },
-    content: '今天把系统架构调整成了瀑布流模式。这种错落有致的感觉真不错！✨',
-    image: 'https://fastly.jsdelivr.net/npm/@vant/assets/apple-1.jpeg',
-    time: '14:20',
-    date: '03-24',
-    location: '新宿区',
-    star: 5,
-    comments: 2, // 追文数量
-    lastComment: '架构调整后顺滑多了！' // 最新追文预览
-  },
-  {
-    id: 2,
-    author: { name: 'Gemini', avatar: 'https://fastly.jsdelivr.net/npm/@vant/assets/cat.jpeg' },
-    content: '纯文字测试。记录一下今天的心情，由于理财收益达标，压力值减小。五星好评的一天！',
-    image: '',
-    time: '10:00',
-    date: '03-24',
-    location: '涩谷',
-    star: 4,
-    comments: 0
-  },
-  {
-    id: 3,
-    author: { name: 'Gemini', avatar: 'https://fastly.jsdelivr.net/npm/@vant/assets/cat.jpeg' },
-    content: '晚餐打卡。这家的猪脚饭虽然贵，但是工作成本核算下来还能接受。',
-    image: 'https://fastly.jsdelivr.net/npm/@vant/assets/apple-2.jpeg',
-    time: '20:15',
-    date: '03-23',
-    location: '银座',
-    star: 3,
-    comments: 1,
-    lastComment: '下次去试试隔壁那家。'
+// 分页
+const currentPage = ref(1);
+const pageSize = ref(10);
+const total = ref(0);
+const totalPages = ref(0);
+const loadingMore = ref(false);
+const noMore = computed(() => diaryList.value.length >= total.value);
+
+// 基础 URL
+const BASE_URL = "http://192.168.0.103:3001/api/public";
+const getFullUrl = (path) => {
+  if (!path) return "";
+  if (path.startsWith("http")) return path;
+  return BASE_URL + path;
+};
+
+// 处理图片 URL
+const processImageUrl = (item) => {
+  if (item.img_url && Array.isArray(item.img_url)) {
+    item.img_url = item.img_url.map((img) => ({
+      url: getFullUrl(img.url || img),
+      thumbnail: getFullUrl(img.thumbnail || img.url || img),
+    }));
   }
-]
+  return item;
+};
 
-// 简单的瀑布流分流算法
-const initWaterfall = (data) => {
-  data.forEach((item, index) => {
-    if (index % 2 === 0) leftList.value.push(item)
-    else rightList.value.push(item)
-  })
-}
+// 加载动态列表
+const loadList = async (append = false) => {
+  if (append) {
+    loadingMore.value = true;
+  } else {
+    loading.value = true;
+    currentPage.value = 1;
+  }
 
-const onRefresh = () => {
-  setTimeout(() => {
-    refreshing.value = false
-  }, 1000)
-}
+  try {
+    const res = await momentApi.list({
+      page: currentPage.value,
+      pageSize: pageSize.value,
+    });
+
+    const list = res.data?.list || res.data || [];
+
+    // 更新分页信息
+    if (res.data?.total !== undefined) {
+      total.value = res.data.total;
+      totalPages.value = res.data.totalPages || Math.ceil(res.data.total / pageSize.value);
+    }
+
+    if (append) {
+      diaryList.value = [...diaryList.value, ...list.map(processImageUrl)];
+    } else {
+      diaryList.value = list.map(processImageUrl);
+    }
+  } catch (err) {
+    console.error("加载动态列表失败:", err);
+    showToast("加载失败");
+  } finally {
+    loading.value = false;
+    loadingMore.value = false;
+  }
+};
+
+// 加载更多
+const loadMore = () => {
+  if (noMore.value || loadingMore.value) return;
+  currentPage.value++;
+  loadList(true);
+};
+
+// 瀑布流分流
+const leftList = computed(() => diaryList.value.filter((_, i) => i % 2 === 0));
+const rightList = computed(() => diaryList.value.filter((_, i) => i % 2 === 1));
+
+// 下拉刷新
+const onRefresh = async () => {
+  try {
+    await loadList(false);
+  } finally {
+    refreshing.value = false;
+  }
+};
 
 onMounted(() => {
-  initWaterfall(mockData)
-})
+  loadList(false);
+});
 </script>
 
 <style scoped>
 .page-diary {
   padding: 8px;
-  background-color: #f4f4f4;
+  background-color: #f4f4f5;
   min-height: 100vh;
+}
+
+.loading-center {
+  display: flex;
+  justify-content: center;
+  padding: 60px 0;
 }
 
 .waterfall-container {
@@ -104,6 +161,14 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+/* 加载更多 */
+.load-more {
+  text-align: center;
+  padding: 16px;
+  color: #969799;
+  font-size: 13px;
 }
 
 /* 悬浮按钮保持原样 */
