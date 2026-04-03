@@ -1,13 +1,6 @@
 # 控制器层 (Controllers)
 
-控制器层负责处理业务逻辑,接收请求参数,调用服务和模型层,并返回响应结果。
-
-## 设计原则
-
-1. **请求处理**: 处理 HTTP 请求,提取和验证参数
-2. **业务协调**: 协调服务层和模型层的调用
-3. **响应格式化**: 将处理结果格式化为统一的 JSON 响应
-4. **错误处理**: 捕获并处理异常,返回友好的错误信息
+控制器层负责处理业务逻辑，接收请求参数，调用服务和模型层，并返回响应结果。
 
 ## 文件说明
 
@@ -18,37 +11,13 @@
 
 **主要方法:**
 - `register()` - 用户注册
-  - 检查邮箱是否已存在
-  - 加密密码 (bcrypt)
-  - 创建用户记录
-  - 发送验证邮件
-
 - `login()` - 用户登录
-  - 验证邮箱和密码
-  - 生成 JWT Token
-  - 返回用户信息和 Token
-
 - `getCurrentUser()` - 获取当前用户信息
 - `refreshToken()` - 刷新 Token
 - `updateProfile()` - 更新用户资料
 - `changePassword()` - 修改密码
 - `getSettings()` - 获取用户设置
 - `updateSettings()` - 更新用户设置
-
-**使用示例:**
-```javascript
-// 在路由中使用
-router.post('/login', authController.login);
-
-// 控制器内部示例
-async login(req, res) {
-  const { email, password } = req.body;
-  const user = await User.findByEmail(email);
-  const isValid = await bcrypt.compare(password, user.password);
-  const token = jwt.sign({ userId: user.id }, secret);
-  res.json({ token, user });
-}
-```
 
 ---
 
@@ -70,17 +39,6 @@ async login(req, res) {
 - `getFinanceReport()` - 获取财务报表
 - `calculateIRR()` - 计算投资回报率 (IRR)
 
-**使用示例:**
-```javascript
-// 获取账务流水 (支持分页和过滤)
-GET /api/account/transactions?page=1&limit=20&type=income&categoryId=1
-
-// 计算投资回报率
-POST /api/account/calculate-irr
-Body: { cashFlows: [-10000, 3000, 4000, 5000, 6000] }
-Response: { irr: 12.5, message: "内部收益率为 12.50%" }
-```
-
 ---
 
 ### securityController.js
@@ -90,100 +48,76 @@ Response: { irr: 12.5, message: "内部收益率为 12.50%" }
 
 **主要方法:**
 - `verifyPin()` - 验证 PIN 码
-  - 验证 PIN 码是否正确
-  - 标记会话已通过验证
-
 - `setPin()` - 设置 PIN 码
-  - 验证 PIN 格式 (6位数字)
-  - 确认两次输入一致
-  - 加密并存储
-
 - `changePin()` - 修改 PIN 码
-  - 验证旧 PIN 码
-  - 验证新 PIN 格式
-  - 更新 PIN 码
-
 - `resetPin()` - 重置 PIN 码
-  - 验证邮箱验证码
-  - 重置为新的 PIN 码
-
 - `sendVerificationCode()` - 发送验证码 (邮箱验证)
 
-**使用示例:**
-```javascript
-// 设置 PIN 码
-POST /api/security/pin/set
-Headers: { Authorization: "Bearer <token>" }
-Body: { pin: "123456", confirmPassword: "123456" }
-Response: { message: "PIN 码设置成功", hasPin: true }
+---
 
-// 验证 PIN 码
-POST /api/security/pin/verify
-Headers: { Authorization: "Bearer <token>" }
-Body: { pin: "123456" }
-Response: { message: "PIN 码验证成功", verified: true }
-```
+### momentController.js
+**动态(朋友圈)控制器**
+
+处理动态发布、查询、编辑、删除等业务逻辑。
+
+**主要方法:**
+- `create()` - 发布动态（自动聚合到当日主动态）
+- `list()` - 获取动态列表（content 截取前20字符作为标题）
+- `today()` - 获取今日动态（含子动态详情）
+- `detail()` - 获取动态详情
+- `batchDetail()` - 批量获取子动态详情
+- `update()` - 更新动态
+- `delete()` - 删除动态
+
+**父子动态模型:**
+- 主动态：每日的首条动态，`parent_id = id`
+- 子动态：当日后续动态，`parent_id` 指向主动态 ID
+- 列表接口返回 `children` 为 ID 数组
+
+---
+
+### uploadController.js
+**文件上传控制器**
+
+处理文件上传、管理、搜索等业务逻辑。
+
+**主要方法:**
+- `upload()` - 单文件上传（图片自动压缩为 WebP，SVG 除外）
+- `uploadMultiple()` - 多文件上传
+- `list()` - 查询附件列表
+- `search()` - 搜索附件（按类型和关键词）
+- `edit()` - 编辑附件（remark 和 tags）
+- `batchDelete()` - 批量删除附件（检查是否被 moment 引用）
+
+**文件分类:**
+| busType | 说明 |
+|---------|------|
+| `post` | 动态图片 |
+| `product` | 资产图片 |
+| `bank` | 银行 Icon |
+| `other` | 其他资源 |
+
+**存储规则:**
+- 文件名：统一生成 `时间戳_随机8位.webp`
+- 路径：`{busType}/{year}/{month}/{day}/{filename}`
+- 图片自动压缩为 WebP（质量 50%）
+- 图片自动生成缩略图（质量 30%，最大 200x200）
+- SVG 不转换格式，保留原样
+
+**校验规则:**
+- remark 最大 50 字符
+- tags 总长度不超过 100 字符
+
+---
 
 ## 统一响应格式
 
-所有控制器都遵循统一的响应格式:
-
-### 成功响应
 ```javascript
-{
-  message: "操作成功",
-  data: { ... }  // 可选
-}
-```
+// 成功响应
+{ status: 200, message: "操作成功", data: {...} }
 
-### 错误响应
-```javascript
-{
-  message: "错误描述",
-  error: "详细错误信息 (开发环境)"
-}
-```
-
-### 分页响应
-```javascript
-{
-  data: [...],
-  pagination: {
-    page: 1,
-    limit: 20,
-    total: 100,
-    totalPages: 5
-  }
-}
-```
-
-## 错误处理
-
-控制器使用 try-catch 捕获异常:
-
-```javascript
-async method(req, res) {
-  try {
-    // 业务逻辑
-    res.json({ message: "成功", data: result });
-  } catch (error) {
-    console.error('操作错误:', error);
-    res.status(500).json({
-      message: '操作失败',
-      error: error.message
-    });
-  }
-}
-```
-
-## 访问用户信息
-
-在需要认证的路由中,可以通过 `authGuard` 中间件获取用户信息:
-
-```javascript
-// authGuard 中间件会将用户信息添加到请求对象
-req.userId  // 用户 ID
-req.userEmail  // 用户邮箱
+// 错误响应
+{ status: 400/500, message: "错误描述" }
 ```
 
 ## 与其他层的关系

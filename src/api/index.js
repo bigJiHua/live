@@ -13,14 +13,12 @@ const userRouter = require("./user");
 const databaseRouter = require("./database");
 const uploadRouter = require("./upload");
 const momentRouter = require("./moment");
-const authGuard = require("../middlewares/authGuard");
 
 // 注册子路由
-
 router.use("/auth", authRouter); // 【已启用】
 router.use("/security", securityRouter); // 【已启用】
 router.use("/account", accountRouter);
-router.use("/user", authGuard, userRouter); // 【已启用】
+router.use("/user", userRouter); // 【已启用】
 router.use("/database", databaseRouter); // 【已启用】
 router.use("/upload", uploadRouter); // 【已启用】文件上传
 router.use("/moment", momentRouter); // 【已启用】动态/日记

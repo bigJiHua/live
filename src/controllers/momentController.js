@@ -53,7 +53,12 @@ class MomentController {
         page: parseInt(page),
         pageSize: parseInt(pageSize),
       });
-      result.list = result.list.map((item) => this._parseFields(item));
+      result.list = result.list.map((item) => {
+        const parsed = this._parseFields(item);
+        // content 只返回最多20个字符作为标题
+        parsed.content = parsed.content ? parsed.content.substring(0, 20) : "";
+        return parsed;
+      });
       res.status(200).json({ status: 200, data: result });
     } catch (error) {
       res.status(500).json({ status: 500, message: "查询失败" });

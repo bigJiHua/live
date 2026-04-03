@@ -3,6 +3,11 @@ const net = require("net");
 
 const securityCheck = (req, res, next) => {
   try {
+    // 跳过静态文件请求（图片、字体等）
+    if (req.path.includes("/uploads/") || req.path.includes("/temp/")) {
+      return next();
+    }
+
     const h = req.headers;
     /* ================== 1. 严格头校验 ================== */
     // 强制要求 X-Requested-With，过滤掉 90% 的直接浏览器访问
@@ -37,7 +42,7 @@ const securityCheck = (req, res, next) => {
     const fp = h["x-fingerprint-hash"];
     const ua = h["user-agent"] || "";
     const customUa = h["x-user-agent-custom"] || "";
-
+    
     if (!fp || ua !== customUa) {
       console.warn('设备环境异常')
       return res.say("非法请求！", 400);
@@ -56,10 +61,6 @@ const securityCheck = (req, res, next) => {
       if (sign !== serverSign) {
         console.warn("安全签名验证失败");
         return res.say("非法请求！", 400);
-
-        // return res
-        //   .status(403)
-        //   .json({ status: 403, message: "安全签名验证失败" });
       }
     }
 

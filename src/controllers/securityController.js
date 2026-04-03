@@ -1,4 +1,6 @@
 const UserPin = require("../models/UserPin");
+const UserLog = require("../models/UserLog");
+const User = require("../models/User");
 
 /**
  * 安全控制器 - PIN 码管理
@@ -50,7 +52,24 @@ class SecurityController {
       // 验证 PIN
       const isValid = await UserPin.verify(pin, user.pin_code);
       if (!isValid) {
-        return res.status(400).json({ status: 400, message: "PIN 码错误" });
+        // 检查错误次数是否超过5次
+        const errorCount = await UserLog.getPinErrorCount(req.userId);
+        if (errorCount >= 5) {
+          // 超过5次，锁定账户并强制退出登录
+          await User.lockUser(req.userId);
+          return res.status(401).json({
+            status: 401,
+            message: "连续输入错误超过5次，账户已被锁定",
+            forceLogout: true,
+            locked: true
+          });
+        }
+        return res.status(400).json({
+          status: 400,
+          message: "PIN 码错误",
+          errorCount: errorCount + 1,
+          remainingAttempts: 5 - errorCount - 1
+        });
       }
 
       return res.json({ status: 200, message: "验证成功", verified: true });
@@ -95,6 +114,7 @@ class SecurityController {
    * @param {string} newPin - 新 PIN 码 / 000000 = 关闭PIN
    */
   async changePin(req, res) {
+    const clientData = req.body;
     try {
       const { oldPin, newPin } = req.body.data;
 
@@ -124,7 +144,33 @@ class SecurityController {
       // 2. 校验旧 PIN
       const isValid = await UserPin.verify(oldPin, user.pin_code);
       if (!isValid) {
-        return res.status(400).json({ status: 400, message: "原 PIN 码错误" });
+        // 检查错误次数是否超过5次
+        const errorCount = await UserLog.getPinErrorCount(user.id);
+        if (errorCount >= 5) {
+          // 超过5次，锁定账户并强制退出登录
+          await User.lockUser(user.id);
+          return res.status(401).json({
+            status: 401,
+            message: "连续输入错误超过5次，账户已被锁定",
+            forceLogout: true,
+            locked: true
+          });
+        }
+
+        // 🔴 登录失败统计
+        await UserLog.append({
+          user_id: user.id,
+          type: "pin",
+          status: 0,
+          error_message: "尝试修改PIN码PIN码输入错误",
+          ...clientData, // 自动解构 request 传来的 login_ip, login_location 等所有字段
+        });
+        return res.status(400).json({
+          status: 400,
+          message: "原 PIN 码错误",
+          errorCount: errorCount + 1,
+          remainingAttempts: 5 - errorCount - 1
+        });
       }
 
       // 3. 逻辑分支：关闭 PIN 或修改 PIN

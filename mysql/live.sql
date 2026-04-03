@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- 主机： 127.0.0.1:3306
--- 生成日期： 2026-04-02 05:30:29
+-- 生成日期： 2026-04-03 04:20:20
 -- 服务器版本： 5.7.40
 -- PHP 版本： 8.0.26
 
@@ -373,14 +373,14 @@ CREATE TABLE IF NOT EXISTS `fund` (
 
 DROP TABLE IF EXISTS `moment`;
 CREATE TABLE IF NOT EXISTS `moment` (
-  `id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT 'id主键',
-  `user_id` int(11) DEFAULT '1' COMMENT '用户ID',
-  `content` text COMMENT '内容',
+  `id` varchar(50) NOT NULL COMMENT 'id主键',
+  `user_id` varchar(50) NOT NULL COMMENT '用户ID',
+  `content` text NOT NULL COMMENT '内容',
   `img_url` varchar(255) DEFAULT NULL COMMENT '图片',
   `mood` varchar(50) DEFAULT NULL COMMENT '心情',
   `location` varchar(255) DEFAULT NULL COMMENT '位置',
   `visible_type` tinyint(4) DEFAULT '0' COMMENT '0仅自己可见',
-  `parent_id` int(11) DEFAULT '0' COMMENT '父ID 单日聚合',
+  `parent_id` varchar(50) DEFAULT NULL COMMENT '父ID 单日聚合',
   `create_time` varchar(20) DEFAULT NULL COMMENT '发布时间',
   `update_time` varchar(20) DEFAULT NULL COMMENT '修改时间',
   `is_deleted` tinyint(4) DEFAULT '0' COMMENT '是否删除',
@@ -397,16 +397,17 @@ CREATE TABLE IF NOT EXISTS `moment` (
 DROP TABLE IF EXISTS `sys_attachment`;
 CREATE TABLE IF NOT EXISTS `sys_attachment` (
   `id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT 'id主键',
-  `user_id` int(11) DEFAULT '1',
-  `bus_id` int(11) DEFAULT NULL COMMENT '关联业务ID(如moment_id/fixed_asset_id)',
+  `user_id` varchar(255) NOT NULL COMMENT '谁的图片',
+  `bus_id` varchar(50) DEFAULT NULL COMMENT '关联业务ID(如moment_id/fixed_asset_id)',
   `bus_type` varchar(50) DEFAULT NULL COMMENT '业务类型: avatar/moment/asset_img',
   `file_name` varchar(255) DEFAULT NULL COMMENT '原始文件名',
   `file_path` varchar(255) NOT NULL COMMENT '存储路径',
-  `file_size` int(11) DEFAULT NULL COMMENT '大小(byte)',
+  `file_size` varchar(50) DEFAULT NULL COMMENT '大小(byte)',
   `file_ext` varchar(10) DEFAULT NULL COMMENT '后缀名',
   `create_time` varchar(20) NOT NULL,
   `is_deleted` tinyint(4) DEFAULT '0',
   PRIMARY KEY (`id`),
+  UNIQUE KEY `bus_id` (`bus_id`),
   KEY `idx_bus_ref` (`bus_type`,`bus_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='文件附件索引表';
 

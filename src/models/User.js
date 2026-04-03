@@ -238,7 +238,38 @@ class User {
    * @returns {Promise<Object>} 更新后的用户对象
    */
   static async setLockStatus(id, locked) {
-    return this.update(id, { status: locked ? 1 : 0 });
+    try {
+      const query = `
+        UPDATE ${this.tableName}
+        SET status = ?, update_time = ?
+        WHERE id = ?
+      `;
+      await db.execute(query, [locked ? 0 : 1, Date.now(), id]);
+      return { status: 200, message: locked ? "账户已锁定" : "账户已解锁" };
+    } catch (error) {
+      console.error("锁定用户失败:", error);
+      return { status: 500, message: "操作失败" };
+    }
+  }
+
+  /**
+   * 锁定用户（PIN错误超过5次时调用）
+   * @param {number} id - 用户 ID
+   * @returns {Promise<Object>} 更新结果
+   */
+  static async lockUser(id) {
+    try {
+      const query = `
+        UPDATE ${this.tableName}
+        SET status = 0, update_time = ?
+        WHERE id = ?
+      `;
+      await db.execute(query, [Date.now(), id]);
+      return { status: 200, message: "账户已被锁定" };
+    } catch (error) {
+      console.error("锁定用户失败:", error);
+      return { status: 500, message: "操作失败" };
+    }
   }
 
   /**

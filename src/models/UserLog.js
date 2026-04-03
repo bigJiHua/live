@@ -52,6 +52,31 @@ class UserLog {
       console.error("Critical: UserLog record failed!", error);
     }
   }
+
+  /**
+   * 获取用户 PIN 错误次数（统计最近错误次数）
+   * @param {string} userId - 用户ID
+   * @param {number} limitMinutes - 统计时间范围（分钟），默认 30 分钟
+   * @returns {Promise<number>} 错误次数
+   */
+  static async getPinErrorCount(userId, limitMinutes = 30) {
+    try {
+      const query = `
+        SELECT COUNT(*) as errorCount
+        FROM ${this.tableName}
+        WHERE user_id = ?
+          AND type = 'pin'
+          AND status = 0
+          AND create_time > ?
+      `;
+      const timeThreshold = Date.now() - limitMinutes * 60 * 1000;
+      const [rows] = await db.execute(query, [userId, timeThreshold.toString()]);
+      return rows[0]?.errorCount || 0;
+    } catch (error) {
+      console.error("查询 PIN 错误次数失败:", error);
+      return 0;
+    }
+  }
 }
 
 module.exports = UserLog;

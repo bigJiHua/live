@@ -1,6 +1,6 @@
 # API 路由层
 
-本目录包含所有 API 路由入口文件,负责定义 HTTP 端点并将请求分发到相应的控制器。
+本目录包含所有 API 路由入口文件，负责定义 HTTP 端点并将请求分发到相应的控制器。
 
 ## 文件说明
 
@@ -14,14 +14,6 @@
 | GET | `/api/auth/me` | 获取当前用户信息 | authGuard |
 | POST | `/api/auth/refresh` | 刷新 Token | - |
 
-**示例:**
-```javascript
-// 用户登录
-POST /api/auth/login
-Body: { email: "user@example.com", password: "123456" }
-Response: { token: "jwt-token", user: {...} }
-```
-
 ---
 
 ### security.js
@@ -33,15 +25,6 @@ Response: { token: "jwt-token", user: {...} }
 | POST | `/api/security/pin/set` | 设置 PIN 码 | authGuard |
 | POST | `/api/security/pin/change` | 修改 PIN 码 | authGuard |
 | POST | `/api/security/pin/reset` | 重置 PIN 码 | - |
-
-**示例:**
-```javascript
-// 验证 PIN 码
-POST /api/security/pin/verify
-Headers: { Authorization: "Bearer <token>" }
-Body: { pin: "123456" }
-Response: { message: "PIN 码验证成功", verified: true }
-```
 
 ---
 
@@ -62,23 +45,6 @@ Response: { message: "PIN 码验证成功", verified: true }
 | GET | `/api/account/report` | 获取财务报表 | authGuard + pinLockGuard |
 | POST | `/api/account/calculate-irr` | 计算 IRR | authGuard + pinLockGuard |
 
-**重要:** 所有账务接口都会先检查 PIN 验证状态,如果未验证会返回 **423** 状态码。
-
-**示例:**
-```javascript
-// 创建账务流水
-POST /api/account/transactions
-Headers: { Authorization: "Bearer <token>" }
-Body: {
-  amount: 100.00,
-  type: "expense",
-  categoryId: 1,
-  description: "午餐",
-  date: "2024-03-26"
-}
-Response: { message: "创建成功", transaction: {...} }
-```
-
 ---
 
 ### user.js
@@ -91,33 +57,67 @@ Response: { message: "创建成功", transaction: {...} }
 | GET | `/api/user/settings` | 获取用户设置 | authGuard |
 | PUT | `/api/user/settings` | 更新用户设置 | authGuard |
 
-**示例:**
-```javascript
-// 更新用户资料
-PUT /api/user/profile
-Headers: { Authorization: "Bearer <token>" }
-Body: { username: "newname" }
-Response: { message: "更新成功", user: {...} }
-```
+---
+
+### moment.js
+**动态(朋友圈)路由**
+
+| 方法 | 路径 | 说明 | 中间件 |
+|------|------|------|--------|
+| POST | `/api/v1/moment` | 发布动态 | authGuard |
+| GET | `/api/v1/moment/list` | 获取动态列表 | authGuard |
+| GET | `/api/v1/moment/today` | 获取今日动态(含子动态) | authGuard |
+| GET | `/api/v1/moment/:id` | 获取动态详情 | authGuard |
+| POST | `/api/v1/moment/batch` | 批量获取子动态详情 | authGuard |
+| PUT | `/api/v1/moment/:id` | 更新动态 | authGuard |
+| DELETE | `/api/v1/moment/:id` | 删除动态 | authGuard |
+
+---
+
+### upload.js
+**文件上传路由**
+
+| 方法 | 路径 | 说明 | 中间件 |
+|------|------|------|--------|
+| POST | `/api/v1/upload/single` | 单文件上传 | authGuard |
+| POST | `/api/v1/upload/multiple` | 多文件上传 | authGuard |
+| GET | `/api/v1/upload/list` | 查询附件列表 | authGuard |
+| GET | `/api/v1/upload/search` | 搜索附件 | authGuard |
+| POST | `/api/v1/upload/:id` | 编辑附件(remark/tags) | authGuard |
+| POST | `/api/v1/upload/batch-delete` | 批量删除附件 | authGuard |
+
+**busType 类型**: `post`(动态图片) / `product`(资产图片) / `bank`(银行Icon) / `other`(其他)
+
+---
+
+### database.js
+**数据库管理路由**
+
+| 方法 | 路径 | 说明 | 中间件 |
+|------|------|------|--------|
+| GET | `/api/database/status` | 数据库状态 | - |
+
+---
 
 ## 中间件说明
 
-### authGuard
-验证 JWT Token,将用户信息添加到请求对象。
-
-### pinLockGuard
-检查会话是否需要 PIN 验证,未验证时返回 423 状态码。
+| 中间件 | 说明 |
+|--------|------|
+| `authGuard` | 验证 JWT Token，将用户信息添加到请求对象 |
+| `pinLockGuard` | 检查会话是否需要 PIN 验证，未验证时返回 423 状态码 |
 
 ## 状态码说明
 
-- **200**: 成功
-- **201**: 创建成功
-- **400**: 请求参数错误
-- **401**: 未认证或认证失败
-- **403**: 权限不足
-- **404**: 资源不存在
-- **423**: 被锁定 (需要 PIN 验证)
-- **500**: 服务器内部错误
+| 状态码 | 说明 |
+|--------|------|
+| 200 | 成功 |
+| 201 | 创建成功 |
+| 400 | 请求参数错误 |
+| 401 | 未认证或认证失败 |
+| 403 | 权限不足 |
+| 404 | 资源不存在 |
+| 423 | 被锁定 (需要 PIN 验证) |
+| 500 | 服务器内部错误 |
 
 ## 设计原则
 

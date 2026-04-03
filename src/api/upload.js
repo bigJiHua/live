@@ -22,9 +22,10 @@ const storage = multer.diskStorage({
     cb(null, tempDir);
   },
   filename: (req, file, cb) => {
-    // 临时文件名，保持原扩展名
+    // 临时文件名，加上随机字符串保证不重复
     const ext = path.extname(file.originalname);
-    cb(null, `temp_${Date.now()}${ext}`);
+    const random = Math.random().toString(36).substring(2, 8);
+    cb(null, `temp_${Date.now()}_${random}${ext}`);
   },
 });
 
@@ -49,11 +50,15 @@ router.post("/multiple", upload.array("files", 10), uploadController.uploadMulti
 router.get("/list", uploadController.list);
 
 // 【已启用】
-// 删除附件
-router.delete("/:id", uploadController.delete);
+// 搜索附件（按类型和关键词）
+router.get("/search", uploadController.search);
 
 // 【已启用】
-// 批量删除附件
+// 批量删除附件（必须在 /:id 前面，否则会被 :id 匹配）
 router.post("/batch-delete", uploadController.batchDelete);
+
+// 【已启用】
+// 编辑附件（修改 remark 和 tags）
+router.post("/:id", uploadController.edit);
 
 module.exports = router;

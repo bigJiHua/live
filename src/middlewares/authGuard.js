@@ -21,6 +21,8 @@ const authGuard = (req, res, next) => {
 
     next();
   } catch (error) {
+    console.log(error);
+    
     console.error("认证中间件错误:", error);
     return res.say("非法闯入！ 401", 401);
   }
