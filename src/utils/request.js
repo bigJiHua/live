@@ -174,12 +174,16 @@ request.interceptors.response.use(
     const status = error.response?.status;
     if (status === 401) {
       showToast({
-        message: "非法闯入",
+        message: "非法闯入--后端报错401",
         position: "top",
       });
       sessionStorage.clear(); // 清理旧 Key
       localStorage.removeItem("finance_token");
       router.push("/login");
+    }else if (status === 429) {
+      sessionStorage.clear(); // 清理旧 Key
+      localStorage.removeItem("finance_token");
+      router.push("/429");
     } else {
       showFailToast(error.response?.data?.message || "网络请求失败");
     }

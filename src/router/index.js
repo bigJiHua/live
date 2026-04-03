@@ -8,7 +8,7 @@ const router = createRouter({
 });
 
 const whiteList = {
-  public: ["/login", "/register"],
+  public: ["/login", "/register", "/429"],
 };
 
 router.beforeEach(async (to, from) => {

@@ -14,11 +14,9 @@ import fileRequest from "@/utils/fileRequest";
 
 // 业务类型
 export const BusType = {
-  AVATAR: "avatar", // 头像
   POST: "post", // 动态
-  COMMENT: "comment", // 评论
-  PRODUCT: "product", // 商品/资产
-  BANNER: "banner", // Banner
+  PRODUCT: "product", // 资产
+  BANK: "bank", // 银行 Icon
   OTHER: "other", // 其他
 };
 
@@ -28,15 +26,20 @@ export const uploadApi = {
    * @param {File} file - 文件对象
    * @param {string} busType - 业务类型
    * @param {string} busId - 业务ID（可选）
+   * @param {string} remark - 图片说明（可选）
+   * @param {string[]} tags - 标签数组（可选）
    */
-  single(file, busType, busId = "") {
+  single(file, busType, busId = "", remark = "", tags = []) {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("busType", busType);
     if (busId) formData.append("busId", busId);
-    return fileRequest.post("/upload/single", formData, {
-      headers: { "Content-Type": "multipart/form-data" },
-    });
+    if (remark) formData.append("remark", remark);
+    // tags 单独 append 每个元素，确保后端拿到数组格式
+    if (tags && tags.length > 0) {
+      tags.forEach((tag) => formData.append("tags[]", tag));
+    }
+    return fileRequest.post("/upload/single", formData);
   },
 
   /**
@@ -44,15 +47,20 @@ export const uploadApi = {
    * @param {File[]} files - 文件数组
    * @param {string} busType - 业务类型
    * @param {string} busId - 业务ID（可选）
+   * @param {string} remark - 图片说明（可选）
+   * @param {string[]} tags - 标签数组（可选）
    */
-  multiple(files, busType, busId = "") {
+  multiple(files, busType, busId = "", remark = "", tags = []) {
     const formData = new FormData();
     files.forEach((file) => formData.append("files", file));
     formData.append("busType", busType);
     if (busId) formData.append("busId", busId);
-    return fileRequest.post("/upload/multiple", formData, {
-      headers: { "Content-Type": "multipart/form-data" },
-    });
+    if (remark) formData.append("remark", remark);
+    // tags 单独 append 每个元素，确保后端拿到数组格式
+    if (tags && tags.length > 0) {
+      tags.forEach((tag) => formData.append("tags[]", tag));
+    }
+    return fileRequest.post("/upload/multiple", formData);
   },
 
   /**
@@ -70,11 +78,12 @@ export const uploadApi = {
   },
 
   /**
-   * 删除附件
+   * 更新附件信息
    * @param {string} id - 附件ID
+   * @param {object} data - 更新数据 { remark, tags }
    */
-  delete(id) {
-    return fileRequest.delete(`/upload/${id}`);
+  update(id, data) {
+    return fileRequest.post(`/upload/${id}`, { type: "update", ...data });
   },
 
   /**
@@ -83,5 +92,19 @@ export const uploadApi = {
    */
   batchDelete(ids) {
     return fileRequest.post("/upload/batch-delete", { ids });
+  },
+
+  /**
+   * 搜索附件
+   * @param {object} params - 搜索参数
+   * @param {string} params.type - 业务类型
+   * @param {string} params.key - 搜索关键词
+   * @param {number} params.limit - 每页数量
+   * @param {number} params.offset - 偏移量
+   */
+  search({ type, key, limit = 50, offset = 0 }) {
+    return fileRequest.get("/upload/search", {
+      params: { type, key, limit, offset },
+    });
   },
 };

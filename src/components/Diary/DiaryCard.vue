@@ -9,7 +9,7 @@
     </div>
 
     <div class="card-content">
-      <div class="main-text">{{ data.content }}</div>
+      <div class="main-text">{{ data.content }}...</div>
 
       <div class="interaction-bar">
         <!-- 心情标签 -->

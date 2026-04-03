@@ -140,13 +140,9 @@ const goToPinManage = () => {
 const onLogout = async () => {
   showConfirmDialog({ title: "提醒", message: "确定退出登录？" }).then(
     async () => {
-      try {
-        await authApi.logout();
-      } catch (err) {
-        console.error("登出请求失败:", err);
-      }
       userStore.clearUserInfo();
       router.push("/login");
+      localStorage.removeItem("finance_token");
       showToast("已安全退出");
     }
   );

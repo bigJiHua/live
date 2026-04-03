@@ -15,6 +15,14 @@ const RouterMap = [
     meta: { title: '登录' }
   },
 
+  // --- 错误页面 ---
+  {
+    path: '/429',
+    name: 'Error429',
+    component: () => import('@/views/error/429.vue'),
+    meta: { title: '请求过于频繁' }
+  },
+
   // --- 主布局容器 (包含底部 Tabbar 导航) ---
   {
     path: '/',

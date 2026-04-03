@@ -4,18 +4,6 @@
       <div class="section-title">资源类型</div>
       <van-cell-group inset class="app-card">
         <van-cell
-          title="头像资源"
-          label="我的头像图片"
-          icon="user-o"
-          is-link
-          center
-          @click="goToResource('avatar')"
-        >
-          <template #right-icon>
-            <van-icon name="arrow" color="#969799" />
-          </template>
-        </van-cell>
-        <van-cell
           title="动态图片"
           label="发布的动态图片"
           icon="photo-o"
@@ -28,19 +16,7 @@
           </template>
         </van-cell>
         <van-cell
-          title="评论附件"
-          label="评论中的图片附件"
-          icon="comment-o"
-          is-link
-          center
-          @click="goToResource('comment')"
-        >
-          <template #right-icon>
-            <van-icon name="arrow" color="#969799" />
-          </template>
-        </van-cell>
-        <van-cell
-          title="商品/资产图片"
+          title="资产图片"
           label="资产相关的图片"
           icon="coupon-o"
           is-link
@@ -52,12 +28,12 @@
           </template>
         </van-cell>
         <van-cell
-          title="Banner 图片"
-          label="横幅图片资源"
-          icon="cluster-o"
+          title="银行 Icon"
+          label="银行图标资源"
+          icon="shop-o"
           is-link
           center
-          @click="goToResource('banner')"
+          @click="goToResource('bank')"
         >
           <template #right-icon>
             <van-icon name="arrow" color="#969799" />
@@ -82,7 +58,6 @@
 
 <script setup>
 import { useRouter } from "vue-router";
-import { BusType } from "@/utils/api/upload";
 
 const router = useRouter();
 

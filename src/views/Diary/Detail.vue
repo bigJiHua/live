@@ -57,8 +57,8 @@
       <!-- 补充内容（正文续写 / 故事续篇） -->
       <div class="append-section">
         <div class="append-header">
-          <span class="title">正文补充</span>
-          <span class="count">{{ childrenCount }} 条补充</span>
+          <span class="title">追文</span>
+          <span class="count">{{ childrenCount }} 条今日追文</span>
         </div>
 
         <van-loading v-if="childrenLoading" class="loading-append" />
@@ -119,6 +119,10 @@
       :images="previewImages"
       :start-position="previewIndex"
     />
+
+    <div class="add-diary-btn" @click="$router.push('/diary/add')">
+      <van-icon name="plus" />
+    </div>
   </div>
 </template>
 
@@ -482,5 +486,23 @@ onMounted(() => {
 }
 .tag.location {
   color: #07c160;
+}
+
+/* 悬浮按钮保持原样 */
+.add-diary-btn {
+  position: fixed;
+  bottom: 80px;
+  right: 20px; /* 瀑布流布局适合放在右侧 */
+  width: 50px;
+  height: 50px;
+  background: var(--app-primary);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 100;
 }
 </style>

@@ -11,7 +11,6 @@ import request from "@/utils/request";
  * | POST | `/api/v1/auth/refresh` | 刷新 Token | - |
  * | GET | `/api/v1/auth/check-admin` | 检查管理员是否存在 | - |
  * | POST | `/api/v1/auth/admin-register` | 管理员注册（仅首次） | - |
- * | POST | `/api/v1/auth/logout` | 用户登出 | authGuard |
  * | POST | `/api/v1/auth/forgot-password` | 忘记密码 | - |
  * | POST | `/api/v1/auth/reset-password` | 重置密码 | - |
  */
@@ -45,12 +44,6 @@ export const authApi = {
   adminRegister(data) {
     return request.post("/auth/admin-register", data);
   },
-
-  // 用户登出
-  logout() {
-    return request.post("/auth/logout");
-  },
-
   // 忘记密码
   forgotPassword(data) {
     return request.post("/auth/forgot-password", data);
