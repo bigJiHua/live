@@ -45,7 +45,7 @@ const RouterMap = [
       {
         path: 'finance/add',
         name: 'FinanceAdd',
-        component: () => import('../views/Finance/Add1.vue'),
+        component: () => import('../views/Finance/Add.vue'),
         meta: { title: '新增账单', hideTabbar: true }
       },
       // 动态/日记模块
@@ -103,6 +103,104 @@ const RouterMap = [
         name: 'ResourceList',
         component: () => import('../views/User/ResourceList.vue'),
         meta: { title: '资源列表', hideTabbar: true }
+      },
+      {
+        path: 'user/app-settings',
+        name: 'AppSettings',
+        component: () => import('../views/User/AppSettings.vue'),
+        meta: { title: '应用设置', hideTabbar: true }
+      },
+      {
+        path: 'user/category-manage',
+        name: 'CategoryManage',
+        component: () => import('../views/User/CategoryManage.vue'),
+        meta: { title: '分类管理', hideTabbar: true }
+      },
+      {
+        path: 'user/bank-category-manage',
+        name: 'BankCategoryManage',
+        component: () => import('../views/User/BankCategoryManage.vue'),
+        meta: { title: '银行分类管理', hideTabbar: true }
+      },
+      {
+        path: 'card',
+        name: 'BankCard',
+        component: () => import('../views/BankCard/index.vue'),
+        meta: { title: '银行卡管理', hideTabbar: true },
+        children: [
+          {
+            path: 'debit',
+            name: 'BankCardDebit',
+            component: () => import('../views/BankCard/debit.vue')
+          },
+          {
+            path: 'credit',
+            name: 'BankCardCredit',
+            component: () => import('../views/BankCard/credit.vue')
+          }
+        ]
+      },
+      {
+        path: 'card/add',
+        name: 'BankCardAdd',
+        component: () => import('../views/BankCard/Add.vue'),
+        meta: { title: '添加卡片', hideTabbar: true }
+      },
+      {
+        path: 'card/edit',
+        name: 'BankCardEdit',
+        component: () => import('../views/BankCard/Edit.vue'),
+        meta: { title: '编辑卡片', hideTabbar: true }
+      },
+      // 账单管理
+      {
+        path: 'card/bill/list',
+        name: 'BillList',
+        component: () => import('../views/BankCard/BillList.vue'),
+        meta: { title: '账单列表', hideTabbar: true }
+      },
+      {
+        path: 'card/bill/detail',
+        name: 'BillDetail',
+        component: () => import('../views/BankCard/BillDetail.vue'),
+        meta: { title: '账单详情', hideTabbar: true }
+      },
+      {
+        path: 'card/bill/add',
+        name: 'BillAdd',
+        component: () => import('../views/BankCard/BillAdd.vue'),
+        meta: { title: '添加账单', hideTabbar: true }
+      },
+      {
+        path: 'card/bill/edit',
+        name: 'BillEdit',
+        component: () => import('../views/BankCard/BillEdit.vue'),
+        meta: { title: '编辑账单', hideTabbar: true }
+      },
+      // 还款记录
+      {
+        path: 'card/repay/list',
+        name: 'RepayList',
+        component: () => import('../views/BankCard/RepayList.vue'),
+        meta: { title: '还款记录', hideTabbar: true }
+      },
+      {
+        path: 'card/repay/detail',
+        name: 'RepayDetail',
+        component: () => import('../views/BankCard/RepayDetail.vue'),
+        meta: { title: '还款详情', hideTabbar: true }
+      },
+      {
+        path: 'card/repay/add',
+        name: 'RepayAdd',
+        component: () => import('../views/BankCard/RepayAdd.vue'),
+        meta: { title: '添加还款', hideTabbar: true }
+      },
+      {
+        path: 'card/repay/edit',
+        name: 'RepayEdit',
+        component: () => import('../views/BankCard/RepayEdit.vue'),
+        meta: { title: '编辑还款', hideTabbar: true }
       },
       {
         path: 'profile-edit',

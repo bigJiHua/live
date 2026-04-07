@@ -78,6 +78,9 @@
 
 <script setup>
 import { ref, reactive } from 'vue';
+import { useRouter } from 'vue-router';
+
+const router = useRouter();
 
 // 接口数据预留 (1.1, 1.3, 1.4)
 const dashboardData = reactive({
@@ -103,7 +106,16 @@ const toggleEye = () => { showAmount.value = !showAmount.value; };
 const goFunction = (type) => { console.log('跳转至功能模块:', type); };
 
 // 1.1 分支入口跳转
-const goSubPage = (page) => { console.log('跳转至子管理页:', page); };
+const goSubPage = (page) => {
+  const routes = {
+    cards: '/card/debit',   // 银行卡 -> 借记卡管理
+    credit: '/card/credit', // 待还信用卡 -> 信用卡管理
+    todo: '/todo'
+  };
+  if (routes[page]) {
+    router.push(routes[page]);
+  }
+};
 
 // 格式化金额
 const formatMoney = (val) => Number(val).toLocaleString('zh-CN', { minimumFractionDigits: 2 });

@@ -35,10 +35,10 @@
       <div class="section-title">系统管理</div>
       <van-cell-group inset class="app-card">
         <van-cell
-          title="偏好设置"
+          title="应用设置"
           icon="setting-o"
           is-link
-          @click="$router.push('/settings')"
+          @click="$router.push('/user/app-settings')"
         />
         <van-cell
           title="文件资源管理"

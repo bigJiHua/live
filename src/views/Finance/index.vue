@@ -38,19 +38,24 @@
     <div class="app-card menu-grid-wrapper">
       <div class="grid-section-title">财务把控中心</div>
       <van-grid :column-num="3" :border="false" clickable>
-        <van-grid-item @click="goFunction('bill-list')">
-          <template #icon><van-icon name="todo-list" class="grid-icon blue" /></template>
-          <template #text><span class="grid-text">账单明细</span></template>
-        </van-grid-item>
-
-        <van-grid-item @click="goFunction('report')">
-          <template #icon><van-icon name="chart-trending-o" class="grid-icon green" /></template>
-          <template #text><span class="grid-text">阶段财报</span></template>
-        </van-grid-item>
-
         <van-grid-item @click="goFunction('credit')">
           <template #icon><van-icon name="credit-pay" class="grid-icon orange" /></template>
           <template #text><span class="grid-text">信用卡专项</span></template>
+        </van-grid-item>
+
+        <van-grid-item @click="goFunction('bill-list')">
+          <template #icon><van-icon name="todo-list-o" class="grid-icon red" /></template>
+          <template #text><span class="grid-text">信用卡账单</span></template>
+        </van-grid-item>
+
+        <van-grid-item @click="goFunction('repay-list')">
+          <template #icon><van-icon name="paid" class="grid-icon green" /></template>
+          <template #text><span class="grid-text">还款记录</span></template>
+        </van-grid-item>
+
+        <van-grid-item @click="goFunction('report')">
+          <template #icon><van-icon name="chart-trending-o" class="grid-icon blue" /></template>
+          <template #text><span class="grid-text">阶段财报</span></template>
         </van-grid-item>
 
         <van-grid-item @click="goFunction('assets')">
@@ -63,25 +68,22 @@
           <template #text><span class="grid-text">预算控制</span></template>
         </van-grid-item>
 
+        <van-grid-item @click="goFunction('fixed-assets')">
+          <template #icon><van-icon name="shop-o" class="grid-icon teal" /></template>
+          <template #text><span class="grid-text">固定资产</span></template>
+        </van-grid-item>
+
+        <van-grid-item @click="goFunction('work-cost')">
+          <template #icon><van-icon name="medal-o" class="grid-icon pink" /></template>
+          <template #text><span class="grid-text">工作成本</span></template>
+        </van-grid-item>
+
         <van-grid-item @click="goFunction('super-calc')" class="special-item">
           <template #icon><van-icon name="points" class="grid-icon gold" /></template>
           <template #text><span class="grid-text font-bold">超级计算</span></template>
         </van-grid-item>
       </van-grid>
     </div>
-
-    <van-cell-group inset class="asset-cell-group">
-      <van-cell title="固定资产标注" is-link value="残值计算" @click="goFunction('fixed-assets')">
-        <template #icon>
-          <van-icon name="shop-o" class="cell-icon" />
-        </template>
-      </van-cell>
-      <van-cell title="工作成本核算" is-link value="薪资/日薪" @click="goFunction('work-cost')">
-        <template #icon>
-          <van-icon name="medal-o" class="cell-icon" />
-        </template>
-      </van-cell>
-    </van-cell-group>
 
     <div class="footer-tips">
       数据已进行全站加密处理 <van-icon name="shield-check" />
@@ -97,8 +99,37 @@ const router = useRouter()
 const showMonthPicker = ref(false)
 
 const goFunction = (type) => {
-  console.log('正在进入专项模块:', type)
-  // router.push(`/finance/${type}`)
+  switch (type) {
+    case 'credit':
+      router.push('/card/credit')
+      break
+    case 'bill-list':
+      router.push('/card/bill/list')
+      break
+    case 'repay-list':
+      router.push('/card/repay/list')
+      break
+    case 'report':
+      // 阶段财报
+      break
+    case 'assets':
+      // 资产结构
+      break
+    case 'budget':
+      // 预算控制
+      break
+    case 'fixed-assets':
+      // 固定资产
+      break
+    case 'work-cost':
+      // 工作成本
+      break
+    case 'super-calc':
+      // 超级计算
+      break
+    default:
+      console.log('正在进入专项模块:', type)
+  }
 }
 </script>
 
@@ -167,8 +198,11 @@ const goFunction = (type) => {
 .blue { color: #1989fa; }
 .green { color: #07c160; }
 .orange { color: #ff976a; }
+.red { color: #ee0a24; }
 .purple { color: #7232dd; }
 .cyan { color: #00bcd4; }
+.teal { color: #009688; }
+.pink { color: #e91e63; }
 .gold { color: #ffb300; }
 
 /* 特殊项目样式 */
@@ -176,12 +210,6 @@ const goFunction = (type) => {
   background: #fff9e6; /* 淡淡的金色背景 */
   border-radius: 12px;
 }
-
-/* 3. 单元格组 */
-.asset-cell-group {
-  margin: 0 -16px 20px !important;
-}
-.cell-icon { font-size: 20px; margin-right: 8px; color: #646566; }
 
 /* 4. 底部提示 */
 .footer-tips {

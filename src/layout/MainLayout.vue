@@ -85,11 +85,11 @@ const onBack = () => {
   /* 规整：清爽背景，突出毛玻璃 */
   background-color: #f7f8fa;
 }
-
+/* TODO 待定 */
 .main-body {
   width: 100%;
   /* 精准 Padding：岛屿高度60px + 悬浮20px + 预留间距 = 90px */
-  padding-bottom: 90px;
+  height: calc(100vh - 90px);
 }
 
 /* 4. 纯手撸悬浮岛导航栏核心 CSS (纯果味实现) */
