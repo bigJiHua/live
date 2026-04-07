@@ -26,3 +26,4 @@ coverage/
 # 构建输出
 dist/
 build/
+card-api.md

@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- 主机： 127.0.0.1:3306
--- 生成日期： 2026-04-03 04:20:20
+-- 生成日期： 2026-04-07 14:17:20
 -- 服务器版本： 5.7.40
 -- PHP 版本： 8.0.26
 
@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS `account` (
   `exchange_rate` decimal(10,4) DEFAULT NULL COMMENT '汇率',
   `trans_date` varchar(20) DEFAULT NULL COMMENT '收支日期',
   `remark` varchar(255) DEFAULT NULL COMMENT '备注',
-  `card_id` int(11) DEFAULT NULL COMMENT '关联卡片ID',
+  `card_id` varchar(32) DEFAULT NULL COMMENT '关联卡片ID',
   `create_time` varchar(20) DEFAULT NULL COMMENT '提交时间',
   `update_time` varchar(20) DEFAULT NULL COMMENT '修改时间',
   `is_deleted` tinyint(4) DEFAULT '0' COMMENT '是否删除',
@@ -119,12 +119,11 @@ CREATE TABLE IF NOT EXISTS `budget` (
 DROP TABLE IF EXISTS `bus_category`;
 CREATE TABLE IF NOT EXISTS `bus_category` (
   `id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT 'id主键',
-  `user_id` int(11) DEFAULT '1' COMMENT '用户ID',
-  `parent_id` int(11) DEFAULT '0' COMMENT '父分类ID(0为一级分类)',
+  `user_id` varchar(50) NOT NULL COMMENT '用户ID',
   `name` varchar(50) NOT NULL COMMENT '分类名称',
-  `type` varchar(20) DEFAULT NULL COMMENT '类型: income/expense/asset/fixed',
-  `icon_name` varchar(50) DEFAULT NULL COMMENT 'Vant图标名称',
-  `color` varchar(20) DEFAULT '#1989fa' COMMENT '图标颜色',
+  `type` varchar(20) NOT NULL COMMENT '类型: income/expense/asset/fixed',
+  `icon_url` varchar(255) DEFAULT NULL COMMENT '自定义图标URL',
+  `remark` varchar(50) DEFAULT NULL COMMENT '说明',
   `sort` int(11) DEFAULT '99' COMMENT '排序',
   `is_deleted` tinyint(4) DEFAULT '0',
   PRIMARY KEY (`id`),
@@ -162,7 +161,7 @@ CREATE TABLE IF NOT EXISTS `bus_recurring` (
   `name` varchar(100) NOT NULL COMMENT '任务名称(如:房租/服务器续费)',
   `amount` decimal(12,2) NOT NULL,
   `category_id` int(11) DEFAULT NULL COMMENT '关联分类',
-  `account_id` int(11) DEFAULT NULL COMMENT '默认扣款账户/卡片',
+  `account_id` varchar(32) DEFAULT NULL COMMENT '默认扣款账户/卡片',
   `cycle` varchar(20) DEFAULT NULL COMMENT '周期: month/year/week',
   `day_of_cycle` int(11) DEFAULT NULL COMMENT '周期内的哪一天',
   `next_date` varchar(20) DEFAULT NULL COMMENT '下次触发日期',
@@ -179,33 +178,35 @@ CREATE TABLE IF NOT EXISTS `bus_recurring` (
 
 DROP TABLE IF EXISTS `card_base`;
 CREATE TABLE IF NOT EXISTS `card_base` (
-  `id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT 'id主键',
-  `user_id` int(11) DEFAULT '1' COMMENT '用户ID',
-  `bank_id` int(11) DEFAULT NULL COMMENT '银行ID',
-  `card_type` varchar(20) DEFAULT NULL COMMENT '卡类型 信用卡/借记卡',
-  `card_level` varchar(20) DEFAULT NULL COMMENT '卡等级',
-  `main_sub` varchar(10) DEFAULT NULL COMMENT '主副卡',
-  `card_org` varchar(20) DEFAULT NULL COMMENT '卡组织',
-  `last4_no` varchar(10) DEFAULT NULL COMMENT '卡号后四位',
-  `mask_no` varchar(50) DEFAULT NULL COMMENT '卡号脱敏',
-  `alias` varchar(50) DEFAULT NULL COMMENT '卡片别名',
-  `card_img` varchar(255) DEFAULT NULL COMMENT '卡面URL',
-  `open_date` varchar(20) DEFAULT NULL COMMENT '下卡日期',
-  `expire_date` varchar(20) DEFAULT NULL COMMENT '过期日期',
-  `bill_day` int(11) DEFAULT NULL COMMENT '账单日',
-  `repay_day` int(11) DEFAULT NULL COMMENT '还款日',
-  `currency` varchar(10) DEFAULT NULL COMMENT '币种',
-  `status` varchar(20) DEFAULT NULL COMMENT '卡片状态',
-  `is_default` tinyint(4) DEFAULT NULL COMMENT '是否默认卡',
-  `is_hide` tinyint(4) DEFAULT NULL COMMENT '是否隐藏',
-  `sort` int(11) DEFAULT '99' COMMENT '排序',
-  `tag` varchar(50) DEFAULT NULL COMMENT '标签',
-  `remark` varchar(255) DEFAULT NULL COMMENT '备注',
-  `annual_fee` decimal(12,2) DEFAULT NULL COMMENT '年费',
-  `fee_free_rule` varchar(255) DEFAULT NULL COMMENT '免年费条件',
-  `source_from` varchar(20) DEFAULT NULL COMMENT '数据来源 手动/导入',
-  `create_time` varchar(20) DEFAULT NULL COMMENT '创建时间',
-  `update_time` varchar(20) DEFAULT NULL COMMENT '更新时间',
+  `id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '主键',
+  `user_id` varchar(50) NOT NULL DEFAULT '1' COMMENT '用户ID',
+  `bank_id` varchar(255) NOT NULL DEFAULT '' COMMENT '银行ID',
+  `card_type` varchar(20) NOT NULL DEFAULT 'debit' COMMENT '卡类型：debit/credit',
+  `card_level` varchar(20) NOT NULL DEFAULT '' COMMENT '卡等级',
+  `main_sub` varchar(10) NOT NULL DEFAULT '主卡' COMMENT '主副卡',
+  `card_org` varchar(20) NOT NULL DEFAULT '' COMMENT '卡组织',
+  `card_length` varchar(30) NOT NULL DEFAULT '19' COMMENT '卡号长度',
+  `last4_no` varchar(10) NOT NULL DEFAULT '' COMMENT '卡号后四位',
+  `card_bin` varchar(10) NOT NULL COMMENT '卡bin前6位',
+  `alias` varchar(50) NOT NULL DEFAULT '' COMMENT '卡片别名',
+  `card_img` varchar(255) NOT NULL DEFAULT '' COMMENT '卡面图片',
+  `open_date` varchar(20) NOT NULL DEFAULT '' COMMENT '开卡日期',
+  `expire_date` varchar(20) NOT NULL DEFAULT '' COMMENT '过期日期',
+  `bill_day` int(11) DEFAULT '0' COMMENT '账单日',
+  `repay_day` int(11) DEFAULT '0' COMMENT '还款日',
+  `currency` varchar(10) NOT NULL DEFAULT 'CNY' COMMENT '币种',
+  `status` varchar(20) NOT NULL DEFAULT '正常' COMMENT '卡片状态',
+  `is_default` tinyint(4) NOT NULL DEFAULT '0' COMMENT '是否默认卡',
+  `is_hide` tinyint(4) DEFAULT '0' COMMENT '是否隐藏',
+  `sort` int(11) NOT NULL DEFAULT '99' COMMENT '排序',
+  `tag` varchar(50) DEFAULT '' COMMENT '标签',
+  `remark` varchar(255) DEFAULT '' COMMENT '备注',
+  `color` varchar(10) NOT NULL DEFAULT '#0052cc' COMMENT '卡颜色',
+  `annual_fee` decimal(12,2) NOT NULL DEFAULT '0.00' COMMENT '年费',
+  `fee_free_rule` varchar(255) NOT NULL DEFAULT '' COMMENT '免年费规则',
+  `source_from` varchar(20) NOT NULL DEFAULT '手动' COMMENT '数据来源',
+  `create_time` varchar(20) NOT NULL DEFAULT '' COMMENT '创建时间',
+  `update_time` varchar(20) NOT NULL DEFAULT '' COMMENT '更新时间',
   `is_deleted` tinyint(4) DEFAULT '0' COMMENT '是否删除',
   PRIMARY KEY (`id`),
   KEY `idx_user_id` (`user_id`),
@@ -221,7 +222,7 @@ CREATE TABLE IF NOT EXISTS `card_base` (
 DROP TABLE IF EXISTS `card_bill`;
 CREATE TABLE IF NOT EXISTS `card_bill` (
   `id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT 'id主键',
-  `card_id` int(11) DEFAULT NULL COMMENT '关联卡片ID',
+  `card_id` varchar(32) DEFAULT NULL COMMENT '关联卡片ID',
   `user_id` int(11) DEFAULT '1' COMMENT '用户ID',
   `credit_limit` decimal(12,2) DEFAULT NULL COMMENT '信用额度',
   `avail_limit` decimal(12,2) DEFAULT NULL COMMENT '可用额度',
@@ -255,7 +256,7 @@ CREATE TABLE IF NOT EXISTS `card_bill` (
 DROP TABLE IF EXISTS `card_log`;
 CREATE TABLE IF NOT EXISTS `card_log` (
   `id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT 'id主键',
-  `card_id` int(11) DEFAULT NULL COMMENT '卡片ID',
+  `card_id` varchar(32) DEFAULT NULL COMMENT '卡片ID',
   `user_id` int(11) DEFAULT '1' COMMENT '用户ID',
   `operate_type` varchar(20) DEFAULT NULL COMMENT '操作类型 新增/编辑/删除/还款',
   `operate_time` varchar(20) DEFAULT NULL COMMENT '操作时间',
@@ -273,9 +274,9 @@ CREATE TABLE IF NOT EXISTS `card_log` (
 DROP TABLE IF EXISTS `card_repay`;
 CREATE TABLE IF NOT EXISTS `card_repay` (
   `id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT 'id主键',
-  `card_id` int(11) DEFAULT NULL COMMENT '卡片ID',
+  `card_id` varchar(32) DEFAULT NULL COMMENT '卡片ID',
   `user_id` int(11) DEFAULT '1' COMMENT '用户ID',
-  `bill_id` int(11) DEFAULT NULL COMMENT '关联账单ID',
+  `bill_id` varchar(32) DEFAULT NULL COMMENT '关联账单ID',
   `repay_amount` decimal(12,2) DEFAULT NULL COMMENT '还款金额',
   `repay_method` varchar(20) DEFAULT NULL COMMENT '还款方式',
   `repay_time` varchar(20) DEFAULT NULL COMMENT '还款时间',
@@ -308,7 +309,7 @@ CREATE TABLE IF NOT EXISTS `device_crypto` (
   `created_at` bigint(20) NOT NULL,
   `updated_at` bigint(20) NOT NULL,
   PRIMARY KEY (`fingerprint`,`scene`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='临时验证码/加密密钥申请记录表';
 
 -- --------------------------------------------------------
 
@@ -399,7 +400,9 @@ CREATE TABLE IF NOT EXISTS `sys_attachment` (
   `id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT 'id主键',
   `user_id` varchar(255) NOT NULL COMMENT '谁的图片',
   `bus_id` varchar(50) DEFAULT NULL COMMENT '关联业务ID(如moment_id/fixed_asset_id)',
-  `bus_type` varchar(50) DEFAULT NULL COMMENT '业务类型: avatar/moment/asset_img',
+  `bus_type` varchar(50) NOT NULL COMMENT '业务类型: moment/动态图片/资产图片 (product)银行Icon(bank)/其他资源 (other)',
+  `remark` varchar(255) DEFAULT '用户上传的图片' COMMENT '图片',
+  `tags` varchar(255) DEFAULT '默认' COMMENT '图片标签，用于搜索，逗号分隔：家,客厅,小区',
   `file_name` varchar(255) DEFAULT NULL COMMENT '原始文件名',
   `file_path` varchar(255) NOT NULL COMMENT '存储路径',
   `file_size` varchar(50) DEFAULT NULL COMMENT '大小(byte)',

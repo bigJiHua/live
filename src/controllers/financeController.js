@@ -1,248 +1,270 @@
-const Transaction = require('../models/Transaction');
-const Category = require('../models/Category');
-const financeService = require('../services/financeService');
+const Account = require('../models/Account');
+const Asset = require('../models/Asset');
 
+/**
+ * 账务控制器
+ * 包含：收支记录、本月统计、总资产统计
+ */
 class FinanceController {
-  // 获取账务流水列表
+
+  // ========== 收支记录 ==========
+
+  /**
+   * 获取收支列表
+   */
   async getTransactions(req, res) {
     try {
-      const { page = 1, limit = 20, type, categoryId, startDate, endDate } = req.query;
+      const { page = 1, limit = 20, direction, categoryId, payMethod, startDate, endDate } = req.query;
 
-      const filters = { userId: req.userId };
-      if (type) filters.type = type;
+      const filters = {};
+      if (direction !== undefined) filters.direction = parseInt(direction);
       if (categoryId) filters.categoryId = categoryId;
+      if (payMethod) filters.payMethod = payMethod;
       if (startDate) filters.startDate = startDate;
       if (endDate) filters.endDate = endDate;
 
-      const result = await Transaction.findAll(filters, page, limit);
+      const result = await Account.findAll(req.userId, filters, parseInt(page), parseInt(limit));
 
       res.json({
-        transactions: result.rows,
-        pagination: {
-          page: parseInt(page),
-          limit: parseInt(limit),
-          total: result.count,
-          totalPages: Math.ceil(result.count / limit),
-        },
+        status: 200,
+        message: '获取成功',
+        data: {
+          list: result.rows,
+          pagination: {
+            page: parseInt(page),
+            limit: parseInt(limit),
+            total: result.total,
+            totalPages: Math.ceil(result.total / limit)
+          }
+        }
       });
     } catch (error) {
-      console.error('获取账务流水错误:', error);
-      res.status(500).json({ message: '获取账务流水失败', error: error.message });
+      console.error('获取收支列表错误:', error);
+      res.status(500).json({ status: 500, message: '获取失败', error: error.message });
     }
   }
 
-  // 获取单个账务流水详情
+  /**
+   * 获取单条收支详情
+   */
   async getTransactionById(req, res) {
     try {
-      const transaction = await Transaction.findById(req.params.id, req.userId);
+      const transaction = await Account.findById(req.params.id, req.userId);
 
       if (!transaction) {
-        return res.status(404).json({ message: '账务流水不存在' });
+        return res.status(404).json({ status: 404, message: '记录不存在' });
       }
 
-      res.json({ transaction });
+      res.json({ status: 200, message: '获取成功', data: transaction });
     } catch (error) {
-      console.error('获取账务流水详情错误:', error);
-      res.status(500).json({ message: '获取账务流水详情失败', error: error.message });
+      console.error('获取收支详情错误:', error);
+      res.status(500).json({ status: 500, message: '获取失败', error: error.message });
     }
   }
 
-  // 创建账务流水
+  /**
+   * 创建收支记录
+   */
   async createTransaction(req, res) {
     try {
-      const { amount, type, categoryId, description, date } = req.body;
+      const { direction, categoryId, payType, payMethod, amount, currency, exchangeRate, transDate, remark, cardId } = req.body;
 
-      // 验证分类是否存在
-      const category = await Category.findById(categoryId, req.userId);
-      if (!category) {
-        return res.status(400).json({ message: '分类不存在' });
+      // 基本验证
+      if (amount === undefined || amount === null) {
+        return res.status(400).json({ status: 400, message: '金额不能为空' });
+      }
+      if (direction === undefined) {
+        return res.status(400).json({ status: 400, message: '请选择收入或支出' });
       }
 
-      const transaction = await Transaction.create({
+      const transaction = await Account.create({
         userId: req.userId,
-        amount,
-        type,
+        direction: parseInt(direction),
         categoryId,
-        description,
-        date: date || new Date(),
+        payType,
+        payMethod,
+        amount: parseFloat(amount),
+        currency,
+        exchangeRate,
+        transDate,
+        remark,
+        cardId
       });
 
       res.status(201).json({
+        status: 201,
         message: '创建成功',
-        transaction,
+        data: transaction
       });
     } catch (error) {
-      console.error('创建账务流水错误:', error);
-      res.status(500).json({ message: '创建账务流水失败', error: error.message });
+      console.error('创建收支记录错误:', error);
+      res.status(500).json({ status: 500, message: '创建失败', error: error.message });
     }
   }
 
-  // 更新账务流水
+  /**
+   * 更新收支记录
+   */
   async updateTransaction(req, res) {
     try {
-      const { amount, type, categoryId, description, date } = req.body;
+      const { direction, categoryId, payType, payMethod, amount, currency, exchangeRate, transDate, remark, cardId } = req.body;
 
-      // 验证分类是否存在
-      const category = await Category.findById(categoryId, req.userId);
-      if (!category) {
-        return res.status(400).json({ message: '分类不存在' });
-      }
-
-      const transaction = await Transaction.update(req.params.id, req.userId, {
-        amount,
-        type,
+      const transaction = await Account.update(req.params.id, req.userId, {
+        direction,
         categoryId,
-        description,
-        date,
+        payType,
+        payMethod,
+        amount,
+        currency,
+        exchangeRate,
+        transDate,
+        remark,
+        cardId
       });
 
       if (!transaction) {
-        return res.status(404).json({ message: '账务流水不存在' });
+        return res.status(404).json({ status: 404, message: '记录不存在' });
       }
 
-      res.json({
-        message: '更新成功',
-        transaction,
-      });
+      res.json({ status: 200, message: '更新成功', data: transaction });
     } catch (error) {
-      console.error('更新账务流水错误:', error);
-      res.status(500).json({ message: '更新账务流水失败', error: error.message });
+      console.error('更新收支记录错误:', error);
+      res.status(500).json({ status: 500, message: '更新失败', error: error.message });
     }
   }
 
-  // 删除账务流水
+  /**
+   * 删除收支记录
+   */
   async deleteTransaction(req, res) {
     try {
-      const result = await Transaction.delete(req.params.id, req.userId);
+      const result = await Account.delete(req.params.id, req.userId);
 
       if (!result) {
-        return res.status(404).json({ message: '账务流水不存在' });
+        return res.status(404).json({ status: 404, message: '记录不存在' });
       }
 
-      res.json({ message: '删除成功' });
+      res.json({ status: 200, message: '删除成功' });
     } catch (error) {
-      console.error('删除账务流水错误:', error);
-      res.status(500).json({ message: '删除账务流水失败', error: error.message });
+      console.error('删除收支记录错误:', error);
+      res.status(500).json({ status: 500, message: '删除失败', error: error.message });
     }
   }
 
-  // 获取分类列表
+  // ========== 本月收支统计 ==========
+
+  /**
+   * 获取本月收支统计
+   */
+  async getMonthStats(req, res) {
+    try {
+      const now = new Date();
+      const year = parseInt(req.query.year) || now.getFullYear();
+      const month = parseInt(req.query.month) || (now.getMonth() + 1);
+
+      const [stats, categoryStats] = await Promise.all([
+        Account.getMonthStats(req.userId, year, month),
+        Account.getStatsByCategory(req.userId, year, month)
+      ]);
+
+      res.json({
+        status: 200,
+        message: '获取成功',
+        data: {
+          ...stats,
+          categoryBreakdown: categoryStats
+        }
+      });
+    } catch (error) {
+      console.error('获取本月统计错误:', error);
+      res.status(500).json({ status: 500, message: '获取失败', error: error.message });
+    }
+  }
+
+  // ========== 总资产统计 ==========
+
+  /**
+   * 获取预估总资产
+   */
+  async getTotalAssets(req, res) {
+    try {
+      const assets = await Asset.getTotalAssets(req.userId);
+
+      res.json({
+        status: 200,
+        message: '获取成功',
+        data: assets
+      });
+    } catch (error) {
+      console.error('获取总资产错误:', error);
+      res.status(500).json({ status: 500, message: '获取失败', error: error.message });
+    }
+  }
+
+  /**
+   * 获取资产明细
+   */
+  async getAssetDetail(req, res) {
+    try {
+      const { type } = req.query; // liquid | fixed | fund | card
+      const userId = req.userId;
+
+      let data;
+      switch (type) {
+        case 'liquid':
+          data = await Asset.getLiquidAssets(userId);
+          break;
+        case 'fixed':
+          data = await Asset.getFixedAssets(userId);
+          break;
+        case 'fund':
+          data = await Asset.getFunds(userId);
+          break;
+        case 'card':
+          data = await Asset.getCardBills(userId);
+          break;
+        default:
+          data = await Asset.getTotalAssets(userId);
+      }
+
+      res.json({ status: 200, message: '获取成功', data });
+    } catch (error) {
+      console.error('获取资产明细错误:', error);
+      res.status(500).json({ status: 500, message: '获取失败', error: error.message });
+    }
+  }
+
+  // ========== 保留旧接口兼容性 ==========
+
   async getCategories(req, res) {
-    try {
-      const { type } = req.query;
-      const filters = { userId: req.userId };
-      if (type) filters.type = type;
-
-      const categories = await Category.findAll(filters);
-
-      res.json({ categories });
-    } catch (error) {
-      console.error('获取分类错误:', error);
-      res.status(500).json({ message: '获取分类失败', error: error.message });
-    }
+    // 分类功能暂时返回空，后续可扩展
+    res.json({ status: 200, message: '获取成功', data: [] });
   }
 
-  // 创建分类
   async createCategory(req, res) {
-    try {
-      const { name, type, color, icon } = req.body;
-
-      const category = await Category.create({
-        userId: req.userId,
-        name,
-        type,
-        color,
-        icon,
-      });
-
-      res.status(201).json({
-        message: '创建成功',
-        category,
-      });
-    } catch (error) {
-      console.error('创建分类错误:', error);
-      res.status(500).json({ message: '创建分类失败', error: error.message });
-    }
+    res.status(501).json({ status: 501, message: '暂未实现' });
   }
 
-  // 更新分类
   async updateCategory(req, res) {
-    try {
-      const { name, type, color, icon } = req.body;
-
-      const category = await Category.update(req.params.id, req.userId, {
-        name,
-        type,
-        color,
-        icon,
-      });
-
-      if (!category) {
-        return res.status(404).json({ message: '分类不存在' });
-      }
-
-      res.json({
-        message: '更新成功',
-        category,
-      });
-    } catch (error) {
-      console.error('更新分类错误:', error);
-      res.status(500).json({ message: '更新分类失败', error: error.message });
-    }
+    res.status(501).json({ status: 501, message: '暂未实现' });
   }
 
-  // 删除分类
   async deleteCategory(req, res) {
-    try {
-      const result = await Category.delete(req.params.id, req.userId);
-
-      if (!result) {
-        return res.status(404).json({ message: '分类不存在' });
-      }
-
-      res.json({ message: '删除成功' });
-    } catch (error) {
-      console.error('删除分类错误:', error);
-      res.status(500).json({ message: '删除分类失败', error: error.message });
-    }
+    res.status(501).json({ status: 501, message: '暂未实现' });
   }
 
-  // 获取财务报表
   async getFinanceReport(req, res) {
-    try {
-      const { startDate, endDate } = req.query;
+    // 财务报表重定向到本月统计
+    const now = new Date();
+    const year = parseInt(req.query.year) || now.getFullYear();
+    const month = parseInt(req.query.month) || (now.getMonth() + 1);
 
-      const report = await financeService.generateReport(req.userId, {
-        startDate,
-        endDate,
-      });
-
-      res.json({ report });
-    } catch (error) {
-      console.error('获取财务报表错误:', error);
-      res.status(500).json({ message: '获取财务报表失败', error: error.message });
-    }
+    const stats = await Account.getMonthStats(req.userId, year, month);
+    res.json({ status: 200, message: '获取成功', data: stats });
   }
 
-  // 计算投资回报率 (IRR)
   async calculateIRR(req, res) {
-    try {
-      const { cashFlows } = req.body;
-
-      if (!Array.isArray(cashFlows) || cashFlows.length === 0) {
-        return res.status(400).json({ message: '现金流数据无效' });
-      }
-
-      const irr = financeService.calculateIRR(cashFlows);
-
-      res.json({
-        irr: irr * 100, // 转换为百分比
-        message: `内部收益率为 ${(irr * 100).toFixed(2)}%`,
-      });
-    } catch (error) {
-      console.error('计算 IRR 错误:', error);
-      res.status(500).json({ message: '计算 IRR 失败', error: error.message });
-    }
+    res.status(501).json({ status: 501, message: '暂未实现' });
   }
 }
 

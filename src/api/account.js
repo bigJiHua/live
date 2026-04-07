@@ -8,32 +8,37 @@ const pinLockGuard = require('../middlewares/pinLockGuard');
 router.use(authGuard);
 router.use(pinLockGuard);
 
-// 获取账务流水列表
+// ========== 收支记录 ==========
+
+// 获取收支列表
 router.get('/transactions', financeController.getTransactions);
 
-// 获取单个账务流水详情
+// 获取单条收支详情
 router.get('/transactions/:id', financeController.getTransactionById);
 
-// 创建账务流水
+// 创建收支记录
 router.post('/transactions', financeController.createTransaction);
 
-// 更新账务流水
+// 更新收支记录
 router.put('/transactions/:id', financeController.updateTransaction);
 
-// 删除账务流水
+// 删除收支记录
 router.delete('/transactions/:id', financeController.deleteTransaction);
 
-// 获取分类列表
-router.get('/categories', financeController.getCategories);
+// ========== 本月收支统计 ==========
 
-// 创建分类
-router.post('/categories', financeController.createCategory);
+// 获取本月收支统计
+router.get('/month-stats', financeController.getMonthStats);
 
-// 更新分类
-router.put('/categories/:id', financeController.updateCategory);
+// ========== 总资产统计 ==========
 
-// 删除分类
-router.delete('/categories/:id', financeController.deleteCategory);
+// 获取预估总资产
+router.get('/total-assets', financeController.getTotalAssets);
+
+// 获取资产明细（可按类型筛选）
+router.get('/asset-detail', financeController.getAssetDetail);
+
+// ========== 旧接口（保持兼容）==========
 
 // 获取财务报表
 router.get('/report', financeController.getFinanceReport);

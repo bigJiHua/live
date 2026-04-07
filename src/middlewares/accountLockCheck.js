@@ -89,7 +89,7 @@ async function accountLockCheck(req, res, next) {
     // 检查账户是否被锁定 (status = 0 表示锁定)
     if (Number(user.status) === 0) {
       const lockTime = new Date(user.update_time).getTime();
-      const unlockTime = lockTime + 1 * 60 * 60 * 1000; // 12小时后解锁
+      const unlockTime = lockTime + 12 * 60 * 60 * 1000; // 12小时后解锁
       const currentTime = Date.now();
 
       if (currentTime < unlockTime) {
