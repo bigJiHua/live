@@ -39,7 +39,7 @@ class MomentController {
         location: location ? JSON.stringify(location) : null,
         visibleType: visibleType || 0,
       });
-      res.status(201).json({ status: 200, message: "发布成功", id: result.id });
+      res.status(200).json({ status: 200, message: "发布成功", id: result.id });
     } catch (error) {
       res.status(500).json({ status: 500, message: "发布失败" });
     }

@@ -1,8 +1,15 @@
 const db = require('../config/db');
 const idUtils = require('../utils/idUtils');
+const AccountSettlement = require('../services/AccountSettlement');
+const CardBill = require('./CardBill');
 
 /**
  * 账务流水模型 - 对应数据库 account 表
+ * 
+ * 业务规则：
+ * 1. 消费时自动同步关联信用卡账单
+ * 2. 还款时（direction=1, pay_type=还款）自动冲减账单
+ * 3. 余额由 AccountSettlement 统一计算
  */
 class Account {
   static tableName = 'account';
@@ -13,50 +20,50 @@ class Account {
   static async findAll(userId, filters = {}, page = 1, limit = 20) {
     const offset = (page - 1) * limit;
 
-    let whereClause = 'WHERE user_id = ? AND is_deleted = 0';
+    let whereClause = 'WHERE a.user_id = ? AND a.is_deleted = 0';
     const params = [userId];
 
     // 过滤：收支类型
     if (filters.direction !== undefined) {
-      whereClause += ' AND direction = ?';
+      whereClause += ' AND a.direction = ?';
       params.push(filters.direction);
     }
 
     // 过滤：分类ID
     if (filters.categoryId) {
-      whereClause += ' AND category_id = ?';
+      whereClause += ' AND a.category_id = ?';
       params.push(filters.categoryId);
     }
 
     // 过滤：支付方式
     if (filters.payMethod) {
-      whereClause += ' AND pay_method = ?';
+      whereClause += ' AND a.pay_method = ?';
       params.push(filters.payMethod);
     }
 
     // 过滤：日期范围
     if (filters.startDate) {
-      whereClause += ' AND trans_date >= ?';
+      whereClause += ' AND a.trans_date >= ?';
       params.push(filters.startDate);
     }
     if (filters.endDate) {
-      whereClause += ' AND trans_date <= ?';
+      whereClause += ' AND a.trans_date <= ?';
       params.push(filters.endDate);
     }
 
     // 获取总数
-    const countQuery = `SELECT COUNT(*) as total FROM ${this.tableName} ${whereClause}`;
+    const countQuery = `SELECT COUNT(*) as total FROM ${this.tableName} a ${whereClause}`;
     const [countResult] = await db.execute(countQuery, params);
     const total = countResult[0].total;
 
     // 获取数据（关联分类和卡片信息）
     const query = `
       SELECT 
-        a.*,
+        a.id, a.user_id, a.direction, a.category_id,
+        a.pay_type, a.pay_method, a.account_type, a.amount, a.currency, a.exchange_rate,
+        a.trans_date, a.remark, a.card_id, a.create_time, a.update_time,
         c.name as category_name,
-        c.icon_name as category_icon,
-        c.color as category_color,
-        cb.alias as card_name,
+        cb.alias as card_alias,
         cb.last4_no as card_last4
       FROM ${this.tableName} a
       LEFT JOIN bus_category c ON a.category_id = c.id
@@ -76,11 +83,11 @@ class Account {
   static async findById(id, userId) {
     const query = `
       SELECT 
-        a.*,
+        a.id, a.user_id, a.direction, a.category_id,
+        a.pay_type, a.pay_method, a.account_type, a.amount, a.currency, a.exchange_rate,
+        a.trans_date, a.remark, a.card_id, a.create_time, a.update_time,
         c.name as category_name,
-        c.icon_name as category_icon,
-        c.color as category_color,
-        cb.alias as card_name,
+        cb.alias as card_alias,
         cb.last4_no as card_last4
       FROM ${this.tableName} a
       LEFT JOIN bus_category c ON a.category_id = c.id
@@ -93,37 +100,73 @@ class Account {
 
   /**
    * 创建账务记录
+   * 使用清算中心统一验证
    */
-  static async create({ userId, direction, categoryId, payType, payMethod, amount, currency, exchangeRate, transDate, remark, cardId }) {
+  static async create({ userId, direction, categoryId, payType, payMethod, accountType, amount, currency, exchangeRate, transDate, remark, cardId }) {
     const id = idUtils.billId();
     const now = String(Date.now());
 
+    // 从 card_base 获取真实的 card_type
+    let finalAccountType = 'debit';
+    if (cardId) {
+      const [cardRows] = await db.execute(
+        'SELECT card_type FROM card_base WHERE id = ? AND is_deleted = 0',
+        [cardId]
+      );
+      if (cardRows[0]?.card_type) {
+        finalAccountType = cardRows[0].card_type;
+      }
+    }
+
+    // ===== 清算中心验证 =====
+    if (cardId) {
+      const settlementResult = await AccountSettlement.validate({
+        card_id: cardId,
+        user_id: userId,
+        direction: direction,
+        amount: amount,
+        exchange_rate: exchangeRate || 1,
+        account_type: finalAccountType
+      });
+
+      if (!settlementResult.valid) {
+        throw new Error(settlementResult.message);
+      }
+    }
+
     const query = `
       INSERT INTO ${this.tableName} 
-      (id, user_id, in_out_type, direction, category_id, pay_type, pay_method, amount, currency, exchange_rate, trans_date, remark, card_id, create_time, update_time, is_deleted)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+      (id, user_id, direction, category_id, pay_type, pay_method, amount, currency, exchange_rate, trans_date, remark, card_id, create_time, update_time, is_deleted)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
     `;
-    
-    // direction: 1=收入, 0=支出
-    const inOutType = direction === 1 ? '收入' : '支出';
 
     await db.execute(query, [
       id,
       userId,
-      inOutType,
       direction,
-      categoryId || null,
-      payType || null,
-      payMethod || null,
+      categoryId,
+      payType,
+      payMethod,
       amount,
       currency || 'CNY',
       exchangeRate || 1,
       transDate || now,
-      remark || null,
-      cardId || null,
+      remark || '普通支出',
+      cardId,
       now,
       now
     ]);
+
+    // ===== 清算中心同步余额（从收支表实时计算）=====
+    if (cardId) {
+      await AccountSettlement.syncBalanceSnapshot(cardId, userId);
+
+      // ===== 信用卡消费实时更新账单 =====
+      // 只有信用卡 + 支出 才更新账单
+      if (finalAccountType === 'credit' && direction === 0) {
+        await CardBill.syncFromExpense(cardId, userId, amount, transDate);
+      }
+    }
 
     return this.findById(id, userId);
   }
@@ -137,8 +180,8 @@ class Account {
     const params = [];
 
     if (direction !== undefined) {
-      fields.push('direction = ?', 'in_out_type = ?');
-      params.push(direction, direction === 1 ? '收入' : '支出');
+      fields.push('direction = ?');
+      params.push(direction);
     }
     if (categoryId !== undefined) {
       fields.push('category_id = ?');
@@ -191,7 +234,16 @@ class Account {
       WHERE id = ? AND user_id = ? AND is_deleted = 0
     `;
     await db.execute(query, params);
-    return this.findById(id, userId);
+    
+    // 同步余额（如果修改了金额、方向或卡片）
+    if (cardId || amount !== undefined || direction !== undefined) {
+      const updated = await this.findById(id, userId);
+      if (updated?.card_id) {
+        await AccountSettlement.syncBalanceSnapshot(updated.card_id, userId);
+      }
+    }
+    
+    return updated;
   }
 
   /**
@@ -199,12 +251,31 @@ class Account {
    */
   static async delete(id, userId) {
     const now = String(Date.now());
+    
+    // 先查询完整记录
+    const [rows] = await db.execute(
+      'SELECT card_id, direction, amount, trans_date FROM account WHERE id = ? AND user_id = ? AND is_deleted = 0',
+      [id, userId]
+    );
+    const record = rows[0];
+    
     const query = `
       UPDATE ${this.tableName} 
       SET is_deleted = 1, update_time = ?
       WHERE id = ? AND user_id = ?
     `;
     const [result] = await db.execute(query, [now, id, userId]);
+    
+    // 删除成功后同步余额和账单
+    if (result.affectedRows > 0 && record?.card_id) {
+      await AccountSettlement.syncBalanceSnapshot(record.card_id, userId);
+      
+      // 信用卡消费回滚：删除支出流水时恢复账单额度
+      if (record.direction === 0) {
+        await CardBill.rollbackExpense(record.card_id, userId, record.amount, record.trans_date);
+      }
+    }
+    
     return result.affectedRows > 0;
   }
 
@@ -218,10 +289,11 @@ class Account {
     const nextYear = month === 12 ? year + 1 : year;
     const endDate = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`;
 
+    // 查询时计算人民币价值：CNY 直接用，外币用 amount * exchange_rate / 100
     const query = `
       SELECT 
         direction,
-        SUM(amount) as total,
+        SUM(CASE WHEN currency = 'CNY' THEN amount ELSE ROUND(amount * exchange_rate / 100, 2) END) as total,
         COUNT(*) as count
       FROM ${this.tableName}
       WHERE user_id = ? AND is_deleted = 0 
@@ -257,7 +329,7 @@ class Account {
   }
 
   /**
-   * 按分类统计收支
+   * 按分类统计收支（人民币价值）
    */
   static async getStatsByCategory(userId, year, month) {
     const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
@@ -265,14 +337,13 @@ class Account {
     const nextYear = month === 12 ? year + 1 : year;
     const endDate = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`;
 
+    // 查询时计算人民币价值
     const query = `
       SELECT 
         a.direction,
         a.category_id,
         c.name as category_name,
-        c.icon_name as category_icon,
-        c.color as category_color,
-        SUM(a.amount) as total,
+        SUM(CASE WHEN a.currency = 'CNY' THEN a.amount ELSE ROUND(a.amount * a.exchange_rate / 100, 2) END) as total,
         COUNT(*) as count
       FROM ${this.tableName} a
       LEFT JOIN bus_category c ON a.category_id = c.id
@@ -290,8 +361,6 @@ class Account {
       const item = {
         categoryId: row.category_id,
         categoryName: row.category_name || '未分类',
-        categoryIcon: row.category_icon,
-        categoryColor: row.category_color,
         total: parseFloat(row.total) || 0,
         count: row.count
       };

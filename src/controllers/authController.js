@@ -41,7 +41,7 @@ class AuthController {
         is_locked: 0, // 新注册用户默认解锁
       });
 
-      res.status(201).json({
+      res.status(200).json({
         message: "注册成功",
         userId: user.id,
         user: {

@@ -91,14 +91,14 @@ class FinanceController {
         cardId
       });
 
-      res.status(201).json({
-        status: 201,
+      res.status(200).json({
+        status: 200,
         message: '创建成功',
         data: transaction
       });
     } catch (error) {
       console.error('创建收支记录错误:', error);
-      res.status(500).json({ status: 500, message: '创建失败', error: error.message });
+      res.status(500).json({ status: 500, message: error, error: error.message });
     }
   }
 

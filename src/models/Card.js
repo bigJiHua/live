@@ -85,6 +85,8 @@ class Card {
     cardLength,
     last4No,
     cardBin,
+    creditLimit,
+    tempLimit,
     alias,
     cardImg,
     openDate,
@@ -101,7 +103,8 @@ class Card {
     color,
     annualFee,
     feeFreeRule,
-    sourceFrom
+    sourceFrom,
+    pointsRate
   }) {
     const id = idUtils.billId();
     const now = String(Date.now());
@@ -109,24 +112,27 @@ class Card {
     const query = `
       INSERT INTO ${this.tableName} (
         id, user_id, bank_id, card_type, card_level, main_sub, card_org,
-        card_length, last4_no, card_bin, alias, card_img, open_date, expire_date,
+        card_length, last4_no, card_bin, credit_limit, temp_limit,
+        alias, card_img, open_date, expire_date,
         bill_day, repay_day, currency, status, is_default, is_hide, sort,
         tag, remark, color, annual_fee, fee_free_rule, source_from,
-        create_time, update_time, is_deleted
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+        points_rate, create_time, update_time, is_deleted
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
     `;
 
     await db.execute(query, [
       id,
       userId,
       bankId || '',
-      cardType,
+      cardType || 'debit',
       cardLevel || '',
       mainSub || '主卡',
       cardOrg || '',
       cardLength || '19',
       last4No || '',
       cardBin || '',
+      creditLimit || 0,
+      tempLimit || 0,
       alias || '',
       cardImg || '',
       openDate || '',
@@ -144,9 +150,20 @@ class Card {
       annualFee || 0,
       feeFreeRule || '',
       sourceFrom || '手动',
+      pointsRate || 1,
       now,
       now
     ]);
+
+    // 信用卡：立即初始化当前月账单
+    if (cardType === 'credit') {
+      try {
+        const CardBill = require('./CardBill');
+        await CardBill.getOrCreateBill(id, userId);
+      } catch (err) {
+        console.error('初始化账单失败:', err);
+      }
+    }
 
     return this.findById(id, userId);
   }
@@ -217,45 +234,26 @@ class Card {
   }
 
   /**
-   * 删除卡片（软删除 + 级联删除子表）
+   * 删除卡片
+   * - 只删除 account_balance（余额数据无意义）
+   * - 其他关联数据（账单/还款/流水/日志）保留，查询时用 is_deleted=0 过滤
    */
   static async delete(id, userId) {
     const now = String(Date.now());
 
-    // 1. 级联软删除关联的账单记录
+    // 1. 删除关联的账户余额
     await db.execute(
-      `UPDATE card_bill SET is_deleted = 1, update_time = ? WHERE card_id = ? AND user_id = ?`,
+      `UPDATE account_balance SET is_deleted = 1, update_time = ? WHERE card_id = ? AND user_id = ?`,
       [now, id, userId]
     );
 
-    // 2. 获取关联的账单ID，用于删除还款记录
-    const [bills] = await db.execute(
-      `SELECT id FROM card_bill WHERE card_id = ? AND user_id = ?`,
-      [id, userId]
-    );
-    const billIds = bills.map(b => b.id);
-
-    if (billIds.length > 0) {
-      // 3. 级联软删除关联的还款记录
-      await db.execute(
-        `UPDATE card_repay SET is_deleted = 1 WHERE bill_id IN (${billIds.map(() => '?').join(',')})`,
-        billIds
-      );
-    }
-
-    // 4. 级联软删除关联的还款记录（直接关联卡片的）
+    // 2. 删除关联的流水记录（可选，如需清理）
     await db.execute(
-      `UPDATE card_repay SET is_deleted = 1 WHERE card_id = ? AND user_id = ? AND bill_id IS NULL`,
-      [id, userId]
+      `UPDATE account SET is_deleted = 1, update_time = ? WHERE card_id = ? AND user_id = ?`,
+      [now, id, userId]
     );
 
-    // 5. 级联软删除关联的操作日志
-    await db.execute(
-      `UPDATE card_log SET is_deleted = 1 WHERE card_id = ? AND user_id = ?`,
-      [id, userId]
-    );
-
-    // 6. 软删除卡片主表
+    // 3. 软删除卡片主表
     const query = `
       UPDATE ${this.tableName}
       SET is_deleted = 1, update_time = ?

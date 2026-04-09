@@ -11,22 +11,20 @@ class CardRepayController {
    */
   async getList(req, res) {
     try {
-      const { cardId, billId } = req.query;
+      const { cardId, billId, billMonth } = req.query;
       const filters = {};
 
       if (cardId) filters.cardId = cardId;
       if (billId) filters.billId = billId;
+      if (billMonth) filters.billMonth = billMonth;
 
       const records = await CardRepay.findAll(req.userId, filters);
 
-      res.json({
-        status: 200,
-        message: '获取成功',
-        data: records
-      });
+      if (!records || records.length === 0) return res.say("暂无还款记录", 200);
+      return res.json({ status: 200, message: "获取成功", data: records });
     } catch (error) {
       console.error('获取还款记录错误:', error);
-      res.status(500).json({ status: 500, message: '获取失败', error: error.message });
+      return res.say("获取失败", 500);
     }
   }
 
@@ -34,41 +32,57 @@ class CardRepayController {
    * 获取单个还款记录详情
    */
   async getById(req, res) {
+    if (!req.params.id) return res.say("还款记录id不能为空", 400);
     try {
       const record = await CardRepay.findById(req.params.id, req.userId);
 
-      if (!record) {
-        return res.status(404).json({ status: 404, message: '还款记录不存在' });
-      }
-
-      res.json({ status: 200, message: '获取成功', data: record });
+      if (!record) return res.say("还款记录不存在", 404);
+      return res.json({ status: 200, message: "获取成功", data: record });
     } catch (error) {
       console.error('获取还款记录详情错误:', error);
-      res.status(500).json({ status: 500, message: '获取失败', error: error.message });
+      return res.say("获取失败", 500);
     }
   }
 
   /**
-   * 创建还款记录
+   * 创建还款记录（支持多种还款方式）
+   * repayMethod: card(本卡)/balance(余额)/bank_card(银行卡)/cash(现金)
+   * bank_card 时需要传入 repayMethodCardId
    */
   async create(req, res) {
     try {
-      const record = await CardRepay.create({
+      const { 
+        cardId, 
+        billId, 
+        repayAmount, 
+        repayMethod,
+        repayMethodCardId,
+        repayTime,
+        remark 
+      } = req.body.data;
+
+      // 使用新的 executeRepay 方法
+      await CardRepay.executeRepay({
         userId: req.userId,
-        ...req.body.data
+        cardId,
+        billId,
+        repayAmount,
+        repayMethod,
+        repayMethodCardId,
+        repayTime,
+        remark
       });
 
       // 记录操作日志
-      await CardLog.log(req.body.data.cardId, req.userId, '创建还款记录', req.ip);
+      await CardLog.log(cardId, req.userId, '还款', req.ip);
 
-      res.status(201).json({
-        status: 201,
-        message: '创建成功',
-        data: record
+      return res.status(200).json({ 
+        status: 200, 
+        message: "还款成功"
       });
     } catch (error) {
       console.error('创建还款记录错误:', error);
-      res.status(500).json({ status: 500, message: '创建失败', error: error.message });
+      return res.say(error.message || "创建失败", 500);
     }
   }
 
@@ -79,17 +93,15 @@ class CardRepayController {
     try {
       const record = await CardRepay.update(req.params.id, req.userId, req.body.data);
 
-      if (!record) {
-        return res.status(404).json({ status: 404, message: '还款记录不存在' });
-      }
+      if (!record) return res.say("还款记录不存在", 404);
 
       // 记录操作日志
       await CardLog.log(record.card_id, req.userId, '更新还款记录', req.ip);
 
-      res.json({ status: 200, message: '更新成功', data: record });
+      return res.json({ status: 200, message: "更新成功", data: record });
     } catch (error) {
       console.error('更新还款记录错误:', error);
-      res.status(500).json({ status: 500, message: '更新失败', error: error.message });
+      return res.say("更新失败", 500);
     }
   }
 
@@ -99,23 +111,19 @@ class CardRepayController {
   async delete(req, res) {
     try {
       const record = await CardRepay.findById(req.params.id, req.userId);
-      if (!record) {
-        return res.status(404).json({ status: 404, message: '还款记录不存在' });
-      }
+      if (!record) return res.say("还款记录不存在", 404);
 
       const result = await CardRepay.delete(req.params.id, req.userId);
 
-      if (!result) {
-        return res.status(404).json({ status: 404, message: '还款记录不存在' });
-      }
+      if (!result) return res.say("还款记录不存在", 404);
 
       // 记录操作日志
       await CardLog.log(record.card_id, req.userId, '删除还款记录', req.ip);
 
-      res.json({ status: 200, message: '删除成功' });
+      return res.json({ status: 200, message: "删除成功" });
     } catch (error) {
       console.error('删除还款记录错误:', error);
-      res.status(500).json({ status: 500, message: '删除失败', error: error.message });
+      return res.say("删除失败", 500);
     }
   }
 }

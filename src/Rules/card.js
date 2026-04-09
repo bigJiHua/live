@@ -17,7 +17,8 @@ exports.createCard = {
       last4No: joi.string().required().messages({
         "any.required": "last4No 卡号后四位 不能为空",
       }),
-      cardBin: joi.string().required().messages({
+      cardBin: joi.string().length(6).required().messages({
+        "string.length": "cardBin 卡BIN前6位必须是6位数",
         "any.required": "cardBin 卡BIN前6位 不能为空",
       }),
       openDate: joi.string().required().messages({
@@ -30,6 +31,15 @@ exports.createCard = {
         "any.required": "sourceFrom 数据来源 不能为空",
       }),
       // ========== 【信用卡必填字段】 ==========
+      creditLimit: joi.number().when('cardType', {
+        is: 'credit',
+        then: joi.number().required().min(0).messages({
+          "any.required": "creditLimit 信用额度（信用卡必填）不能为空",
+          "number.min": "信用额度不能为负数",
+        }),
+        otherwise: joi.number().default(0),
+      }),
+      tempLimit: joi.number().default(0),
       billDay: joi.number().when('cardType', {
         is: 'credit',
         then: joi.number().required().messages({
@@ -116,44 +126,22 @@ exports.updateCard = {
 exports.createBill = {
   body: joi.object({
     data: joi.object({
+      // 【前端必填】
       cardId: joi.string().required().messages({
         "any.required": "cardId 卡片ID 不能为空",
       }),
       creditLimit: joi.number().required().messages({
         "any.required": "creditLimit 信用额度 不能为空",
       }),
-      availLimit: joi.number().required().messages({
-        "any.required": "availLimit 可用额度 不能为空",
+      tempLimit: joi.number().default(0),
+      pointsRate: joi.number().default(1),
+      // 【可选】
+      billMonth: joi.string().pattern(/^\d{4}-\d{2}$/).messages({
+        "string.pattern.base": "billMonth 格式应为 YYYY-MM",
       }),
-      usedLimit: joi.number().required().messages({
-        "any.required": "usedLimit 已用额度 不能为空",
-      }),
-      tempLimit: joi.number(),
-      billStartDate: joi.string().required().messages({
-        "any.required": "billStartDate 账单周期开始 不能为空",
-      }),
-      billEndDate: joi.string().required().messages({
-        "any.required": "billEndDate 账单周期结束 不能为空",
-      }),
-      billAmount: joi.number().required().messages({
-        "any.required": "billAmount 本期账单 不能为空",
-      }),
-      minRepay: joi.number().required().messages({
-        "any.required": "minRepay 最低还款 不能为空",
-      }),
-      repaid: joi.number().required().messages({
-        "any.required": "repaid 已还金额 不能为空",
-      }),
-      needRepay: joi.number().required().messages({
-        "any.required": "needRepay 待还金额 不能为空",
-      }),
-      points: joi.number(),
-      pointsExpire: joi.string(),
-      repayStatus: joi.string(),
-      isOverdue: joi.boolean(),
-      overdueDays: joi.number(),
-      remindSwitch: joi.boolean(),
-      remindDays: joi.number(),
+      // 【后端计算/默认值】
+      remindSwitch: joi.boolean().default(true),
+      remindDays: joi.number().default(3),
     }).unknown(true),
   }).unknown(true),
 };
@@ -163,20 +151,9 @@ exports.updateBill = {
   body: joi.object({
     data: joi.object({
       creditLimit: joi.number(),
-      availLimit: joi.number(),
-      usedLimit: joi.number(),
       tempLimit: joi.number(),
-      billStartDate: joi.string(),
-      billEndDate: joi.string(),
-      billAmount: joi.number(),
-      minRepay: joi.number(),
+      pointsRate: joi.number(),
       repaid: joi.number(),
-      needRepay: joi.number(),
-      points: joi.number(),
-      pointsExpire: joi.string(),
-      repayStatus: joi.string(),
-      isOverdue: joi.boolean(),
-      overdueDays: joi.number(),
       remindSwitch: joi.boolean(),
       remindDays: joi.number(),
     }).unknown(true),
@@ -195,16 +172,26 @@ exports.createRepay = {
       billId: joi.string().required().messages({
         "any.required": "billId 账单ID 不能为空",
       }),
-      repayAmount: joi.number().required().messages({
+      repayAmount: joi.number().required().min(0.01).messages({
         "any.required": "repayAmount 还款金额 不能为空",
+        "number.min": "还款金额必须大于 0",
       }),
-      repayMethod: joi.string().required().messages({
+      repayMethod: joi.string().required().valid('card', 'balance', 'bank_card', 'cash').messages({
         "any.required": "repayMethod 还款方式 不能为空",
+        "any.only": "repayMethod 只支持: card/balance/bank_card/cash",
       }),
-      repayTime: joi.string().required().messages({
+      repayMethodCardId: joi.string().when('repayMethod', {
+        is: 'bank_card',
+        then: joi.string().required().messages({
+          "any.required": "银行卡还款时 repayMethodCardId 不能为空",
+        }),
+        otherwise: joi.string().allow('').optional(),
+      }),
+      repayTime: joi.string().required().pattern(/^\d{4}-\d{2}-\d{2}$/).messages({
         "any.required": "repayTime 还款时间 不能为空",
+        "string.pattern.base": "repayTime 格式应为 YYYY-MM-DD",
       }),
-      remark: joi.string(),
+      remark: joi.string().allow('').optional(),
     }).unknown(true),
   }).unknown(true),
 };

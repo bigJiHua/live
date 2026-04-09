@@ -61,6 +61,9 @@ const decryptWithSecurity = async (req, res, next) => {
     try {
       // 这里后续引用方式为 req.body.data
       req.body = JSON.parse(decryptedStr);
+      //TODO 打印生产案例数据
+      console.log(req.body.data);
+      
     } catch (e) {
       throw new Error("INVALID_JSON");
     }

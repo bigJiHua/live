@@ -27,3 +27,5 @@ coverage/
 dist/
 build/
 card-api.md
+account-api.md
+card-bill-api.md
