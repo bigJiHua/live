@@ -2,32 +2,38 @@
   <div class="page-finance">
     <div class="app-card finance-header">
       <div class="month-selector" @click="showMonthPicker = true">
-        <span class="num-font">2026</span>年<span class="num-font">3</span>月 
+        <span class="num-font">{{ currentYear }}</span
+        >年<span class="num-font">{{ currentMonth }}</span
+        >月
         <van-icon name="arrow-down" />
       </div>
-      
+
       <van-row class="total-info">
         <van-col span="12" class="info-item">
           <div class="label">本月总支出</div>
-          <div class="amount text-expense num-font">3,240.60</div>
+          <div class="amount text-expense num-font">
+            {{ formatAmount(stats.expense) }}
+          </div>
         </van-col>
         <van-col span="12" class="info-item">
           <div class="label">本月总收入</div>
-          <div class="amount text-income num-font">8,500.00</div>
+          <div class="amount text-income num-font">
+            {{ formatAmount(stats.income) }}
+          </div>
         </van-col>
       </van-row>
 
       <div class="header-footer">
         <div class="net-assets">
-          <span class="label">预估净资产：</span>
-          <span class="val num-font">￥125,210.00</span>
+          <span class="label">结余：</span>
+          <span class="val num-font">￥{{ formatAmount(stats.balance) }}</span>
         </div>
-        <van-button 
+        <van-button
           plain
           size="small"
-          type="primary" 
-          class="quick-add-btn" 
-          icon="plus" 
+          type="primary"
+          class="quick-add-btn"
+          icon="plus"
           @click="$router.push('/finance/add')"
         >
           记一笔
@@ -38,49 +44,67 @@
     <div class="app-card menu-grid-wrapper">
       <div class="grid-section-title">财务把控中心</div>
       <van-grid :column-num="3" :border="false" clickable>
+        <van-grid-item @click="goFunction('flow')">
+          <template #icon
+            ><van-icon name="orders-o" class="grid-icon blue"
+          /></template>
+          <template #text><span class="grid-text">流水明细</span></template>
+        </van-grid-item>
         <van-grid-item @click="goFunction('credit')">
-          <template #icon><van-icon name="credit-pay" class="grid-icon orange" /></template>
+          <template #icon
+            ><van-icon name="credit-pay" class="grid-icon orange"
+          /></template>
           <template #text><span class="grid-text">信用卡专项</span></template>
         </van-grid-item>
-
         <van-grid-item @click="goFunction('bill-list')">
-          <template #icon><van-icon name="todo-list-o" class="grid-icon red" /></template>
+          <template #icon
+            ><van-icon name="todo-list-o" class="grid-icon red"
+          /></template>
           <template #text><span class="grid-text">信用卡账单</span></template>
         </van-grid-item>
-
         <van-grid-item @click="goFunction('repay-list')">
-          <template #icon><van-icon name="paid" class="grid-icon green" /></template>
+          <template #icon
+            ><van-icon name="paid" class="grid-icon green"
+          /></template>
           <template #text><span class="grid-text">还款记录</span></template>
         </van-grid-item>
-
         <van-grid-item @click="goFunction('report')">
-          <template #icon><van-icon name="chart-trending-o" class="grid-icon blue" /></template>
+          <template #icon
+            ><van-icon name="chart-trending-o" class="grid-icon blue"
+          /></template>
           <template #text><span class="grid-text">阶段财报</span></template>
         </van-grid-item>
-
         <van-grid-item @click="goFunction('assets')">
-          <template #icon><van-icon name="gem" class="grid-icon purple" /></template>
+          <template #icon
+            ><van-icon name="gem" class="grid-icon purple"
+          /></template>
           <template #text><span class="grid-text">资产结构</span></template>
         </van-grid-item>
-
         <van-grid-item @click="goFunction('budget')">
-          <template #icon><van-icon name="balance-list" class="grid-icon cyan" /></template>
+          <template #icon
+            ><van-icon name="balance-list" class="grid-icon cyan"
+          /></template>
           <template #text><span class="grid-text">预算控制</span></template>
         </van-grid-item>
-
         <van-grid-item @click="goFunction('fixed-assets')">
-          <template #icon><van-icon name="shop-o" class="grid-icon teal" /></template>
+          <template #icon
+            ><van-icon name="shop-o" class="grid-icon teal"
+          /></template>
           <template #text><span class="grid-text">固定资产</span></template>
         </van-grid-item>
-
         <van-grid-item @click="goFunction('work-cost')">
-          <template #icon><van-icon name="medal-o" class="grid-icon pink" /></template>
+          <template #icon
+            ><van-icon name="medal-o" class="grid-icon pink"
+          /></template>
           <template #text><span class="grid-text">工作成本</span></template>
         </van-grid-item>
-
         <van-grid-item @click="goFunction('super-calc')" class="special-item">
-          <template #icon><van-icon name="points" class="grid-icon gold" /></template>
-          <template #text><span class="grid-text font-bold">超级计算</span></template>
+          <template #icon
+            ><van-icon name="points" class="grid-icon gold"
+          /></template>
+          <template #text
+            ><span class="grid-text font-bold">超级计算</span></template
+          >
         </van-grid-item>
       </van-grid>
     </div>
@@ -88,57 +112,127 @@
     <div class="footer-tips">
       数据已进行全站加密处理 <van-icon name="shield-check" />
     </div>
+
+    <van-popup v-model:show="showMonthPicker" position="bottom" round>
+      <van-picker
+        title="选择月份"
+        v-model="selectedValues"
+        :columns="pickerColumns"
+        @confirm="onPickerConfirm"
+        @cancel="showMonthPicker = false"
+      />
+    </van-popup>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted } from "vue";
+import { useRouter } from "vue-router";
+import { showToast } from "vant";
+import { getMonthStats } from "@/utils/api/account";
 
-const router = useRouter()
-const showMonthPicker = ref(false)
+const router = useRouter();
+const showMonthPicker = ref(false);
+
+const now = new Date();
+const currentYear = ref(now.getFullYear());
+const currentMonth = ref(now.getMonth() + 1);
+const selectedValues = ref([
+  `${now.getFullYear()}年`,
+  `${now.getMonth() + 1}月`,
+]);
+
+const stats = ref({ expense: 0, income: 0, balance: 0 });
+const detailData = ref(null); // 存放明细数据
+
+const formatAmount = (amount) => {
+  if (amount === null || amount === undefined) return "0.00";
+  const num = Number(amount);
+  // 超过1万显示为万
+  if (num >= 10000) {
+    return (num / 10000).toFixed(2) + "万";
+  }
+  return num.toLocaleString("zh-CN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+};
+
+const pickerColumns = computed(() => {
+  const years = [];
+  const startYear = 2020;
+  const endYear = new Date().getFullYear() + 5;
+  for (let i = startYear; i <= endYear; i++) {
+    years.push({ text: `${i}年`, value: `${i}年` });
+  }
+  const months = Array.from({ length: 12 }, (_, i) => ({
+    text: `${i + 1}月`,
+    value: `${i + 1}月`,
+  }));
+  return [years, months];
+});
+
+const onPickerConfirm = ({ selectedOptions }) => {
+  const yearText = selectedOptions[0].text;
+  const monthText = selectedOptions[1].text;
+  currentYear.value = parseInt(yearText);
+  currentMonth.value = parseInt(monthText);
+  selectedValues.value = [yearText, monthText];
+  showMonthPicker.value = false;
+  loadMonthStats();
+};
+
+const loadMonthStats = async () => {
+  try {
+    // 获取 summary 数据（总数）
+    const summaryRes = await getMonthStats({
+      year: currentYear.value,
+      month: currentMonth.value,
+      type: "summary",
+    });
+
+    // 获取 detail 数据（明细）
+    const detailRes = await getMonthStats({
+      year: currentYear.value,
+      month: currentMonth.value,
+      type: "detail",
+    });
+
+    if (summaryRes.data) {
+      stats.value = {
+        expense: summaryRes.data.expense || 0,
+        income: summaryRes.data.income || 0,
+        balance: summaryRes.data.balance || 0,
+      };
+    }
+
+    // 存放明细数据（按分类统计等）
+    if (detailRes.data) {
+      detailData.value = detailRes.data;
+    }
+  } catch (e) {
+    showToast("加载失败");
+  }
+};
 
 const goFunction = (type) => {
-  switch (type) {
-    case 'credit':
-      router.push('/card/credit')
-      break
-    case 'bill-list':
-      router.push('/card/bill/list')
-      break
-    case 'repay-list':
-      router.push('/card/repay/list')
-      break
-    case 'report':
-      // 阶段财报
-      break
-    case 'assets':
-      // 资产结构
-      break
-    case 'budget':
-      // 预算控制
-      break
-    case 'fixed-assets':
-      // 固定资产
-      break
-    case 'work-cost':
-      // 工作成本
-      break
-    case 'super-calc':
-      // 超级计算
-      break
-    default:
-      console.log('正在进入专项模块:', type)
-  }
-}
+  const routes = {
+    flow: "/finance/flow",
+    credit: "/credit-center",
+    "bill-list": "/card/bill/list",
+    "repay-list": "/card/repay/list",
+    assets: "/finance/structure",
+  };
+  if (routes[type]) router.push(routes[type]);
+};
+
+onMounted(() => loadMonthStats());
 </script>
 
 <style scoped>
 .page-finance {
   padding: 8px 16px;
 }
-
-/* 1. 头部看板优化 */
 .finance-header {
   background: white;
   padding: 20px;
@@ -150,9 +244,9 @@ const goFunction = (type) => {
   font-size: 14px;
   color: #646566;
   margin-bottom: 15px;
-}
-.total-info .info-item {
-  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 .info-item .label {
   font-size: 12px;
@@ -163,7 +257,6 @@ const goFunction = (type) => {
   font-size: 22px;
   font-weight: bold;
 }
-
 .header-footer {
   margin-top: 18px;
   padding-top: 15px;
@@ -172,11 +265,20 @@ const goFunction = (type) => {
   justify-content: space-between;
   align-items: center;
 }
-.net-assets .label { font-size: 12px; color: #969799; }
-.net-assets .val { font-size: 14px; color: #323233; font-weight: 500; }
-.quick-add-btn { padding: 0 15px; height: 32px; border-radius: 8px; }
-
-/* 2. 功能矩阵优化 */
+.net-assets .label {
+  font-size: 12px;
+  color: #969799;
+}
+.net-assets .val {
+  font-size: 14px;
+  color: #323233;
+  font-weight: 500;
+}
+.quick-add-btn {
+  padding: 0 15px;
+  height: 32px;
+  border-radius: 8px;
+}
 .menu-grid-wrapper {
   background: white;
   padding: 16px 8px;
@@ -190,28 +292,49 @@ const goFunction = (type) => {
   margin-bottom: 15px;
   color: #323233;
 }
-.grid-icon { font-size: 26px; margin-bottom: 8px; }
-.grid-text { font-size: 13px; color: #646566; }
-.font-bold { font-weight: bold; color: #323233; }
-
-/* 图标颜色方案 */
-.blue { color: #1989fa; }
-.green { color: #07c160; }
-.orange { color: #ff976a; }
-.red { color: #ee0a24; }
-.purple { color: #7232dd; }
-.cyan { color: #00bcd4; }
-.teal { color: #009688; }
-.pink { color: #e91e63; }
-.gold { color: #ffb300; }
-
-/* 特殊项目样式 */
+.grid-icon {
+  font-size: 26px;
+  margin-bottom: 8px;
+}
+.grid-text {
+  font-size: 13px;
+  color: #646566;
+}
+.font-bold {
+  font-weight: bold;
+  color: #323233;
+}
+.blue {
+  color: #1989fa;
+}
+.green {
+  color: #07c160;
+}
+.orange {
+  color: #ff976a;
+}
+.red {
+  color: #ee0a24;
+}
+.purple {
+  color: #7232dd;
+}
+.cyan {
+  color: #00bcd4;
+}
+.teal {
+  color: #009688;
+}
+.pink {
+  color: #e91e63;
+}
+.gold {
+  color: #ffb300;
+}
 .special-item {
-  background: #fff9e6; /* 淡淡的金色背景 */
+  background: #fff9e6;
   border-radius: 12px;
 }
-
-/* 4. 底部提示 */
 .footer-tips {
   text-align: center;
   font-size: 11px;
@@ -219,7 +342,10 @@ const goFunction = (type) => {
   margin-top: 30px;
   padding-bottom: 20px;
 }
-
-.text-income { color: #07c160; }
-.text-expense { color: #ee0a24; }
+.text-income {
+  color: #07c160;
+}
+.text-expense {
+  color: #ee0a24;
+}
 </style>

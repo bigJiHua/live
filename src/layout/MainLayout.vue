@@ -41,7 +41,7 @@
 </template>
 
 <script setup>
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
 const route = useRoute();
@@ -68,9 +68,11 @@ const showBackButton = computed(() => {
   const mainPages = ["/home", "/finance", "/diary", "/user"];
   return !mainPages.includes(route.path);
 });
-
+let cNum = ref(0)
 // 执行返回 (保持原样)
 const onBack = () => {
+  cNum++;
+  if (cNum >= 3) return router.push('/')
   if (showBackButton.value) {
     router.back();
   }

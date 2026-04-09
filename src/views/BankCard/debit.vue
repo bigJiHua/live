@@ -1,7 +1,7 @@
 <template>
   <div class="page-card-list" @click="handleBackdropClick">
     <div class="page-header">
-      <h1 class="title">我的资产</h1>
+      <h1 class="title">借记卡</h1>
       <span class="subtitle">共 {{ cardList.length }} 张卡片</span>
     </div>
 
@@ -40,8 +40,11 @@
               <div class="bank-icon-mock" v-else>
                 {{ item.bankName?.charAt(0) || "?" }}
               </div>
-              <div class="bank-name">{{ item.bankName || "未知银行" }}
-                <span class="bank-last4"> （{{ item.last4No }}）</span>
+              <div class="bank-name">
+                {{ item.bankName || "未知银行" }}
+                <span class="bank-last4" v-if="selectedId === null"
+                  >（{{ item.last4No }}）</span
+                >
               </div>
             </div>
             <van-tag v-if="item.isDefault || item.is_default" class="custom-tag"
@@ -50,7 +53,7 @@
           </div>
 
           <div class="card-number">
-            **** **** **** {{ item.last4No || item.last4_no || "****" }}
+            {{ formatCardNo(item) }}
           </div>
 
           <div class="card-footer">
@@ -64,23 +67,25 @@
             </div>
 
             <!-- 卡组织图标 - 左下角默认 -->
-            <div class="card-org" v-if="item.cardOrgIconUrl">
+            <div
+              class="card-org"
+              v-if="item.cardOrgIconUrl && selectedId === null"
+            >
               <img :src="item.cardOrgIconUrl" alt="卡组织" />
             </div>
-
-            <transition name="fade">
-              <div class="card-actions-quick" v-if="selectedId === item.id">
-                <!-- 卡组织图标 - 右上角选中时 -->
-                <div class="card-org card-org-top" v-if="item.cardOrgIconUrl">
-                  <img :src="item.cardOrgIconUrl" alt="卡组织" />
-                </div>
-                <button class="action-pill-btn" @click.stop="goToEdit(item)">
-                  <van-icon name="setting-o" />
-                  <span>管理卡片</span>
-                </button>
-              </div>
-            </transition>
           </div>
+          <transition name="fade">
+            <div class="card-actions-quick" v-if="selectedId === item.id">
+              <button class="action-pill-btn" @click.stop="goToEdit(item)">
+                <van-icon name="setting-o" />
+                <span>管理</span>
+              </button>
+              <!-- 卡组织图标 - 右上角选中时 -->
+              <div class="card-org card-org-top" v-if="item.cardOrgIconUrl">
+                <img :src="item.cardOrgIconUrl" alt="卡组织" />
+              </div>
+            </div>
+          </transition>
         </div>
       </div>
     </div>
@@ -135,9 +140,18 @@ const getBankInfo = (bankId) => {
 };
 
 // 获取卡组织信息（根据 card_org 匹配 name）
+// 英文忽略大小写，中文全等匹配
 const getCardOrgInfo = (cardOrg) => {
   if (!cardOrg) return "";
-  const org = bankList.value.find((b) => b.name === cardOrg);
+  // 判断是否包含中文
+  const isChinese = /[\u4e00-\u9fa5]/.test(cardOrg);
+  const org = bankList.value.find((b) => {
+    if (isChinese) {
+      return b.name === cardOrg;
+    } else {
+      return b.name.toLowerCase() === cardOrg.toLowerCase();
+    }
+  });
   if (org && org.icon_url) {
     return BASE_URL + org.icon_url;
   }
@@ -152,6 +166,19 @@ const loadBankList = async () => {
   } catch (e) {
     bankList.value = [];
   }
+};
+
+// 格式化卡号显示：4位一组，如 6228 48** **** ***6 6666
+const formatCardNo = (item) => {
+  const bin = item.card_bin || item.cardBin || "";
+  const length = parseInt(item.card_length || item.cardLength || "16");
+  const last4 = item.last4_no || item.last4No || "****";
+  const middleLength = length - bin.length - 4;
+  const middleStars = middleLength > 0 ? "*".repeat(middleLength) : "";
+  const fullNo = bin + middleStars + last4;
+
+  // 每4位一组，用空格分隔
+  return fullNo.match(/.{1,4}/g)?.join(" ") || fullNo;
 };
 
 // 加载卡片列表
@@ -172,6 +199,8 @@ const loadCards = async () => {
         cardOrg: cardOrg,
         cardOrgIconUrl: getCardOrgInfo(cardOrg),
         cardType: item.card_type || item.cardType,
+        cardBin: item.card_bin,
+        cardLength: item.card_length,
         last4No: item.last4_no || item.last4No,
         alias: item.alias,
         cardLevel: item.card_level || item.cardLevel,
@@ -204,7 +233,7 @@ const handleBackdropClick = () => {
 
 // 跳转到编辑页面
 const goToEdit = (item) => {
-  router.push(`/card/edit?id=${item.id}`);
+  router.push(`/card/edit?id=${item.id}&from=debit`);
   selectedId.value = null;
 };
 
@@ -221,11 +250,11 @@ onMounted(async () => {
 
 <style scoped>
 .page-card-list {
-  height: calc(100vh - 210px);
+  min-height: calc(100vh - 100px);
   background: #ffffff;
-  padding: 24px 20px 100px;
+  padding: 24px 20px 120px;
   position: relative;
-  overflow: hidden;
+  overflow-x: hidden;
 }
 
 .page-header {
@@ -278,7 +307,7 @@ onMounted(async () => {
   right: 0;
   border-radius: 20px;
   height: 220px;
-  padding: 20px;
+  padding: 20px 5px 20px 20px;
   box-sizing: border-box;
   color: #fff;
   background: linear-gradient(135deg, var(--card-color) 0%, #1a1a1a 150%);
@@ -411,18 +440,32 @@ onMounted(async () => {
 }
 .card-org-top {
   position: static;
-  margin-bottom: 8px;
+  > img {
+    width: 80px;
+    height: 80px;
+  }
 }
 
 /* 操作按钮 */
 .card-actions-quick {
   position: absolute;
   right: 0;
-  bottom: 5px;
+  top: 0;
+  height: 100%;
+  width: 100px;
   z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  align-content: space-around;
+  padding: 20px 10px 0 10px;
+  flex-wrap: nowrap;
+  box-sizing: border-box;
 }
 .action-pill-btn {
-  background: #fff;
+  width: 100%;
+  background: #ffffff71;
   color: #333;
   border: none;
   padding: 5px 12px;

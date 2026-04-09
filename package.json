@@ -12,6 +12,7 @@
     "axios": "^1.13.6",
     "browser-image-compression": "^2.0.2",
     "crypto-js": "^4.2.0",
+    "dayjs": "^1.11.20",
     "jsencrypt": "^3.5.4",
     "jwt-decode": "^4.0.0",
     "pinia": "^3.0.4",

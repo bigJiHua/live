@@ -7,17 +7,36 @@
         class="preview-card"
         :style="{ background: `linear-gradient(135deg, ${formData.color} 0%, #1a1a1a 150%)` }"
       >
+        <div class="preview-bg-pattern"></div>
+        
         <div class="preview-header">
-          <span class="preview-bank">{{ bankNameDisplay || getBankName(formData.bankId) }}</span>
-          <van-tag v-if="formData.isDefault" type="warning" size="small">默认</van-tag>
-        </div>
-        <div class="preview-number">**** **** **** {{ formData.last4No }}</div>
-        <div class="preview-footer">
-          <div>
-            <div class="preview-label">持卡人</div>
-            <div class="preview-value">{{ formData.alias || '未设置别名' }}</div>
+          <div class="preview-bank-info">
+            <div class="preview-bank-icon" v-if="bankIconUrl">
+              <img :src="bankIconUrl" :alt="bankNameDisplay" />
+            </div>
+            <div class="preview-bank-icon-mock" v-else>
+              {{ (bankNameDisplay || '?').charAt(0) }}
+            </div>
+            <div class="preview-bank-name">
+              {{ bankNameDisplay || '未知银行' }}
+              <span class="preview-bank-last4">（{{ formData.last4No }}）</span>
+            </div>
           </div>
-          <div class="preview-type">{{ isCreditCard ? '信用卡' : '借记卡' }}</div>
+          <van-tag v-if="formData.isDefault" class="preview-tag">默认</van-tag>
+        </div>
+        
+        <div class="preview-number">{{ previewCardNo }}</div>
+        
+        <div class="preview-footer">
+          <div class="preview-holder">
+            <div class="preview-label">{{ isCreditCard ? 'CREDIT CARD' : 'DEBIT CARD' }}</div>
+            <div class="preview-value">{{ formData.alias || formData.cardLevel || (isCreditCard ? '信用卡' : '银行卡') }}</div>
+          </div>
+          
+          <!-- 卡组织图标 -->
+          <div class="preview-card-org" v-if="cardOrgIconUrl">
+            <img :src="cardOrgIconUrl" alt="卡组织" />
+          </div>
         </div>
       </div>
     </div>
@@ -47,8 +66,10 @@
             v-model="formData.last4No"
             name="last4No"
             label="卡号后4位"
-            maxlength="4"
-            type="number"
+            placeholder="请输入"
+            readonly
+            clickable
+            @click="openKeyboard('last4No')"
             :rules="[{ required: true, message: '请输入卡号后4位' }]"
           />
           <van-field
@@ -82,23 +103,30 @@
             v-model="formData.cardOrg"
             name="cardOrg"
             label="卡组织"
-            is-link
-            readonly
-            @click="showCardOrgPicker = true"
-          />
+            placeholder="请输入或选择卡组织"
+            @click-right-icon="showCardOrgPicker = true"
+          >
+            <template #right-icon>
+              <van-icon name="arrow-down" @click="showCardOrgPicker = true" />
+            </template>
+          </van-field>
           <van-field
             v-model="formData.cardLength"
             name="cardLength"
             label="卡号长度"
-            type="number"
+            placeholder="请输入"
+            readonly
+            clickable
+            @click="openKeyboard('cardLength')"
           />
           <van-field
             v-model="formData.cardBin"
             name="cardBin"
             label="卡BIN"
-            placeholder="卡号前6位"
-            maxlength="6"
-            type="number"
+            placeholder="请输入"
+            readonly
+            clickable
+            @click="openKeyboard('cardBin')"
           />
         </van-cell-group>
       </div>
@@ -114,23 +142,35 @@
             v-model="formData.billDay"
             name="billDay"
             label="账单日"
-            placeholder="如：5"
-            type="number"
-          />
+            placeholder="请输入"
+            readonly
+            clickable
+            @click="openKeyboard('billDay')"
+          >
+            <template #suffix>日</template>
+          </van-field>
           <van-field
             v-model="formData.repayDay"
             name="repayDay"
             label="还款日"
-            placeholder="如：25"
-            type="number"
-          />
+            placeholder="请输入"
+            readonly
+            clickable
+            @click="openKeyboard('repayDay')"
+          >
+            <template #suffix>日</template>
+          </van-field>
           <van-field
             v-model="formData.annualFee"
             name="annualFee"
             label="年费"
-            placeholder="如：0"
-            type="number"
-          />
+            placeholder="请输入"
+            readonly
+            clickable
+            @click="openKeyboard('annualFee')"
+          >
+            <template #button>元</template>
+          </van-field>
           <van-field
             v-model="formData.feeFreeRule"
             name="feeFreeRule"
@@ -213,6 +253,14 @@
               </div>
             </template>
           </van-field>
+          <div class="custom-color">
+            <span class="custom-label">自定义</span>
+            <input
+              type="color"
+              v-model="formData.color"
+              class="color-input"
+            />
+          </div>
         </van-cell-group>
       </div>
 
@@ -319,6 +367,19 @@
         @cancel="showExpireDatePicker = false"
       />
     </van-popup>
+
+    <!-- 数字键盘 -->
+    <van-number-keyboard
+      v-model:show="showKeyboard"
+      :maxlength="keyboardMaxlength"
+      theme="custom"
+      close-on-click-outside
+      @input="onKeyboardInput"
+      @delete="onKeyboardDelete"
+      @close="onKeyboardClose"
+      @blur="showKeyboard = false"
+      close-button-text="完成"
+    />
   </div>
 </template>
 
@@ -334,6 +395,44 @@ const route = useRoute()
 const loading = ref(false)
 const cardData = ref({})
 const bankNameDisplay = ref('')
+const bankIconUrl = ref('')
+const cardOrgIconUrl = ref('')
+const bankList = ref([])
+
+// 获取来源页面，决定成功后返回哪里
+const fromPage = route.query.from || 'debit'
+const backPath = computed(() => fromPage === 'credit' ? '/card/credit' : '/card/debit')
+
+// BASE_URL
+const BASE_URL = "http://192.168.0.103:3001/api/public"
+
+// 格式化卡号显示
+const previewCardNo = computed(() => {
+  const bin = formData.cardBin || ''
+  const length = parseInt(formData.cardLength || '16')
+  const last4 = formData.last4No || '****'
+  const middleLength = length - bin.length - 4
+  const middleStars = middleLength > 0 ? '*'.repeat(middleLength) : ''
+  const fullNo = bin + middleStars + last4
+  return fullNo.match(/.{1,4}/g)?.join(' ') || fullNo
+})
+
+// 获取卡组织图标（英文忽略大小写匹配）
+const getCardOrgIcon = (cardOrg) => {
+  if (!cardOrg) return ''
+  const isChinese = /[\u4e00-\u9fa5]/.test(cardOrg)
+  const org = bankList.value.find(b => {
+    if (isChinese) {
+      return b.name === cardOrg
+    } else {
+      return b.name.toLowerCase() === cardOrg.toLowerCase()
+    }
+  })
+  if (org && org.icon_url) {
+    return BASE_URL + org.icon_url
+  }
+  return ''
+}
 
 // 计算属性
 const isCreditCard = computed(() => formData.cardType === 'credit')
@@ -369,14 +468,18 @@ const formData = reactive({
 
 // 颜色选项
 const colorOptions = [
-  { value: '#1989fa', label: '蓝色' },
+  { value: '#0052cc', label: '蓝色' },
   { value: '#07c160', label: '绿色' },
   { value: '#ee0a24', label: '红色' },
   { value: '#ff976a', label: '橙色' },
   { value: '#7232dd', label: '紫色' },
   { value: '#1a1a1a', label: '黑色' },
   { value: '#c01d24', label: '深红' },
-  { value: '#1b4f9a', label: '深蓝' }
+  { value: '#1b4f9a', label: '深蓝' },
+  { value: '#f0c987', label: '金色' },
+  { value: '#ffffff', label: '白色' },
+  { value: '#9c27b0', label: '紫色' },
+  { value: '#00bcd4', label: '青色' },
 ]
 
 // 银行列表（从 API 加载）
@@ -387,6 +490,7 @@ const loadBankList = async () => {
   try {
     const res = await categoryApi.list("bank")
     const banks = res.data || res || []
+    bankList.value = banks
     bankColumns.value = banks.map(bank => ({
       text: bank.name,
       value: bank.id,
@@ -397,10 +501,22 @@ const loadBankList = async () => {
   }
 }
 
+// 根据 ID 获取银行信息
+const getBankInfo = (bankId) => {
+  const bank = bankList.value.find(b => b.id === bankId)
+  if (bank) {
+    return {
+      name: bank.name,
+      iconUrl: bank.icon_url ? BASE_URL + bank.icon_url : ''
+    }
+  }
+  return { name: '未知银行', iconUrl: '' }
+}
+
 // 根据 ID 获取银行名称
 const getBankName = (bankId) => {
-  const bank = bankColumns.value.find(b => b.value === bankId)
-  return bank ? bank.text : '未知银行'
+  const info = getBankInfo(bankId)
+  return info.name
 }
 
 // 主副卡
@@ -439,22 +555,112 @@ const showStatusPicker = ref(false)
 const showOpenDatePicker = ref(false)
 const showExpireDatePicker = ref(false)
 
+// 数字键盘控制
+const showKeyboard = ref(false)
+const currentField = ref("")
+const keyboardMaxlength = ref(999)
+
+// 验证函数
+const validateLast4No = () => {
+  if (formData.last4No && formData.last4No.length !== 4) {
+    showToast("卡号后4位必须为4位数字")
+    formData.last4No = ""
+  }
+}
+
+const validateCardBin = () => {
+  if (formData.cardBin && formData.cardBin.length < 6) {
+    showToast("卡BIN必须至少6位数字")
+    formData.cardBin = ""
+  }
+}
+
+const validateBillDay = () => {
+  const day = Number(formData.billDay)
+  if (formData.billDay && (day < 1 || day > 31)) {
+    showToast("账单日范围为1-31")
+    formData.billDay = ""
+  }
+}
+
+const validateRepayDay = () => {
+  const day = Number(formData.repayDay)
+  if (formData.repayDay && (day < 1 || day > 31)) {
+    showToast("还款日范围为1-31")
+    formData.repayDay = ""
+  }
+}
+
+// 字段配置
+const fieldConfig = {
+  last4No: { maxlength: 4, validate: validateLast4No },
+  cardBin: { maxlength: 6, validate: validateCardBin },
+  cardLength: { maxlength: 2, validate: null },
+  billDay: { maxlength: 2, validate: validateBillDay },
+  repayDay: { maxlength: 2, validate: validateRepayDay },
+  annualFee: { maxlength: 10, validate: null },
+}
+
+// 打开数字键盘
+const openKeyboard = (field) => {
+  currentField.value = field
+  keyboardMaxlength.value = fieldConfig[field]?.maxlength || 10
+  showKeyboard.value = true
+}
+
+// 数字键盘输入
+const onKeyboardInput = (value) => {
+  const field = currentField.value
+  if (!field) return
+  let newValue = formData[field] + value
+  if (newValue.length > keyboardMaxlength.value) {
+    newValue = newValue.slice(0, keyboardMaxlength.value)
+  }
+  formData[field] = newValue
+}
+
+// 数字键盘删除
+const onKeyboardDelete = () => {
+  const field = currentField.value
+  if (!field) return
+  formData[field] = formData[field].slice(0, -1)
+}
+
+// 数字键盘关闭
+const onKeyboardClose = () => {
+  showKeyboard.value = false
+  const field = currentField.value
+  if (field && fieldConfig[field]?.validate) {
+    fieldConfig[field].validate()
+  }
+}
+
+// 关闭键盘（用于失焦时）
+const closeKeyboard = () => {
+  showKeyboard.value = false
+}
+
 // 选择器确认
 const onBankConfirm = ({ selectedOptions }) => {
   const selected = selectedOptions[0]
   formData.bankId = selected.value
   bankNameDisplay.value = selected.text
+  // 更新银行图标
+  const bank = bankList.value.find(b => b.id === selected.value)
+  bankIconUrl.value = bank?.icon_url ? BASE_URL + bank.icon_url : ''
   showBankPicker.value = false
+}
+
+const onCardOrgConfirm = ({ selectedOptions }) => {
+  formData.cardOrg = selectedOptions[0].value
+  // 更新卡组织图标
+  cardOrgIconUrl.value = getCardOrgIcon(selectedOptions[0].value)
+  showCardOrgPicker.value = false
 }
 
 const onMainSubConfirm = ({ selectedOptions }) => {
   formData.mainSub = selectedOptions[0].value
   showMainSubPicker.value = false
-}
-
-const onCardOrgConfirm = ({ selectedOptions }) => {
-  formData.cardOrg = selectedOptions[0].value
-  showCardOrgPicker.value = false
 }
 
 const onStatusConfirm = ({ selectedOptions }) => {
@@ -523,7 +729,12 @@ const loadCardDetail = async () => {
     formData.sourceFrom = data.source_from || data.sourceFrom || '手动'
 
     // 设置银行名称显示
-    bankNameDisplay.value = getBankName(formData.bankId)
+    const bankInfo = getBankInfo(formData.bankId)
+    bankNameDisplay.value = bankInfo.name
+    bankIconUrl.value = bankInfo.iconUrl
+    
+    // 设置卡组织图标
+    cardOrgIconUrl.value = getCardOrgIcon(formData.cardOrg)
 
     // 处理日期选择器
     if (formData.openDate) {
@@ -593,7 +804,7 @@ const onSubmit = async () => {
     await updateCard(cardData.value.id, submitData)
 
     closeToast()
-    showToast({ message: '保存成功', onClose: () => router.back() })
+    showToast({ message: '保存成功', onClose: () => router.push(backPath.value) })
   } catch (error) {
     closeToast()
     showToast(error.message || '保存失败')
@@ -615,7 +826,7 @@ const onDelete = async () => {
     await deleteCard(cardData.value.id)
 
     closeToast()
-    showToast({ message: '删除成功', onClose: () => router.back() })
+    showToast({ message: '删除成功', onClose: () => router.push(backPath.value) })
   } catch (error) {
     if (error !== 'cancel') {
       showToast(error.message || '删除失败')
@@ -645,50 +856,127 @@ onMounted(() => {
 }
 
 .preview-card {
-  border-radius: 16px;
-  padding: 20px;
+  position: relative;
+  border-radius: 20px;
+  padding: 20px 5px 20px 20px;
   color: #fff;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+}
+
+.preview-bg-pattern {
+  position: absolute;
+  top: -20%;
+  right: -10%;
+  width: 200px;
+  height: 200px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 50%;
 }
 
 .preview-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  position: relative;
+  z-index: 2;
 }
 
-.preview-bank {
+.preview-bank-info {
+  display: flex;
+  align-items: center;
+}
+
+.preview-bank-icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.preview-bank-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.preview-bank-icon-mock {
+  width: 40px;
+  height: 40px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 18px;
+}
+
+.preview-bank-name {
   font-size: 18px;
   font-weight: 600;
+  margin-left: 12px;
+}
+
+.preview-bank-last4 {
+  font-size: 1rem;
+  font-weight: normal;
+}
+
+.preview-tag {
+  background: rgba(255, 255, 255, 0.2) !important;
+  border: none !important;
 }
 
 .preview-number {
   font-size: 20px;
-  letter-spacing: 4px;
-  margin: 20px 0;
-  font-family: monospace;
+  font-weight: 600;
+  letter-spacing: 2px;
+  margin: 30px 0;
+  position: relative;
+  z-index: 2;
 }
 
 .preview-footer {
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
+  position: relative;
+  z-index: 2;
 }
 
-.preview-label {
-  font-size: 10px;
-  opacity: 0.7;
-  text-transform: uppercase;
-}
-
-.preview-value {
+.preview-holder .preview-label {
   font-size: 14px;
-  margin-top: 4px;
+  opacity: 0.5;
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
 
-.preview-type {
-  font-size: 12px;
-  opacity: 0.8;
+.preview-holder .preview-value {
+  font-size: 14px;
+  font-weight: 600;
+  margin-top: 4px;
+  display: block;
+}
+
+.preview-card-org {
+  position: absolute;
+  right: 0;
+  bottom: -20px;
+  width: 100px;
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.preview-card-org img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .form-section {
@@ -730,6 +1018,27 @@ onMounted(() => {
 
 .color-option.active {
   box-shadow: 0 0 0 2px #fff, 0 0 0 4px currentColor;
+}
+
+.custom-color {
+  display: flex;
+  align-items: center;
+  padding: 8px 16px;
+  gap: 8px;
+}
+
+.custom-label {
+  font-size: 14px;
+  color: #969799;
+}
+
+.color-input {
+  width: 40px;
+  height: 28px;
+  border: 1px solid #ebedf0;
+  border-radius: 4px;
+  padding: 0;
+  cursor: pointer;
 }
 
 .submit-btn-wrap {

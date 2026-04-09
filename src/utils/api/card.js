@@ -1,8 +1,8 @@
-import request from '@/utils/request'
+import request from "@/utils/request";
 
 /**
  * 卡片管理 API
- * 基础路径: /api/card
+ * 基础路径: /api/v1/card
  */
 
 /**
@@ -10,11 +10,7 @@ import request from '@/utils/request'
  * @param {object} params - { cardType?, isHide? }
  */
 export function getCardList(params) {
-  return request({
-    url: '/card',
-    method: 'GET',
-    params
-  })
+  return request.get("/card", { params });
 }
 
 /**
@@ -22,10 +18,7 @@ export function getCardList(params) {
  * @param {string} id - 卡片ID
  */
 export function getCardDetail(id) {
-  return request({
-    url: `/card/${id}`,
-    method: 'GET'
-  })
+  return request.get(`/card/${id}`);
 }
 
 /**
@@ -33,11 +26,7 @@ export function getCardDetail(id) {
  * @param {object} data - 卡片数据
  */
 export function createCard(data) {
-  return request({
-    url: '/card',
-    method: 'POST',
-    data
-  })
+  return request.post("/card", data);
 }
 
 /**
@@ -46,11 +35,7 @@ export function createCard(data) {
  * @param {object} data - 更新的字段
  */
 export function updateCard(id, data) {
-  return request({
-    url: `/card/${id}`,
-    method: 'PUT',
-    data
-  })
+  return request.put(`/card/${id}`, data);
 }
 
 /**
@@ -58,15 +43,12 @@ export function updateCard(id, data) {
  * @param {string} id - 卡片ID
  */
 export function deleteCard(id) {
-  return request({
-    url: `/card/${id}`,
-    method: 'DELETE'
-  })
+  return request.delete(`/card/${id}`);
 }
 
 /**
- * 卡片账单 API
- * 基础路径: /api/card/bill
+ * 信用卡账单 API
+ * 基础路径: /api/v1/card/bill
  */
 
 /**
@@ -74,11 +56,7 @@ export function deleteCard(id) {
  * @param {object} params - { cardId? }
  */
 export function getBillList(params) {
-  return request({
-    url: '/card/bill',
-    method: 'GET',
-    params
-  })
+  return request.get("/card/bill", { params });
 }
 
 /**
@@ -86,10 +64,7 @@ export function getBillList(params) {
  * @param {string} id - 账单ID
  */
 export function getBillDetail(id) {
-  return request({
-    url: `/card/bill/${id}`,
-    method: 'GET'
-  })
+  return request.get(`/card/bill/${id}`);
 }
 
 /**
@@ -97,35 +72,47 @@ export function getBillDetail(id) {
  * @param {string} cardId - 卡片ID
  */
 export function getLatestBill(cardId) {
-  return request({
-    url: `/card/bill/card/${cardId}/latest`,
-    method: 'GET'
-  })
+  return request.get(`/card/bill/card/${cardId}/latest`);
+}
+
+/**
+ * 刷新卡片账单
+ * @param {string} cardId - 卡片ID
+ */
+export function rebuildBill(cardId) {
+  return request.post(`/card/bill/card/${cardId}/rebuild`);
 }
 
 /**
  * 创建账单
  * @param {object} data - 账单数据
+ * @param {string} data.cardId - 卡片ID (必填)
+ * @param {number} data.creditLimit - 信用额度 (必填)
+ * @param {number} data.tempLimit - 临时额度 (可选，默认0)
+ * @param {number} data.pointsRate - 积分倍率 (可选，默认1)
+ * @param {boolean} data.remindSwitch - 还款提醒开关 (可选，默认true)
+ * @param {number} data.remindDays - 提前提醒天数 (可选，默认3)
+ *
+ * 后端自动计算字段: usedLimit, availLimit, billAmount, minRepay, repaid, needRepay,
+ * points, pointsExpire, repayStatus, isOverdue, overdueDays
  */
 export function createBill(data) {
-  return request({
-    url: '/card/bill',
-    method: 'POST',
-    data
-  })
+  return request.post("/card/bill", data);
 }
 
 /**
  * 更新账单
  * @param {string} id - 账单ID
  * @param {object} data - 更新的字段
+ * @param {number} data.creditLimit - 信用额度 (更新时同步计算 availLimit)
+ * @param {number} data.tempLimit - 临时额度
+ * @param {number} data.pointsRate - 积分倍率 (更新时同步计算 points)
+ * @param {number} data.repaid - 已还金额 (更新时同步计算 needRepay 和 repayStatus)
+ * @param {boolean} data.remindSwitch - 还款提醒开关
+ * @param {number} data.remindDays - 提前提醒天数
  */
 export function updateBill(id, data) {
-  return request({
-    url: `/card/bill/${id}`,
-    method: 'PUT',
-    data
-  })
+  return request.put(`/card/bill/${id}`, data);
 }
 
 /**
@@ -133,15 +120,12 @@ export function updateBill(id, data) {
  * @param {string} id - 账单ID
  */
 export function deleteBill(id) {
-  return request({
-    url: `/card/bill/${id}`,
-    method: 'DELETE'
-  })
+  return request.delete(`/card/bill/${id}`);
 }
 
 /**
  * 还款记录 API
- * 基础路径: /api/card/repay
+ * 基础路径: /api/v1/card/repay
  */
 
 /**
@@ -149,11 +133,7 @@ export function deleteBill(id) {
  * @param {object} params - { cardId?, billId? }
  */
 export function getRepayList(params) {
-  return request({
-    url: '/card/repay',
-    method: 'GET',
-    params
-  })
+  return request.get("/card/repay", { params });
 }
 
 /**
@@ -161,10 +141,7 @@ export function getRepayList(params) {
  * @param {string} id - 还款记录ID
  */
 export function getRepayDetail(id) {
-  return request({
-    url: `/card/repay/${id}`,
-    method: 'GET'
-  })
+  return request.get(`/card/repay/${id}`);
 }
 
 /**
@@ -172,11 +149,7 @@ export function getRepayDetail(id) {
  * @param {object} data - 还款数据
  */
 export function createRepay(data) {
-  return request({
-    url: '/card/repay',
-    method: 'POST',
-    data
-  })
+  return request.post("/card/repay", data);
 }
 
 /**
@@ -185,11 +158,7 @@ export function createRepay(data) {
  * @param {object} data - 更新的字段
  */
 export function updateRepay(id, data) {
-  return request({
-    url: `/card/repay/${id}`,
-    method: 'PUT',
-    data
-  })
+  return request.put(`/card/repay/${id}`, data);
 }
 
 /**
@@ -197,8 +166,5 @@ export function updateRepay(id, data) {
  * @param {string} id - 还款记录ID
  */
 export function deleteRepay(id) {
-  return request({
-    url: `/card/repay/${id}`,
-    method: 'DELETE'
-  })
+  return request.delete(`/card/repay/${id}`);
 }

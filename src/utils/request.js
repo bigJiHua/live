@@ -92,6 +92,7 @@ const request = axios.create({
   baseURL: baseUrl,
   withCredentials: true,
   timeout: TIMEOUT,
+  validateStatus: (status) => true, // 👈 就是这一行！解决所有弹窗问题！
 });
 
 request.interceptors.request.use(
@@ -146,7 +147,7 @@ request.interceptors.response.use(
   (response) => {
     const res = response.data || {};
     // 如果有 ismessage 字段且为 true，不显示任何 toast
-    if (res.ismessage) {
+    if (res.ismessage && res.ismessage === true) {
       return res;
     }
     if (res.status === 200 || res.success) {
@@ -180,11 +181,13 @@ request.interceptors.response.use(
       sessionStorage.clear(); // 清理旧 Key
       localStorage.removeItem("finance_token");
       router.push("/login");
-    }else if (status === 429) {
+    } else if (status === 429) {
       sessionStorage.clear(); // 清理旧 Key
       localStorage.removeItem("finance_token");
       router.push("/429");
     } else {
+      console.log(error.response);
+      
       showFailToast(error.response?.data?.message || "网络请求失败");
     }
     return Promise.reject(error);

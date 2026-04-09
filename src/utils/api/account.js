@@ -1,77 +1,109 @@
 import request from '@/utils/request'
 
 /**
- * 账务管理 API (account.js) - 需要 PIN 验证
- *
- * | 方法 | 路径 | 说明 | 中间件 |
- * |------|------|------|--------|
- * | GET | `/api/v1/account/transactions` | 获取账务流水列表 | authGuard + pinLockGuard |
- * | GET | `/api/v1/account/transactions/:id` | 获取账务流水详情 | authGuard + pinLockGuard |
- * | POST | `/api/v1/account/transactions` | 创建账务流水 | authGuard + pinLockGuard |
- * | PUT | `/api/v1/account/transactions/:id` | 更新账务流水 | authGuard + pinLockGuard |
- * | DELETE | `/api/v1/account/transactions/:id` | 删除账务流水 | authGuard + pinLockGuard |
- * | GET | `/api/v1/account/categories` | 获取分类列表 | authGuard + pinLockGuard |
- * | POST | `/api/v1/account/categories` | 创建分类 | authGuard + pinLockGuard |
- * | PUT | `/api/v1/account/categories/:id` | 更新分类 | authGuard + pinLockGuard |
- * | DELETE | `/api/v1/account/categories/:id` | 删除分类 | authGuard + pinLockGuard |
- * | GET | `/api/v1/account/report` | 获取财务报表 | authGuard + pinLockGuard |
- * | POST | `/api/v1/account/calculate-irr` | 计算 IRR | authGuard + pinLockGuard |
- *
- * **重要**: 所有账务接口都会先检查 PIN 验证状态，如果未验证会返回 423 状态码。
+ * 收支记录 API
+ * 基础路径: /api/v1/account
  */
-export const accountApi = {
-  // 获取账务流水列表
-  getTransactions(params) {
-    return request.get('/account/transactions', { params })
-  },
 
-  // 获取账务流水详情
-  getTransactionDetail(id) {
-    return request.get(`/account/transactions/${id}`)
-  },
+/**
+ * 获取收支列表
+ * @param {object} params - { page, limit, direction?, categoryId?, payMethod?, startDate?, endDate? }
+ */
+export function getAccountList(params) {
+  return request.get('/account', { params })
+}
 
-  // 创建账务流水
-  createTransaction(data) {
-    return request.post('/account/transactions', data)
-  },
+/**
+ * 获取单条收支详情
+ * @param {string} id - 记录ID
+ */
+export function getAccountDetail(id) {
+  return request.get(`/account/${id}`)
+}
 
-  // 更新账务流水
-  updateTransaction(id, data) {
-    return request.put(`/account/transactions/${id}`, data)
-  },
+/**
+ * 创建收支记录
+ * @param {object} data - { direction, categoryId, payType, payMethod, amount, transDate, cardId, ... }
+ */
+export function createAccount(data) {
+  return request.post('/account', data)
+}
 
-  // 删除账务流水
-  deleteTransaction(id) {
-    return request.delete(`/account/transactions/${id}`)
-  },
+/**
+ * 更新收支记录
+ * @param {string} id - 记录ID
+ * @param {object} data - 更新的字段
+ */
+export function updateAccount(id, data) {
+  return request.put(`/account/${id}`, data)
+}
 
-  // 获取分类列表
-  getCategories() {
-    return request.get('/account/categories')
-  },
+/**
+ * 删除收支记录
+ * @param {string} id - 记录ID
+ */
+export function deleteAccount(id) {
+  return request.delete(`/account/${id}`)
+}
 
-  // 创建分类
-  createCategory(data) {
-    return request.post('/account/categories', data)
-  },
+/**
+ * 获取本月收支统计
+ * @param {object} params - { year?, month?, type? }
+ * @param {string} params.type - summary(返回总数) / detail(返回总数+明细)
+ */
+export function getMonthStats(params) {
+  return request.get('/account/stats/month', { params })
+}
 
-  // 更新分类
-  updateCategory(id, data) {
-    return request.put(`/account/categories/${id}`, data)
-  },
+/**
+ * ========== 账户余额管理 API ==========
+ * 基础路径: /api/v1/accountBalance
+ */
 
-  // 删除分类
-  deleteCategory(id) {
-    return request.delete(`/account/categories/${id}`)
-  },
+// 虚拟账户ID常量
+export const VIRTUAL_ACCOUNTS = {
+  CASH: 'virtual_cash',      // 现金
+  WX: 'virtual_wx',          // 微信
+  ALIPAY: 'virtual_alipay',  // 支付宝
+  BANK: 'virtual_bank'       // 银行卡（通用）
+}
 
-  // 获取财务报表
-  getReport(params) {
-    return request.get('/account/report', { params })
-  },
+/**
+ * 获取所有账户余额（包括虚拟账户）
+ */
+export function getBalanceList() {
+  return request.get('/accountBalance')
+}
 
-  // 计算 IRR
-  calculateIRR(data) {
-    return request.post('/account/calculate-irr', data)
-  },
+/**
+ * 获取单张卡/账户余额
+ * @param {string} cardId - 账户ID
+ */
+export function getBalanceById(cardId) {
+  return request.get(`/accountBalance/${cardId}`)
+}
+
+/**
+ * 手动同步余额
+ * @param {string} cardId - 账户ID
+ * @param {number} balance - 余额
+ */
+export function upsertBalance(cardId, balance) {
+  return request.post('/accountBalance/upsert', { card_id: cardId, balance })
+}
+
+/**
+ * 初始化虚拟账户
+ * @param {object} data - { virtual_cash?, virtual_wx?, virtual_alipay?, virtual_bank? }
+ */
+export function initVirtualAccounts(data) {
+  return request.post('/accountBalance/init-virtual', data)
+}
+
+/**
+ * 更新虚拟账户余额
+ * @param {object} data - { virtual_cash?, virtual_wx?, virtual_alipay?, virtual_bank? }
+ */
+export function updateVirtualAccounts(data) {
+  return request.post('/accountBalance/update-virtual', data)
 }

@@ -33,7 +33,7 @@ export const setupRouterGuard = () => {
   // 白名单：不需要登录的路由
   const whiteList = ["/login", "/register", "/429"]
 
-  router.beforeEach(async (to, from, next) => {
+  router.beforeEach(async (to, from) => {
     const userStore = useUserStore();
 
     // 判断是否有 token
@@ -43,12 +43,11 @@ export const setupRouterGuard = () => {
     if (!hasToken) {
       if (whiteList.includes(to.path)) {
         // 白名单路由直接放行
-        next();
+        return true;
       } else {
         // 记录原本要去的页面，登录后可以跳回来
-        next({ name: "Login", query: { redirect: to.fullPath } });
+        return { name: "Login", query: { redirect: to.fullPath } };
       }
-      return;
     }
 
     // 2. 有 token，但没有用户信息，获取用户数据
@@ -58,11 +57,10 @@ export const setupRouterGuard = () => {
 
     // 3. 已登录用户访问登录页，跳转到首页
     if (to.path === "/login") {
-      next({ name: "Home" });
-      return;
+      return { name: "Home" };
     }
 
     // 4. 其他情况，正常放行
-    next();
+    return true;
   });
 };

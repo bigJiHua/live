@@ -12,8 +12,27 @@
           readonly
           @click="showCardPicker = true"
         />
+        <van-field
+          v-model="monthText"
+          label="账单月份"
+          placeholder="请选择月份"
+          is-link
+          readonly
+          @click="showMonthPicker = true"
+        />
       </van-cell-group>
     </div>
+
+    <!-- 月份选择器 -->
+    <van-popup v-model:show="showMonthPicker" position="bottom" round>
+      <van-picker
+        v-model="selectedValues"
+        title="选择月份"
+        :columns="pickerColumns"
+        @confirm="onPickerConfirm"
+        @cancel="showMonthPicker = false"
+      />
+    </van-popup>
 
     <!-- 账单列表 -->
     <div class="bill-list" v-if="billList.length > 0">
@@ -25,32 +44,63 @@
       >
         <div class="bill-header">
           <div class="bill-info">
-            <span class="bill-card-name">{{ item.card_alias || '未知卡片' }}</span>
-            <span class="bill-card-no">**** {{ item.card_last4 }}</span>
+            <span class="bill-card-name">{{ getCardDisplayName(item) }}</span>
           </div>
-          <van-tag :type="getStatusType(item)">{{ getStatusText(item) }}</van-tag>
+          <van-tag :type="getStatusType(item)" :class="{ 'tag-normal': getStatusType(item) === '' }">
+            {{ getStatusText(item) }}
+          </van-tag>
         </div>
 
         <div class="bill-body">
-          <div class="bill-amount">
-            <div class="amount-label">账单金额</div>
-            <div class="amount-value">¥{{ formatMoney(item.bill_amount) }}</div>
+          <div class="bill-limit-small">
+            <div class="limit-row">
+              <span>额度</span>
+              <span>¥{{ formatMoney(item.credit_limit) }}</span>
+            </div>
+            <div class="limit-row">
+              <span>可用</span>
+              <span>¥{{ formatMoney(item.avail_limit) }}</span>
+            </div>
           </div>
-          <div class="bill-repay">
-            <div class="repay-label">待还金额</div>
-            <div class="repay-value" :class="{ overdue: item.need_repay > 0 }">
-              ¥{{ formatMoney(item.need_repay) }}
+          <div class="bill-amount-right">
+            <div class="amount-col">
+              <div class="repay-label">已用额度</div>
+              <div class="repay-value" :class="{ overdue: Number(item.used_limit) > 0 }">
+                ¥{{ formatMoney(item.used_limit) }}
+              </div>
+            </div>
+            <div class="amount-col">
+              <div class="repay-label">待还额度</div>
+              <div class="repay-value danger">
+                ¥{{ formatMoney(item.need_repay) }}
+              </div>
             </div>
           </div>
         </div>
 
         <div class="bill-footer">
           <div class="bill-period">
-            {{ formatDate(item.bill_start_date) }} ~ {{ formatDate(item.bill_end_date) }}
+            <span>账单日 {{ formatDay(item.bill_start_date) }}</span>
+            <span class="period-divider">|</span>
+            <span>还款日 {{ formatDay(item.bill_end_date) }}</span>
           </div>
-          <div class="bill-limit">
-            <span>额度: ¥{{ formatMoney(item.credit_limit) }}</span>
-            <span>可用: ¥{{ formatMoney(item.avail_limit) }}</span>
+          <div class="bill-actions">
+            <van-button
+              size="small"
+              plain
+              round
+              @click.stop="refreshBill(item, $event)"
+            >
+              刷新账单
+            </van-button>
+            <van-button
+              size="small"
+              type="danger"
+              round
+              @click.stop="goToRepay(item)"
+            >
+              立即还款
+            </van-button>
           </div>
         </div>
       </div>
@@ -87,7 +137,8 @@
 import { ref, computed, onMounted } from "vue";
 import { showToast } from "vant";
 import { useRouter } from "vue-router";
-import { getBillList, getCardList } from "@/utils/api/card";
+import dayjs from "dayjs";
+import { getBillList, getCardList, rebuildBill } from "@/utils/api/card";
 
 const router = useRouter();
 
@@ -97,6 +148,40 @@ const loading = ref(false);
 const selectedCardId = ref(null);
 const selectedCardName = ref("");
 const showCardPicker = ref(false);
+
+// 月份选择（Vant 4 写法）
+const now = dayjs();
+const currentYear = ref(now.year());
+const currentMonth = ref(now.month() + 1);
+const showMonthPicker = ref(false);
+// Vant 4 必须绑定 v-model 数组来控制选中项
+const selectedValues = ref([`${now.year()}年`, `${now.month() + 1}月`]);
+const monthText = computed(() => `${currentYear.value}年${currentMonth.value}月`);
+
+// 月份选择器列
+const pickerColumns = computed(() => {
+  const currentYearVal = dayjs().year();
+  const years = [];
+  for (let i = currentYearVal - 10; i <= currentYearVal + 10; i++) {
+    years.push({ text: `${i}年`, value: `${i}年` });
+  }
+  const months = Array.from({ length: 12 }, (_, i) => ({
+    text: `${i + 1}月`,
+    value: `${i + 1}月`,
+  }));
+  return [years, months];
+});
+
+// 月份确认
+const onPickerConfirm = ({ selectedOptions }) => {
+  const yearText = selectedOptions[0].text;
+  const monthText = selectedOptions[1].text;
+  currentYear.value = parseInt(yearText);
+  currentMonth.value = parseInt(monthText);
+  selectedValues.value = [yearText, monthText];
+  showMonthPicker.value = false;
+  loadBillList();
+};
 
 // 卡片选择列
 const cardColumns = computed(() => {
@@ -123,6 +208,9 @@ const loadBillList = async () => {
     if (selectedCardId.value) {
       params.cardId = selectedCardId.value;
     }
+    // 添加账单月份筛选
+    const billMonth = `${currentYear.value}-${String(currentMonth.value).padStart(2, '0')}`;
+    params.billMonth = billMonth;
     const res = await getBillList(params);
     billList.value = res.data || res || [];
   } catch (error) {
@@ -135,7 +223,7 @@ const loadBillList = async () => {
 // 加载卡片列表
 const loadCardList = async () => {
   try {
-    const res = await getCardList();
+    const res = await getCardList({ cardType: 'credit' });
     cardList.value = res.data || res || [];
   } catch (error) {
     // 忽略错误
@@ -155,14 +243,18 @@ const getStatusType = (item) => {
   if (item.is_overdue || item.overdue_days > 0) return "danger";
   if (item.repay_status === "已还清") return "success";
   if (item.need_repay > 0) return "warning";
-  return "default";
+  return "";  // 正常状态，返回空使用蓝色背景
 };
 
 // 获取状态文本
 const getStatusText = (item) => {
-  if (item.is_overdue || item.overdue_days > 0) return "已逾期";
+  if (item.is_overdue || item.overdue_days > 0) {
+    const days = item.overdue_days || 0;
+    return `已逾期${days}天`;
+  }
   if (item.repay_status === "已还清") return "已还清";
   if (item.need_repay > 0) return "待还款";
+  return "正常";
   return "正常";
 };
 
@@ -172,10 +264,19 @@ const formatMoney = (amount) => {
   return Number(amount).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 };
 
-// 格式化日期
-const formatDate = (date) => {
+// 格式化日期 - 只显示天数
+const formatDay = (date) => {
   if (!date) return "--";
-  return date.split(" ")[0];
+  // 格式如 2026-03-06，提取最后5位中的天数部分
+  const match = date.match(/-(\d{2})$/);
+  return match ? match[1] : "--";
+};
+
+// 获取卡片显示名称
+const getCardDisplayName = (item) => {
+  if (item.card_alias) return item.card_alias;
+  if (item.card_last4) return `信用卡 ${item.card_last4}`;
+  return '未知卡片';
 };
 
 // 跳转到详情
@@ -183,9 +284,36 @@ const goToDetail = (item) => {
   router.push(`/card/bill/detail?id=${item.id}`);
 };
 
+// 跳转到还款
+const goToRepay = (item) => {
+  // 携带账单ID、卡ID等信息
+  const params = new URLSearchParams({
+    billId: item.id,
+    cardId: item.card_id,
+    last4: item.card_last4 || '',
+    alias: item.card_alias || '',
+    billDay: formatDay(item.bill_start_date),
+    repayDay: formatDay(item.bill_end_date)
+  });
+  router.push(`/card/repay/add?${params.toString()}`);
+};
+
 // 跳转到添加
 const goToAdd = () => {
   router.push("/card/bill/add");
+};
+
+// 刷新账单
+const refreshBill = async (item, event) => {
+  event.stopPropagation();
+  try {
+    const res = await rebuildBill(item.card_id);
+    const msg = res.message || "账单已刷新";
+    showToast(msg);
+    loadBillList();
+  } catch (error) {
+    showToast(error.message || "刷新失败");
+  }
 };
 
 // 返回
@@ -253,31 +381,72 @@ onMounted(() => {
 .bill-body {
   display: flex;
   justify-content: space-between;
+  align-items: flex-start;
   margin-bottom: 12px;
+  gap: 8px;
 }
 
-.amount-label,
+.bill-repay {
+  flex: 1;
+  text-align: center;
+}
+
 .repay-label {
   font-size: 12px;
   color: #999;
   margin-bottom: 4px;
 }
 
-.amount-value {
-  font-size: 20px;
-  font-weight: 600;
-  color: #333;
-}
-
 .repay-value {
   font-size: 20px;
   font-weight: 600;
   color: #333;
-  text-align: right;
 }
 
 .repay-value.overdue {
   color: #ee0a24;
+}
+
+.repay-value.danger {
+  color: #ee0a24;
+}
+
+.bill-limit-small {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding-right: 12px;
+  border-right: 1px solid #f0f0f0;
+}
+
+.limit-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  color: #999;
+}
+
+.limit-row span:last-child {
+  color: #666;
+}
+
+.bill-amount-right {
+  flex: 1;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+}
+
+.amount-col {
+  text-align: center;
+}
+
+.tag-normal {
+  background: #1989fa !important;
+  color: #fff !important;
 }
 
 .bill-footer {
@@ -291,6 +460,18 @@ onMounted(() => {
 .bill-period {
   font-size: 12px;
   color: #999;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.period-divider {
+  color: #ddd;
+}
+
+.bill-actions {
+  display: flex;
+  gap: 8px;
 }
 
 .bill-limit {

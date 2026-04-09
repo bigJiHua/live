@@ -123,7 +123,7 @@ const loadRepayList = async () => {
 // 加载卡片列表
 const loadCardList = async () => {
   try {
-    const res = await getCardList();
+    const res = await getCardList({ cardType: 'credit' });
     cardList.value = res.data || res || [];
   } catch (error) {
     // 忽略错误
