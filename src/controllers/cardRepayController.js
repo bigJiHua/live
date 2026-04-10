@@ -61,8 +61,8 @@ class CardRepayController {
         remark 
       } = req.body.data;
 
-      // 使用新的 executeRepay 方法
-      await CardRepay.executeRepay({
+      // 使用 executeRepay 方法（失败会抛出错误）
+      const result = await CardRepay.executeRepay({
         userId: req.userId,
         cardId,
         billId,
@@ -73,12 +73,18 @@ class CardRepayController {
         remark
       });
 
+      // 检查返回值确保还款记录确实创建成功
+      if (!result || !result.repayId) {
+        throw new Error('还款记录创建失败');
+      }
+
       // 记录操作日志
-      await CardLog.log(cardId, req.userId, '还款', req.ip);
+      await CardLog.log(cardId, req.userId, `还款 ${repayAmount}元`, req.ip);
 
       return res.status(200).json({ 
         status: 200, 
-        message: "还款成功"
+        message: "还款成功",
+        data: result
       });
     } catch (error) {
       console.error('创建还款记录错误:', error);
@@ -101,7 +107,7 @@ class CardRepayController {
       return res.json({ status: 200, message: "更新成功", data: record });
     } catch (error) {
       console.error('更新还款记录错误:', error);
-      return res.say("更新失败", 500);
+      return res.say(error.message || "更新失败", 500);
     }
   }
 
@@ -123,7 +129,7 @@ class CardRepayController {
       return res.json({ status: 200, message: "删除成功" });
     } catch (error) {
       console.error('删除还款记录错误:', error);
-      return res.say("删除失败", 500);
+      return res.say(error.message || "删除失败", 500);
     }
   }
 }

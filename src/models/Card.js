@@ -7,10 +7,88 @@ const idUtils = require('../utils/idUtils');
 class Card {
   static tableName = 'card_base';
 
+  // 虚拟账户类型
+  static VIRTUAL_CARDS = {
+    CASH: 'xxxx',     // 现金
+    BALANCE: 'yyyy',  // 余额（微信+支付宝）
+  };
+
+  /**
+   * 初始化虚拟账户（现金、余额）
+   * 在 card_base 表中创建虚拟账户记录（如果不存在）
+   * 虚拟银行分类写入 bus_category 表 (type='bank')
+   */
+  static async initVirtualCards(userId) {
+    const now = String(Date.now());
+    const results = [];
+
+    // 1. 初始化虚拟银行分类到 bus_category 表
+    const BusBank = require('./BusBank');
+    await BusBank.initVirtualBanks(userId);
+
+    // 2. 创建/更新虚拟卡片（只创建不存在的，不重复更新）
+    for (const [type, cardId] of Object.entries(this.VIRTUAL_CARDS)) {
+      const alias = type === 'CASH' ? '现金' : '余额';
+      const cardType = type === 'CASH' ? 'virtual_cash' : 'virtual_balance';
+      const bankId = cardId; // xxxx 或 yyyy
+
+      // 检查是否已存在
+      const [existing] = await db.execute(
+        'SELECT id, bank_id FROM card_base WHERE id = ? AND user_id = ?',
+        [cardId, userId]
+      );
+
+      if (existing.length === 0) {
+        // 创建新记录 - 所有字段都用占位符
+        const query = `
+          INSERT INTO card_base (
+            id, user_id, bank_id, card_type, card_level, main_sub, card_org,
+            card_length, last4_no, card_bin, credit_limit, temp_limit,
+            alias, card_img, open_date, expire_date,
+            bill_day, repay_day, currency, status, is_default, is_hide, sort,
+            tag, remark, color, annual_fee, fee_free_rule, source_from,
+            points_rate, create_time, update_time, is_deleted
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `;
+        await db.execute(query, [
+          cardId, userId, bankId, cardType, '000', '000', '000',
+          '0', '0000', '000', 0, 0,
+          alias, '', '0000-00-00', '0000-00-00',
+          0, 0, 'CNY', '正常', 0, 0, 99,
+          '', '', '#999999', 0, '', '系统',
+          1, now, now, 0
+        ]);
+        console.log(`[虚拟账户] 创建 ${alias} (${cardId})`);
+      } else if (existing[0].bank_id !== bankId) {
+        // 仅当 bank_id 不匹配时才更新
+        await db.execute(
+          'UPDATE card_base SET bank_id = ?, update_time = ? WHERE id = ? AND user_id = ?',
+          [bankId, now, cardId, userId]
+        );
+        console.log(`[虚拟账户] 修复 bank_id: ${existing[0].bank_id} -> ${bankId}`);
+      }
+
+      // 获取并返回虚拟账户信息
+      const [rows] = await db.execute(
+        'SELECT * FROM card_base WHERE id = ? AND user_id = ?',
+        [cardId, userId]
+      );
+      if (rows[0]) {
+        results.push(rows[0]);
+      }
+    }
+
+    return results;
+  }
+
   /**
    * 获取卡片列表 - 根据卡类型返回不同字段
+   * 自动初始化虚拟账户（如果不存在）
    */
   static async findAll(userId, filters = {}) {
+    // 确保虚拟账户已初始化
+    await this.initVirtualCards(userId);
+
     let whereClause = 'WHERE user_id = ? AND is_deleted = 0';
     const params = [userId];
 

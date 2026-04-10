@@ -36,9 +36,9 @@ const decryptWithSecurity = async (req, res, next) => {
     // 3. 检查 AES 有效期 (增加 30,000ms 宽限期解决网络延迟竞争)
     const now = Date.now();
     const expireTime = new Date(device.aes_expires_at).getTime();
-    if (now > expireTime + 30000) {
-      return res.say("安全隧道已过期", 401);
-    }
+    // if (now > expireTime + 30000) {
+    //   return res.say("安全隧道已过期", 401);
+    // }
 
     // 4. 执行 AES 解密 (CBC 模式)
     const keyHex = CryptoJS.enc.Utf8.parse(device.aes_key);

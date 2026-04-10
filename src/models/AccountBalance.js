@@ -7,28 +7,26 @@ const idUtils = require('../utils/idUtils');
  * 
  * 支持两种账户类型：
  * 1. 实体卡片：card_id 关联 card_base 表
- * 2. 虚拟账户：用 virtual_ 前缀标识，如 virtual_cash、virtual_wx、virtual_alipay
+ * 2. 虚拟账户：xxxx(现金)、yyyy(余额=微信+支付宝)
  */
 class AccountBalance {
   static tableName = 'account_balance';
 
-  // 虚拟账户类型（无卡号实体账户）
+  // 虚拟账户类型
   static VIRTUAL_TYPES = {
-    CASH: 'virtual_cash',      // 现金
-    WX: 'virtual_wx',          // 微信
-    ALIPAY: 'virtual_alipay',  // 支付宝
+    CASH: 'xxxx',      // 现金
+    BALANCE: 'yyyy',   // 余额（微信+支付宝）
   };
 
   // 虚拟账户显示名称
   static VIRTUAL_NAMES = {
-    'virtual_cash': { name: '现金', alias: '现金账户', card_type: 'cash' },
-    'virtual_wx': { name: '微信', alias: '微信零钱', card_type: 'digital' },
-    'virtual_alipay': { name: '支付宝', alias: '支付宝余额', card_type: 'digital' },
+    'xxxx': { name: '现金', alias: '现金账户', card_type: 'cash' },
+    'yyyy': { name: '余额', alias: '余额账户(微信+支付宝)', card_type: 'digital' },
   };
 
   /**
    * 获取用户所有账户余额（包括虚拟账户）
-   * 虚拟账户: virtual_cash, virtual_wx, virtual_alipay
+   * 虚拟账户: xxxx(现金), yyyy(余额)
    * 实体卡: 关联 card_base 表
    */
   static async findAll(userId) {
@@ -42,14 +40,14 @@ class AccountBalance {
       LEFT JOIN card_base cb ON ab.card_id = cb.id
       WHERE ab.user_id = ? AND ab.is_deleted = 0
       ORDER BY 
-        CASE WHEN ab.card_id LIKE 'virtual_%' THEN 0 ELSE 1 END,
+        CASE WHEN ab.card_id IN ('xxxx', 'yyyy') THEN 0 ELSE 1 END,
         ab.card_id
     `;
     const [rows] = await db.execute(query, [userId]);
     
     // 补充虚拟账户名称
     return rows.map(row => {
-      if (row.card_id && row.card_id.startsWith('virtual_')) {
+      if (row.card_id === 'xxxx' || row.card_id === 'yyyy') {
         const virtualInfo = this.VIRTUAL_NAMES[row.card_id] || {};
         return {
           ...row,
@@ -148,7 +146,7 @@ class AccountBalance {
     const currencyCode = currency || 'CNY';
     
     // 跳过虚拟账户的收支同步（虚拟账户需要单独维护）
-    if (card_id && card_id.startsWith('virtual_')) {
+    if (card_id === 'xxxx' || card_id === 'yyyy') {
       return null;
     }
     

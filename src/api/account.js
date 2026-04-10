@@ -21,8 +21,17 @@ router.get('/:id', accountController.getById);
 // 创建收支记录
 router.post('/', createValidator(AccountRules.create), accountController.create);
 
-// 删除收支记录
-router.delete('/:id', accountController.delete);
+// 修改收支备注（仅备注）
+router.patch('/:id/remark', accountController.updateRemark);
+
+// 冲正流水 - 借记卡
+router.post('/:id/reverse/debit', accountController.reverseDebit);
+
+// 冲正流水 - 信用卡消费
+router.post('/:id/reverse/credit-expense', accountController.reverseCreditExpense);
+
+// 冲正流水 - 信用卡还款撤销
+router.post('/:id/reverse/credit-repay', accountController.reverseCreditRepay);
 
 // ========== 本月收支统计 ==========
 

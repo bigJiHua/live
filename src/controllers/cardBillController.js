@@ -1,5 +1,6 @@
 const CardBill = require("../models/CardBill");
 const CardLog = require("../models/CardLog");
+const Card = require("../models/Card");
 
 /**
  * 卡片账单控制器
@@ -22,6 +23,15 @@ class CardBillController {
       // 2. 如果指定了卡片，自动重建遗留账单
       if (cardId) {
         await CardBill.rebuildBillFromAccount(cardId, req.userId);
+        bills = await CardBill.findAll(req.userId, filters);
+      }
+
+      // 3. 如果没有账单，自动为所有信用卡创建当前月账单
+      if (!bills || bills.length === 0) {
+        const creditCards = await Card.findAll(req.userId, { cardType: 'credit' });
+        for (const card of creditCards) {
+          await CardBill.rebuildBillFromAccount(card.id, req.userId);
+        }
         bills = await CardBill.findAll(req.userId, filters);
       }
 
@@ -87,6 +97,10 @@ class CardBillController {
         ...req.body.data,
       });
 
+      if (!bill || !bill.id) {
+        throw new Error('账单创建失败');
+      }
+
       // 记录操作日志
       await CardLog.log(req.body.data.cardId, req.userId, "创建账单", req.ip);
 
@@ -95,7 +109,7 @@ class CardBillController {
         .json({ status: 200, message: "创建成功", data: bill });
     } catch (error) {
       console.error("创建账单错误:", error);
-      return res.say("创建失败", 500);
+      return res.say(error.message || "创建失败", 500);
     }
   }
 
@@ -118,7 +132,7 @@ class CardBillController {
       return res.json({ status: 200, message: "更新成功", data: bill });
     } catch (error) {
       console.error("更新账单错误:", error);
-      return res.say("更新失败", 500);
+      return res.say(error.message || "更新失败", 500);
     }
   }
 

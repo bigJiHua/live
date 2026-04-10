@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- 主机： 127.0.0.1:3306
--- 生成日期： 2026-04-09 14:26:07
+-- 生成日期： 2026-04-10 16:38:09
 -- 服务器版本： 5.7.40
 -- PHP 版本： 8.0.26
 
@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS `account` (
   `category_id` varchar(50) NOT NULL COMMENT '分类ID',
   `pay_type` varchar(50) NOT NULL COMMENT '支出类型',
   `pay_method` varchar(50) NOT NULL COMMENT '支付方式',
-  `account_type` varchar(20) DEFAULT 'debit' COMMENT '账户类型：cash现金 / debit资产 / credit负债',
+  `account_type` varchar(20) DEFAULT NULL COMMENT '账户类型：cash现金 / debit资产 / credit负债',
   `amount` decimal(12,2) NOT NULL COMMENT '金额',
   `currency` varchar(10) DEFAULT 'CNY' COMMENT '币种',
   `exchange_rate` decimal(10,4) DEFAULT '1.0000' COMMENT '汇率',
@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS `account` (
   `create_time` varchar(20) DEFAULT NULL COMMENT '提交时间',
   `update_time` varchar(20) DEFAULT NULL COMMENT '修改时间',
   `is_deleted` tinyint(4) DEFAULT '0' COMMENT '是否删除',
+  `reversed_id` varchar(32) DEFAULT NULL COMMENT '冲正流水ID，指向被冲正的原流水',
   PRIMARY KEY (`id`),
   KEY `idx_user_date` (`user_id`,`trans_date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='记账明细表';
@@ -322,16 +323,21 @@ DROP TABLE IF EXISTS `card_repay`;
 CREATE TABLE IF NOT EXISTS `card_repay` (
   `id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT 'id主键',
   `card_id` varchar(50) NOT NULL COMMENT '卡片ID',
+  `account_id` varchar(50) NOT NULL COMMENT '绑定流水id',
   `user_id` varchar(50) NOT NULL COMMENT '用户ID',
   `bill_id` varchar(32) NOT NULL COMMENT '关联账单ID',
   `bill_month` varchar(7) DEFAULT NULL COMMENT '归属账单月',
   `repay_amount` decimal(12,2) NOT NULL COMMENT '还款金额',
   `repay_method` varchar(20) NOT NULL COMMENT '还款方式',
+  `repay_card_id` varchar(20) NOT NULL COMMENT '还款来源的的id',
   `repay_time` varchar(20) NOT NULL COMMENT '还款时间',
   `remark` varchar(255) DEFAULT NULL COMMENT '备注',
+  `create_time` varchar(20) NOT NULL,
+  `update_time` varchar(20) NOT NULL,
   `is_deleted` tinyint(4) DEFAULT '0' COMMENT '是否删除',
   PRIMARY KEY (`id`),
-  KEY `idx_user_card` (`user_id`,`card_id`)
+  KEY `idx_user_card` (`user_id`,`card_id`),
+  KEY `account_id` (`account_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='信用卡还款记录表';
 
 -- --------------------------------------------------------

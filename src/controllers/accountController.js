@@ -119,18 +119,121 @@ class AccountController {
   }
 
   /**
-   * 删除收支记录
+   * 修改收支备注（仅修改备注，不涉及其他字段）
    */
-  async delete(req, res) {
+  async updateRemark(req, res) {
     try {
-      const result = await Account.delete(req.params.id, req.userId);
+      const { remark } = req.body;
 
-      if (!result) return res.say("记录不存在", 404);
+      if (remark === undefined) {
+        return res.status(400).json({
+          status: 400,
+          message: "备注不能为空"
+        });
+      }
 
-      return res.json({ status: 200, message: "删除成功" });
+      const result = await Account.updateRemark(req.params.id, req.userId, remark);
+
+      if (!result) {
+        return res.status(404).json({
+          status: 404,
+          message: "记录不存在"
+        });
+      }
+
+      return res.json({
+        status: 200,
+        message: "备注修改成功",
+        data: result
+      });
     } catch (error) {
-      console.error("删除收支记录错误:", error);
-      return res.say("删除失败", 500);
+      console.error("修改备注错误:", error);
+      return res.status(500).json({
+        status: 500,
+        message: error.message || "修改失败"
+      });
+    }
+  }
+
+  /**
+   * 冲正流水 - 借记卡
+   * 原支出(direction=0) -> 冲正收入(direction=1)
+   * 原收入(direction=1) -> 冲正支出(direction=0)
+   */
+  async reverseDebit(req, res) {
+    try {
+      const { remark } = req.body || {};
+
+      const result = await Account.reverseDebitById(req.params.id, req.userId, remark);
+
+      return res.json({
+        status: 200,
+        message: "借记卡冲正成功",
+        data: {
+          reversed: result,
+          originalId: req.params.id
+        }
+      });
+    } catch (error) {
+      console.error("借记卡冲正流水错误:", error);
+      return res.status(400).json({
+        status: 400,
+        message: error.message || "冲正失败"
+      });
+    }
+  }
+
+  /**
+   * 冲正流水 - 信用卡消费
+   * 原支出(direction=0) -> 冲正收入(direction=1) + 恢复账单额度
+   */
+  async reverseCreditExpense(req, res) {
+    try {
+      const { remark } = req.body || {};
+
+      const result = await Account.reverseCreditExpenseById(req.params.id, req.userId, remark);
+
+      return res.json({
+        status: 200,
+        message: "信用卡消费冲正成功",
+        data: {
+          reversed: result,
+          originalId: req.params.id
+        }
+      });
+    } catch (error) {
+      console.error("信用卡消费冲正错误:", error);
+      return res.status(400).json({
+        status: 400,
+        message: error.message || "冲正失败"
+      });
+    }
+  }
+
+  /**
+   * 冲正流水 - 信用卡还款撤销
+   * 原还款流水 -> 冲正支出 + 软删除card_repay + 恢复账单额度
+   */
+  async reverseCreditRepay(req, res) {
+    try {
+      const { remark } = req.body || {};
+
+      const result = await Account.reverseCreditRepayById(req.params.id, req.userId, remark);
+
+      return res.json({
+        status: 200,
+        message: "信用卡还款撤销成功",
+        data: {
+          reversed: result,
+          originalId: req.params.id
+        }
+      });
+    } catch (error) {
+      console.error("信用卡还款撤销错误:", error);
+      return res.status(400).json({
+        status: 400,
+        message: error.message || "冲正失败"
+      });
     }
   }
 

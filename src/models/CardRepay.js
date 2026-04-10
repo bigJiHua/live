@@ -35,10 +35,12 @@ class CardRepay {
 
     const query = `
       SELECT cr.*, c.alias as card_alias, c.last4_no as card_last4,
-             cb.bill_amount, cb.need_repay as bill_need_repay
+             cb.bill_amount, cb.need_repay as bill_need_repay,
+             rc.alias as repay_card_alias, rc.last4_no as repay_card_last4
       FROM ${this.tableName} cr
       LEFT JOIN card_base c ON cr.card_id = c.id
       LEFT JOIN card_bill cb ON cr.bill_id = cb.id
+      LEFT JOIN card_base rc ON cr.repay_card_id = rc.id
       ${whereClause}
       ORDER BY cr.repay_time DESC
     `;
@@ -52,10 +54,12 @@ class CardRepay {
   static async findById(id, userId) {
     const query = `
       SELECT cr.*, c.alias as card_alias, c.last4_no as card_last4,
-             cb.bill_amount, cb.need_repay as bill_need_repay
+             cb.bill_amount, cb.need_repay as bill_need_repay,
+             rc.alias as repay_card_alias, rc.last4_no as repay_card_last4
       FROM ${this.tableName} cr
       LEFT JOIN card_base c ON cr.card_id = c.id
       LEFT JOIN card_bill cb ON cr.bill_id = cb.id
+      LEFT JOIN card_base rc ON cr.repay_card_id = rc.id
       WHERE cr.id = ? AND cr.user_id = ? AND cr.is_deleted = 0
     `;
     const [rows] = await db.execute(query, [id, userId]);
@@ -96,7 +100,10 @@ class CardRepay {
       'SELECT * FROM card_base WHERE id = ? AND is_deleted = 0',
       [cardId]
     );
+    
     const card = cardRows[0];
+    console.log(card);
+    
     if (!card) {
       throw new Error('卡片不存在');
     }
@@ -116,10 +123,10 @@ class CardRepay {
     let sourceBalance = 0;   // 当前余额
 
     if (repayMethod === 'balance') {
-      // 使用平台余额还款（查询account_balance）
-      const balance = await AccountSettlement.calculateBalance(cardId, userId);
+      // 使用余额还款（微信+支付宝，card_id = yyyy）
+      const balance = await AccountSettlement.calculateBalance('yyyy', userId);
       sourceBalance = balance.balance;
-      sourceCardId = cardId;
+      sourceCardId = 'yyyy';
     } else if (repayMethod === 'bank_card') {
       // 使用指定银行卡还款
       if (!repayMethodCardId) {
@@ -140,10 +147,10 @@ class CardRepay {
       sourceBalance = balance.balance;
       sourceCardId = repayMethodCardId;
     } else if (repayMethod === 'cash') {
-      // 现金还款，查询虚拟现金账户
-      const balance = await AccountSettlement.calculateBalance('virtual_cash', userId);
+      // 现金还款，查询虚拟现金账户（card_id = xxxx）
+      const balance = await AccountSettlement.calculateBalance('xxxx', userId);
       sourceBalance = balance.balance;
-      sourceCardId = 'virtual_cash';
+      sourceCardId = 'xxxx';
     }
 
     // 验证余额是否充足（card方式不需要验证）
@@ -165,9 +172,11 @@ class CardRepay {
     }
 
     // ===== 处理资金转移 =====
+    let repayAccountId = null; // 保存还款流水ID，用于关联 card_repay
+    
     if (repayMethod !== 'card') {
       // 1. 从还款来源扣款（生成支出流水）
-      await Account.create({
+      const repayAccount = await Account.create({
         userId,
         direction: 0, // 支出
         categoryId: 'CATEGORY_REPAY', // 还款分类（需确保存在）
@@ -181,6 +190,11 @@ class CardRepay {
         remark: remark || `信用卡还款至${card.alias || card.last4_no}`,
         cardId: sourceCardId
       });
+      
+      // 保存还款流水ID用于关联
+      if (repayAccount && repayAccount.id) {
+        repayAccountId = repayAccount.id;
+      }
 
       // 2. 溢缴款写入信用卡余额（作为收入）
       if (overflowAmount > 0) {
@@ -258,11 +272,23 @@ class CardRepay {
       month = bill.bill_month;
     }
 
+    // 获取还款来源卡ID（用于 repay_card_id 字段溯源）
+    let repaySourceCardId = null;
+    if (repayMethod === 'balance') {
+      repaySourceCardId = 'yyyy'; // 余额（微信+支付宝）
+    } else if (repayMethod === 'bank_card') {
+      repaySourceCardId = repayMethodCardId; // 指定银行卡
+    } else if (repayMethod === 'cash') {
+      repaySourceCardId = 'xxxx'; // 现金
+    } else if (repayMethod === 'card') {
+      repaySourceCardId = cardId; // 本卡还款
+    }
+
     const query = `
       INSERT INTO ${this.tableName} (
         id, card_id, user_id, bill_id, bill_month, repay_amount,
-        repay_method, repay_time, remark, is_deleted
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+        repay_method, repay_card_id, repay_time, remark, account_id, is_deleted, create_time, update_time
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
     `;
 
     await db.execute(query, [
@@ -273,8 +299,12 @@ class CardRepay {
       month || null,
       repayAmountNum,
       repayMethod,
+      repaySourceCardId,
       repayTime || now.substring(0, 10),
-      remark || null
+      remark || null,
+      repayAccountId || null,
+      now,
+      now
     ]);
 
     // ===== 同步更新信用卡账单 =====
@@ -303,6 +333,7 @@ class CardRepay {
     billMonth,
     repayAmount,
     repayMethod,
+    repayCardId,
     repayTime,
     remark
   }) {
@@ -324,8 +355,8 @@ class CardRepay {
     const query = `
       INSERT INTO ${this.tableName} (
         id, card_id, user_id, bill_id, bill_month, repay_amount,
-        repay_method, repay_time, remark, is_deleted
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+        repay_method, repay_card_id, repay_time, remark, is_deleted, create_time, update_time
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
     `;
 
     await db.execute(query, [
@@ -336,8 +367,11 @@ class CardRepay {
       month || null,
       repayAmount,
       repayMethod || null,
+      repayCardId || cardId, // 默认还款来源为本卡
       repayTime || now,
-      remark || null
+      remark || null,
+      now,
+      now
     ]);
 
     // 创建成功后，更新关联账单的还款信息
@@ -411,6 +445,7 @@ class CardRepay {
     const fieldMap = {
       repayAmount: 'repay_amount',
       repayMethod: 'repay_method',
+      repayCardId: 'repay_card_id',
       repayTime: 'repay_time',
       remark: 'remark'
     };
@@ -449,12 +484,13 @@ class CardRepay {
     const record = await this.findById(id, userId);
     if (!record) return false;
 
+    const now = String(Date.now());
     const query = `
       UPDATE ${this.tableName}
-      SET is_deleted = 1
+      SET is_deleted = 1, update_time = ?
       WHERE id = ? AND user_id = ?
     `;
-    const [result] = await db.execute(query, [id, userId]);
+    const [result] = await db.execute(query, [now, id, userId]);
 
     // 删除成功后，重新计算关联账单的还款信息
     if (result.affectedRows > 0) {

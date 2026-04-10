@@ -18,6 +18,7 @@ const userRouter = require("./user");
 const databaseRouter = require("./database");
 const uploadRouter = require("./upload");
 const momentRouter = require("./moment");
+const bankRouter = require("./busBank");
 
 // 注册子路由
 router.use("/auth", authRouter); // 【已启用】【已完成
@@ -32,5 +33,6 @@ router.use("/user", userRouter); // 【已启用】用户管理 【已完成
 router.use("/database", databaseRouter); // 【已启用】临时数据库操控
 router.use("/upload", uploadRouter); // 【已启用】文件上传 【已完成
 router.use("/moment", momentRouter); // 【已启用】动态/日记 【已完成
+router.use("/bank", bankRouter); // 银行分类管理
 
 module.exports = router;

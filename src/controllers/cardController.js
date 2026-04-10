@@ -54,6 +54,10 @@ class CardController {
         ...req.body.data,
       });
 
+      if (!card || !card.id) {
+        throw new Error('卡片创建失败');
+      }
+
       // ===== 创建卡片时初始化余额快照 =====
       await AccountSettlement.initCardBalance(card.id, req.userId);
 
@@ -67,7 +71,7 @@ class CardController {
       });
     } catch (error) {
       console.error("创建卡片错误:", error);
-      return res.say("创建失败", 500);
+      return res.say(error.message || "创建失败", 500);
     }
   }
 

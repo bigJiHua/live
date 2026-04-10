@@ -61,7 +61,7 @@ class Account {
       SELECT 
         a.id, a.user_id, a.direction, a.category_id,
         a.pay_type, a.pay_method, a.account_type, a.amount, a.currency, a.exchange_rate,
-        a.trans_date, a.remark, a.card_id, a.create_time, a.update_time,
+        a.trans_date, a.remark, a.card_id, a.create_time, a.update_time, a.reversed_id,
         c.name as category_name,
         cb.alias as card_alias,
         cb.last4_no as card_last4
@@ -85,13 +85,15 @@ class Account {
       SELECT 
         a.id, a.user_id, a.direction, a.category_id,
         a.pay_type, a.pay_method, a.account_type, a.amount, a.currency, a.exchange_rate,
-        a.trans_date, a.remark, a.card_id, a.create_time, a.update_time,
+        a.trans_date, a.remark, a.card_id, a.create_time, a.update_time, a.reversed_id,
         c.name as category_name,
         cb.alias as card_alias,
-        cb.last4_no as card_last4
+        cb.last4_no as card_last4,
+        rb.remark as reversed_remark
       FROM ${this.tableName} a
       LEFT JOIN bus_category c ON a.category_id = c.id
       LEFT JOIN card_base cb ON a.card_id = cb.id
+      LEFT JOIN ${this.tableName} rb ON a.reversed_id = rb.id
       WHERE a.id = ? AND a.user_id = ? AND a.is_deleted = 0
     `;
     const [rows] = await db.execute(query, [id, userId]);
@@ -107,7 +109,7 @@ class Account {
     const now = String(Date.now());
 
     // 从 card_base 获取真实的 card_type
-    let finalAccountType = 'debit';
+    let finalAccountType = '';
     if (cardId) {
       const [cardRows] = await db.execute(
         'SELECT card_type FROM card_base WHERE id = ? AND is_deleted = 0',
@@ -136,8 +138,8 @@ class Account {
 
     const query = `
       INSERT INTO ${this.tableName} 
-      (id, user_id, direction, category_id, pay_type, pay_method, amount, currency, exchange_rate, trans_date, remark, card_id, create_time, update_time, is_deleted)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+      (id, user_id, direction, category_id, pay_type, pay_method, account_type, amount, currency, exchange_rate, trans_date, remark, card_id, create_time, update_time, is_deleted)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
     `;
 
     await db.execute(query, [
@@ -147,6 +149,7 @@ class Account {
       categoryId,
       payType,
       payMethod,
+      finalAccountType,
       amount,
       currency || 'CNY',
       exchangeRate || 1,
@@ -247,36 +250,215 @@ class Account {
   }
 
   /**
-   * 删除账务记录（软删除）
+   * 仅修改备注
    */
-  static async delete(id, userId) {
+  static async updateRemark(id, userId, remark) {
     const now = String(Date.now());
-    
-    // 先查询完整记录
+
+    const query = `
+      UPDATE ${this.tableName}
+      SET remark = ?, update_time = ?
+      WHERE id = ? AND user_id = ? AND is_deleted = 0
+    `;
+
+    const [result] = await db.execute(query, [remark, now, id, userId]);
+
+    if (result.affectedRows === 0) {
+      return null;
+    }
+
+    return this.findById(id, userId);
+  }
+
+  /**
+   * 借记卡冲正
+   * 原支出 -> 冲正收入，原收入 -> 冲正支出
+   */
+  static async reverseDebitById(id, userId, reverseRemark) {
+    const now = String(Date.now());
+
     const [rows] = await db.execute(
-      'SELECT card_id, direction, amount, trans_date FROM account WHERE id = ? AND user_id = ? AND is_deleted = 0',
+      `SELECT a.*, cb.card_type, cb.alias as card_alias, cb.last4_no
+       FROM ${this.tableName} a
+       LEFT JOIN card_base cb ON a.card_id = cb.id
+       WHERE a.id = ? AND a.user_id = ? AND a.is_deleted = 0`,
       [id, userId]
     );
-    const record = rows[0];
-    
-    const query = `
-      UPDATE ${this.tableName} 
-      SET is_deleted = 1, update_time = ?
-      WHERE id = ? AND user_id = ?
-    `;
-    const [result] = await db.execute(query, [now, id, userId]);
-    
-    // 删除成功后同步余额和账单
-    if (result.affectedRows > 0 && record?.card_id) {
-      await AccountSettlement.syncBalanceSnapshot(record.card_id, userId);
-      
-      // 信用卡消费回滚：删除支出流水时恢复账单额度
-      if (record.direction === 0) {
-        await CardBill.rollbackExpense(record.card_id, userId, record.amount, record.trans_date);
+    const original = rows[0];
+
+    if (!original) throw new Error('原流水不存在或已被删除');
+    if (original.reversed_id) throw new Error('该流水已被冲正，无法重复冲正');
+
+    const reverseDirection = original.direction === 0 ? 1 : 0;
+
+    // 1. 创建冲正流水
+    await db.execute(`
+      INSERT INTO ${this.tableName} 
+      (id, user_id, direction, category_id, pay_type, pay_method, amount, currency, 
+       exchange_rate, trans_date, remark, card_id, create_time, update_time, is_deleted, reversed_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+    `, [
+      idUtils.billId(), userId, reverseDirection, original.category_id,
+      original.pay_type, original.pay_method, original.amount, original.currency,
+      original.exchange_rate, now.substring(0, 10),
+      reverseRemark || `冲正：${original.remark || '交易撤销'}`,
+      original.card_id, now, now, original.id
+    ]);
+
+    // 2. 标记原流水为已删除
+    await db.execute(
+      `UPDATE ${this.tableName} SET is_deleted = 1, update_time = ? WHERE id = ?`,
+      [now, id]
+    );
+
+    await AccountSettlement.syncBalanceSnapshot(original.card_id, userId);
+
+    console.log(`[借记卡冲正] ${original.card_alias || original.card_id} ${original.direction === 0 ? '支出' : '收入'} ${original.amount} -> 冲正${reverseDirection === 1 ? '收入' : '支出'}，原流水已标记删除`);
+
+    return this.findById(id, userId);
+  }
+
+  /**
+   * 信用卡消费冲正
+   * 原支出 -> 冲正收入 + 恢复账单额度
+   */
+  static async reverseCreditExpenseById(id, userId, reverseRemark) {
+    const now = String(Date.now());
+
+    const [rows] = await db.execute(
+      `SELECT a.*, cb.card_type, cb.alias as card_alias, cb.last4_no
+       FROM ${this.tableName} a
+       LEFT JOIN card_base cb ON a.card_id = cb.id
+       WHERE a.id = ? AND a.user_id = ? AND a.is_deleted = 0`,
+      [id, userId]
+    );
+    const original = rows[0];
+
+    if (!original) throw new Error('原流水不存在或已被删除');
+    if (original.reversed_id) throw new Error('该流水已被冲正，无法重复冲正');
+
+    // 检查该卡是否有未撤销的还款记录
+    // TODO 暂时拦截
+    const [repayRows] = await db.execute(
+      `SELECT id FROM card_repay WHERE card_id = ? AND is_deleted = 0 LIMIT 1`,
+      [original.card_id]
+    );
+    if (repayRows.length > 0) {
+      throw new Error('该卡有还款记录，请先撤销还款后再冲正此笔交易');
+    }
+
+    // 1. 创建冲正流水
+    await db.execute(`
+      INSERT INTO ${this.tableName} 
+      (id, user_id, direction, category_id, pay_type, pay_method, amount, currency, 
+       exchange_rate, trans_date, remark, card_id, create_time, update_time, is_deleted, reversed_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+    `, [
+      idUtils.billId(), userId, 1, original.category_id,
+      original.pay_type, original.pay_method, original.amount, original.currency,
+      original.exchange_rate, now.substring(0, 10),
+      reverseRemark || `冲正：${original.remark || '交易撤销'}`,
+      original.card_id, now, now, original.id
+    ]);
+
+    // 2. 标记原流水为已删除
+    await db.execute(
+      `UPDATE ${this.tableName} SET is_deleted = 1, update_time = ? WHERE id = ?`,
+      [now, id]
+    );
+
+    await CardBill.rollbackExpense(original.card_id, userId, original.amount, original.trans_date);
+    await AccountSettlement.syncBalanceSnapshot(original.card_id, userId);
+
+    console.log(`[信用卡消费冲正] ${original.card_alias || original.card_id} 支出${original.amount} -> 冲正收入 + 恢复账单额度，原流水已标记删除`);
+
+    return this.findById(id, userId);
+  }
+
+  /**
+   * 信用卡还款撤销冲正
+   * 原还款流水 -> 冲正收入（恢复余额）+ 软删除card_repay + 软删除溢缴款 + 恢复账单额度
+   */
+  static async reverseCreditRepayById(id, userId, reverseRemark) {
+    const now = String(Date.now());
+
+    const [rows] = await db.execute(
+      `SELECT a.*, cb.card_type, cb.alias as card_alias, cb.last4_no
+       FROM ${this.tableName} a
+       LEFT JOIN card_base cb ON a.card_id = cb.id
+       WHERE a.id = ? AND a.user_id = ? AND a.is_deleted = 0`,
+      [id, userId]
+    );
+    const original = rows[0];
+
+    if (!original) throw new Error('原流水不存在或已被删除');
+    if (original.reversed_id) throw new Error('该流水已被冲正，无法重复冲正');
+    if (original.category_id !== 'CATEGORY_REPAY') {
+      throw new Error('该接口仅支持信用卡还款流水');
+    }
+
+    // 1. 创建冲正流水（收入方向，恢复余额）
+    await db.execute(`
+      INSERT INTO ${this.tableName} 
+      (id, user_id, direction, category_id, pay_type, pay_method, amount, currency, 
+       exchange_rate, trans_date, remark, card_id, create_time, update_time, is_deleted, reversed_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+    `, [
+      idUtils.billId(), userId, 1, original.category_id,  // direction=1 收入，恢复余额
+      original.pay_type, original.pay_method, original.amount, original.currency,
+      original.exchange_rate, now.substring(0, 10),
+      reverseRemark || `还款撤销：${original.remark || '交易撤销'}`,
+      original.card_id, now, now, original.id
+    ]);
+
+    // 2. 标记原流水为已删除
+    await db.execute(
+      `UPDATE ${this.tableName} SET is_deleted = 1, update_time = ? WHERE id = ?`,
+      [now, id]
+    );
+
+    // 3. 查询并软删除 card_repay 记录
+    const [repayRows] = await db.execute(
+      'SELECT * FROM card_repay WHERE account_id = ? AND is_deleted = 0 LIMIT 1',
+      [id]
+    );
+
+    if (repayRows.length > 0) {
+      const repayRecord = repayRows[0];
+
+      await db.execute(
+        'UPDATE card_repay SET is_deleted = 1, update_time = ? WHERE id = ?',
+        [now, repayRecord.id]
+      );
+
+      // 使用 card_repay 的 create_time 来计算账单月
+      await CardBill.rollbackRepay(
+        original.card_id, userId, repayRecord.repay_amount, repayRecord.create_time
+      );
+
+      console.log(`[信用卡还款撤销] card_repay ${repayRecord.id} 已软删除，恢复账单额度 ${repayRecord.repay_amount}`);
+
+      // 4. 查询并软删除关联的溢缴款收入流水
+      const [overflowRows] = await db.execute(
+        `SELECT * FROM ${this.tableName} 
+         WHERE card_id = ? AND category_id = 'CATEGORY_OVERFLOW' 
+           AND trans_date = ? AND is_deleted = 0
+         ORDER BY create_time DESC LIMIT 1`,
+        [original.card_id, original.trans_date]
+      );
+
+      if (overflowRows.length > 0) {
+        await db.execute(
+          `UPDATE ${this.tableName} SET is_deleted = 1, update_time = ? WHERE id = ?`,
+          [now, overflowRows[0].id]
+        );
+        console.log(`[信用卡还款撤销] 溢缴款流水 ${overflowRows[0].id} 已软删除，金额 ${overflowRows[0].amount}`);
       }
     }
-    
-    return result.affectedRows > 0;
+
+    await AccountSettlement.syncBalanceSnapshot(original.card_id, userId);
+
+    return this.findById(id, userId);
   }
 
   /**

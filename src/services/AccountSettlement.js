@@ -10,6 +10,7 @@ class AccountSettlement {
    * 计算余额（从 account 表汇总，换算成人民币价值）
    * CNY（人民币）：金额 * 1（1:1 不变）
    * 外币：金额 * 汇率 / 100（前端传来的是"100外币兑人民币价格"）
+   * 注意：跳过 reversed_id 不为空的流水（已被冲正，不应计入余额）
    */
   static async calculateBalance(cardId, userId) {
     const query = `
@@ -19,7 +20,7 @@ class AccountSettlement {
         amount,
         exchange_rate
       FROM account
-      WHERE card_id = ? AND user_id = ? AND is_deleted = 0
+      WHERE card_id = ? AND user_id = ? AND is_deleted = 0 AND reversed_id IS NULL
     `;
     const [rows] = await db.execute(query, [cardId, userId]);
     
