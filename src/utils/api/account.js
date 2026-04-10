@@ -39,6 +39,15 @@ export function updateAccount(id, data) {
 }
 
 /**
+ * 修改收支备注
+ * @param {string} id - 流水ID
+ * @param {string} remark - 备注内容
+ */
+export function updateAccountRemark(id, remark) {
+  return request.patch(`/account/${id}/remark`, { remark })
+}
+
+/**
  * 删除收支记录
  * @param {string} id - 记录ID
  */
@@ -106,4 +115,32 @@ export function initVirtualAccounts(data) {
  */
 export function updateVirtualAccounts(data) {
   return request.post('/accountBalance/update-virtual', data)
+}
+
+/**
+ * ========== 流水冲正 API ==========
+ */
+
+/**
+ * 借记卡支出/收入冲正
+ * @param {string} id - 流水ID
+ */
+export function reverseDebit(id) {
+  return request.post(`/account/${id}/reverse/debit`)
+}
+
+/**
+ * 信用卡消费支出冲正
+ * @param {string} id - 流水ID
+ */
+export function reverseCreditExpense(id) {
+  return request.post(`/account/${id}/reverse/credit-expense`)
+}
+
+/**
+ * 信用卡还款流水撤销
+ * @param {string} id - 流水ID
+ */
+export function reverseCreditRepay(id) {
+  return request.post(`/account/${id}/reverse/credit-repay`)
 }

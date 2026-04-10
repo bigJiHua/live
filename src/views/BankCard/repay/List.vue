@@ -12,8 +12,27 @@
           readonly
           @click="showCardPicker = true"
         />
+        <van-field
+          v-model="monthText"
+          label="账单月份"
+          placeholder="请选择月份"
+          is-link
+          readonly
+          @click="showMonthPicker = true"
+        />
       </van-cell-group>
     </div>
+
+    <!-- 月份选择器 -->
+    <van-popup v-model:show="showMonthPicker" position="bottom" round>
+      <van-picker
+        v-model="selectedValues"
+        title="选择月份"
+        :columns="pickerColumns"
+        @confirm="onMonthConfirm"
+        @cancel="showMonthPicker = false"
+      />
+    </van-popup>
 
     <!-- 还款记录列表 -->
     <div class="repay-list" v-if="repayList.length > 0">
@@ -25,26 +44,50 @@
       >
         <div class="repay-header">
           <div class="repay-info">
-            <span class="repay-card-name">{{ item.card_alias || '未知卡片' }}</span>
-            <span class="repay-card-no">**** {{ item.card_last4 }}</span>
+            <span class="repay-card-name">{{ getCardDisplayName(item) }}</span>
+            <span class="repay-date">本次记录还款日期 {{ formatDate(item.repay_time) }}</span>
           </div>
-          <div class="repay-amount">
-            -¥{{ formatMoney(item.repay_amount) }}
-          </div>
+          <van-tag type="success">已还款</van-tag>
         </div>
 
         <div class="repay-body">
-          <div class="repay-method">
-            <van-icon name="alipay" v-if="item.repay_method === '支付宝'" />
-            <van-icon name="wechat-pay" v-else-if="item.repay_method === '微信'" />
-            <van-icon name="credit-card" v-else />
-            {{ item.repay_method || '转账' }}
+          <div class="bill-info-col">
+            <div class="info-row">
+              <span class="info-label">账单金额</span>
+              <span class="info-value">¥{{ formatMoney(item.bill_amount) }}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">已还金额</span>
+              <span class="info-value">¥{{ formatMoney(item.repay_amount) }}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">待还金额</span>
+              <span class="info-value danger">¥{{ formatMoney(item.bill_need_repay) }}</span>
+            </div>
           </div>
-          <div class="repay-time">{{ formatDate(item.repay_time) }}</div>
+          <div class="repay-amount-col">
+            <div class="repay-label">本次还款</div>
+            <div class="repay-value">
+              ¥{{ formatMoney(item.repay_amount) }}
+            </div>
+          </div>
         </div>
 
-        <div class="repay-footer" v-if="item.remark">
-          {{ item.remark }}
+        <div class="repay-footer">
+          <div class="repay-method">
+            <van-icon name="card" size="14" />
+            <span>{{ formatRepayMethod(item.repay_method) }}</span>
+          </div>
+          <div class="repay-actions">
+            <van-button
+              size="small"
+              round
+              plain
+              @click.stop="goToRepay(item)"
+            >
+              再次还款
+            </van-button>
+          </div>
         </div>
       </div>
     </div>
@@ -80,6 +123,7 @@
 import { ref, computed, onMounted } from "vue";
 import { showToast } from "vant";
 import { useRouter } from "vue-router";
+import dayjs from "dayjs";
 import { getRepayList, getCardList } from "@/utils/api/card";
 
 const router = useRouter();
@@ -90,6 +134,37 @@ const loading = ref(false);
 const selectedCardId = ref(null);
 const selectedCardName = ref("");
 const showCardPicker = ref(false);
+
+// 月份选择（Vant 4 写法）
+const now = dayjs();
+const currentYear = ref(now.year());
+const currentMonth = ref(now.month() + 1);
+const showMonthPicker = ref(false);
+const selectedValues = ref([`${now.year()}年`, `${now.month() + 1}月`]);
+const monthText = computed(() => `${currentYear.value}年${currentMonth.value}月`);
+
+// 月份选择器列
+const pickerColumns = computed(() => {
+  const currentYearVal = dayjs().year();
+  const years = [];
+  for (let i = currentYearVal - 10; i <= currentYearVal + 10; i++) {
+    years.push({ text: `${i}年`, value: `${i}年` });
+  }
+  const months = Array.from({ length: 12 }, (_, i) => ({
+    text: `${i + 1}月`,
+    value: `${i + 1}月`,
+  }));
+  return [years, months];
+});
+
+// 月份确认
+const onMonthConfirm = ({ selectedOptions }) => {
+  currentYear.value = parseInt(selectedOptions[0].text);
+  currentMonth.value = parseInt(selectedOptions[1].text);
+  selectedValues.value = [selectedOptions[0].text, selectedOptions[1].text];
+  showMonthPicker.value = false;
+  loadRepayList();
+};
 
 // 卡片选择列
 const cardColumns = computed(() => {
@@ -111,6 +186,9 @@ const loadRepayList = async () => {
     if (selectedCardId.value) {
       params.cardId = selectedCardId.value;
     }
+    // 添加账单月份筛选
+    const billMonth = `${currentYear.value}-${String(currentMonth.value).padStart(2, '0')}`;
+    params.billMonth = billMonth;
     const res = await getRepayList(params);
     repayList.value = res.data || res || [];
   } catch (error) {
@@ -138,16 +216,36 @@ const onCardConfirm = ({ selectedOptions }) => {
   loadRepayList();
 };
 
+// 获取卡片显示名称
+const getCardDisplayName = (item) => {
+  if (item.card_alias) return item.card_alias;
+  if (item.card_last4) return `信用卡 ****${item.card_last4}`;
+  return '信用卡';
+};
+
 // 格式化金额
 const formatMoney = (amount) => {
   if (amount === null || amount === undefined) return "0.00";
   return Number(amount).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 };
 
-// 格式化日期
+// 格式化日期 - 显示完整日期
 const formatDate = (date) => {
   if (!date) return "--";
-  return date.replace("T", " ").split(".")[0];
+  const d = dayjs(date);
+  if (!d.isValid()) return "--";
+  return `${d.month() + 1}月${d.date()}日`;
+};
+
+// 格式化还款方式
+const formatRepayMethod = (method) => {
+  const map = {
+    cash: '现金还款',
+    balance: '余额还款',
+    bank_card: '借记卡还款',
+    card: '卡还款',
+  };
+  return map[method] || method || '还款';
 };
 
 // 跳转到详情
@@ -155,14 +253,20 @@ const goToDetail = (item) => {
   router.push(`/card/repay/detail?id=${item.id}`);
 };
 
+// 跳转到再次还款
+const goToRepay = (item) => {
+  const params = new URLSearchParams({
+    cardId: item.card_id,
+    billId: item.bill_id || '',
+    last4: item.card_last4 || '',
+    alias: item.card_alias || '',
+  });
+  router.push(`/card/repay/add?${params.toString()}`);
+};
+
 // 跳转到添加
 const goToAdd = () => {
   router.push("/card/repay/add");
-};
-
-// 返回
-const onClickLeft = () => {
-  router.back();
 };
 
 onMounted(() => {
@@ -176,10 +280,6 @@ onMounted(() => {
   min-height: 100vh;
   background: #f7f8fa;
   padding-bottom: 100px;
-}
-
-.page-header {
-  background: #fff;
 }
 
 .filter-section {
@@ -201,7 +301,7 @@ onMounted(() => {
 .repay-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   margin-bottom: 12px;
 }
 
@@ -216,19 +316,73 @@ onMounted(() => {
   color: #333;
 }
 
-.repay-card-no {
-  font-size: 12px;
-  color: #999;
+.repay-date {
+  font-size: 13px;
+  color: #07c160;
+  font-weight: 500;
   margin-top: 2px;
 }
 
-.repay-amount {
-  font-size: 20px;
-  font-weight: 600;
-  color: #07c160;
+.repay-body {
+  display: flex;
+  justify-content: space-between;
+  align-items: stretch;
+  margin-bottom: 12px;
 }
 
-.repay-body {
+.bill-info-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-right: 16px;
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.info-label {
+  font-size: 13px;
+  color: #999;
+}
+
+.info-value {
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+}
+
+.info-value.danger {
+  color: #ee0a24;
+}
+
+.repay-amount-col {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #07c160 0%, #10b981 100%);
+  border-radius: 8px;
+  min-width: 100px;
+}
+
+.repay-label {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.85);
+  margin-bottom: 4px;
+}
+
+.repay-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.repay-footer {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -237,24 +391,16 @@ onMounted(() => {
 }
 
 .repay-method {
+  font-size: 12px;
+  color: #999;
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 14px;
-  color: #666;
+  gap: 4px;
 }
 
-.repay-time {
-  font-size: 12px;
-  color: #999;
-}
-
-.repay-footer {
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px dashed #f5f5f5;
-  font-size: 12px;
-  color: #999;
+.repay-actions {
+  display: flex;
+  gap: 8px;
 }
 
 .add-btn-wrap {

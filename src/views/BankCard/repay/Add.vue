@@ -128,15 +128,13 @@
 
     <!-- 数字键盘 -->
     <van-number-keyboard
-      v-model:show="showKeyboard"
-      :maxlength="keyboardMaxlength"
+      :show="showKeyboard"
       theme="custom"
-      close-on-click-outside
+      extra-key="."
+      close-button-text="完成"
+      @blur="showKeyboard = false"
       @input="onKeyboardInput"
       @delete="onKeyboardDelete"
-      @close="onKeyboardClose"
-      @blur="showKeyboard = false"
-      close-button-text="完成"
     />
   </div>
 </template>
@@ -233,10 +231,31 @@ const openKeyboard = (field) => {
 const onKeyboardInput = (value) => {
   const field = currentField.value;
   if (!field) return;
-  let newValue = formData[field] + value;
-  if (newValue.length > keyboardMaxlength.value) {
-    newValue = newValue.slice(0, keyboardMaxlength.value);
+  
+  let current = formData[field];
+  let newValue;
+  
+  if (value === '.') {
+    // 小数点：只能有一个
+    if (current.includes('.')) return;
+    newValue = current + '.';
+  } else {
+    newValue = current + value;
+    
+    // 金额格式处理
+    if (current.includes('.')) {
+      const [, decimal] = current.split('.');
+      // 小数点后最多2位
+      if (decimal && decimal.length >= 2) return;
+    }
+    
+    // 处理 0 开头的数字（如 01 -> 1）
+    if (current === '0' && /^\d$/.test(value)) {
+      newValue = value;
+    }
   }
+  
+  if (newValue.length > keyboardMaxlength.value) return;
   formData[field] = newValue;
 };
 

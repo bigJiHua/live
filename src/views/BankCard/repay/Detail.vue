@@ -1,6 +1,5 @@
 <template>
   <div class="page-repay-detail">
-
     <van-skeleton title :row="8" v-if="loading" />
 
     <div class="repay-content" v-if="!loading && repayData.id">
@@ -8,7 +7,9 @@
       <div class="info-section">
         <div class="amount-display">
           <div class="amount-label">还款金额</div>
-          <div class="amount-value">¥{{ formatMoney(repayData.repay_amount) }}</div>
+          <div class="amount-value">
+            ¥{{ formatMoney(repayData.repay_amount) }}
+          </div>
         </div>
       </div>
 
@@ -16,9 +17,12 @@
       <div class="info-section">
         <div class="section-title">关联信息</div>
         <van-cell-group inset>
-          <van-cell title="卡片" :value="repayData.card_alias || '未知卡片'" />
           <van-cell title="卡号" :value="`**** ${repayData.card_last4}`" />
-          <van-cell title="关联账单" :value="repayData.bill_id ? '是' : '否'" />
+          <van-cell
+            title="关联账单"
+            :value="repayData.bill_id ? `是（${repayData.bill_id}）` : '否'"
+          />
+          <van-cell title="账单流水号" :value="repayData.id" />
           <van-cell
             v-if="repayData.bill_amount"
             title="账单金额"
@@ -29,6 +33,10 @@
             title="账单待还"
             :value="`¥${formatMoney(repayData.bill_need_repay)}`"
           />
+          <van-cell
+            title="是否溢缴款"
+            :value="repayData.bill_need_repay < repayData.repay_amount  ? `是（+¥${formatMoney(repayData.repay_amount)}）` : '否'"
+          />
         </van-cell-group>
       </div>
 
@@ -36,9 +44,22 @@
       <div class="info-section">
         <div class="section-title">还款详情</div>
         <van-cell-group inset>
-          <van-cell title="还款方式" :value="repayData.repay_method || '转账'" />
-          <van-cell title="还款时间" :value="formatDateTime(repayData.repay_time)" />
-          <van-cell title="创建时间" :value="formatDateTime(repayData.created_at)" />
+          <van-cell
+            title="所属账单周期"
+            :value="repayData.bill_month || '-'"
+          />
+          <van-cell
+            title="还款方式"
+            :value="repayData.repay_method || '转账'"
+          />
+          <van-cell
+            title="还款时间"
+            :value="formatDateTime(repayData.create_time)"
+          />
+          <van-cell
+            title="更新时间"
+            :value="formatDateTime(repayData.update_time)"
+          />
         </van-cell-group>
       </div>
 
@@ -50,16 +71,6 @@
             <div class="remark-content">{{ repayData.remark }}</div>
           </van-cell>
         </van-cell-group>
-      </div>
-
-      <!-- 操作按钮 -->
-      <div class="action-section">
-        <van-button type="primary" block round @click="goToEdit">
-          编辑还款记录
-        </van-button>
-        <van-button plain block round type="danger" @click="handleDelete">
-          删除还款记录
-        </van-button>
       </div>
     </div>
 
@@ -73,9 +84,9 @@
 
 <script setup>
 import { ref, onMounted } from "vue";
-import { showToast, showConfirmDialog, showLoadingToast, closeToast } from "vant";
+import { showToast } from "vant";
 import { useRouter, useRoute } from "vue-router";
-import { getRepayDetail, deleteRepay } from "@/utils/api/card";
+import { getRepayDetail } from "@/utils/api/card";
 
 const router = useRouter();
 const route = useRoute();
@@ -106,44 +117,21 @@ const loadRepayDetail = async () => {
 // 格式化金额
 const formatMoney = (amount) => {
   if (amount === null || amount === undefined) return "0.00";
-  return Number(amount).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return Number(amount)
+    .toFixed(2)
+    .replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 };
-
+import dayjs from "dayjs";
 // 格式化日期时间
 const formatDateTime = (date) => {
   if (!date) return "-";
-  return date.replace("T", " ").split(".")[0];
+  const newDate = Number(date)
+  return dayjs(newDate).format("YYYY-MM-DD HH:mm:ss");
 };
 
 // 返回
 const onClickLeft = () => {
   router.back();
-};
-
-// 编辑
-const goToEdit = () => {
-  router.push(`/card/repay/edit?id=${repayData.value.id}`);
-};
-
-// 删除
-const handleDelete = async () => {
-  try {
-    await showConfirmDialog({
-      title: "删除确认",
-      message: "确定要删除这条还款记录吗？",
-      confirmButtonColor: "#ee0a24",
-    });
-
-    showLoadingToast({ message: "删除中...", forbidClick: true });
-    await deleteRepay(repayData.value.id);
-
-    closeToast();
-    showToast({ message: "删除成功", onClose: () => router.back() });
-  } catch (error) {
-    if (error !== "cancel") {
-      showToast(error.message || "删除失败");
-    }
-  }
 };
 
 onMounted(() => {
@@ -197,13 +185,6 @@ onMounted(() => {
 .remark-content {
   color: #666;
   line-height: 1.5;
-}
-
-.action-section {
-  padding: 24px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
 }
 
 .flex-center {

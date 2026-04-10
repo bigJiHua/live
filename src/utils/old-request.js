@@ -92,7 +92,7 @@ const request = axios.create({
   baseURL: baseUrl,
   withCredentials: true,
   timeout: TIMEOUT,
-  validateStatus: (status) => true, // 👈 就是这一行！解决所有弹窗问题！
+  // validateStatus: (status) => true, // 👈 就是这一行！解决所有弹窗问题！
 });
 
 request.interceptors.request.use(
@@ -145,11 +145,15 @@ request.interceptors.request.use(
 
 request.interceptors.response.use(
   (response) => {
+    // 【成功路径】状态码 2xx 进入这里
     const res = response.data || {};
-    // 如果有 ismessage 字段且为 true，不显示任何 toast
-    if (res.ismessage && res.ismessage === true) {
+
+    // 1. 业务静默模式：如果有 ismessage 字段且为 true，直接返回，不触发任何 UI 提示
+    if (res.ismessage === true) {
       return res;
     }
+
+    // 2. 正常业务成功处理
     if (res.status === 200 || res.success) {
       if (
         ["post", "put", "delete"].includes(
@@ -160,6 +164,8 @@ request.interceptors.response.use(
       }
       return res;
     }
+
+    // 3. 业务逻辑错误（例如：余额不足、验证码错误）
     showToast({
       message: res.message || "业务异常",
       position: "top",
@@ -168,28 +174,36 @@ request.interceptors.response.use(
     return Promise.reject(res);
   },
   (error) => {
-    // 如果有 ismessage 字段且为 true，不显示任何 toast
-    if (error.response?.data?.ismessage) {
-      return Promise.reject(error);
+    // 【异常路径】状态码非 2xx (如 404, 500, 401) 进入这里
+    const response = error.response;
+    const resData = response?.data; // 这里的 resData 就是你后端返回的真实 JSON
+
+    // 1. 核心改进：即便 HTTP 报错，如果后端传了自定义业务信息，优先按业务逻辑处理
+    if (resData && resData.ismessage === true) {
+      // 如果后端要求静默，或者需要特殊处理，直接 reject 数据给业务层，不弹窗
+      return Promise.reject(resData);
     }
-    const status = error.response?.status;
+
+    // 2. 处理特定的 HTTP 状态码
+    const status = response?.status;
+
+    // 如果后端在 404/400 时传了 message，优先显示后端的 message
+    const errorMsg = resData?.message || "网络请求失败";
+
     if (status === 401) {
-      showToast({
-        message: "非法闯入--后端报错401",
-        position: "top",
-      });
-      sessionStorage.clear(); // 清理旧 Key
+      showToast({ message: "登录失效，请重新登录", position: "top" });
+      sessionStorage.clear();
       localStorage.removeItem("finance_token");
       router.push("/login");
     } else if (status === 429) {
-      sessionStorage.clear(); // 清理旧 Key
-      localStorage.removeItem("finance_token");
+      sessionStorage.clear();
       router.push("/429");
     } else {
-      console.log(error.response);
-      
-      showFailToast(error.response?.data?.message || "网络请求失败");
+      // 3. 其他系统级错误（如 500 崩溃、404 资源不存在）
+      console.error("System Error:", error);
+      showFailToast(errorMsg);
     }
+
     return Promise.reject(error);
   }
 );

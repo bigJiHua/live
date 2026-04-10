@@ -1,23 +1,32 @@
 <template>
   <div class="page-flow-detail">
     <!-- 加载状态 -->
-    <van-loading v-if="loading" class="loading-center" vertical>加载中...</van-loading>
+    <van-loading v-if="loading" class="loading-center" vertical
+      >加载中...</van-loading
+    >
 
     <!-- 详情内容 -->
     <div v-else-if="detail" class="detail-content">
       <!-- 金额卡片 -->
       <div class="amount-card">
         <div class="amount-label">
-          {{ detail.direction === 1 ? '收入' : '支出' }}
+          {{ detail.direction === 1 ? "收入" : "支出" }}
           <span v-if="showExchange" class="currency-tag">
             {{ getCurrencySymbol(detail.currency) }} {{ detail.amount }}
           </span>
         </div>
-        <div class="amount-value" :class="detail.direction === 1 ? 'income' : 'expense'">
-          {{ detail.direction === 1 ? '+' : '-' }}¥{{ formatAmount(detail.amount) }}
+        <div
+          class="amount-value"
+          :class="detail.direction === 1 ? 'income' : 'expense'"
+        >
+          {{ detail.direction === 1 ? "+" : "-" }}¥{{
+            formatAmount(detail.amount)
+          }}
         </div>
         <div class="exchange-info" v-if="showExchange">
-          约 {{ getCurrencySymbol(detail.currency) }}{{ detail.amount }} = ¥{{ formatAmount(detail.amount) }}
+          约 {{ getCurrencySymbol(detail.currency) }}{{ detail.amount }} = ¥{{
+            formatAmount(detail.amount)
+          }}
         </div>
       </div>
 
@@ -25,17 +34,20 @@
       <van-cell-group inset class="info-group">
         <van-cell title="分类">
           <template #value>
-            <span>{{ detail.category_name || '未知分类' }}</span>
+            <span>{{ getCategoryText(detail) }}</span>
           </template>
         </van-cell>
         <van-cell title="币种">
           <template #value>
-            <span>{{ detail.currency || 'CNY' }}</span>
+            <span>{{ detail.currency || "CNY" }}</span>
           </template>
         </van-cell>
-        <van-cell v-if="detail.currency && detail.currency !== 'CNY'" title="汇率">
+        <van-cell
+          v-if="detail.currency && detail.currency !== 'CNY'"
+          title="汇率"
+        >
           <template #value>
-            <span>{{ detail.exchange_rate || '-' }}</span>
+            <span>{{ detail.exchange_rate || "-" }}</span>
           </template>
         </van-cell>
         <van-cell title="时间">
@@ -45,7 +57,7 @@
         </van-cell>
         <van-cell title="交易方式">
           <template #value>
-            <span>{{ detail.pay_method || '-' }}</span>
+            <span>{{ detail.pay_method || "-" }}</span>
           </template>
         </van-cell>
         <van-cell title="关联卡片">
@@ -55,32 +67,65 @@
         </van-cell>
         <van-cell title="交易日期">
           <template #value>
-            <span>{{ detail.trans_date || '-' }}</span>
+            <span>{{ detail.trans_date || "-" }}</span>
           </template>
         </van-cell>
       </van-cell-group>
 
       <!-- 备注 -->
-      <van-cell-group v-if="detail.remark" inset class="info-group">
+      <van-cell-group inset class="info-group">
         <van-cell title="备注">
           <template #value>
-            <span class="remark-text">{{ detail.remark }}</span>
+            <span class="remark-text">{{ detail.remark || "暂无备注" }}</span>
           </template>
         </van-cell>
       </van-cell-group>
 
-      <!-- 提示横幅 -->
-      <div class="notice-banner">
-        <van-icon name="info-o" />
-        <span>如记录有误，请删除后重新添加</span>
-      </div>
-
       <!-- 操作按钮 -->
       <div class="action-btns">
-        <van-button type="danger" block round @click="handleDelete">
-          删除
+        <van-button
+          v-if="getReverseType(detail)"
+          type="warning"
+          round
+          @click="handleReverse"
+        >
+          {{ getReverseBtnText(getReverseType(detail)) }}
+        </van-button>
+        <van-button type="primary" block round @click="openRemarkPopup">
+          修改备注
         </van-button>
       </div>
+
+      <!-- 备注编辑弹窗 -->
+      <van-popup v-model:show="showRemarkPopup" position="bottom" round>
+        <div class="remark-popup">
+          <div class="popup-header">
+            <span>修改备注</span>
+            <van-icon name="cross" @click="showRemarkPopup = false" />
+          </div>
+          <div class="popup-tip">请输入新的备注</div>
+          <van-field
+            v-model="editRemark"
+            type="textarea"
+            rows="3"
+            placeholder="请输入备注"
+            maxlength="200"
+            show-word-limit
+          />
+          <div class="popup-footer">
+            <van-button size="small" @click="showRemarkPopup = false"
+              >取消</van-button
+            >
+            <van-button
+              type="primary"
+              size="small"
+              :loading="remarkLoading"
+              @click="handleSaveRemark"
+              >保存</van-button
+            >
+          </div>
+        </div>
+      </van-popup>
     </div>
 
     <!-- 空状态 -->
@@ -89,126 +134,230 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
-import { showToast, showConfirmDialog } from 'vant'
-import dayjs from 'dayjs'
-import 'dayjs/locale/zh-cn'
-import { getAccountDetail, deleteAccount } from '@/utils/api/account'
-import { getCardList } from '@/utils/api/card'
+import { ref, computed, onMounted } from "vue";
+import { useRouter, useRoute } from "vue-router";
+import { showToast, showConfirmDialog } from "vant";
+import dayjs from "dayjs";
+import "dayjs/locale/zh-cn";
+import {
+  getAccountDetail,
+  updateAccountRemark,
+  reverseDebit,
+  reverseCreditExpense,
+  reverseCreditRepay,
+} from "@/utils/api/account";
+import { getCardList } from "@/utils/api/card";
 
-dayjs.locale('zh-cn')
+dayjs.locale("zh-cn");
 
-const router = useRouter()
-const route = useRoute()
+const router = useRouter();
+const route = useRoute();
 
 // 状态
-const loading = ref(true)
-const detail = ref(null)
-const cardList = ref([])
+const loading = ref(true);
+const detail = ref(null);
+const cardList = ref([]);
+const showRemarkPopup = ref(false);
+const editRemark = ref("");
+const remarkLoading = ref(false);
 
 // 格式化金额（根据币种和汇率计算）
 const formatAmount = (amount) => {
-  if (amount === null || amount === undefined) return '0.00'
-  const num = Number(amount)
-  if (!detail.value?.currency || detail.value.currency === 'CNY') {
-    return num.toFixed(2)
+  if (amount === null || amount === undefined) return "0.00";
+  const num = Number(amount);
+  if (!detail.value?.currency || detail.value.currency === "CNY") {
+    return num.toFixed(2);
   }
   // 外币：金额 * 汇率 / 100
-  const rate = Number(detail.value.exchange_rate) || 0
-  return (num * rate / 100).toFixed(2)
-}
+  const rate = Number(detail.value.exchange_rate) || 0;
+  return ((num * rate) / 100).toFixed(2);
+};
 
 // 获取币种符号
 const getCurrencySymbol = (code) => {
   const symbols = {
-    CNY: '¥',
-    USD: '$',
-    EUR: '€',
-    HKD: 'HK$',
-    JPY: '¥',
-    GBP: '£',
-    KRW: '₩',
-    TWD: 'NT$'
-  }
-  return symbols[code] || code || '¥'
-}
+    CNY: "¥",
+    USD: "$",
+    EUR: "€",
+    HKD: "HK$",
+    JPY: "¥",
+    GBP: "£",
+    KRW: "₩",
+    TWD: "NT$",
+  };
+  return symbols[code] || code || "¥";
+};
 
 // 是否显示汇率换算
 const showExchange = computed(() => {
-  return detail.value?.currency && detail.value.currency !== 'CNY'
-})
+  return detail.value?.currency && detail.value.currency !== "CNY";
+});
 
 // 格式化日期时间（处理时间戳）
 const formatDateTime = (timestamp) => {
-  if (!timestamp) return '-'
-  const d = dayjs(Number(timestamp))
-  if (!d.isValid()) return '-'
-  return d.format('YYYY-MM-DD HH:mm:ss')
-}
+  if (!timestamp) return "-";
+  const d = dayjs(Number(timestamp));
+  if (!d.isValid()) return "-";
+  return d.format("YYYY-MM-DD HH:mm:ss");
+};
 
 // 获取卡片显示文本
 const getCardText = (cardId) => {
-  if (!cardId) return '-'
-  if (cardId === 'xxxx') return '现金'
-  if (cardId === 'yyyy') return '余额'
+  if (!cardId) return "-";
+  if (cardId === "xxxx") return "现金";
+  if (cardId === "yyyy") return "余额";
   // 优先使用返回的别名
-  if (detail.value?.card_alias) return detail.value.card_alias
-  if (detail.value?.card_last4) return `****${detail.value.card_last4}`
+  if (detail.value?.card_alias) return detail.value.card_alias;
+  if (detail.value?.card_last4) return `****${detail.value.card_last4}`;
   // 尝试从卡片列表匹配
-  const card = cardList.value.find(c => c.id === cardId)
+  const card = cardList.value.find((c) => c.id === cardId);
   if (card) {
-    return card.alias || card.bank_name || `****${card.last4_no || card.last4No}`
+    return (
+      card.alias || card.bank_name || `****${card.last4_no || card.last4No}`
+    );
   }
-  return cardId
-}
+  return cardId;
+};
+
+// 获取分类显示文本
+const getCategoryText = (item) => {
+  if (item.category_id === "CATEGORY_REPAY") {
+    return "信用卡还款";
+  }
+  return item.category_name || "未知分类";
+};
 
 // 加载卡片列表
 const loadCardList = async () => {
   try {
-    const res = await getCardList()
-    cardList.value = res.data || res || []
+    const res = await getCardList();
+    cardList.value = res.data || res || [];
   } catch (e) {
-    cardList.value = []
+    cardList.value = [];
   }
-}
+};
 
 // 加载详情
 const loadDetail = async () => {
-  loading.value = true
+  loading.value = true;
   try {
-    const res = await getAccountDetail(route.params.id)
-    detail.value = res.data || res
+    const res = await getAccountDetail(route.params.id);
+    detail.value = res.data || res;
   } catch (e) {
-    showToast('加载失败')
+    showToast("加载失败");
   } finally {
-    loading.value = false
+    loading.value = false;
   }
-}
+};
 
-// 删除
-const handleDelete = async () => {
+// 打开备注编辑弹窗
+const openRemarkPopup = () => {
+  editRemark.value = detail.value?.remark || "";
+  showRemarkPopup.value = true;
+};
+
+// 保存备注
+const handleSaveRemark = async () => {
+  try {
+    remarkLoading.value = true;
+    await updateAccountRemark(route.params.id, editRemark.value);
+    detail.value.remark = editRemark.value;
+    showRemarkPopup.value = false;
+    showToast("保存成功");
+  } catch (e) {
+    // 错误已由拦截器处理
+  } finally {
+    remarkLoading.value = false;
+  }
+};
+
+// ========== 冲正相关 ==========
+
+/**
+ * 判断冲正类型
+ */
+const getReverseType = (item) => {
+  if (!item) return null;
+  const payMethod = item.pay_method;
+  const accountType = item.account_type;
+  const payType = item.pay_type;
+  const categoryId = item.category_id;
+
+  // 信用卡还款撤销：pay_type === '还款' 且 category_id === 'CATEGORY_REPAY'
+  if (payType === "还款" && categoryId === "CATEGORY_REPAY") {
+    return "credit-repay";
+  }
+
+  // 优先判断 pay_method
+  if (payMethod === "借记卡") {
+    return "debit";
+  }
+  if (payMethod === "信用卡") {
+    return "credit-expense";
+  }
+
+  // 其次判断 account_type
+  if (accountType === "debit") {
+    return "debit";
+  }
+  if (accountType === "credit") {
+    return "credit-expense";
+  }
+
+  return null;
+};
+
+/**
+ * 获取冲正按钮文本
+ */
+const getReverseBtnText = (type) => {
+  const map = {
+    debit: "借记卡冲正",
+    "credit-expense": "消费冲正",
+    "credit-repay": "还款撤销",
+  };
+  return map[type] || "";
+};
+
+/**
+ * 执行冲正
+ */
+const handleReverse = async () => {
+  const type = getReverseType(detail.value);
+  if (!type) return;
+
   try {
     await showConfirmDialog({
-      title: '确认删除',
-      message: '确定要删除这条记录吗？删除后不可恢复。'
-    })
-    
-    await deleteAccount(route.params.id)
-    showToast('删除成功')
-    router.back()
+      title: "确认冲正",
+      message: `确定要执行${getReverseBtnText(type)}吗？`,
+    });
+
+    let res;
+    switch (type) {
+      case "debit":
+        res = await reverseDebit(detail.value.id);
+        break;
+      case "credit-expense":
+        res = await reverseCreditExpense(detail.value.id);
+        break;
+      case "credit-repay":
+        res = await reverseCreditRepay(detail.value.id);
+        break;
+    }
+    showToast(res.message || "冲正成功");
+    return router.push("/finance/flow");
   } catch (e) {
-    if (e !== 'cancel') {
-      showToast('删除失败')
+    if (e !== "cancel") {
+      // 错误已由拦截器处理
     }
   }
-}
+};
 
 // 初始化
 onMounted(() => {
-  loadCardList()
-  loadDetail()
-})
+  loadCardList();
+  loadDetail();
+});
 </script>
 
 <style scoped>
@@ -240,7 +389,7 @@ onMounted(() => {
 .currency-tag {
   margin-left: 8px;
   padding: 2px 8px;
-  background: rgba(255,255,255,0.2);
+  background: rgba(255, 255, 255, 0.2);
   border-radius: 10px;
   font-size: 12px;
 }
@@ -254,7 +403,7 @@ onMounted(() => {
 .amount-value {
   font-size: 36px;
   font-weight: bold;
-  font-family: 'DIN Alternate', -apple-system, sans-serif;
+  font-family: "DIN Alternate", -apple-system, sans-serif;
 }
 
 .amount-value.income {
@@ -301,5 +450,36 @@ onMounted(() => {
 
 .action-btns .van-button {
   flex: 1;
+}
+
+.remark-popup {
+  padding: 16px;
+}
+
+.popup-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.popup-tip {
+  color: #969799;
+  font-size: 14px;
+  margin-bottom: 12px;
+}
+
+.popup-header .van-icon {
+  font-size: 20px;
+  color: #969799;
+}
+
+.popup-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 16px;
 }
 </style>

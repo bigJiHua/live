@@ -14,7 +14,7 @@
         />
         <van-field
           v-model="monthText"
-          label="账单月份"
+          label="代还月份"
           placeholder="请选择月份"
           is-link
           readonly
@@ -44,7 +44,15 @@
       >
         <div class="bill-header">
           <div class="bill-info">
-            <span class="bill-card-name">{{ getCardDisplayName(item) }}</span>
+            <div class="bill-name-row">
+              <span class="bill-card-name">{{ getCardDisplayName(item) }}</span>
+              <span class="bill-card-last4" v-if="item.card_last4">**** {{ item.card_last4 }}</span>
+            </div>
+            <div class="bill-fee-info">
+              <span>年费 ¥{{ formatMoney(item.annual_fee) }}</span>
+              <span class="fee-divider">|</span>
+              <span>{{ getFeeFreeRuleText(item.fee_free_rule) }}</span>
+            </div>
           </div>
           <van-tag :type="getStatusType(item)" :class="{ 'tag-normal': getStatusType(item) === '' }">
             {{ getStatusText(item) }}
@@ -64,13 +72,13 @@
           </div>
           <div class="bill-amount-right">
             <div class="amount-col">
-              <div class="repay-label">已用额度</div>
+              <div class="repay-label">{{ getBillMonthText(item) }}</div>
               <div class="repay-value" :class="{ overdue: Number(item.used_limit) > 0 }">
                 ¥{{ formatMoney(item.used_limit) }}
               </div>
             </div>
             <div class="amount-col">
-              <div class="repay-label">待还额度</div>
+              <div class="repay-label">待还</div>
               <div class="repay-value danger">
                 ¥{{ formatMoney(item.need_repay) }}
               </div>
@@ -79,10 +87,15 @@
         </div>
 
         <div class="bill-footer">
-          <div class="bill-period">
-            <span>账单日 {{ formatDay(item.bill_start_date) }}</span>
-            <span class="period-divider">|</span>
-            <span>还款日 {{ formatDay(item.bill_end_date) }}</span>
+          <div class="bill-day-info">
+            <div class="limit-row">
+              <span>本月账单日</span>
+              <span style="color: red;">{{ item.bill_day }}</span>号
+            </div>
+            <div class="limit-row">
+              <span>次月还款日</span>
+              <span style="color: red;">{{ item.repay_day }}</span>号
+            </div>
           </div>
           <div class="bill-actions">
             <van-button
@@ -275,8 +288,26 @@ const formatDay = (date) => {
 // 获取卡片显示名称
 const getCardDisplayName = (item) => {
   if (item.card_alias) return item.card_alias;
-  if (item.card_last4) return `信用卡 ${item.card_last4}`;
-  return '未知卡片';
+  return '信用卡';
+};
+
+// 获取免年费规则文本
+const getFeeFreeRuleText = (rule) => {
+  if (!rule) return '无免年费规则';
+  // 如果是纯数字，显示 "X笔消费免"
+  if (/^\d+$/.test(String(rule))) {
+    return `${rule}笔消费免`;
+  }
+  // 否则直接显示原有值
+  return rule;
+};
+
+// 获取账单月份文本（根据 bill_start_date 判断）
+const getBillMonthText = (item) => {
+  if (!item.bill_start_date) return '账单';
+  const d = dayjs(item.bill_start_date);
+  if (!d.isValid()) return '账单';
+  return `${d.month() + 1}月账单`;
 };
 
 // 跳转到详情
@@ -364,6 +395,13 @@ onMounted(() => {
 .bill-info {
   display: flex;
   flex-direction: column;
+  flex: 1;
+}
+
+.bill-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .bill-card-name {
@@ -372,10 +410,22 @@ onMounted(() => {
   color: #333;
 }
 
-.bill-card-no {
+.bill-card-last4 {
   font-size: 12px;
   color: #999;
-  margin-top: 2px;
+}
+
+.bill-fee-info {
+  font-size: 11px;
+  color: #999;
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.fee-divider {
+  color: #ddd;
 }
 
 .bill-body {
@@ -457,16 +507,10 @@ onMounted(() => {
   border-top: 1px solid #f5f5f5;
 }
 
-.bill-period {
-  font-size: 12px;
-  color: #999;
+.bill-day-info {
   display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.period-divider {
-  color: #ddd;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .bill-actions {

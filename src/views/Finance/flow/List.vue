@@ -57,7 +57,7 @@
                 </div>
                 <div class="item-info">
                   <div class="item-title">
-                    {{ item.category_name || "未知分类" }}
+                    {{ getCategoryName(item) }}
                   </div>
                   <div class="item-desc">
                     {{ item.pay_method || "-" }} ·
@@ -212,6 +212,14 @@ const getCategoryIcon = (name) => {
   return map[name] || "balance-o";
 };
 
+// 获取分类名称（处理特殊分类）
+const getCategoryName = (item) => {
+  if (item.category_id === 'CATEGORY_REPAY') {
+    return '信用卡还款';
+  }
+  return item.category_name || '未知分类';
+};
+
 const getCardName = (id) => {
   const card = cardList.value.find((c) => c.id === id);
   return card ? card.alias || card.bank_name : "";
@@ -284,10 +292,14 @@ const loadData = async () => {
   }
 };
 
-const onRefresh = async () => {
+const onRefresh = () => {
   page.value = 1;
   finished.value = false;
-  await Promise.all([loadSummary(), loadData()]);
+  loading.value = true;
+  Promise.all([loadSummary(), loadData()]).finally(() => {
+    loading.value = false;
+    refreshing.value = false;
+  });
 };
 
 const onFilterChange = () => onRefresh();
@@ -312,6 +324,7 @@ const goDetail = (item) => router.push(`/finance/flow/${item.id}`);
   background: #f0f0f0;
   border-radius: 2px;
 }
+
 .page-flow-list {
   min-height: 100vh;
   background: #f7f8fa;
