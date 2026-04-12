@@ -84,16 +84,28 @@
       <!-- 操作按钮 -->
       <div class="action-btns">
         <van-button
-          v-if="getReverseType(detail)"
+          v-if="getReverseType(detail) && getReverseType(detail) !== 'credit-repay'"
           type="warning"
           round
           @click="handleReverse"
         >
           {{ getReverseBtnText(getReverseType(detail)) }}
         </van-button>
-        <van-button type="primary" block round @click="openRemarkPopup">
+        <van-button
+          v-if="getReverseType(detail) !== 'credit-repay'"
+          type="primary"
+          block
+          round
+          @click="openRemarkPopup"
+        >
           修改备注
         </van-button>
+      </div>
+
+      <!-- 还款撤销提示 -->
+      <div class="repay-hint" v-if="getReverseType(detail) === 'credit-repay'">
+        <van-icon name="info-o" />
+        <span>本收支不计支出。如需撤销还款，请到还款记录编辑</span>
       </div>
 
       <!-- 备注编辑弹窗 -->
@@ -138,17 +150,16 @@ import { ref, computed, onMounted } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import { showToast, showConfirmDialog } from "vant";
 import dayjs from "dayjs";
-import "dayjs/locale/zh-cn";
+import zhCn from "dayjs/locale/zh-cn";
 import {
   getAccountDetail,
   updateAccountRemark,
   reverseDebit,
   reverseCreditExpense,
-  reverseCreditRepay,
 } from "@/utils/api/account";
 import { getCardList } from "@/utils/api/card";
 
-dayjs.locale("zh-cn");
+dayjs.locale(zhCn);
 
 const router = useRouter();
 const route = useRoute();
@@ -278,28 +289,21 @@ const handleSaveRemark = async () => {
  */
 const getReverseType = (item) => {
   if (!item) return null;
-  const payMethod = item.pay_method;
   const accountType = item.account_type;
-  const payType = item.pay_type;
   const categoryId = item.category_id;
+  const payType = item.pay_type;
 
-  // 信用卡还款撤销：pay_type === '还款' 且 category_id === 'CATEGORY_REPAY'
+  // 还款撤销 → 提示用户去还款记录操作
   if (payType === "还款" && categoryId === "CATEGORY_REPAY") {
     return "credit-repay";
   }
 
-  // 优先判断 pay_method
-  if (payMethod === "借记卡") {
+  // 借记卡相关（包括 debit 和 virtual_balance）
+  if (accountType === "debit" || accountType === "virtual_balance") {
     return "debit";
-  }
-  if (payMethod === "信用卡") {
-    return "credit-expense";
   }
 
-  // 其次判断 account_type
-  if (accountType === "debit") {
-    return "debit";
-  }
+  // 信用卡消费
   if (accountType === "credit") {
     return "credit-expense";
   }
@@ -326,6 +330,12 @@ const handleReverse = async () => {
   const type = getReverseType(detail.value);
   if (!type) return;
 
+  // 还款撤销提示用户去还款记录操作
+  if (type === "credit-repay") {
+    showToast("请前往还款记录进行撤销");
+    return;
+  }
+
   try {
     await showConfirmDialog({
       title: "确认冲正",
@@ -339,9 +349,6 @@ const handleReverse = async () => {
         break;
       case "credit-expense":
         res = await reverseCreditExpense(detail.value.id);
-        break;
-      case "credit-repay":
-        res = await reverseCreditRepay(detail.value.id);
         break;
     }
     showToast(res.message || "冲正成功");
@@ -481,5 +488,22 @@ onMounted(() => {
   justify-content: flex-end;
   gap: 12px;
   margin-top: 16px;
+}
+
+.repay-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px 16px;
+  margin: 16px;
+  background: #fff7e6;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #fa8c16;
+}
+
+.repay-hint .van-icon {
+  font-size: 16px;
 }
 </style>

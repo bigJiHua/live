@@ -178,12 +178,23 @@ const formData = reactive({
   remindDays: 3,
 });
 
+// 获取卡片类型文本
+const getCardTypeText = (cardType) => {
+  const map = {
+    credit: "信用卡",
+    debit: "借记卡",
+    virtual_cash: "现金",
+    virtual_balance: "余额",
+  };
+  return map[cardType] || cardType || "卡片";
+};
+
 // 卡片选择列
 const cardColumns = computed(() => {
   return cardList.value.map((card) => ({
-    text: `${card.alias || card.bank_name || "卡片"} **** ${
+    text: `${getCardTypeText(card.card_type)} ${card.alias || card.bank_name || ""} **** ${
       card.last4_no || card.last4No || "****"
-    }`,
+    }`.replace(/\s+/g, " ").trim(),
     value: card.id,
   }));
 });
@@ -200,9 +211,9 @@ const loadCardList = async () => {
       formData.cardId = cardId;
       const card = cardList.value.find((c) => c.id === cardId);
       if (card) {
-        selectedCardName.value = `${
+        selectedCardName.value = `${getCardTypeText(card.card_type)} ${
           card.alias || card.bank_name || "卡片"
-        } **** ${card.last4_no || card.last4No || "****"}`;
+        } **** ${card.last4_no || card.last4No || "****"}`.replace(/\s+/g, " ").trim();
       }
     }
   } catch (error) {

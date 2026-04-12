@@ -66,9 +66,7 @@
             v-model="formData.cardLevel"
             label="卡等级"
             placeholder="默认普卡"
-            readonly
-            clickable
-            @click="showCardLevelPicker = true"
+            @click-right-icon="showCardLevelPicker = true"
           >
             <template #right-icon>
               <van-icon name="arrow-down" />
@@ -85,11 +83,13 @@
           <van-field
             v-model="formData.cardOrg"
             label="卡组织"
-            is-link
-            readonly
-            clickable
-            @click="showCardOrgPicker = true"
-          />
+            placeholder="请选择或输入"
+            @click-right-icon="showCardOrgPicker = true"
+          >
+            <template #right-icon>
+              <van-icon name="arrow-down" />
+            </template>
+          </van-field>
           <van-field
             v-model="formData.cardLength"
             label="卡号长度"
@@ -370,9 +370,10 @@ const mainSubColumns = [
 // 卡组织
 const cardOrgColumns = [
   { text: "银联", value: "银联" },
+  { text: "万事达", value: "万事达" },
   { text: "Visa", value: "Visa" },
-  { text: "Mastercard", value: "Mastercard" },
-  { text: "American Express", value: "American Express" },
+  { text: "Amex", value: "Amex" },
+  { text: "大莱", value: "大莱" },
   { text: "JCB", value: "JCB" },
 ];
 

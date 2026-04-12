@@ -269,7 +269,7 @@
             <van-field
               v-model="formData.cardLength"
               label="卡号长度"
-              placeholder="默认19位"
+              placeholder="默认16位"
               readonly
               clickable
               @click="openKeyboard('cardLength')"
@@ -576,7 +576,7 @@ const formData = reactive({
   cardLevel: "白金卡",
   mainSub: "主卡",
   cardOrg: "银联",
-  cardLength: "19",
+  cardLength: "16",
   alias: "",
   currency: "CNY",
   status: "正常",
@@ -701,6 +701,24 @@ const validateRepayDay = () => {
   }
 };
 
+// 信用额度验证（最大100万，整数）
+const validateCreditLimit = () => {
+  const val = Number(formData.creditLimit);
+  if (formData.creditLimit && val > 1000000) {
+    showToast("信用额度不能超过100万");
+    formData.creditLimit = "1000000";
+  }
+};
+
+// 临时额度验证（最大100万，整数）
+const validateTempLimit = () => {
+  const val = Number(formData.tempLimit);
+  if (formData.tempLimit && val > 1000000) {
+    showToast("临时额度不能超过100万");
+    formData.tempLimit = "1000000";
+  }
+};
+
 // ========== 数字键盘控制 ==========
 const showKeyboard = ref(false);
 const currentField = ref("");
@@ -712,8 +730,8 @@ const fieldConfig = {
   billDay: { maxlength: 2, validate: validateBillDay },
   repayDay: { maxlength: 2, validate: validateRepayDay },
   annualFee: { maxlength: 10, validate: null },
-  creditLimit: { maxlength: 10, validate: null },
-  tempLimit: { maxlength: 10, validate: null },
+  creditLimit: { maxlength: 7, validate: validateCreditLimit },
+  tempLimit: { maxlength: 7, validate: validateTempLimit },
   pointsRate: { maxlength: 3, validate: null },
   remindDays: { maxlength: 2, validate: null },
   cardLength: { maxlength: 2, validate: null },
@@ -934,7 +952,7 @@ const submitCard = async () => {
       cardLevel: formData.cardLevel || "白金卡",
       mainSub: formData.mainSub,
       cardOrg: formData.cardOrg,
-      cardLength: formData.cardLength || "19",
+      cardLength: formData.cardLength || "16",
       alias: formData.alias,
       currency: formData.currency,
       status: formData.status,

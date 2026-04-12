@@ -2,7 +2,7 @@
   <div class="page-bank-card-manage">
     <!-- Tab 切换 -->
     <van-tabs v-model:active="activeTab" @change="onTabChange" class="center-tabs">
-      <van-tab title="我的资产" name="debit" />
+      <van-tab title="借记卡" name="debit" />
       <van-tab title="信用卡" name="credit" />
     </van-tabs>
     

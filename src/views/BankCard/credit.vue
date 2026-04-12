@@ -123,7 +123,8 @@ const loading = ref(false);
 const selectedId = ref(null);
 
 // BASE_URL
-const BASE_URL = "http://192.168.0.103:3001/api/public";
+import ENV from '@/utils/env'
+const BASE_URL = ENV.FILE_BASE_URL;
 
 // 获取银行信息
 const getBankInfo = (bankId) => {

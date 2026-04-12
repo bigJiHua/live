@@ -57,7 +57,8 @@ const loadingMore = ref(false);
 const noMore = computed(() => diaryList.value.length >= total.value);
 
 // 基础 URL
-const BASE_URL = "http://192.168.0.103:3001/api/public";
+import ENV from '@/utils/env'
+const BASE_URL = ENV.FILE_BASE_URL;
 const getFullUrl = (path) => {
   if (!path) return "";
   if (path.startsWith("http")) return path;
@@ -133,7 +134,7 @@ const onRefresh = async () => {
 };
 
 onMounted(() => {
-  loadList(false);
+  loadList(false)
 });
 </script>
 
@@ -171,11 +172,12 @@ onMounted(() => {
   font-size: 13px;
 }
 
-/* 悬浮按钮保持原样 */
+/* 悬浮按钮 - 底部居中固定 */
 .add-diary-btn {
   position: fixed;
+  left: 50%;
   bottom: 80px;
-  right: 20px; /* 瀑布流布局适合放在右侧 */
+  transform: translateX(-50%);
   width: 50px;
   height: 50px;
   background: var(--app-primary);

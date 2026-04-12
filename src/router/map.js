@@ -46,13 +46,25 @@ const RouterMap = [
         path: 'finance/add',
         name: 'FinanceAdd',
         component: () => import('../views/Finance/account/Add.vue'),
-        meta: { title: '新增账单', hideTabbar: true }
+        meta: { title: '新增收支明细', hideTabbar: true }
       },
       {
         path: 'finance/structure',
         name: 'FinanceStructure',
         component: () => import('../views/Finance/account/Structure.vue'),
-        meta: { title: '资产结构', hideTabbar: true }
+        meta: { title: '系统账户余额', hideTabbar: true }
+      },
+      {
+        path: 'finance/assets/register',
+        name: 'FinanceAssetsRegister',
+        component: () => import('../views/Finance/assets/Register.vue'),
+        meta: { title: '资产结构登记', hideTabbar: true }
+      },
+      {
+        path: 'finance/assets/list',
+        name: 'FinanceAssetsList',
+        component: () => import('../views/Finance/assets/List.vue'),
+        meta: { title: '资产登记记录', hideTabbar: true }
       },
       {
         path: 'finance/flow',
@@ -84,6 +96,13 @@ const RouterMap = [
         name: 'DiaryDetail',
         component: () => import('../views/Diary/Detail.vue'),
         meta: { title: '动态详情', hideTabbar: true }
+      },
+      // 日历待办
+      {
+        path: 'todo/calendar',
+        name: 'TodoCalendar',
+        component: () => import('../views/Todo/Calendar.vue'),
+        meta: { title: '日程日历', hideTabbar: true }
       },
       // 个人中心
       {
@@ -186,61 +205,93 @@ const RouterMap = [
         component: () => import('../views/BankCard/card/Edit.vue'),
         meta: { title: '编辑卡片', hideTabbar: true }
       },
+      {
+        path: 'card/flow',
+        name: 'CardFlow',
+        component: () => import('../views/BankCard/card/flow/List.vue'),
+        meta: { title: '卡片流水', hideTabbar: true }
+      },
       // 账单管理
       {
         path: 'card/bill/list',
         name: 'BillList',
         component: () => import('../views/BankCard/bill/List.vue'),
-        meta: { title: '账单列表', hideTabbar: true }
+        meta: { title: '信用卡账单列表', hideTabbar: true }
       },
       {
         path: 'card/bill/detail',
         name: 'BillDetail',
         component: () => import('../views/BankCard/bill/Detail.vue'),
-        meta: { title: '账单详情', hideTabbar: true }
+        meta: { title: '信用卡账单详情', hideTabbar: true }
       },
       {
         path: 'card/bill/add',
         name: 'BillAdd',
         component: () => import('../views/BankCard/bill/Add.vue'),
-        meta: { title: '添加账单', hideTabbar: true }
+        meta: { title: '信用卡添加账单', hideTabbar: true }
       },
       {
         path: 'card/bill/edit',
         name: 'BillEdit',
         component: () => import('../views/BankCard/bill/Edit.vue'),
-        meta: { title: '编辑账单', hideTabbar: true }
+        meta: { title: '信用卡编辑账单', hideTabbar: true }
       },
       // 还款记录
       {
         path: 'card/repay/list',
         name: 'RepayList',
         component: () => import('../views/BankCard/repay/List.vue'),
-        meta: { title: '还款记录', hideTabbar: true }
+        meta: { title: '信用卡还款记录', hideTabbar: true }
       },
       {
         path: 'card/repay/detail',
         name: 'RepayDetail',
         component: () => import('../views/BankCard/repay/Detail.vue'),
-        meta: { title: '还款详情', hideTabbar: true }
+        meta: { title: '信用卡还款详情', hideTabbar: true }
       },
       {
         path: 'card/repay/add',
         name: 'RepayAdd',
         component: () => import('../views/BankCard/repay/Add.vue'),
-        meta: { title: '添加还款', hideTabbar: true }
+        meta: { title: '信用卡添加还款', hideTabbar: true }
       },
       {
         path: 'card/repay/edit',
         name: 'RepayEdit',
         component: () => import('../views/BankCard/repay/Edit.vue'),
-        meta: { title: '编辑还款', hideTabbar: true }
+        meta: { title: '信用卡编辑还款', hideTabbar: true }
       },
       {
         path: 'profile-edit',
         name: 'ProfileEdit',
         component: () => import('../views/User/ProfileEdit.vue'),
         meta: { title: '编辑资料', hideTabbar: true }
+      },
+
+      // 工资核算模块
+      {
+        path: 'work/job-setting',
+        name: 'WorkJobSetting',
+        component: () => import('../views/Work/JobSetting.vue'),
+        meta: { title: '工作信息设置', hideTabbar: true }
+      },
+      {
+        path: 'work/salary-calendar',
+        name: 'WorkSalaryCalendar',
+        component: () => import('../views/Work/SalaryCalendar.vue'),
+        meta: { title: '工资日历', hideTabbar: true }
+      },
+      {
+        path: 'work/salary-day',
+        name: 'WorkSalaryDay',
+        component: () => import('../views/Work/SalaryDay.vue'),
+        meta: { title: '每日工资详情', hideTabbar: true }
+      },
+      {
+        path: 'work/salary-stat',
+        name: 'WorkSalaryStat',
+        component: () => import('../views/Work/SalaryStat.vue'),
+        meta: { title: '月度工资统计', hideTabbar: true }
       },
     ],
   },

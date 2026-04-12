@@ -178,9 +178,14 @@ import { createAccount } from "@/utils/api/account";
 // 常量配置
 // ============================================
 
-// 支付方式选项
-const payMethodOptions = [
+// 支出支付方式选项
+const expensePayMethods = [
   '现金', '余额', '微信支付', '支付宝', '借记卡', '信用卡'
+]
+
+// 收入支付方式选项（不含信用卡）
+const incomePayMethods = [
+  '现金', '余额', '微信支付', '支付宝', '借记卡'
 ]
 
 // ============================================
@@ -275,29 +280,52 @@ const categoryColumns = computed(() =>
   }))
 )
 
-const payMethodColumns = payMethodOptions.map((m) => ({ text: m, value: m }))
+// 支付方式选项（根据类型动态过滤）
+const payMethodColumns = computed(() => {
+  const options = isExpense.value ? expensePayMethods : incomePayMethods
+  return options.map((m) => ({ text: m, value: m }))
+})
 
 const currencyColumns = currencyOptions.map((c) => ({ text: `${c.label} ${c.symbol}`, value: c.code }))
 
 const cardColumns = computed(() => {
-  // 根据支付方式筛选对应类型的卡片
-  const isDebit = selectedPayMethod.value === '借记卡'
-  const isCredit = selectedPayMethod.value === '信用卡'
+  const method = selectedPayMethod.value
 
-  return cardList.value
-    .filter(c => {
-      if (isDebit) return c.card_type !== 'credit'
-      if (isCredit) return c.card_type === 'credit'
-      return true
-    })
-    .map((c) => {
-      const cardNo = c.last4_no || c.last4No || c.card_last4 || '****'
-      return {
-        text: cardNo,
+  // 借记卡：只显示真实借记卡
+  if (method === '借记卡') {
+    return cardList.value
+      .filter(c => c.card_type === 'debit')
+      .map((c) => ({
+        text: getCardDisplayText(c),
         value: c.id,
         ...c
-      }
-    })
+      }))
+  }
+
+  // 信用卡：只显示真实信用卡
+  if (method === '信用卡') {
+    return cardList.value
+      .filter(c => c.card_type === 'credit')
+      .map((c) => ({
+        text: getCardDisplayText(c),
+        value: c.id,
+        ...c
+      }))
+  }
+
+  // 微信/支付宝：显示借记卡 + 余额
+  if (method === '微信支付' || method === '支付宝') {
+    return cardList.value
+      .filter(c => c.card_type === 'debit' || c.card_type === 'virtual_balance')
+      .map((c) => ({
+        text: getCardDisplayText(c),
+        value: c.id,
+        ...c
+      }))
+  }
+
+  // 其他（现金等）：返回空
+  return []
 })
 
 // 是否显示关联卡片（借记卡/信用卡/微信支付/支付宝时显示）
@@ -309,8 +337,25 @@ const showCardCell = computed(() => {
 // 获取卡片显示文本
 const getCardDisplayText = (card) => {
   if (!card) return '请选择'
+  const typeText = getCardTypeText(card.card_type)
+  // 虚拟卡片（现金、余额）只显示名称
+  if (card.card_type === 'virtual_cash' || card.card_type === 'virtual_balance') {
+    return typeText
+  }
+  // 其他卡片显示类型 + 卡号后四位
   const cardNo = card.last4_no || card.last4No || card.card_last4 || '****'
-  return cardNo
+  return `${typeText} ${cardNo}`
+}
+
+// 获取卡片类型文本
+const getCardTypeText = (cardType) => {
+  const map = {
+    credit: '信用卡',
+    debit: '借记卡',
+    virtual_cash: '现金',
+    virtual_balance: '余额',
+  }
+  return map[cardType] || cardType || '卡片'
 }
 
 const canSubmit = computed(() => {
@@ -346,8 +391,11 @@ const onCurrencyConfirm = ({ selectedOptions }) => {
 // 类型切换
 const onTypeChange = () => {
   selectedCategory.value = null
-  selectedPayMethod.value = ''
-  selectedCard.value = null
+  // 如果切换到收入模式且当前选择的是信用卡，清空选择
+  if (!isExpense.value && selectedPayMethod.value === '信用卡') {
+    selectedPayMethod.value = ''
+    selectedCard.value = null
+  }
   loadCategories()
 }
 

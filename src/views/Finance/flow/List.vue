@@ -113,11 +113,11 @@ import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { showToast } from "vant";
 import dayjs from "dayjs";
-import "dayjs/locale/zh-cn";
+import zhCn from "dayjs/locale/zh-cn";
 import { getAccountList, getMonthStats } from "@/utils/api/account";
 import { getCardList } from "@/utils/api/card";
 
-dayjs.locale("zh-cn");
+dayjs.locale(zhCn);
 const router = useRouter();
 
 // 筛选状态

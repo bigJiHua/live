@@ -11,7 +11,7 @@
           <span class="stat-value">{{ cardCount }}</span>
           <span class="stat-label">卡片数量</span>
         </div>
-        <div class="stat-item">
+        <div class="stat-item" @click="goTo('/card/bill/list')">
           <span class="stat-value">{{ billCount }}</span>
           <span class="stat-label">待还账单</span>
         </div>
@@ -92,6 +92,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getCardList } from '@/utils/api/card'
+import { getBillList } from '@/utils/api/card'
 
 const router = useRouter()
 const cardCount = ref(0)
@@ -104,11 +105,20 @@ const goTo = (path) => {
 // 加载统计数据
 const loadStats = async () => {
   try {
+    // 获取信用卡数量
     const res = await getCardList({ cardType: 'credit' })
     const data = res.data || res || []
     cardCount.value = data.length
+
+    // 获取待还账单数量
+    const billRes = await getBillList({})
+    const billData = billRes.data || billRes
+    const billList = Array.isArray(billData) ? billData : (billData.list || [])
+    // 统计未还清的账单数量
+    billCount.value = billList.filter(b => Number(b.need_repay || b.needRepay || 0) > 0).length
   } catch (e) {
     cardCount.value = 0
+    billCount.value = 0
   }
 }
 

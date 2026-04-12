@@ -82,6 +82,14 @@
             <van-button
               size="small"
               round
+              type="warning"
+              @click.stop="handleReverse(item)"
+            >
+              还款撤销
+            </van-button>
+            <van-button
+              size="small"
+              round
               plain
               @click.stop="goToRepay(item)"
             >
@@ -121,10 +129,11 @@
 
 <script setup>
 import { ref, computed, onMounted } from "vue";
-import { showToast } from "vant";
+import { showToast, showConfirmDialog } from "vant";
 import { useRouter } from "vue-router";
 import dayjs from "dayjs";
 import { getRepayList, getCardList } from "@/utils/api/card";
+import { reverseCreditRepay } from "@/utils/api/account";
 
 const router = useRouter();
 
@@ -267,6 +276,29 @@ const goToRepay = (item) => {
 // 跳转到添加
 const goToAdd = () => {
   router.push("/card/repay/add");
+};
+
+// 还款撤销
+const handleReverse = async (item) => {
+  if (!item.account_id) {
+    showToast("该记录无法撤销");
+    return;
+  }
+
+  try {
+    await showConfirmDialog({
+      title: "确认撤销",
+      message: `确定要撤销这笔 ¥${formatMoney(item.repay_amount)} 的还款记录吗？`,
+    });
+
+    await reverseCreditRepay(item.account_id);
+    showToast("撤销成功");
+    loadRepayList();
+  } catch (e) {
+    if (e !== "cancel") {
+      showToast(e.message || "撤销失败");
+    }
+  }
 };
 
 onMounted(() => {

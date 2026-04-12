@@ -11,10 +11,6 @@ import 'vant/lib/index.css';
 
 import './assets/css/style.css';
 
-// 2. 初始化主题
-import { initTheme } from './utils/theme';
-initTheme();
-
 const app = createApp(App);
 const pinia = createPinia();
 

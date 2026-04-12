@@ -153,8 +153,8 @@ import { momentApi } from "@/utils/api/moment";
 
 const router = useRouter();
 
-// 后端地址
-const BASE_URL = "http://192.168.0.103:3001/api/public";
+import ENV from '@/utils/env'
+const BASE_URL = ENV.FILE_BASE_URL;
 const getFullUrl = (path) => {
   if (!path) return "";
   if (path.startsWith("http")) return path;

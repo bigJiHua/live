@@ -14,6 +14,21 @@ export function getAccountList(params) {
 }
 
 /**
+ * 按卡片获取收支列表
+ * @param {object} params - {
+ *   cardId: string (必填),
+ *   direction?: 0|1 (0=支出, 1=收入),
+ *   startDate?: string,
+ *   endDate?: string,
+ *   page?: number,
+ *   limit?: number
+ * }
+ */
+export function getAccountListByCard(params) {
+  return request.get('/account/list', { params })
+}
+
+/**
  * 获取单条收支详情
  * @param {string} id - 记录ID
  */

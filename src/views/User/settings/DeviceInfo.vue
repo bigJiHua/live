@@ -142,6 +142,7 @@ import { generateBrowserFingerprint } from "@/utils/fingerprint";
 import { getFullNetworkInfo } from "@/utils/network";
 import { authApi } from "@/utils";
 import { showToast } from "vant";
+import ENV from "@/utils/env";
 
 const uaParser = new UAParser();
 const uaInfo = ref({});
@@ -207,7 +208,7 @@ const testRequest = async () => {
   try {
     // 模拟一个请求，实际会携带所有头部信息
     const response = await fetch(
-      "http://192.168.0.103:3001/api/v1/test-headers",
+      `${ENV.API_BASE_URL}/api/v1/test-headers`,
       {
         method: "GET",
         headers: {

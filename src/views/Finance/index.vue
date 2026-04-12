@@ -44,11 +44,23 @@
     <div class="app-card menu-grid-wrapper">
       <div class="grid-section-title">财务把控中心</div>
       <van-grid :column-num="3" :border="false" clickable>
+        <van-grid-item @click="goFunction('assets')">
+          <template #icon
+            ><van-icon name="gem" class="grid-icon purple"
+          /></template>
+          <template #text><span class="grid-text">系统账户余额</span></template>
+        </van-grid-item>
         <van-grid-item @click="goFunction('flow')">
           <template #icon
             ><van-icon name="orders-o" class="grid-icon blue"
           /></template>
           <template #text><span class="grid-text">流水明细</span></template>
+        </van-grid-item>
+        <van-grid-item @click="goFunction('assets-list')">
+          <template #icon
+            ><van-icon name="todo-list-o" class="grid-icon gray"
+          /></template>
+          <template #text><span class="grid-text">登记记录</span></template>
         </van-grid-item>
         <van-grid-item @click="goFunction('credit')">
           <template #icon
@@ -68,35 +80,17 @@
           /></template>
           <template #text><span class="grid-text">还款记录</span></template>
         </van-grid-item>
-        <van-grid-item @click="goFunction('report')">
+        <van-grid-item @click="goFunction('assets-reg')">
           <template #icon
-            ><van-icon name="chart-trending-o" class="grid-icon blue"
+            ><van-icon name="location-o" class="grid-icon teal"
           /></template>
-          <template #text><span class="grid-text">阶段财报</span></template>
-        </van-grid-item>
-        <van-grid-item @click="goFunction('assets')">
-          <template #icon
-            ><van-icon name="gem" class="grid-icon purple"
-          /></template>
-          <template #text><span class="grid-text">资产结构</span></template>
-        </van-grid-item>
-        <van-grid-item @click="goFunction('budget')">
-          <template #icon
-            ><van-icon name="balance-list" class="grid-icon cyan"
-          /></template>
-          <template #text><span class="grid-text">预算控制</span></template>
+          <template #text><span class="grid-text">资产结构登记</span></template>
         </van-grid-item>
         <van-grid-item @click="goFunction('fixed-assets')">
           <template #icon
             ><van-icon name="shop-o" class="grid-icon teal"
           /></template>
           <template #text><span class="grid-text">固定资产</span></template>
-        </van-grid-item>
-        <van-grid-item @click="goFunction('work-cost')">
-          <template #icon
-            ><van-icon name="medal-o" class="grid-icon pink"
-          /></template>
-          <template #text><span class="grid-text">工作成本</span></template>
         </van-grid-item>
         <van-grid-item @click="goFunction('super-calc')" class="special-item">
           <template #icon
@@ -106,13 +100,26 @@
             ><span class="grid-text font-bold">超级计算</span></template
           >
         </van-grid-item>
+        <van-grid-item @click="goFunction('budget')">
+          <template #icon
+            ><van-icon name="balance-list" class="grid-icon cyan"
+          /></template>
+          <template #text><span class="grid-text">预算表</span></template>
+        </van-grid-item>
+        <van-grid-item @click="goFunction('report')">
+          <template #icon
+            ><van-icon name="chart-trending-o" class="grid-icon blue"
+          /></template>
+          <template #text><span class="grid-text">报表</span></template>
+        </van-grid-item>
+        <van-grid-item @click="goFunction('invest')">
+          <template #icon
+            ><van-icon name="gold-coin-o" class="grid-icon gold"
+          /></template>
+          <template #text><span class="grid-text">理财预期</span></template>
+        </van-grid-item>
       </van-grid>
     </div>
-
-    <div class="footer-tips">
-      数据已进行全站加密处理 <van-icon name="shield-check" />
-    </div>
-
     <van-popup v-model:show="showMonthPicker" position="bottom" round>
       <van-picker
         title="选择月份"
@@ -143,7 +150,6 @@ const selectedValues = ref([
 ]);
 
 const stats = ref({ expense: 0, income: 0, balance: 0 });
-const detailData = ref(null); // 存放明细数据
 
 const formatAmount = (amount) => {
   if (amount === null || amount === undefined) return "0.00";
@@ -184,31 +190,17 @@ const onPickerConfirm = ({ selectedOptions }) => {
 
 const loadMonthStats = async () => {
   try {
-    // 获取 summary 数据（总数）
-    const summaryRes = await getMonthStats({
+    const res = await getMonthStats({
       year: currentYear.value,
       month: currentMonth.value,
-      type: "summary",
     });
 
-    // 获取 detail 数据（明细）
-    const detailRes = await getMonthStats({
-      year: currentYear.value,
-      month: currentMonth.value,
-      type: "detail",
-    });
-
-    if (summaryRes.data) {
+    if (res.data) {
       stats.value = {
-        expense: summaryRes.data.expense || 0,
-        income: summaryRes.data.income || 0,
-        balance: summaryRes.data.balance || 0,
+        expense: res.data.expense || 0,
+        income: res.data.income || 0,
+        balance: res.data.balance || 0,
       };
-    }
-
-    // 存放明细数据（按分类统计等）
-    if (detailRes.data) {
-      detailData.value = detailRes.data;
     }
   } catch (e) {
     showToast("加载失败");
@@ -222,6 +214,11 @@ const goFunction = (type) => {
     "bill-list": "/card/bill/list",
     "repay-list": "/card/repay/list",
     assets: "/finance/structure",
+    "assets-reg": "/finance/assets/register",
+    "assets-list": "/finance/assets/list",
+    report: "/finance/report",
+    budget: "/finance/budget",
+    invest: "/finance/invest",
   };
   if (routes[type]) router.push(routes[type]);
 };

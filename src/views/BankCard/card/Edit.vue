@@ -144,8 +144,8 @@
             label="账单日"
             placeholder="请输入"
             readonly
-            clickable
-            @click="openKeyboard('billDay')"
+            :clickable="isEditable"
+            @click="isEditable && openKeyboard('billDay')"
           >
             <template #suffix>日</template>
           </van-field>
@@ -155,11 +155,23 @@
             label="还款日"
             placeholder="请输入"
             readonly
-            clickable
-            @click="openKeyboard('repayDay')"
+            :clickable="isEditable"
+            @click="isEditable && openKeyboard('repayDay')"
           >
             <template #suffix>日</template>
           </van-field>
+          <div class="check-editable">
+            <van-button
+              size="small"
+              :loading="checkLoading"
+              :disabled="isEditable !== null"
+              @click="checkEditable"
+            >
+              {{ isEditable !== null ? (isEditable ? '已解锁' : '已锁定') : '检查是否可修改' }}
+            </van-button>
+            <span class="check-hint" v-if="isEditable === false">有流水记录，不可修改</span>
+            <span class="check-hint text-success" v-else-if="isEditable === true">可自由修改</span>
+          </div>
           <van-field
             v-model="formData.annualFee"
             name="annualFee"
@@ -261,8 +273,45 @@
               class="color-input"
             />
           </div>
+          <van-cell
+            title="卡面选择"
+            is-link
+            :value="formData.cardImg ? '已选择' : '未选择'"
+            @click="showImagePicker = true"
+          />
         </van-cell-group>
       </div>
+
+      <!-- 图片选择弹窗 -->
+      <van-popup
+        v-model:show="showImagePicker"
+        position="bottom"
+        round
+        :style="{ height: '70%' }"
+      >
+        <div class="image-picker">
+          <div class="picker-header">
+            <span class="picker-title">选择卡面</span>
+            <van-button size="small" type="primary" @click="confirmCardImg">
+              确认
+            </van-button>
+          </div>
+          <van-loading v-if="imageLoading" class="loading" />
+          <div v-else class="image-grid">
+            <div
+              v-for="item in imageList"
+              :key="item.id"
+              class="image-item"
+              :class="{ selected: selectedImageId === item.id }"
+              @click="selectImage(item)"
+            >
+              <van-image fit="cover" :src="getFullUrl(item.file_path)" />
+              <van-icon v-if="selectedImageId === item.id" name="success" class="select-icon" />
+            </div>
+          </div>
+          <van-empty v-if="!imageLoading && imageList.length === 0" description="暂无图片" image="search" />
+        </div>
+      </van-popup>
 
       <!-- 备注 -->
       <div class="form-section">
@@ -389,6 +438,8 @@ import { useRouter, useRoute } from 'vue-router'
 import { showToast, showConfirmDialog, showLoadingToast, closeToast } from 'vant'
 import { getCardDetail, updateCard, deleteCard } from '@/utils/api/card'
 import { categoryApi } from '@/utils/api/category'
+import { getAccountListByCard } from '@/utils/api/account'
+import { uploadApi } from '@/utils/api/upload'
 
 const router = useRouter()
 const route = useRoute()
@@ -399,12 +450,17 @@ const bankIconUrl = ref('')
 const cardOrgIconUrl = ref('')
 const bankList = ref([])
 
+// 账单日/还款日是否可编辑（默认不可编辑）
+const isEditable = ref(null)
+const checkLoading = ref(false)
+
 // 获取来源页面，决定成功后返回哪里
 const fromPage = route.query.from || 'debit'
 const backPath = computed(() => fromPage === 'credit' ? '/card/credit' : '/card/debit')
 
-// BASE_URL
-const BASE_URL = "http://192.168.0.103:3001/api/public"
+import ENV from '@/utils/env'
+
+const BASE_URL = ENV.FILE_BASE_URL
 
 // 格式化卡号显示
 const previewCardNo = computed(() => {
@@ -461,6 +517,7 @@ const formData = reactive({
   tag: '',
   remark: '',
   color: '#1989fa',
+  cardImg: '',
   annualFee: '',
   feeFreeRule: '',
   sourceFrom: '手动'
@@ -555,6 +612,13 @@ const showStatusPicker = ref(false)
 const showOpenDatePicker = ref(false)
 const showExpireDatePicker = ref(false)
 
+// 卡面图片选择
+const showImagePicker = ref(false)
+const imageList = ref([])
+const imageLoading = ref(false)
+const selectedImageId = ref('')
+const selectedImageItem = ref(null)
+
 // 数字键盘控制
 const showKeyboard = ref(false)
 const currentField = ref("")
@@ -640,6 +704,35 @@ const closeKeyboard = () => {
   showKeyboard.value = false
 }
 
+// 检查账单日/还款日是否可以修改
+const checkEditable = async () => {
+  if (!cardData.value.id) return
+
+  checkLoading.value = true
+  try {
+    const res = await getAccountListByCard({
+      cardId: cardData.value.id,
+      page: 1,
+      limit: 1
+    })
+    const data = res.data || res
+    const total = data.pagination?.total || 0
+
+    if (total > 0) {
+      isEditable.value = false
+      showToast('该卡片已有流水记录，账单日和还款日不可修改')
+    } else {
+      isEditable.value = true
+      showToast('该卡片暂无流水，可以修改账单日和还款日')
+    }
+  } catch (e) {
+    console.error('检查失败', e)
+    showToast('检查失败')
+  } finally {
+    checkLoading.value = false
+  }
+}
+
 // 选择器确认
 const onBankConfirm = ({ selectedOptions }) => {
   const selected = selectedOptions[0]
@@ -677,6 +770,72 @@ const onExpireDateConfirm = ({ selectedValues }) => {
   formData.expireDate = selectedValues.join('-')
   showExpireDatePicker.value = false
 }
+
+// 加载图片列表
+const loadImageList = async () => {
+  imageLoading.value = true
+  try {
+    const res = await uploadApi.list({
+      busType: 'other',
+      limit: 100,
+      offset: 0
+    })
+    const list = Array.isArray(res.data) ? res.data : (res.data?.list || [])
+    // 过滤：只保留 .png .jpg .jpeg .webp 结尾的图片
+    imageList.value = list.filter(item => {
+      const ext = (item.file_ext || '').toLowerCase()
+      return ['.png', '.jpg', '.jpeg', '.webp'].includes(ext)
+    })
+  } catch (err) {
+    console.error('加载图片列表失败:', err)
+  } finally {
+    imageLoading.value = false
+  }
+}
+
+// 监听弹窗打开，加载图片
+import { watch } from 'vue'
+watch(showImagePicker, (val) => {
+  if (val) {
+    // 如果已有选择，记录已选
+    if (formData.cardImg) {
+      const selected = imageList.value.find(item => {
+        const path = item.file_path || ''
+        return path === formData.cardImg || getFullUrl(path) === formData.cardImg
+      })
+      if (selected) {
+        selectedImageId.value = selected.id
+        selectedImageItem.value = selected
+      }
+    }
+    loadImageList()
+  }
+})
+
+// 获取完整图片地址
+const getFullUrl = (path) => {
+  if (!path) return ''
+  if (path.startsWith('http')) return path
+  return BASE_URL + path
+}
+
+// 选择图片
+const selectImage = (item) => {
+  selectedImageId.value = item.id
+  selectedImageItem.value = item
+}
+
+// 确认选择
+const confirmCardImg = () => {
+  if (selectedImageItem.value) {
+    // 只传 URL，不传图片格式
+    const path = selectedImageItem.value.file_path || ''
+    formData.cardImg = path
+  }
+  showImagePicker.value = false
+}
+
+
 
 // 返回
 const onClickLeft = () => {
@@ -724,6 +883,7 @@ const loadCardDetail = async () => {
     formData.tag = data.tag || ''
     formData.remark = data.remark || ''
     formData.color = data.color || '#1989fa'
+    formData.cardImg = data.card_img || data.cardImg || ''
     formData.annualFee = data.annual_fee ?? data.annualFee ?? ''
     formData.feeFreeRule = data.fee_free_rule || data.feeFreeRule || ''
     formData.sourceFrom = data.source_from || data.sourceFrom || '手动'
@@ -762,6 +922,12 @@ const loadCardDetail = async () => {
 // 提交更新
 const onSubmit = async () => {
   try {
+    // 二次确认
+    await showConfirmDialog({
+      title: '确认保存',
+      message: '确定要保存对这张卡片的修改吗？'
+    })
+
     loading.value = true
     showLoadingToast({ message: '保存中...', forbidClick: true })
 
@@ -780,6 +946,7 @@ const onSubmit = async () => {
       currency: formData.currency || 'CNY',
       status: formData.status || '正常',
       color: formData.color,
+      cardImg: formData.cardImg || '',
       isDefault: formData.isDefault,
       isHide: formData.isHide,
       sort: formData.sort,
@@ -879,7 +1046,7 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   position: relative;
-  z-index: 2;
+  z-index: 0;
 }
 
 .preview-bank-info {
@@ -936,7 +1103,7 @@ onMounted(() => {
   letter-spacing: 2px;
   margin: 30px 0;
   position: relative;
-  z-index: 2;
+  z-index: 0;
 }
 
 .preview-footer {
@@ -944,7 +1111,7 @@ onMounted(() => {
   justify-content: space-between;
   align-items: flex-end;
   position: relative;
-  z-index: 2;
+  z-index: 0;
 }
 
 .preview-holder .preview-label {
@@ -993,6 +1160,22 @@ onMounted(() => {
 
 .credit-section .section-title {
   color: #ee0a24;
+}
+
+.check-editable {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  gap: 12px;
+}
+
+.check-hint {
+  font-size: 12px;
+  color: #969799;
+}
+
+.check-hint.text-success {
+  color: #07c160;
 }
 
 .color-picker {
@@ -1050,5 +1233,70 @@ onMounted(() => {
 
 .delete-btn {
   margin-top: 0;
+}
+
+/* 图片选择弹窗 */
+.image-picker {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+}
+
+.picker-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #ebedf0;
+  margin-bottom: 12px;
+}
+
+.picker-title {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.image-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.image-item {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 2px solid transparent;
+}
+
+.image-item.selected {
+  border-color: #1989fa;
+}
+
+.image-item :deep(.van-image) {
+  width: 100%;
+  height: 100%;
+}
+
+.select-icon {
+  position: absolute;
+  right: 4px;
+  top: 4px;
+  background: #1989fa;
+  color: #fff;
+  border-radius: 50%;
+  padding: 2px;
+  font-size: 12px;
+}
+
+.loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 200px;
 }
 </style>

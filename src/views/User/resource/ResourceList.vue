@@ -237,7 +237,8 @@ import imageCompression from "browser-image-compression";
 const route = useRoute();
 
 // --- 常量配置 ---
-const BASE_URL = "http://192.168.0.103:3001/api/public";
+import ENV from '@/utils/env'
+const BASE_URL = ENV.FILE_BASE_URL;
 
 // --- 响应式状态 ---
 const loading = ref(false);

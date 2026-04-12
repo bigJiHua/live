@@ -1,45 +1,45 @@
 /* --- 1. 核心配色方案 (CSS 变量) --- */
 :root {
-  /* 品牌主色 (Vant 绿风格，代表财务健康) */
+  /* 品牌主色 */
   --app-primary: #07c160;
 
-  /* 状态色 (支出/收入) */
-  --app-expense: #ff9900; /* 类似微信支出的金黄色 */
-  --app-income: #07c160; /* 微信绿 */
+  /* 状态色 */
+  --app-expense: #ff9900;
+  --app-income: #07c160;
 
   /* 背景与中性色 */
-  --app-bg: #f7f8fa; /* 页面全局背景色 */
-  --app-card-bg: #ffffff; /* 卡片背景色 */
-  --app-text-main: #323233; /* 主文字 */
+  --app-bg: #f7f8fa;
+  --app-card-bg: #ffffff;
+  --app-text-main: #323233;
 
   /* 装饰属性 */
-  --app-radius: 12px; /* 标准圆角 */
-  --app-shadow: 0 4px 16px rgba(0, 0, 0, 0.06); /* 柔和阴影 */
+  --app-radius: 12px;
+  --app-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
 
-  /* 字体族 (数字推荐用 DIN) */
+  /* 字体族 */
   --app-font-number: 'DIN Alternate', 'PingFang SC', -apple-system, sans-serif;
 
-  /* === 全局主题变量 (可动态修改) === */
-  --theme-primary: #07c160;           /* 主题色 - 主品牌色 */
-  --theme-primary-light: #e6f9ed;     /* 主题色浅色背景 */
-  --theme-secondary: #1989fa;         /* 辅助色 - 蓝色系 */
-  --theme-secondary-light: #ecf5fe;   /* 辅助色浅色背景 */
-  --theme-success: #07c160;           /* 成功色 */
-  --theme-warning: #ff976a;           /* 警告色 */
-  --theme-danger: #ee0a24;            /* 危险色 */
-  --theme-info: #969799;              /* 信息色 */
+  /* 全局主题变量 */
+  --theme-primary: #07c160;
+  --theme-primary-light: #e6f9ed;
+  --theme-secondary: #1989fa;
+  --theme-secondary-light: #ecf5fe;
+  --theme-success: #07c160;
+  --theme-warning: #ff976a;
+  --theme-danger: #ee0a24;
+  --theme-info: #969799;
 
-  --theme-bg-primary: #f7f8fa;        /* 主要背景色 */
-  --theme-bg-secondary: #ffffff;      /* 次要背景色/卡片背景 */
-  --theme-bg-tertiary: #f2f3f5;       /* 第三背景色/分割线 */
+  --theme-bg-primary: #f7f8fa;
+  --theme-bg-secondary: #ffffff;
+  --theme-bg-tertiary: #f2f3f5;
 
-  --theme-text-primary: #323233;     /* 主要文字 */
-  --theme-text-secondary: #646566;    /* 次要文字 */
-  --theme-text-tertiary: #969799;     /* 提示文字 */
-  --theme-text-placeholder: #c8c9cc;  /* 占位符文字 */
+  --theme-text-primary: #323233;
+  --theme-text-secondary: #646566;
+  --theme-text-tertiary: #969799;
+  --theme-text-placeholder: #c8c9cc;
 
-  --theme-border: #ebedf0;            /* 边框颜色 */
-  --theme-border-light: #f7f8fa;     /* 浅边框 */
+  --theme-border: #ebedf0;
+  --theme-border-light: #f7f8fa;
 }
 
 /* --- 2. 覆盖 Vant 组件的主题色 --- */
