@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- 主机： 127.0.0.1:3306
--- 生成日期： 2026-04-10 16:38:09
+-- 生成日期： 2026-04-12 16:06:12
 -- 服务器版本： 5.7.40
 -- PHP 版本： 8.0.26
 
@@ -30,9 +30,11 @@ SET time_zone = "+00:00";
 DROP TABLE IF EXISTS `account`;
 CREATE TABLE IF NOT EXISTS `account` (
   `id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT 'id主键',
+  `card_id` varchar(32) NOT NULL COMMENT '关联卡片ID，从哪来',
+  `reversed_id` varchar(32) DEFAULT NULL COMMENT '冲正流水ID，指向被冲正的原流水',
   `user_id` varchar(50) NOT NULL COMMENT '用户ID',
-  `direction` tinyint(4) NOT NULL COMMENT '1收入 0支出',
   `category_id` varchar(50) NOT NULL COMMENT '分类ID',
+  `direction` tinyint(4) NOT NULL COMMENT '1收入 0支出',
   `pay_type` varchar(50) NOT NULL COMMENT '支出类型',
   `pay_method` varchar(50) NOT NULL COMMENT '支付方式',
   `account_type` varchar(20) DEFAULT NULL COMMENT '账户类型：cash现金 / debit资产 / credit负债',
@@ -41,11 +43,9 @@ CREATE TABLE IF NOT EXISTS `account` (
   `exchange_rate` decimal(10,4) DEFAULT '1.0000' COMMENT '汇率',
   `trans_date` varchar(20) NOT NULL COMMENT '收支日期',
   `remark` varchar(255) DEFAULT '普通支出' COMMENT '备注',
-  `card_id` varchar(32) NOT NULL COMMENT '关联卡片ID',
   `create_time` varchar(20) DEFAULT NULL COMMENT '提交时间',
   `update_time` varchar(20) DEFAULT NULL COMMENT '修改时间',
   `is_deleted` tinyint(4) DEFAULT '0' COMMENT '是否删除',
-  `reversed_id` varchar(32) DEFAULT NULL COMMENT '冲正流水ID，指向被冲正的原流水',
   PRIMARY KEY (`id`),
   KEY `idx_user_date` (`user_id`,`trans_date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='记账明细表';
@@ -127,6 +127,54 @@ CREATE TABLE IF NOT EXISTS `asset` (
   PRIMARY KEY (`id`),
   KEY `idx_user_id` (`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='资产结构表';
+
+-- --------------------------------------------------------
+
+--
+-- 表的结构 `asset_register`
+--
+
+DROP TABLE IF EXISTS `asset_register`;
+CREATE TABLE IF NOT EXISTS `asset_register` (
+  `id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '主键ID',
+  `user_id` varchar(50) NOT NULL COMMENT '用户ID',
+  `total_asset` decimal(14,2) NOT NULL DEFAULT '0.00' COMMENT '各类资产合计',
+  `credit_debt` decimal(14,2) NOT NULL DEFAULT '0.00' COMMENT '信用卡总欠款',
+  `total_balance` decimal(14,2) NOT NULL DEFAULT '0.00' COMMENT '最终总资产余额',
+  `asset_details` json DEFAULT NULL COMMENT '资产明细JSON {wechat,alipay,bank,fund...}',
+  `register_date` varchar(10) NOT NULL COMMENT '登记日期 YYYY-MM-DD',
+  `register_time` varchar(20) NOT NULL COMMENT '登记时间',
+  `remark` varchar(255) DEFAULT NULL COMMENT '备注',
+  `create_time` varchar(20) NOT NULL COMMENT '创建时间',
+  `update_time` varchar(20) NOT NULL COMMENT '修改时间',
+  `is_deleted` tinyint(4) DEFAULT '0' COMMENT '是否删除',
+  PRIMARY KEY (`id`),
+  KEY `idx_user_id` (`user_id`),
+  KEY `idx_user_date` (`user_id`,`register_date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='总资产登记表（用户手动核算）';
+
+-- --------------------------------------------------------
+
+--
+-- 表的结构 `asset_snapshot`
+--
+
+DROP TABLE IF EXISTS `asset_snapshot`;
+CREATE TABLE IF NOT EXISTS `asset_snapshot` (
+  `id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '主键ID',
+  `user_id` varchar(50) NOT NULL COMMENT '用户ID',
+  `total_asset` decimal(14,2) NOT NULL DEFAULT '0.00' COMMENT '各类资产合计',
+  `credit_debt` decimal(14,2) NOT NULL DEFAULT '0.00' COMMENT '信用卡总欠款',
+  `total_balance` decimal(14,2) NOT NULL DEFAULT '0.00' COMMENT '最终总资产余额',
+  `record_date` varchar(10) NOT NULL COMMENT '记录日期 YYYY-MM-DD',
+  `record_time` varchar(20) NOT NULL COMMENT '记录时间 YYYY-MM-DD HH:mm:ss',
+  `create_time` varchar(20) NOT NULL COMMENT '毫秒时间戳(排序用)',
+  `update_time` varchar(20) DEFAULT NULL COMMENT '更新时间',
+  `is_deleted` tinyint(4) DEFAULT '0' COMMENT '是否删除',
+  PRIMARY KEY (`id`),
+  KEY `idx_user_id` (`user_id`),
+  KEY `idx_user_date` (`user_id`,`record_date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='资产定时记录表（系统自动快照）';
 
 -- --------------------------------------------------------
 
@@ -477,16 +525,23 @@ CREATE TABLE IF NOT EXISTS `sys_attachment` (
 DROP TABLE IF EXISTS `todo`;
 CREATE TABLE IF NOT EXISTS `todo` (
   `id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT 'id主键',
-  `user_id` int(11) DEFAULT '1' COMMENT '用户ID',
-  `content` varchar(255) DEFAULT NULL COMMENT '事件内容',
-  `happen_date` varchar(20) DEFAULT NULL COMMENT '发生日期',
-  `create_time` varchar(20) DEFAULT NULL COMMENT '提交日期',
-  `status` varchar(20) DEFAULT NULL COMMENT '状态 待完成/已完成/逾期',
-  `need_remind` tinyint(4) DEFAULT NULL COMMENT '是否提醒',
+  `user_id` varchar(50) NOT NULL DEFAULT '1' COMMENT '用户ID',
+  `content` varchar(255) NOT NULL COMMENT '事件内容',
+  `event_type` varchar(20) DEFAULT NULL COMMENT '事件类型：日程/生日/纪念日/倒数日',
+  `happen_date` varchar(20) DEFAULT NULL COMMENT '发生日期(YYYY-MM-DD)',
+  `status` varchar(20) DEFAULT '待完成' COMMENT '状态 待完成/已完成/逾期',
+  `priority` tinyint(4) DEFAULT '2' COMMENT '优先级：1高 2中 3低',
+  `need_remind` tinyint(4) DEFAULT '0' COMMENT '是否提醒',
+  `remind_time` varchar(20) DEFAULT NULL COMMENT '提醒具体时间戳',
+  `is_recurring` tinyint(4) DEFAULT '0' COMMENT '是否每年重复(用于生日/纪念日)',
+  `remark` varchar(100) DEFAULT NULL COMMENT '详细备注',
+  `create_time` varchar(20) DEFAULT NULL COMMENT '创建时间戳',
+  `update_time` varchar(20) DEFAULT NULL COMMENT '修改时间戳',
   `is_deleted` tinyint(4) DEFAULT '0' COMMENT '是否删除',
   PRIMARY KEY (`id`),
+  KEY `idx_user_status` (`user_id`,`status`),
   KEY `idx_user_date` (`user_id`,`happen_date`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='待办事项表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='待办事项表';
 
 -- --------------------------------------------------------
 
@@ -547,25 +602,66 @@ CREATE TABLE IF NOT EXISTS `user_log` (
 -- --------------------------------------------------------
 
 --
+-- 表的结构 `work_job`
+--
+
+DROP TABLE IF EXISTS `work_job`;
+CREATE TABLE IF NOT EXISTS `work_job` (
+  `id` varchar(32) NOT NULL COMMENT '主键UUID',
+  `user_id` varchar(50) NOT NULL COMMENT '用户ID，用于多用户隔离',
+  `job_type` varchar(20) NOT NULL COMMENT '工作类型：formal=正式(月薪制), parttime=兼职(时薪制)',
+  `company` varchar(100) DEFAULT NULL COMMENT '公司或工作单位名称',
+  `job_color` varchar(20) DEFAULT '#07c160' COMMENT '日历显示的标记颜色(Hex格式)',
+  `status` tinyint(4) NOT NULL DEFAULT '1' COMMENT '任职状态：1=在职(进行中), 0=离职(已结束)',
+  `join_date` varchar(20) DEFAULT NULL COMMENT '入职日期(文本格式 YYYY-MM-DD)',
+  `leave_date` varchar(20) DEFAULT NULL COMMENT '离职日期(文本格式 YYYY-MM-DD)',
+  `pay_day` tinyint(4) NOT NULL DEFAULT '15' COMMENT '每月固定发薪日期(1-31号)',
+  `base_salary` decimal(12,2) NOT NULL DEFAULT '0.00' COMMENT '正式工月基本工资(税前)',
+  `base_work_days` int(11) NOT NULL DEFAULT '22' COMMENT '每月标准出勤天数(用于折算日薪)',
+  `hourly_wage` decimal(12,2) NOT NULL DEFAULT '0.00' COMMENT '兼职/外快时薪',
+  `subsidy_meal` decimal(12,2) NOT NULL DEFAULT '0.00' COMMENT '每月餐补标准',
+  `subsidy_traffic` decimal(12,2) NOT NULL DEFAULT '0.00' COMMENT '每月交通补贴标准',
+  `subsidy_post` decimal(12,2) NOT NULL DEFAULT '0.00' COMMENT '每月岗位/通讯补贴',
+  `social` decimal(12,2) NOT NULL DEFAULT '0.00' COMMENT '每月个人承担社保扣款',
+  `fund` decimal(12,2) NOT NULL DEFAULT '0.00' COMMENT '每月个人承担公积金扣款',
+  `tax_rate` decimal(10,2) NOT NULL DEFAULT '0.00' COMMENT '预估税率或固定扣税额',
+  `remark` varchar(50) DEFAULT NULL COMMENT '职位备注(前端限制50字以内)',
+  `is_deleted` tinyint(4) NOT NULL DEFAULT '0' COMMENT '逻辑删除标记：0=正常, 1=已删除',
+  `create_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '记录创建时间',
+  PRIMARY KEY (`id`),
+  KEY `idx_user_job` (`user_id`,`job_type`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='工作信息配置与薪酬计算规则表';
+
+-- --------------------------------------------------------
+
+--
 -- 表的结构 `work_salary`
 --
 
 DROP TABLE IF EXISTS `work_salary`;
 CREATE TABLE IF NOT EXISTS `work_salary` (
-  `id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT 'id主键',
-  `user_id` int(11) DEFAULT '1' COMMENT '用户ID',
-  `work_date` varchar(20) DEFAULT NULL COMMENT '日期',
-  `income` decimal(12,2) DEFAULT NULL COMMENT '收入',
-  `outcome` decimal(12,2) DEFAULT NULL COMMENT '支出',
-  `day_salary` decimal(12,2) DEFAULT NULL COMMENT '日薪',
-  `subsidy` decimal(12,2) DEFAULT NULL COMMENT '补贴',
-  `cut` decimal(12,2) DEFAULT NULL COMMENT '扣款',
-  `social_security` decimal(12,2) DEFAULT NULL COMMENT '社保公积金',
-  `tax` decimal(12,2) DEFAULT NULL COMMENT '个税',
-  `is_deleted` tinyint(4) DEFAULT '0' COMMENT '是否删除',
+  `id` varchar(32) NOT NULL COMMENT '主键UUID',
+  `user_id` varchar(50) NOT NULL COMMENT '用户ID',
+  `job_id` varchar(32) NOT NULL COMMENT '关联work_job表的主键ID',
+  `job_type` varchar(20) DEFAULT NULL COMMENT '冗余字段：记录产生该流水时的工作类型',
+  `work_date` varchar(20) DEFAULT NULL COMMENT '展示用日期文本(如: 2026-04-13)',
+  `work_date_dt` date NOT NULL COMMENT '标准日期格式(统计用，支持BETWEEN查询)',
+  `work_hours` decimal(8,2) NOT NULL DEFAULT '0.00' COMMENT '当日工作时长(兼职专用，单位:小时)',
+  `day_salary` decimal(12,2) NOT NULL DEFAULT '0.00' COMMENT '当日基本工资(正式工日薪或兼职总额)',
+  `subsidy` decimal(12,2) NOT NULL DEFAULT '0.00' COMMENT '当日额外补贴(奖金、加班费等)',
+  `cut` decimal(12,2) NOT NULL DEFAULT '0.00' COMMENT '当日扣除项(迟到、请假扣款)',
+  `social` decimal(12,2) NOT NULL DEFAULT '0.00' COMMENT '当日折算的社保支出',
+  `fund` decimal(12,2) NOT NULL DEFAULT '0.00' COMMENT '当日折算的公积金支出',
+  `tax` decimal(12,2) NOT NULL DEFAULT '0.00' COMMENT '当日折算的预估税额',
+  `income` decimal(12,2) NOT NULL DEFAULT '0.00' COMMENT '当日实得总收入',
+  `status` tinyint(4) NOT NULL DEFAULT '1' COMMENT '发放状态：0=待确认,1=已确认,2=已发放',
+  `remark` varchar(50) DEFAULT NULL COMMENT '单笔流水备注(前端限制50字)',
+  `is_deleted` tinyint(4) NOT NULL DEFAULT '0' COMMENT '逻辑删除标记',
+  `update_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '最后更新时间',
   PRIMARY KEY (`id`),
-  KEY `idx_user_date` (`user_id`,`work_date`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='工作薪酬核算';
+  KEY `idx_user_date_dt` (`user_id`,`work_date_dt`) COMMENT '加速日期范围筛选',
+  KEY `idx_job_id` (`job_id`) COMMENT '用于快速查询某份工作的全部流水'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='每日工资收入明细与流水记录表';
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;

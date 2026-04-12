@@ -6,33 +6,39 @@ const express = require("express");
 const router = express.Router();
 
 // 导入子路由模块
-const authRouter = require("./auth");
-const securityRouter = require("./security");
-const accountRouter = require("./account");
-const accountBalanceRouter = require("./accountBalance");
-const categoryRouter = require("./category");
-const cardRouter = require("./card");
-const cardBillRouter = require("./cardBill");
-const cardRepayRouter = require("./cardRepay");
-const userRouter = require("./user");
+const authRouter = require("../modules/auth/api");
+const securityRouter = require("../modules/security/api");
+const accountRouter = require("../modules/account/api");
+const accountBalanceRouter = require("../modules/account/api/balance");
+const categoryRouter = require("../modules/category/api");
+const cardRouter = require("../modules/card/api");
+const cardBillRouter = require("../modules/card/api/bill");
+const cardRepayRouter = require("../modules/card/api/repay");
+const userRouter = require("../modules/user/api");
 const databaseRouter = require("./database");
-const uploadRouter = require("./upload");
-const momentRouter = require("./moment");
-const bankRouter = require("./busBank");
+const uploadRouter = require("../modules/upload/api");
+const momentRouter = require("../modules/moment/api");
+const bankRouter = require("../modules/category/api/bank");
+const assetRouter = require("../modules/asset/api");
+const todoRouter = require("../modules/todo/api");
+const workRouter = require("../modules/work/api");
 
 // 注册子路由
-router.use("/auth", authRouter); // 【已启用】【已完成
-router.use("/security", securityRouter); // 【已启用】
-router.use("/account", accountRouter); // 【已启用】账户管理
-router.use("/accountBalance", accountBalanceRouter); // 【已启用】账户余额
+router.use("/auth", authRouter);       // 【已启用】【已完成】认证模块
+router.use("/security", securityRouter); // 【已启用】安全模块
+router.use("/account", accountRouter);   // 【已启用】账户收支
+router.use("/accountBalance", accountBalanceRouter); // 账户余额
 router.use("/category", categoryRouter); // 【已启用】分类管理
-router.use("/card/bill", cardBillRouter); // 卡片账单
-router.use("/card/repay", cardRepayRouter); // 卡片还款记录
-router.use("/card", cardRouter); // 卡片管理
-router.use("/user", userRouter); // 【已启用】用户管理 【已完成
+router.use("/card/bill", cardBillRouter);   // 卡片账单
+router.use("/card/repay", cardRepayRouter);  // 卡片还款
+router.use("/card", cardRouter);         // 【已启用】卡片管理
+router.use("/user", userRouter);         // 【已启用】用户管理
 router.use("/database", databaseRouter); // 【已启用】临时数据库操控
-router.use("/upload", uploadRouter); // 【已启用】文件上传 【已完成
-router.use("/moment", momentRouter); // 【已启用】动态/日记 【已完成
-router.use("/bank", bankRouter); // 银行分类管理
+router.use("/upload", uploadRouter);     // 【已启用】文件上传
+router.use("/moment", momentRouter);      // 【已启用】动态/日记
+router.use("/bank", bankRouter);          // 银行分类
+router.use("/asset", assetRouter);       // 【已启用】资产快照与登记
+router.use("/todo", todoRouter);          // 待办日程
+router.use("/work", workRouter);           // 工作与工资
 
 module.exports = router;

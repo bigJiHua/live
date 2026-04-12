@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../config/db');
+const db = require('../common/config/db');
 
 // 获取所有数据库
 router.get('/databases', async (req, res) => {
