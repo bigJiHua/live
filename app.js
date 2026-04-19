@@ -59,13 +59,13 @@ app.use(async (req, res, next) => {
 // --- 路由层 ---
 const apiRouter = require("./src/api");
 app.use("/api/v1", securityCheck, apiRouter); // 【已启用】
-app.use("/api", apiRouter); // 【已启用】
+app.use("/api/public", express.static(path.join(__dirname, "public")));// 【已启用】
+// app.use("/api", apiRouter); // 【已启用】
 // --- 静态资源与健康检查 ---
-app.use("/api/public", express.static(path.join(__dirname, "public")));
 // 根路由 - 管理员首次注册页面
-app.get("/", (req, res) => {
-  res.redirect("http://192.168.0.103:5173/register");
-});
+// app.get("/", (req, res) => {
+//   res.redirect("http://192.168.0.103:5173/register");
+// });
 
 // --- 错误处理 ---
 const {
@@ -82,7 +82,15 @@ app.use(errorHandler);
 // --- 启动逻辑 ---
 if (require.main === module) {
   const PORT = process.env.PORT || 3001;
-  app.listen(PORT, () => {
+  
+  // 启动服务
+  app.listen(PORT, async () => {
+    // 初始化系统（创建管理员等）
+    if (process.env.INIT_ENABLE === 'true') {
+      const init = require('./src/init');
+      await init();
+    }
+    
     console.log(`🚀 服务已启动: http://localhost:${PORT}`);
     console.log(`🌍 环境: ${process.env.NODE_ENV || "dev"}`);
     console.log(`📡 API 地址: http://localhost:${PORT}/api`);

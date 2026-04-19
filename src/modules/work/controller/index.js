@@ -1,5 +1,5 @@
-const WorkJob = require('../model/job');
-const WorkSalary = require('../model/salary');
+const WorkJob = require("../model/job");
+const WorkSalary = require("../model/salary");
 
 /**
  * 工作与工资控制器
@@ -14,10 +14,12 @@ class WorkController {
     try {
       const userId = req.userId;
       const jobs = await WorkJob.findAll(userId);
-      return res.json({ status: 200, message: '查询成功', data: jobs });
+      return res.json({ status: 200, message: "查询成功", data: jobs });
     } catch (error) {
-      console.error('获取工作列表错误:', error);
-      return res.status(500).json({ status: 500, message: error.message || '查询失败' });
+      console.error("获取工作列表错误:", error);
+      return res
+        .status(500)
+        .json({ status: 500, message: error.message || "查询失败" });
     }
   }
 
@@ -27,13 +29,31 @@ class WorkController {
   async createJob(req, res) {
     try {
       const userId = req.userId;
-      const { job_type, company, job_color, status, join_date, leave_date, pay_day,
-        base_salary, base_work_days, hourly_wage,
-        subsidy_meal, subsidy_traffic, subsidy_post,
-        social, fund, tax_rate, remark } = req.body.data;
+      const {
+        job_type,
+        company,
+        job_color,
+        status,
+        join_date,
+        leave_date,
+        pay_day,
+        base_salary,
+        base_work_days,
+        hourly_wage,
+        subsidy_meal,
+        subsidy_traffic,
+        subsidy_post,
+        social,
+        fund,
+        tax_rate,
+        remark,
+      } = req.body.data;
 
-      if (!job_type || !['formal', 'parttime'].includes(job_type)) {
-        return res.status(400).json({ status: 400, message: 'job_type 必填且为 formal 或 parttime' });
+      if (!job_type || !["formal", "parttime"].includes(job_type)) {
+        return res.status(400).json({
+          status: 400,
+          message: "job_type 必填且为 formal 或 parttime",
+        });
       }
 
       const result = await WorkJob.create({
@@ -54,13 +74,15 @@ class WorkController {
         social,
         fund,
         taxRate: tax_rate,
-        remark
+        remark,
       });
 
-      return res.json({ status: 200, message: '创建成功', data: result });
+      return res.json({ status: 200, message: "创建成功", data: result });
     } catch (error) {
-      console.error('创建工作错误:', error);
-      return res.status(500).json({ status: 500, message: error.message || '创建失败' });
+      console.error("创建工作错误:", error);
+      return res
+        .status(500)
+        .json({ status: 500, message: error.message || "创建失败" });
     }
   }
 
@@ -71,14 +93,28 @@ class WorkController {
     try {
       const userId = req.userId;
       const { id } = req.params;
-      const { company, job_color, status, join_date, leave_date, pay_day,
-        base_salary, base_work_days, hourly_wage,
-        subsidy_meal, subsidy_traffic, subsidy_post,
-        social, fund, tax_rate, remark } = req.body.data;
+      const {
+        company,
+        job_color,
+        status,
+        join_date,
+        leave_date,
+        pay_day,
+        base_salary,
+        base_work_days,
+        hourly_wage,
+        subsidy_meal,
+        subsidy_traffic,
+        subsidy_post,
+        social,
+        fund,
+        tax_rate,
+        remark,
+      } = req.body.data;
 
       const existing = await WorkJob.findById(id, userId);
       if (!existing) {
-        return res.status(404).json({ status: 404, message: '工作记录不存在' });
+        return res.status(404).json({ status: 404, message: "工作记录不存在" });
       }
 
       const updates = {};
@@ -92,7 +128,8 @@ class WorkController {
       if (base_work_days !== undefined) updates.base_work_days = base_work_days;
       if (hourly_wage !== undefined) updates.hourly_wage = hourly_wage;
       if (subsidy_meal !== undefined) updates.subsidy_meal = subsidy_meal;
-      if (subsidy_traffic !== undefined) updates.subsidy_traffic = subsidy_traffic;
+      if (subsidy_traffic !== undefined)
+        updates.subsidy_traffic = subsidy_traffic;
       if (subsidy_post !== undefined) updates.subsidy_post = subsidy_post;
       if (social !== undefined) updates.social = social;
       if (fund !== undefined) updates.fund = fund;
@@ -100,10 +137,12 @@ class WorkController {
       if (remark !== undefined) updates.remark = remark;
 
       const result = await WorkJob.update(id, userId, updates);
-      return res.json({ status: 200, message: '更新成功', data: result });
+      return res.json({ status: 200, message: "更新成功", data: result });
     } catch (error) {
-      console.error('更新工作错误:', error);
-      return res.status(500).json({ status: 500, message: error.message || '更新失败' });
+      console.error("更新工作错误:", error);
+      return res
+        .status(500)
+        .json({ status: 500, message: error.message || "更新失败" });
     }
   }
 
@@ -117,12 +156,14 @@ class WorkController {
 
       const result = await WorkJob.delete(id, userId);
       if (!result) {
-        return res.status(404).json({ status: 404, message: '工作记录不存在' });
+        return res.status(404).json({ status: 404, message: "工作记录不存在" });
       }
-      return res.json({ status: 200, message: '删除成功' });
+      return res.json({ status: 200, message: "删除成功" });
     } catch (error) {
-      console.error('删除工作错误:', error);
-      return res.status(500).json({ status: 500, message: error.message || '删除失败' });
+      console.error("删除工作错误:", error);
+      return res
+        .status(500)
+        .json({ status: 500, message: error.message || "删除失败" });
     }
   }
 
@@ -137,7 +178,9 @@ class WorkController {
       const { work_date, work_hours } = req.query;
 
       if (!work_date || !/^\d{4}-\d{2}-\d{2}$/.test(work_date)) {
-        return res.status(400).json({ status: 400, message: 'work_date 必填且为 YYYY-MM-DD 格式' });
+        return res
+          .status(400)
+          .json({ status: 400, message: "work_date 必填且为 YYYY-MM-DD 格式" });
       }
 
       let workHoursMap = {};
@@ -145,31 +188,39 @@ class WorkController {
         try {
           workHoursMap = JSON.parse(work_hours);
         } catch (e) {
-          return res.status(400).json({ status: 400, message: 'work_hours 格式错误' });
+          return res
+            .status(400)
+            .json({ status: 400, message: "work_hours 格式错误" });
         }
       }
 
       const result = await WorkSalary.getDaySalary(userId, work_date, workHoursMap);
-      return res.json({ status: 200, message: '查询成功', data: result });
+      return res.json({ status: 200, message: "查询成功", data: result });
     } catch (error) {
-      console.error('获取日工资错误:', error);
-      return res.status(500).json({ status: 500, message: error.message || '查询失败' });
+      console.error("获取日工资错误:", error);
+      return res
+        .status(500)
+        .json({ status: 500, message: error.message || "查询失败" });
     }
   }
 
   /**
    * 保存当日工资
+   * 保存成功后，自动补充本月缺失的正式工日薪数据
    */
   async saveDaySalary(req, res) {
     try {
       const userId = req.userId;
-      const { job_id, work_date, work_hours, cut, subsidy, status, remark } = req.body.data;
+      const { job_id, work_date, work_hours, cut, subsidy, status, remark } =
+        req.body.data;
 
       if (!job_id) {
-        return res.status(400).json({ status: 400, message: 'job_id 必填' });
+        return res.status(400).json({ status: 400, message: "job_id 必填" });
       }
       if (!work_date || !/^\d{4}-\d{2}-\d{2}$/.test(work_date)) {
-        return res.status(400).json({ status: 400, message: 'work_date 必填且为 YYYY-MM-DD 格式' });
+        return res
+          .status(400)
+          .json({ status: 400, message: "work_date 必填且为 YYYY-MM-DD 格式" });
       }
 
       const result = await WorkSalary.saveDaySalary({
@@ -180,13 +231,18 @@ class WorkController {
         cut,
         subsidy,
         status,
-        remark
+        remark,
       });
 
-      return res.json({ status: 200, message: '保存成功', data: result });
+      // 保存成功后，静默补充本月缺失的正式工日薪数据（当月1日 ~ 插入日期）
+      WorkSalary.fillMissingFormalSalary(userId, work_date);
+
+      return res.json({ status: 200, message: "保存成功", data: result });
     } catch (error) {
-      console.error('保存日工资错误:', error);
-      return res.status(500).json({ status: 500, message: error.message || '保存失败' });
+      console.error("保存日工资错误:", error);
+      return res
+        .status(500)
+        .json({ status: 500, message: error.message || "保存失败" });
     }
   }
 
@@ -199,37 +255,43 @@ class WorkController {
       const { year, month } = req.query;
 
       if (!year || !month) {
-        return res.status(400).json({ status: 400, message: 'year 和 month 必填' });
+        return res
+          .status(400)
+          .json({ status: 400, message: "year 和 month 必填" });
       }
 
-      const result = await WorkSalary.getMonthSalary(userId, parseInt(year), parseInt(month));
-      return res.json({ status: 200, message: '查询成功', data: result });
+      const result = await WorkSalary.getMonthSalary(
+        userId,
+        parseInt(year),
+        parseInt(month)
+      );
+      return res.json({ status: 200, message: "查询成功", data: result });
     } catch (error) {
-      console.error('获取月工资错误:', error);
-      return res.status(500).json({ status: 500, message: error.message || '查询失败' });
+      console.error("获取月工资错误:", error);
+      return res
+        .status(500)
+        .json({ status: 500, message: error.message || "查询失败" });
     }
   }
 
   /**
-   * 删除某天工资记录
+   * 删除指定日期的所有工资记录
    */
   async deleteDaySalary(req, res) {
     try {
       const userId = req.userId;
-      const { job_id, work_date } = req.body.data;
-
-      if (!job_id || !work_date) {
-        return res.status(400).json({ status: 400, message: 'job_id 和 work_date 必填' });
+      const { work_date } = req.body.data;
+      if (!work_date) {
+        return res.status(400).json({ status: 400, message: "work_date 必填" });
       }
 
-      const result = await WorkSalary.delete(userId, job_id, work_date);
-      if (!result) {
-        return res.status(404).json({ status: 404, message: '工资记录不存在' });
-      }
-      return res.json({ status: 200, message: '删除成功' });
+      const count = await WorkSalary.delete(userId, work_date);
+      return res.json({ status: 200, message: `已删除${count}条记录` });
     } catch (error) {
-      console.error('删除日工资错误:', error);
-      return res.status(500).json({ status: 500, message: error.message || '删除失败' });
+      console.error("删除日工资错误:", error);
+      return res
+        .status(500)
+        .json({ status: 500, message: error.message || "删除失败" });
     }
   }
 }

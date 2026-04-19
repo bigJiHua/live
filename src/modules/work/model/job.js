@@ -187,6 +187,21 @@ class WorkJob {
       params
     );
 
+    // 自动化：如果是正式工且更新了离职日期，自动删除离职日之后到月底的薪酬记录
+    const newLeaveDate = updates.leave_date !== undefined ? updates.leave_date : existing.leave_date;
+    if (existing.job_type === 'formal' && updates.leave_date) {
+      const today = new Date().toISOString().split('T')[0];
+      // 如果新离职日期 <= 今天，清理未来薪酬
+      if (newLeaveDate <= today) {
+        const [year, month] = newLeaveDate.split('-').slice(0, 2);
+        const endOfMonth = `${year}-${month}-${new Date(year, month, 0).getDate()}`;
+        await db.execute(
+          `DELETE FROM work_salary WHERE user_id = ? AND job_id = ? AND work_date > ? AND work_date <= ? AND job_type = 'formal'`,
+          [userId, id, newLeaveDate, endOfMonth]
+        );
+      }
+    }
+
     return this.findById(id, userId);
   }
 

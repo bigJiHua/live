@@ -8,14 +8,15 @@ const WorkJob = require('./job');
  * 正式工：月薪制，日薪 = base_salary / base_work_days
  * 兼职工：时薪制，日薪 = hourly_wage * work_hours
  * 
- * 注：subsidy_meal/subsidy_traffic/subsidy_post 存在 work_job 表
- *     work_salary 表只有 subsidy 汇总字段
+ * 注意：subsidy_meal/subsidy_traffic/subsidy_post 是每月固定补贴，不按日计算
+ *       它们应该在发薪日（pay_day）单独发放，不计入每日工资
  */
 class WorkSalary {
   static tableName = 'work_salary';
 
   /**
    * 计算正式工当日工资
+   * 注：subsidy_meal/subsidy_traffic/subsidy_post 是每月固定补贴，不按日计算
    */
   static calculateFormalSalary(job, workDate, overrides = {}) {
     if (job.status !== 1) return null;
@@ -26,11 +27,8 @@ class WorkSalary {
     const baseWorkDays = parseFloat(job.base_work_days) || 22;
     const daySalary = Math.round((baseSalary / baseWorkDays) * 100) / 100;
 
-    // 补贴从 job 表汇总
-    const subsidyMeal = parseFloat(job.subsidy_meal) || 0;
-    const subsidyTraffic = parseFloat(job.subsidy_traffic) || 0;
-    const subsidyPost = parseFloat(job.subsidy_post) || 0;
-    const subsidy = Math.round((subsidyMeal + subsidyTraffic + subsidyPost) * 100) / 100;
+    // 每日补贴为空（meal/traffic/post 是每月补贴，不按日计算）
+    const subsidy = 0;
 
     const social = parseFloat(job.social) || 0;
     const dailySocial = Math.round((social / baseWorkDays) * 100) / 100;
@@ -67,6 +65,7 @@ class WorkSalary {
 
   /**
    * 计算兼职工当日工资
+   * 注：subsidy_meal/subsidy_traffic/subsidy_post 是每月固定补贴，不按日计算
    */
   static calculateParttimeSalary(job, workDate, workHours, overrides = {}) {
     if (job.join_date && workDate < job.join_date) return null;
@@ -76,11 +75,8 @@ class WorkSalary {
     const hourlyWage = parseFloat(job.hourly_wage) || 0;
     const daySalary = Math.round(hourlyWage * parseFloat(workHours) * 100) / 100;
 
-    // 补贴从 job 表汇总
-    const subsidyMeal = parseFloat(job.subsidy_meal) || 0;
-    const subsidyTraffic = parseFloat(job.subsidy_traffic) || 0;
-    const subsidyPost = parseFloat(job.subsidy_post) || 0;
-    const subsidy = Math.round((subsidyMeal + subsidyTraffic + subsidyPost) * 100) / 100;
+    // 每日补贴为空（meal/traffic/post 是每月补贴，不按日计算）
+    const subsidy = 0;
 
     const cut = overrides.cut !== undefined ? overrides.cut : 0;
     const income = Math.round((daySalary + subsidy - cut) * 100) / 100;
@@ -291,6 +287,55 @@ class WorkSalary {
   }
 
   /**
+   * 补充本月缺失的正式工日薪数据（静默执行，不影响原有逻辑）
+   * 范围：当月1日 ~ 执行插入的日期
+   */
+  static async fillMissingFormalSalary(userId, workDate) {
+    // 解析年月
+    const [year, month] = workDate.split('-').slice(0, 2).map(Number);
+    const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+
+    // 获取本月所有正式工
+    const formalJobs = await WorkJob.findActiveFormal(userId, workDate);
+    if (formalJobs.length === 0) return;
+    const formalJob = formalJobs[0];
+
+    // 获取本月已有的正式工日薪记录（只查到插入的日期）
+    const [existing] = await db.execute(
+      `SELECT work_date FROM ${this.tableName} 
+       WHERE user_id = ? AND job_id = ? AND work_date >= ? AND work_date <= ? AND job_type = 'formal'`,
+      [userId, formalJob.id, startDate, workDate]
+    );
+
+    const existingDates = new Set(existing.map(r => r.work_date));
+
+    // 从1号到插入日期，逐日检查并补充
+    const insertDay = parseInt(workDate.split('-')[2], 10);
+    for (let day = 1; day <= insertDay; day++) {
+      const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      if (existingDates.has(dateStr)) continue;
+      
+      // 检查入职/离职范围
+      if (formalJob.join_date && dateStr < formalJob.join_date) continue;
+      if (formalJob.leave_date && dateStr > formalJob.leave_date) continue;
+      
+      const salary = this.calculateFormalSalary(formalJob, dateStr);
+      if (salary) {
+        const id = idUtils.billId();
+        await db.execute(
+          `INSERT INTO ${this.tableName} 
+           (id, user_id, job_id, job_type, work_date, work_date_dt, work_hours, day_salary, subsidy, 
+            social, fund, tax, cut, income, status, remark, is_deleted)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+          [id, userId, formalJob.id, salary.job_type, dateStr, dateStr, salary.work_hours,
+           salary.day_salary, salary.subsidy, salary.social, salary.fund, salary.tax, salary.cut,
+           salary.income, salary.status, salary.remark]
+        );
+      }
+    }
+  }
+
+  /**
    * 按月统计工资
    */
   static async getMonthSalary(userId, year, month) {
@@ -344,14 +389,14 @@ class WorkSalary {
   }
 
   /**
-   * 删除工资记录（软删）
+   * 删除指定日期的所有工资记录（硬删除）
    */
-  static async delete(userId, jobId, workDate) {
+  static async delete(userId, workDate) {
     const [result] = await db.execute(
-      `UPDATE ${this.tableName} SET is_deleted = 1 WHERE job_id = ? AND work_date = ? AND user_id = ?`,
-      [jobId, workDate, userId]
+      `DELETE FROM ${this.tableName} WHERE work_date = ? AND user_id = ?`,
+      [workDate, userId]
     );
-    return result.affectedRows > 0;
+    return result.affectedRows;
   }
 
   /**

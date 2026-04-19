@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- 主机： 127.0.0.1:3306
--- 生成日期： 2026-04-12 16:06:12
+-- 生成日期： 2026-04-19 14:49:43
 -- 服务器版本： 5.7.40
 -- PHP 版本： 8.0.26
 
@@ -185,16 +185,19 @@ CREATE TABLE IF NOT EXISTS `asset_snapshot` (
 DROP TABLE IF EXISTS `budget`;
 CREATE TABLE IF NOT EXISTS `budget` (
   `id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT 'id主键',
-  `user_id` int(11) DEFAULT '1' COMMENT '用户ID',
-  `budget_type` varchar(20) DEFAULT NULL COMMENT '预算类型 吃/买/行',
-  `budget_amount` decimal(12,2) DEFAULT NULL COMMENT '预算金额',
+  `user_id` varchar(50) NOT NULL COMMENT '用户ID',
+  `title` varchar(50) NOT NULL COMMENT '预算标题',
+  `route` varchar(50) DEFAULT NULL COMMENT '路线，A-B计划',
+  `budget_type` varchar(20) NOT NULL COMMENT '预算类型 吃/买/行',
+  `budget_amount` decimal(12,2) NOT NULL COMMENT '预算金额',
   `used_amount` decimal(12,2) DEFAULT '0.00' COMMENT '已使用',
-  `currency` varchar(10) DEFAULT NULL COMMENT '币种',
-  `cycle` varchar(20) DEFAULT NULL COMMENT '周期 月/季/年',
-  `plan_date` varchar(20) DEFAULT NULL COMMENT '预计日期',
+  `budget_details` varchar(512) NOT NULL COMMENT '明细',
+  `cycle` varchar(20) NOT NULL COMMENT '周期 月/季/年',
+  `plan_date` varchar(20) NOT NULL COMMENT '预计日期',
   `is_over_budget` tinyint(4) DEFAULT '0' COMMENT '是否超支',
-  `create_time` varchar(20) DEFAULT NULL COMMENT '创建时间',
-  `update_time` varchar(20) DEFAULT NULL COMMENT '修改时间',
+  `is_excute` int(10) DEFAULT '0' COMMENT '是否执行，0否1是',
+  `create_time` varchar(20) NOT NULL COMMENT '创建时间',
+  `update_time` varchar(20) NOT NULL COMMENT '修改时间',
   `is_deleted` tinyint(4) DEFAULT '0' COMMENT '是否删除',
   PRIMARY KEY (`id`),
   KEY `idx_user_id` (`user_id`)
@@ -421,25 +424,29 @@ CREATE TABLE IF NOT EXISTS `device_crypto` (
 
 DROP TABLE IF EXISTS `fixed_asset`;
 CREATE TABLE IF NOT EXISTS `fixed_asset` (
-  `id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT 'id主键',
-  `user_id` int(11) DEFAULT '1' COMMENT '用户ID',
-  `info` varchar(255) DEFAULT NULL COMMENT '资产信息',
-  `tag` varchar(50) DEFAULT NULL COMMENT '品类标签',
-  `img_url` varchar(255) DEFAULT NULL COMMENT '图片',
-  `buy_price` decimal(12,2) DEFAULT NULL COMMENT '购买价',
-  `now_val` decimal(12,2) DEFAULT NULL COMMENT '当前估值',
-  `use_year` int(11) DEFAULT NULL COMMENT '使用年限',
-  `deprec_method` varchar(20) DEFAULT NULL COMMENT '折旧方法 直线/加速',
-  `month_deprec` decimal(12,2) DEFAULT NULL COMMENT '月折旧',
-  `total_deprec` decimal(12,2) DEFAULT NULL COMMENT '累计折旧',
-  `status` varchar(20) DEFAULT NULL COMMENT '状态',
-  `buy_date` varchar(20) DEFAULT NULL COMMENT '购买日期',
-  `scrap_date` varchar(20) DEFAULT NULL COMMENT '报废日期',
-  `residual_val` decimal(12,2) DEFAULT NULL COMMENT '残值',
-  `create_time` varchar(20) DEFAULT NULL COMMENT '登记时间',
-  `is_deleted` tinyint(4) DEFAULT '0' COMMENT '是否删除',
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='固定资产表';
+  `id` varchar(32) NOT NULL COMMENT '主键',
+  `user_id` varchar(50) NOT NULL COMMENT '用户ID',
+  `info` varchar(255) NOT NULL COMMENT '资产名称',
+  `tag` varchar(50) NOT NULL COMMENT '品类',
+  `img_url` varchar(512) NOT NULL COMMENT '图片',
+  `buy_price` decimal(12,2) NOT NULL COMMENT '购买价',
+  `now_val` decimal(12,2) NOT NULL COMMENT '当前账面价值',
+  `secondhand_price` decimal(12,2) DEFAULT NULL COMMENT '二手价',
+  `use_years` varchar(50) NOT NULL COMMENT '【保留varchar】预计使用年限',
+  `use_months` smallint(6) NOT NULL COMMENT '总月数（use_years*12 后端算）',
+  `residual_rate` decimal(4,2) NOT NULL DEFAULT '5.00' COMMENT '残值率%',
+  `residual_val` decimal(12,2) NOT NULL COMMENT '残值',
+  `deprec_method` varchar(20) NOT NULL DEFAULT 'straight' COMMENT '折旧方法',
+  `month_deprec` decimal(12,2) NOT NULL COMMENT '月折旧额',
+  `total_deprec` decimal(12,2) NOT NULL DEFAULT '0.00' COMMENT '累计折旧',
+  `buy_date` varchar(20) NOT NULL COMMENT '【保留varchar】购买日期',
+  `last_deprec_date` varchar(20) NOT NULL COMMENT '【保留varchar】上次折旧日期',
+  `scrap_date` varchar(20) DEFAULT NULL COMMENT '【保留varchar】报废日期',
+  `create_time` varchar(20) NOT NULL COMMENT '【保留varchar】创建时间',
+  `deprec_finished` tinyint(1) NOT NULL DEFAULT '0' COMMENT '折旧是否完结',
+  `status` varchar(20) NOT NULL DEFAULT 'using' COMMENT '状态 using/scrapped/sold/lost',
+  `is_deleted` tinyint(4) DEFAULT '0' COMMENT '软删除'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='固定资产表（老库兼容版）';
 
 -- --------------------------------------------------------
 

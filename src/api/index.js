@@ -22,9 +22,11 @@ const bankRouter = require("../modules/category/api/bank");
 const assetRouter = require("../modules/asset/api");
 const todoRouter = require("../modules/todo/api");
 const workRouter = require("../modules/work/api");
+const fixedAssetRouter = require("../modules/fixed_asset/api");
+const budgetRouter = require("../modules/budget/api");
 
 // 注册子路由
-router.use("/auth", authRouter);       // 【已启用】【已完成】认证模块
+router.use("/auth", authRouter);       // 【已启用】认证模块
 router.use("/security", securityRouter); // 【已启用】安全模块
 router.use("/account", accountRouter);   // 【已启用】账户收支
 router.use("/accountBalance", accountBalanceRouter); // 账户余额
@@ -40,5 +42,7 @@ router.use("/bank", bankRouter);          // 银行分类
 router.use("/asset", assetRouter);       // 【已启用】资产快照与登记
 router.use("/todo", todoRouter);          // 待办日程
 router.use("/work", workRouter);           // 工作与工资
+router.use("/fixedAsset", fixedAssetRouter); // 固定资产管理
+router.use("/budget", budgetRouter);          // 预算管理
 
 module.exports = router;
