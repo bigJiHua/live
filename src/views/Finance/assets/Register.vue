@@ -68,8 +68,8 @@
               v-model.number="exchangeRates.USD"
               type="number"
               placeholder="0.0000"
-              max="999.9999"
-              min="0"
+              :max="999.9999"
+              :min="0"
               step="0.0001"
             />
           </div>
@@ -79,8 +79,8 @@
               v-model.number="exchangeRates.HKD"
               type="number"
               placeholder="0.0000"
-              max="999.9999"
-              min="0"
+              :max="999.9999"
+              :min="0"
               step="0.0001"
             />
           </div>
@@ -90,8 +90,8 @@
               v-model.number="exchangeRates.GBP"
               type="number"
               placeholder="0.0000"
-              max="999.9999"
-              min="0"
+              :max="999.9999"
+              :min="0"
               step="0.0001"
             />
           </div>
@@ -101,8 +101,8 @@
               v-model.number="exchangeRates.EUR"
               type="number"
               placeholder="0.0000"
-              max="999.9999"
-              min="0"
+              :max="999.9999"
+              :min="0"
               step="0.0001"
             />
           </div>
@@ -225,8 +225,8 @@
             type="number"
             label="金额"
             placeholder="请输入金额"
-            max="9999999999.999"
-            min="0"
+            :max="9999999999.999"
+            :min="0"
             step="0.001"
           />
           <van-field
@@ -287,8 +287,8 @@
             type="number"
             label="金额"
             placeholder="输入外币金额"
-            max="9999999999.999"
-            min="0"
+            :max="9999999999.999"
+            :min="0"
             step="0.001"
           />
           <van-field
@@ -350,8 +350,8 @@
             type="number"
             label="欠款金额"
             placeholder="请输入金额"
-            max="9999999999.999"
-            min="0"
+            :max="9999999999.999"
+            :min="0"
             step="0.001"
           />
           <van-field

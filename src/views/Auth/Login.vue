@@ -53,12 +53,12 @@
 
       <div class="submit-bar">
         <van-row gutter="12">
-          <van-col span="12">
+          <!-- <van-col span="12">
             <van-button round block plain type="primary" @click="goToRegister">
               注册账号
             </van-button>
-          </van-col>
-          <van-col span="12">
+          </van-col> -->
+          <van-col span="24">
             <van-button
               round
               block
@@ -159,7 +159,7 @@ const onSubmit = async (values) => {
       password: values.password,
     });
     // 存储返回的 Token
-    const token = res.token
+    const token = res.token;
     if (token) {
       localStorage.setItem("finance_token", token);
     }

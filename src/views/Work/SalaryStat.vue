@@ -262,21 +262,21 @@ onMounted(() => {
 
 .detail-label {
   font-size: 12px;
-  opacity: 0.75;
 }
 
 .detail-value {
-  font-size: 16px;
-  font-weight: 600;
+  font-size: 18px;
+  font-weight: 700;
   color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 .detail-value.blue {
-  color: #a0cfff;
+  color: #3618cd;
 }
 
 .detail-value.orange {
-  color: #ffd0a8;
+  color: #ffae78;
 }
 
 /* 每日明细 */

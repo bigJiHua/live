@@ -3,6 +3,12 @@
  * 使用环境变量，参考 .env.example 配置
  */
 export const ENV = {
+  // 站点标题
+  APP_TITLE: import.meta.env.VITE_APP_TITLE || 'Golden Finance',
+
+  // 站点描述
+  APP_DESCRIPTION: import.meta.env.VITE_APP_DESCRIPTION || '个人财务管理工具',
+
   // 站点域名
   SITE_URL: import.meta.env.VITE_SITE_URL || 'http://localhost',
 

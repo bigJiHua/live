@@ -19,15 +19,14 @@
     </van-cell-group>
 
     <!-- 更多设置入口可在此添加 -->
-    <div class="section-title">其他设置</div>
+    <!-- <div class="section-title">其他设置</div>
     <van-cell-group inset class="app-card">
       <van-cell title="通知设置" label="即将上线" icon="bell-o" is-link disabled />
-    </van-cell-group>
+    </van-cell-group> -->
   </div>
 </template>
 
-<script setup>
-</script>
+<script setup></script>
 
 <style scoped>
 .page-app-settings {

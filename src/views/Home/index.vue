@@ -161,6 +161,7 @@ import { ref, reactive, onMounted, computed } from "vue";
 import { useRouter } from "vue-router";
 import { getAssetHome } from "@/utils/api/asset";
 import { getReminders } from "@/utils/api/todo";
+import { getSalaryDay } from "@/utils/api/work";
 
 const router = useRouter();
 
@@ -181,6 +182,7 @@ const loading = ref(false);
 const recentItems = ref([]);
 const showAmount = ref(true);
 const topReminder = ref(null); // 最重要的1条提醒
+const todaySalaryData = ref(null); // 今日薪酬数据
 
 // 日期
 const now = new Date();
@@ -241,6 +243,20 @@ const loadReminder = async () => {
 
 // 今日预估薪酬
 const dailySalary = computed(() => {
+  if (todaySalaryData.value) {
+    // 从 API 获取今日薪酬
+    let total = 0
+    if (todaySalaryData.value.formal?.income) {
+      total += parseFloat(todaySalaryData.value.formal.income) || 0
+    }
+    if (todaySalaryData.value.parttimes) {
+      todaySalaryData.value.parttimes.forEach(p => {
+        total += parseFloat(p.income) || 0
+      })
+    }
+    return total
+  }
+  // 兜底：按月收入估算
   const today = new Date();
   const daysInMonth = new Date(
     today.getFullYear(),
@@ -250,6 +266,18 @@ const dailySalary = computed(() => {
   const day = today.getDate();
   return (dashboardData.monthIncome / daysInMonth) * day || 0;
 });
+
+// 加载今日薪酬
+const loadTodaySalary = async () => {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const res = await getSalaryDay({ work_date: today });
+    todaySalaryData.value = res.data || null;
+  } catch (e) {
+    console.error('加载今日薪酬失败', e);
+    todaySalaryData.value = null;
+  }
+};
 
 const toggleEye = () => {
   showAmount.value = !showAmount.value;
@@ -302,6 +330,7 @@ const goToDetail = (item) => {
 onMounted(() => {
   loadHomeData();
   loadReminder();
+  loadTodaySalary();
 });
 </script>
 

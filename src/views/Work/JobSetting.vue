@@ -103,22 +103,37 @@
                 type="date"
                 placeholder="请选择"
               />
+              <!-- 已离职时显示重新入职按钮 -->
+              <div v-if="formalJob?.status === 0" class="leave-btn-wrapper">
+                <van-button
+                  type="primary"
+                  block
+                  round
+                  @click="rejoinJob"
+                >
+                  重新入职
+                </van-button>
+              </div>
+              <!-- 在职时显示离职登记 -->
               <van-field
-                v-if="formalForm.status === 0"
+                v-if="formalJob?.status === 1"
                 v-model="formalForm.leave_date"
                 label="离职日期"
                 type="date"
-                readonly
+                placeholder="选择离职日期"
+                :min-date="minLeaveDate"
+                :max-date="maxLeaveDate"
               />
-              <van-field label="在职状态">
-                <template #input>
-                  <van-switch
-                    v-model="formalStatusActive"
-                    size="20"
-                    @change="onFormalStatusChange"
-                  />
-                </template>
-              </van-field>
+              <div v-if="formalJob?.status === 1" class="leave-btn-wrapper">
+                <van-button
+                  type="danger"
+                  block
+                  round
+                  @click="confirmLeave"
+                >
+                  登记离职
+                </van-button>
+              </div>
             </van-cell-group>
           </van-form>
 
@@ -244,10 +259,17 @@ import { getJobList, saveJob, updateJob, deleteJob } from '@/utils/api/work'
 const saving = ref(false)
 const loading = ref(false)
 
+// 离职日期范围
+const minLeaveDate = computed(() => new Date())
+const maxLeaveDate = computed(() => {
+  const date = new Date()
+  date.setDate(date.getDate() + 45)
+  return date
+})
+
 // 正式工
 const formalJob = ref(null)
 const showFormalPopup = ref(false)
-const formalStatusActive = ref(true)
 
 const formalForm = ref({
   company: '',
@@ -329,7 +351,6 @@ const createFormal = () => {
     leave_date: '',
     status: 1,
   }
-  formalStatusActive.value = true
   showFormalPopup.value = true
 }
 
@@ -347,7 +368,6 @@ const editFormal = () => {
     fund: formalJob.value.fund || '',
     tax_rate: formalJob.value.tax_rate || '',
   }
-  formalStatusActive.value = formalJob.value.status === 1
   showFormalPopup.value = true
 }
 
@@ -356,15 +376,39 @@ const closeFormalPopup = () => {
   showFormalPopup.value = false
 }
 
-// 正式工状态切换
-const onFormalStatusChange = (checked) => {
-  formalForm.value.status = checked ? 1 : 0
-  if (!checked) {
-    // 离职：设置离职日期
-    formalForm.value.leave_date = new Date().toISOString().split('T')[0]
-  } else {
-    // 重新入职：清空离职日期
+// 登记离职
+const confirmLeave = async () => {
+  try {
+    await showConfirmDialog({
+      title: '确认离职',
+      message: '确定要登记离职吗？',
+    })
+    // 如果没有选择离职日期，默认今天
+    if (!formalForm.value.leave_date) {
+      formalForm.value.leave_date = new Date().toISOString().split('T')[0]
+    }
+    formalForm.value.status = 0
+    // 保存
+    await saveFormal()
+  } catch {
+    // 用户取消
+  }
+}
+
+// 重新入职
+const rejoinJob = async () => {
+  try {
+    await showConfirmDialog({
+      title: '确认重新入职',
+      message: '确定要重新入职吗？',
+    })
+    // 清空离职日期，状态改为在职
     formalForm.value.leave_date = ''
+    formalForm.value.status = 1
+    // 保存
+    await saveFormal()
+  } catch {
+    // 用户取消
   }
 }
 
@@ -616,5 +660,14 @@ onMounted(() => {
   background: #fff;
   border-radius: 12px;
   padding: 32px;
+}
+
+/* 登记离职按钮 */
+.leave-btn-wrapper {
+  padding: 16px 16px 8px;
+}
+
+.leave-btn-wrapper .van-button {
+  font-weight: 600;
 }
 </style>

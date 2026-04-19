@@ -6,9 +6,12 @@
         <van-tab title="收入" name="income" />
         <van-tab title="支出" name="expense" />
       </van-tabs>
-      <div class="date-filter" @click="showDatePicker = true">
-        <span>{{ dateRangeText }}</span>
-        <van-icon name="arrow-down" />
+      <div class="filter-right">
+        <div class="date-filter" @click="showDatePicker = true">
+          <span>{{ dateRangeText }}</span>
+          <van-icon name="arrow-down" />
+        </div>
+        <van-icon name="calendar-o" class="calendar-icon" @click="goCalendar" />
       </div>
     </div>
 
@@ -174,22 +177,22 @@ const formatAmount = (amount) => (amount ? Number(amount).toFixed(2) : "0.00");
 // 获取币种符号
 const getCurrencySymbol = (code) => {
   const symbols = {
-    CNY: '¥',
-    USD: '$',
-    EUR: '€',
-    HKD: 'HK$',
-    JPY: '¥',
-    GBP: '£',
-    KRW: '₩',
-    TWD: 'NT$'
-  }
-  return symbols[code] || code || ''
-}
+    CNY: "¥",
+    USD: "$",
+    EUR: "€",
+    HKD: "HK$",
+    JPY: "¥",
+    GBP: "£",
+    KRW: "₩",
+    TWD: "NT$",
+  };
+  return symbols[code] || code || "";
+};
 
 // 是否为外币
 const isForeignCurrency = (item) => {
-  return item.currency && item.currency !== 'CNY'
-}
+  return item.currency && item.currency !== "CNY";
+};
 
 const formatDateHeader = (date) => {
   if (!date) return "";
@@ -214,10 +217,10 @@ const getCategoryIcon = (name) => {
 
 // 获取分类名称（处理特殊分类）
 const getCategoryName = (item) => {
-  if (item.category_id === 'CATEGORY_REPAY') {
-    return '信用卡还款';
+  if (item.category_id === "CATEGORY_REPAY") {
+    return "信用卡还款";
   }
-  return item.category_name || '未知分类';
+  return item.category_name || "未知分类";
 };
 
 const getCardName = (id) => {
@@ -311,6 +314,8 @@ onMounted(() => {
 });
 
 const goDetail = (item) => router.push(`/finance/flow/${item.id}`);
+
+const goCalendar = () => router.push("/finance/flow/calendar");
 </script>
 
 <style scoped>
@@ -347,6 +352,18 @@ const goDetail = (item) => router.push(`/finance/flow/${item.id}`);
   padding: 6px 10px;
   background: #f7f8fa;
   border-radius: 4px;
+}
+
+.filter-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.calendar-icon {
+  font-size: 20px;
+  color: #1989fa;
+  padding: 4px;
 }
 
 .stats-summary {

@@ -92,21 +92,19 @@
           /></template>
           <template #text><span class="grid-text">固定资产</span></template>
         </van-grid-item>
-        <van-grid-item @click="goFunction('super-calc')" class="special-item">
+        <!-- <van-grid-item @click="goFunction('super-calc')" class="special-item">
           <template #icon
             ><van-icon name="points" class="grid-icon gold"
           /></template>
-          <template #text
-            ><span class="grid-text font-bold">超级计算</span></template
-          >
-        </van-grid-item>
+          <template #text><span class="grid-text">超级计算</span></template>
+        </van-grid-item> -->
         <van-grid-item @click="goFunction('budget')">
           <template #icon
             ><van-icon name="balance-list" class="grid-icon cyan"
           /></template>
           <template #text><span class="grid-text">预算表</span></template>
         </van-grid-item>
-        <van-grid-item @click="goFunction('report')">
+        <!-- <van-grid-item @click="goFunction('report')">
           <template #icon
             ><van-icon name="chart-trending-o" class="grid-icon blue"
           /></template>
@@ -117,7 +115,7 @@
             ><van-icon name="gold-coin-o" class="grid-icon gold"
           /></template>
           <template #text><span class="grid-text">理财预期</span></template>
-        </van-grid-item>
+        </van-grid-item> -->
       </van-grid>
     </div>
     <van-popup v-model:show="showMonthPicker" position="bottom" round>
@@ -216,6 +214,7 @@ const goFunction = (type) => {
     assets: "/finance/structure",
     "assets-reg": "/finance/assets/register",
     "assets-list": "/finance/assets/list",
+    "fixed-assets": "/finance/fixed-asset",
     report: "/finance/report",
     budget: "/finance/budget",
     invest: "/finance/invest",
@@ -296,10 +295,6 @@ onMounted(() => loadMonthStats());
 .grid-text {
   font-size: 13px;
   color: #646566;
-}
-.font-bold {
-  font-weight: bold;
-  color: #323233;
 }
 .blue {
   color: #1989fa;

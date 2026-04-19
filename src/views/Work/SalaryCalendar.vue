@@ -9,7 +9,7 @@
       </span>
       <div class="header-actions">
         <van-icon name="setting-o" @click="goJobSetting" />
-        <van-icon name="chart" @click="goStat" />
+        <van-icon name="bars" @click="goStat" />
         <van-icon name="arrow" @click="nextMonth" />
       </div>
     </div>
@@ -18,16 +18,22 @@
     <div class="stat-bar">
       <div class="stat-item main">
         <span class="stat-label">月总收入</span>
-        <span class="stat-value income">¥{{ monthData.total_income || '0.00' }}</span>
+        <span class="stat-value income"
+          >¥{{ monthData.total_income || "0.00" }}</span
+        >
       </div>
       <div class="stat-divider"></div>
       <div class="stat-item">
         <span class="stat-label">正式</span>
-        <span class="stat-value blue">¥{{ monthData.formal_total || '0.00' }}</span>
+        <span class="stat-value blue"
+          >¥{{ monthData.formal_total || "0.00" }}</span
+        >
       </div>
       <div class="stat-item">
         <span class="stat-label">兼职</span>
-        <span class="stat-value orange">¥{{ monthData.parttime_total || '0.00' }}</span>
+        <span class="stat-value orange"
+          >¥{{ monthData.parttime_total || "0.00" }}</span
+        >
       </div>
     </div>
 
@@ -48,11 +54,19 @@
         <span class="day-number">{{ day.day }}</span>
         <!-- 有工资记录 -->
         <div v-if="day.hasRecord" class="day-amounts">
-          <span v-if="day.formalIncome > 0" class="amount fulltime">¥{{ day.formalIncome }}</span>
-          <span v-if="day.parttimeCount > 0" class="amount parttime">¥{{ day.parttimeTotal }}</span>
+          <span v-if="day.formalIncome > 0" class="amount fulltime"
+            >¥{{ day.formalIncome }}</span
+          >
+          <span v-if="day.parttimeCount > 0" class="amount parttime"
+            >¥{{ day.parttimeTotal }}</span
+          >
         </div>
         <!-- 计薪日但无记录 -->
-        <span v-else-if="day.isWorkingDay && !day.notWorking" class="day-working">计薪</span>
+        <span
+          v-else-if="day.isWorkingDay && !day.notWorking"
+          class="day-working"
+          >计薪</span
+        >
       </div>
     </div>
 
@@ -74,151 +88,152 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
-import dayjs from 'dayjs'
-import { getSalaryMonth, getJobList } from '@/utils/api/work'
+import { ref, computed, onMounted, onActivated } from "vue";
+import { useRouter } from "vue-router";
+import dayjs from "dayjs";
+import { getSalaryMonth, getJobList } from "@/utils/api/work";
 
-const router = useRouter()
-const weekDays = ['日', '一', '二', '三', '四', '五', '六']
+const router = useRouter();
+const weekDays = ["日", "一", "二", "三", "四", "五", "六"];
 
 // 当前年月
-const today = dayjs()
-const currentYear = ref(today.year())
-const currentMonth = ref(today.month())
-const showMonthPicker = ref(false)
+const today = dayjs();
+const currentYear = ref(today.year());
+const currentMonth = ref(today.month());
+const showMonthPicker = ref(false);
 const pickerSelectedValues = ref([
   `${new Date().getFullYear()}年`,
   `${new Date().getMonth() + 1}月`,
-])
-const loading = ref(false)
+]);
+const loading = ref(false);
 
 // 工作信息
-const formalJob = ref(null)
-const parttimeJobs = ref([])
+const formalJob = ref(null);
+const parttimeJobs = ref([]);
 
 // 月度数据
 const monthData = ref({
-  formal_total: '0.00',
-  parttime_total: '0.00',
-  total_income: '0.00',
+  formal_total: "0.00",
+  parttime_total: "0.00",
+  total_income: "0.00",
   daily_list: [],
-})
+});
 
 // 月份选择器列
 const pickerColumns = computed(() => {
-  const years = []
-  const months = []
-  const now = new Date()
-  const currentYear = now.getFullYear()
+  const years = [];
+  const months = [];
+  const now = new Date();
+  const currentYear = now.getFullYear();
 
   for (let y = currentYear - 5; y <= currentYear + 5; y++) {
-    years.push({ text: `${y}年`, value: `${y}年` })
+    years.push({ text: `${y}年`, value: `${y}年` });
   }
   for (let m = 1; m <= 12; m++) {
-    months.push({ text: `${m}月`, value: `${m}月` })
+    months.push({ text: `${m}月`, value: `${m}月` });
   }
 
-  return [years, months]
-})
+  return [years, months];
+});
 
 // 选择年月
 const onPickerConfirm = ({ selectedOptions }) => {
-  const yearText = selectedOptions[0].text
-  const monthText = selectedOptions[1].text
-  currentYear.value = parseInt(yearText)
-  currentMonth.value = parseInt(monthText) - 1
-  pickerSelectedValues.value = [yearText, monthText]
-  showMonthPicker.value = false
-  loadMonthData()
-}
+  const yearText = selectedOptions[0].text;
+  const monthText = selectedOptions[1].text;
+  currentYear.value = parseInt(yearText);
+  currentMonth.value = parseInt(monthText) - 1;
+  pickerSelectedValues.value = [yearText, monthText];
+  showMonthPicker.value = false;
+  loadMonthData();
+};
 
 // 上月
 const prevMonth = () => {
   if (currentMonth.value === 0) {
-    currentMonth.value = 11
-    currentYear.value--
+    currentMonth.value = 11;
+    currentYear.value--;
   } else {
-    currentMonth.value--
+    currentMonth.value--;
   }
-  loadMonthData()
-}
+  loadMonthData();
+};
 
 // 下月
 const nextMonth = () => {
   if (currentMonth.value === 11) {
-    currentMonth.value = 0
-    currentYear.value++
+    currentMonth.value = 0;
+    currentYear.value++;
   } else {
-    currentMonth.value++
+    currentMonth.value++;
   }
-  loadMonthData()
-}
+  loadMonthData();
+};
 
 // 判断日期是否在兼职时间段内
 const isParttimeWorking = (dateStr) => {
-  if (!dateStr) return false
-  return parttimeJobs.value.some(job => {
-    if (!job.join_date) return false
-    if (job.join_date > dateStr) return false
-    if (job.leave_date && job.leave_date < dateStr) return false
-    return true
-  })
-}
+  if (!dateStr) return false;
+  return parttimeJobs.value.some((job) => {
+    if (!job.join_date) return false;
+    if (job.join_date > dateStr) return false;
+    if (job.leave_date && job.leave_date < dateStr) return false;
+    return true;
+  });
+};
 
 // 判断正式工是否在职
 const isFormalWorking = (dateStr) => {
-  if (!formalJob.value || formalJob.value.status !== 1) return false
-  if (formalJob.value.join_date > dateStr) return false
-  if (formalJob.value.leave_date && formalJob.value.leave_date < dateStr) return false
-  return true
-}
+  if (!formalJob.value || formalJob.value.status !== 1) return false;
+  if (formalJob.value.join_date > dateStr) return false;
+  if (formalJob.value.leave_date && formalJob.value.leave_date < dateStr)
+    return false;
+  return true;
+};
 
 // 日历天列表
 const calendarDays = computed(() => {
-  const days = []
+  const days = [];
   const firstDay = dayjs()
     .year(currentYear.value)
     .month(currentMonth.value)
-    .date(1)
-  const daysInMonth = firstDay.daysInMonth()
-  const startWeekday = firstDay.day()
-  const dailyList = monthData.value.daily_list || []
-  const todayStr = dayjs().format('YYYY-MM-DD')
+    .date(1);
+  const daysInMonth = firstDay.daysInMonth();
+  const startWeekday = firstDay.day();
+  const dailyList = monthData.value.daily_list || [];
+  const todayStr = dayjs().format("YYYY-MM-DD");
 
   // 空白填充
   for (let i = 0; i < startWeekday; i++) {
-    days.push({ day: null, empty: true })
+    days.push({ day: null, empty: true });
   }
 
   // 日期
   for (let d = 1; d <= daysInMonth; d++) {
-    const dateStr = firstDay.date(d).format('YYYY-MM-DD')
-    const dayRecord = dailyList.find(item => item.date === dateStr)
-    const isToday = dateStr === todayStr
+    const dateStr = firstDay.date(d).format("YYYY-MM-DD");
+    const dayRecord = dailyList.find((item) => item.date === dateStr);
+    const isToday = dateStr === todayStr;
 
     // 正式工是否在职
-    const formalWorking = isFormalWorking(dateStr)
+    const formalWorking = isFormalWorking(dateStr);
     // 兼职是否在职
-    const parttimeWorking = isParttimeWorking(dateStr)
+    const parttimeWorking = isParttimeWorking(dateStr);
     // 不计薪（都不在职）
-    const notWorking = !formalWorking && !parttimeWorking
+    const notWorking = !formalWorking && !parttimeWorking;
 
     // 当日收入
-    let formalIncome = 0
-    let parttimeTotal = 0
-    let parttimeCount = 0
+    let formalIncome = 0;
+    let parttimeTotal = 0;
+    let parttimeCount = 0;
 
     if (dayRecord) {
       // 确保数值转换
       if (dayRecord.formal?.income) {
-        formalIncome = parseFloat(dayRecord.formal.income) || 0
+        formalIncome = parseFloat(dayRecord.formal.income) || 0;
       }
       if (dayRecord.parttimes?.length > 0) {
-        dayRecord.parttimes.forEach(p => {
-          parttimeTotal += parseFloat(p.income) || 0
-        })
-        parttimeCount = dayRecord.parttimes.length
+        dayRecord.parttimes.forEach((p) => {
+          parttimeTotal += parseFloat(p.income) || 0;
+        });
+        parttimeCount = dayRecord.parttimes.length;
       }
     }
 
@@ -232,88 +247,94 @@ const calendarDays = computed(() => {
       parttimeTotal,
       parttimeCount,
       hasRecord: formalIncome > 0 || parttimeTotal > 0,
-    })
+    });
   }
-  return days
-})
+  return days;
+});
 
 // 获取日期格子样式
 const getDayCellClass = (day) => {
-  if (!day.day) return 'empty'
-  const classes = []
+  if (!day.day) return "empty";
+  const classes = [];
 
-  if (day.isToday) classes.push('today')
-  if (day.notWorking) classes.push('not-working')
+  if (day.isToday) classes.push("today");
+  if (day.notWorking) classes.push("not-working");
   else if (day.hasRecord) {
     if (day.formalIncome > 0 && day.parttimeCount > 0) {
-      classes.push('has-both')
+      classes.push("has-both");
     } else if (day.formalIncome > 0) {
-      classes.push('has-fulltime')
+      classes.push("has-fulltime");
     } else if (day.parttimeTotal > 0) {
-      classes.push('has-parttime')
+      classes.push("has-parttime");
     }
   } else if (day.isWorkingDay) {
-    classes.push('working-day')
+    classes.push("working-day");
   }
 
-  return classes.join(' ')
-}
+  return classes.join(" ");
+};
 
 // 选择日期
 const selectDate = (day) => {
-  if (!day?.date || day.empty || day.notWorking) return
-  router.push(`/work/salary-day?date=${day.date}`)
-}
+  if (!day?.date || day.empty || day.notWorking) return;
+  router.push(`/work/salary-day?date=${day.date}`);
+};
 
 // 去工作设置
 const goJobSetting = () => {
-  router.push('/work/job-setting')
-}
+  router.push("/work/job-setting");
+};
 
 // 去统计页
 const goStat = () => {
-  router.push('/work/salary-stat')
-}
+  router.push("/work/salary-stat");
+};
 
 // 加载工作信息
 const loadJobInfo = async () => {
   try {
-    const res = await getJobList()
-    const list = Array.isArray(res.data) ? res.data : []
+    const res = await getJobList();
+    const list = Array.isArray(res.data) ? res.data : [];
     // 根据 job_type 分离正式工和兼职
-    formalJob.value = list.find(item => item.job_type === 'formal') || null
-    parttimeJobs.value = list.filter(item => item.job_type === 'parttime')
+    formalJob.value = list.find((item) => item.job_type === "formal") || null;
+    parttimeJobs.value = list.filter((item) => item.job_type === "parttime");
   } catch (e) {
-    console.error('加载工作信息失败', e)
+    console.error("加载工作信息失败", e);
   }
-}
+};
 
 // 加载月度数据
 const loadMonthData = async () => {
-  loading.value = true
+  loading.value = true;
   try {
     const res = await getSalaryMonth({
       year: currentYear.value,
       month: currentMonth.value + 1,
-    })
-    const data = res.data || {}
+    });
+    const data = res.data || {};
     monthData.value = {
-      formal_total: data.formal_total || '0.00',
-      parttime_total: data.parttime_total || '0.00',
-      total_income: data.total_income || '0.00',
+      formal_total: data.formal_total || "0.00",
+      parttime_total: data.parttime_total || "0.00",
+      total_income: data.total_income || "0.00",
       daily_list: data.daily_list || [],
-    }
+    };
   } catch (e) {
-    console.error('加载月度数据失败', e)
+    console.error("加载月度数据失败", e);
   } finally {
-    loading.value = false
+    loading.value = false;
   }
-}
+};
 
 onMounted(() => {
-  loadJobInfo()
-  loadMonthData()
-})
+  loadJobInfo();
+  loadMonthData();
+});
+
+// 每次页面激活时重新加载数据（从其他页面返回时）
+onActivated(() => {
+  loadJobInfo();
+  loadMonthData();
+});
 </script>
 
 <style scoped>
@@ -425,26 +446,30 @@ onMounted(() => {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   background: #fff;
-  padding: 8px 0;
+  padding: 0; /* ❗去掉 padding */
 }
 
+/* 核心修复 */
+.day-cell {
+  width: 100%;
+  height: calc(100vw / 7); /* 👈 关键 */
+  max-height: 80px; /* 可选，防止平板太大 */
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  position: relative;
+  cursor: pointer;
+  gap: 2px;
+}
 .calendar-loading {
   display: flex;
   align-items: center;
   justify-content: center;
   height: 300px;
   background: #fff;
-}
-
-.day-cell {
-  aspect-ratio: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  cursor: pointer;
-  gap: 2px;
 }
 
 .day-cell.empty {

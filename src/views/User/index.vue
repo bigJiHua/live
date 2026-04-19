@@ -46,12 +46,6 @@
           is-link
           @click="$router.push('/user/resource-manage')"
         />
-        <van-cell
-          title="设备信息"
-          icon="phone-o"
-          is-link
-          @click="$router.push('/user/device-info')"
-        />
       </van-cell-group>
     </div>
 

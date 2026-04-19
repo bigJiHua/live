@@ -1,4 +1,4 @@
-import request from '@/utils/request'
+import request from "@/utils/request";
 
 /**
  * 工作信息 API
@@ -10,7 +10,7 @@ import request from '@/utils/request'
  * 返回: { formal: {...}, parttimes: [...] }
  */
 export function getJobList() {
-  return request.get('/work/job/list')
+  return request.get("/work/job/list");
 }
 
 /**
@@ -19,7 +19,7 @@ export function getJobList() {
  * job_type: 'formal' | 'parttime'
  */
 export function saveJob(data) {
-  return request.post('/work/job', data)
+  return request.post("/work/job", data);
 }
 
 /**
@@ -28,7 +28,7 @@ export function saveJob(data) {
  * @param {object} data - 更新的数据
  */
 export function updateJob(id, data) {
-  return request.put(`/work/job/${id}`, data)
+  return request.put(`/work/job/${id}`, data);
 }
 
 /**
@@ -36,7 +36,7 @@ export function updateJob(id, data) {
  * @param {string} id - 工作ID
  */
 export function deleteJob(id) {
-  return request.delete(`/work/job/${id}`)
+  return request.delete(`/work/job/${id}`);
 }
 
 /**
@@ -44,7 +44,7 @@ export function deleteJob(id) {
  * @param {object} params - { work_date: 'YYYY-MM-DD', work_hours?: JSON字符串 }
  */
 export function getSalaryDay(params) {
-  return request.get('/work/salary/day', { params })
+  return request.get("/work/salary/day", { params });
 }
 
 /**
@@ -52,7 +52,7 @@ export function getSalaryDay(params) {
  * @param {object} data - { job_id, work_date, work_hours, cut, subsidy_meal, subsidy_traffic, subsidy_post, status, remark }
  */
 export function saveSalaryDay(data) {
-  return request.post('/work/salary', data)
+  return request.post("/work/salary", data);
 }
 
 /**
@@ -60,7 +60,7 @@ export function saveSalaryDay(data) {
  * @param {object} params - { year, month }
  */
 export function getSalaryMonth(params) {
-  return request.get('/work/salary/month', { params })
+  return request.get("/work/salary/month", { params });
 }
 
 /**
@@ -68,5 +68,5 @@ export function getSalaryMonth(params) {
  * @param {object} data - { job_id, work_date }
  */
 export function deleteSalaryDay(data) {
-  return request.delete('/work/salary', { data })
+  return request.delete("/work/salary", { data });
 }

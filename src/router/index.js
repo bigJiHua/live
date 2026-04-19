@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from "vue-router";
 import { showToast } from "vant";
 import RouterMap from "@/router/map";
+import { ENV } from "@/utils/env";
 
 const router = createRouter({
   history: createWebHistory("/"),
