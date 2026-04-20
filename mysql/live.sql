@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- 主机： 127.0.0.1:3306
--- 生成日期： 2026-04-19 14:49:43
+-- 生成日期： 2026-04-20 13:09:01
 -- 服务器版本： 5.7.40
 -- PHP 版本： 8.0.26
 
@@ -497,6 +497,27 @@ CREATE TABLE IF NOT EXISTS `moment` (
   PRIMARY KEY (`id`),
   KEY `idx_user_id` (`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='动态发布表';
+
+-- --------------------------------------------------------
+
+--
+-- 表的结构 `security_verify_log`
+--
+
+DROP TABLE IF EXISTS `security_verify_log`;
+CREATE TABLE IF NOT EXISTS `security_verify_log` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `user_id` varchar(50) NOT NULL COMMENT '固定用户ID=1（单用户）',
+  `request_url` varchar(255) NOT NULL COMMENT '触发的接口URL /api/card/delete',
+  `action_type` varchar(64) DEFAULT '' COMMENT '操作类型 delete/edit/view等',
+  `pin_status` tinyint(4) NOT NULL DEFAULT '0' COMMENT '0=未验证 1=验证通过 2=验证失败 3=已锁定',
+  `error_count` tinyint(4) NOT NULL DEFAULT '0' COMMENT '本次连续错误次数',
+  `verify_expire_time` datetime DEFAULT NULL COMMENT '验证有效期截止时间',
+  `remark` varchar(255) DEFAULT '' COMMENT '备注信息',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_user_id` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='PIN安全验证-请求日志表';
 
 -- --------------------------------------------------------
 

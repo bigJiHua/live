@@ -2,6 +2,7 @@
 require("dotenv").config();
 const { securityCheck } = require("./src/middlewares/securityCheck");
 const decryptWithSecurity = require("./src/middlewares/authSecurityData");
+const { pinSecurityGuard } = require("./src/common/middleware/pinSecurityGuard");
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
@@ -55,6 +56,9 @@ app.use(async (req, res, next) => {
   // 解密前端数据
   await decryptWithSecurity(req, res, next);
 });
+
+// --- PIN 安全验证中间件（在路由之后，拦截已认证的请求） ---
+app.use(pinSecurityGuard);
 
 // --- 路由层 ---
 const apiRouter = require("./src/api");

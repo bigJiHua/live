@@ -26,23 +26,24 @@ const fixedAssetRouter = require("../modules/fixed_asset/api");
 const budgetRouter = require("../modules/budget/api");
 
 // 注册子路由
-router.use("/auth", authRouter);       // 【已启用】认证模块
-router.use("/security", securityRouter); // 【已启用】安全模块
-router.use("/account", accountRouter);   // 【已启用】账户收支
+router.use("/auth", authRouter);       // 认证模块
+router.use("/security", securityRouter); // 安全设置模块
+// 注册业务路由
+router.use("/account", accountRouter);        // 账户收支
 router.use("/accountBalance", accountBalanceRouter); // 账户余额
-router.use("/category", categoryRouter); // 【已启用】分类管理
-router.use("/card/bill", cardBillRouter);   // 卡片账单
+router.use("/category", categoryRouter);      // 分类管理
+router.use("/card/bill", cardBillRouter);    // 卡片账单
 router.use("/card/repay", cardRepayRouter);  // 卡片还款
-router.use("/card", cardRouter);         // 【已启用】卡片管理
-router.use("/user", userRouter);         // 【已启用】用户管理
-router.use("/database", databaseRouter); // 【已启用】临时数据库操控
-router.use("/upload", uploadRouter);     // 【已启用】文件上传
-router.use("/moment", momentRouter);      // 【已启用】动态/日记
-router.use("/bank", bankRouter);          // 银行分类
-router.use("/asset", assetRouter);       // 【已启用】资产快照与登记
-router.use("/todo", todoRouter);          // 待办日程
-router.use("/work", workRouter);           // 工作与工资
-router.use("/fixedAsset", fixedAssetRouter); // 固定资产管理
-router.use("/budget", budgetRouter);          // 预算管理
+router.use("/card", cardRouter);              // 卡片管理
+router.use("/user", userRouter);              // 用户管理
+router.use("/database", databaseRouter);     // 临时数据库操控
+router.use("/upload", uploadRouter);          // 文件上传
+router.use("/moment", momentRouter);          // 动态/日记
+router.use("/bank", bankRouter);             // 银行分类
+router.use("/asset", assetRouter);            // 资产快照与登记
+router.use("/todo", todoRouter);              // 待办日程
+router.use("/work", workRouter);              // 工作与工资
+router.use("/fixedAsset", fixedAssetRouter);  // 固定资产管理
+router.use("/budget", budgetRouter);           // 预算管理
 
 module.exports = router;

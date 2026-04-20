@@ -156,7 +156,7 @@ async function getConnectionWithDb() {
 }
 
 /**
- * 步骤 1: 检查数据库是否存在
+ * 步骤 1: 检查数据库是否存在，不存在则自动创建
  */
 async function checkDatabase() {
   console.log('\n📦 [步骤 1/5] 检查数据库');
@@ -177,10 +177,21 @@ async function checkDatabase() {
     const elapsed = Date.now() - startTime;
     
     if (rows.length === 0) {
-      logInit(`❌ 数据库 ${dbName} 不存在`, 'error');
-      logInit('请先执行: mysql -u root -p < mysql/live.sql', 'warn');
-      stats.checks.database = false;
-      return false;
+      logInit(`⚠️ 数据库 ${dbName} 不存在，尝试自动创建...`, 'warn');
+      
+      // 导入自动数据库初始化模块
+      const { autoInitDatabase } = require('./autoDatabase');
+      const autoResult = await autoInitDatabase();
+      
+      if (autoResult.success) {
+        logInit(`✅ 数据库 ${dbName} 自动创建成功`, 'success');
+        stats.checks.database = true;
+        return true;
+      } else {
+        logInit(`❌ 自动创建失败: ${autoResult.reason}`, 'error');
+        stats.checks.database = false;
+        return false;
+      }
     }
     
     logInit(`✅ 数据库 ${dbName} 存在`, 'success');

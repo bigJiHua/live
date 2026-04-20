@@ -5,6 +5,7 @@ const authController = require("../controller");
 const authGuard = require("../../../common/middleware/authGuard");
 const accountLockCheck = require("../../../common/middleware/accountLockCheck");
 const AuthRules = require("../Rules");
+
 /**
  *   非权限接口部分
  */
