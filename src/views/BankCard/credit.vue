@@ -22,17 +22,20 @@
           :class="{
             'is-selected': selectedId === item.id,
             'is-dimmed': selectedId !== null && selectedId !== item.id,
+            'has-card-img': item.cardImgUrl,
           }"
           :style="{
             '--card-color': item.color || '#ee0a24',
             '--stack-offset': `${index * 70}px`,
             'z-index': selectedId === item.id ? 999 : index,
+            ...(item.cardImgUrl ? { backgroundImage: `url(${item.cardImgUrl})` } : {}),
           }"
           @click.stop="handleCardClick(item, index)"
         >
-          <div class="bg-pattern"></div>
+          <div class="bg-pattern" v-if="!item.cardImgUrl"></div>
 
-          <div class="card-header">
+          <!-- 无卡面图片时：左上角银行信息 -->
+          <div class="card-header" v-if="!item.cardImgUrl">
             <div class="bank-info">
               <div class="bank-icon" v-if="item.bankIconUrl">
                 <img :src="item.bankIconUrl" :alt="item.bankName" />
@@ -52,11 +55,19 @@
             >
           </div>
 
-          <div class="card-number">
+          <!-- 有卡面图片时：右上角显示尾号后四位（弹出后隐藏） -->
+          <div class="card-header-img" v-if="item.cardImgUrl && selectedId !== item.id">
+            <van-tag v-if="item.isDefault || item.is_default" class="custom-tag"
+              >默认</van-tag
+            >
+            <span class="card-img-last4">{{ item.last4No }}</span>
+          </div>
+
+          <div class="card-number" v-if="!item.cardImgUrl">
             {{ formatCardNo(item) }}
           </div>
 
-          <div class="card-footer">
+          <div class="card-footer" v-if="!item.cardImgUrl">
             <div class="holder-section">
               <span class="label">CREDIT CARD</span>
               <span class="value">{{
@@ -72,6 +83,12 @@
               <img :src="item.cardOrgIconUrl" alt="卡组织" />
             </div>
           </div>
+
+          <!-- 有卡面图片时：弹出后左下角显示尾号 -->
+          <div class="card-footer-img" v-if="item.cardImgUrl && selectedId === item.id">
+            <span class="card-img-last4-bottom">{{ item.last4No }}</span>
+          </div>
+
           <transition name="fade">
             <div class="card-actions-quick" v-if="selectedId === item.id">
               <button class="action-pill-btn" @click.stop="goToEdit(item)">
@@ -79,7 +96,7 @@
                 <span>管理</span>
               </button>
               <!-- 卡组织图标 - 右上角选中时 -->
-              <div class="card-org card-org-top" v-if="item.cardOrgIconUrl">
+              <div class="card-org card-org-top" v-if="item.cardOrgIconUrl && !item.cardImgUrl">
                 <img :src="item.cardOrgIconUrl" alt="卡组织" />
               </div>
             </div>
@@ -327,6 +344,54 @@ onMounted(async () => {
   filter: brightness(0.5) blur(1px);
   transform: translateY(10px) scale(0.95);
   opacity: 0.6;
+}
+
+/* 有卡面图片时：用图片做背景，去掉渐变 */
+.bank-card-item.has-card-img {
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+/* 有卡面图片时：用图片做背景，去掉渐变 */
+.bank-card-item.has-card-img {
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+/* 有卡面图片时的右上角尾号 */
+.card-header-img {
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-start;
+  position: relative;
+  z-index: 2;
+  gap: 8px;
+}
+.card-img-last4 {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 4px 12px;
+  border-radius: 8px;
+}
+
+/* 有卡面图片时：弹出后左下角尾号 */
+.card-footer-img {
+  position: absolute;
+  left: 20px;
+  bottom: 20px;
+  z-index: 5;
+}
+.card-img-last4-bottom {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 3px;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 6px 14px;
+  border-radius: 8px;
 }
 
 .bg-pattern {

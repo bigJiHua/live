@@ -135,12 +135,15 @@ const disableError = ref("");
 // 检查 PIN 设置状态
 const checkPinStatus = async () => {
   try {
-    await securityApi.checkPin();
-    // 200 = 已设置 PIN
-    hasPinSet.value = true;
-    pinEnabled.value = true;
+    const res = await securityApi.checkPin();
+    if (res.status === 200) {
+      hasPinSet.value = true;
+      pinEnabled.value = true;
+    } else {
+      hasPinSet.value = false;
+      pinEnabled.value = false;
+    }
   } catch (err) {
-    // 400 = 未设置 PIN
     hasPinSet.value = false;
     pinEnabled.value = false;
   }

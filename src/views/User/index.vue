@@ -73,18 +73,16 @@ const security = reactive({ pinEnabled: false, hasPinSet: false });
 // 检查 PIN 设置状态（后端 + 本地双校验）
 const checkPinStatus = async () => {
   try {
-    await securityApi.checkPin();
+    const res = await securityApi.checkPin();
     // 200 = 已设置 PIN
-    security.hasPinSet = true;
-  } catch (err) {
-    // 400 = 未设置 PIN
-    if (err.response?.status === 400) {
-      security.hasPinSet = false;
+    if (res.status === 200) {
+      security.hasPinSet = true;
     } else {
-      console.error("检查 PIN 状态失败:", err);
-      // 其他错误降级为本地校验
-      security.hasPinSet = localStorage.getItem("pin_enabled") === "true";
+      security.hasPinSet = false;
     }
+  } catch (err) {
+    // 400 或其他错误 = 未设置 PIN
+    security.hasPinSet = false;
   }
   // 同步本地状态与后端一致
   localStorage.setItem("pin_enabled", security.hasPinSet ? "true" : "false");

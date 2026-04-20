@@ -112,11 +112,9 @@ const pageTitle = computed(() => {
 // 检查 PIN 设置状态
 const checkPinStatus = async () => {
   try {
-    await securityApi.checkPin();
-    // 200 = 已设置 PIN
-    return true;
+    const res = await securityApi.checkPin();
+    return res.status === 200;
   } catch (err) {
-    // 400 = 未设置 PIN
     return false;
   }
 };
