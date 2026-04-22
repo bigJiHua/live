@@ -14,15 +14,15 @@
     </div>
 
     <!-- 提醒横幅 -->
-    <div v-if="reminders.length > 0" class="reminder-banner" :class="{ 'has-reminders': reminders.length > 0 }">
+    <div v-if="realReminders.length > 0" class="reminder-banner" :class="{ 'has-reminders': realReminders.length > 0 }">
       <div class="reminder-header">
         <van-icon name="bell" />
         <span>待办提醒</span>
-        <span class="reminder-count">{{ reminders.length }}个</span>
+        <span class="reminder-count">{{ realReminders.length }}个</span>
       </div>
       <div class="reminder-list">
         <div
-          v-for="item in reminders"
+          v-for="item in realReminders"
           :key="item.id"
           class="reminder-item"
           :class="'reminder-' + getReminderBannerLevel(item)"
@@ -58,7 +58,7 @@
         <span class="day-number">{{ day.day }}</span>
         <div v-if="showAirplane && day.hasAirplane" class="airplane-icon">✈️</div>
         <div
-          v-else-if="day.count > 0"
+          v-else-if="day.hasRealEvent"
           class="event-dot"
           :class="{ overdue: day.hasOverdue }"
         ></div>
@@ -373,6 +373,11 @@ const loadingEvents = ref(false);
 const reminders = ref([]);
 const reminderLoading = ref(false);
 
+// 过滤掉 content === "1" 的隐蔽标记，只展示真实事项的提醒
+const realReminders = computed(() =>
+  reminders.value.filter((r) => r.content !== "1")
+);
+
 // 计算单个事件的提醒等级
 const calcReminderLevel = (item) => {
   // 只处理 need_remind = 1 的事件
@@ -491,8 +496,10 @@ const calendarDays = computed(() => {
     const dateStr = firstDay.date(d).format("YYYY-MM-DD");
     const dayData = monthData.find((m) => m.date === dateStr);
     const list = dayData?.list || [];
-    // 判断是否有小飞机：该天有任意日程且其中包含 content === "1" 的记录
+    // 判断是否有小飞机：该天有 content === "1" 的记录
     const hasAirplane = list.some((item) => item?.content === "1");
+    // 判断是否有"真实事项"（排除 content === "1" 的隐蔽标记）
+    const hasRealEvent = list.some((item) => item?.content !== "1");
     // 检查该日期是否有提醒需要闪烁
     const reminderItem = reminders.value.find((r) => r.happen_date === dateStr);
     const reminderFlash = reminderItem ? calcReminderLevel(reminderItem) : null;
@@ -503,6 +510,7 @@ const calendarDays = computed(() => {
       count: dayData?.count || 0,
       hasOverdue: dayData?.hasOverdue || false,
       hasAirplane,
+      hasRealEvent,
       reminderFlash,
     });
   }

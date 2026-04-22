@@ -275,9 +275,18 @@ const handleAfterRead = async (file) => {
     try {
       const res = await uploadApi.single(f.file, BusType.POST);
       if (res.data) {
-        // 上传成功，添加到列表（保留 thumbnail 和 url）
-        const newItem = { ...res.data, uploading: false };
+        // 上传成功，添加到列表并自动选中
+        // 统一 file_path 字段：url -> file_path，确保预览能正常显示
+        const newItem = {
+          ...res.data,
+          file_path: res.data.url || res.data.file_path,
+          uploading: false,
+        };
         imageList.value.unshift(newItem);
+        // 自动选中刚上传的图片
+        if (!localSelected.value.includes(newItem.id) && localSelected.value.length < MAX_SELECT) {
+          localSelected.value.push(newItem.id);
+        }
         f.status = "done";
         f.message = "上传成功";
       } else {
@@ -315,9 +324,13 @@ const handleImageClick = (item) => {
 
 // 确认选择
 const confirmSelection = () => {
-  selectedImages.value = imageList.value.filter((item) =>
-    localSelected.value.includes(item.id)
-  );
+  selectedImages.value = imageList.value
+    .filter((item) => localSelected.value.includes(item.id))
+    .map((item) => ({
+      ...item,
+      // 统一 file_path 字段：优先用 file_path，否则 fallback 到 url
+      file_path: item.file_path || item.url,
+    }));
   showImagePicker.value = false;
 };
 

@@ -168,13 +168,6 @@ const RouterMap = [
         component: () => import("../views/Finance/budget/Detail.vue"),
         meta: { title: "预算详情", hideTabbar: true },
       },
-      // 执行预算（登记支出）
-      {
-        path: "finance/budget/execute/:id",
-        name: "FinanceBudgetExecute",
-        component: () => import("../views/Finance/budget/Execute.vue"),
-        meta: { title: "登记支出", hideTabbar: true },
-      },
       // 动态/日记模块
       {
         path: "diary",

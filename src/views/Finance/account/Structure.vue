@@ -57,16 +57,18 @@
           class="account-item"
         >
           <div class="account-left">
-            <div class="account-icon bank-icon">
+            <div class="account-icon bank-icon" v-if="!getCardBankInfo(account.card_id).bankIcon">
               <van-icon name="card" size="20" color="#fff" />
+            </div>
+            <div class="account-icon bank-icon-img" v-else>
+              <van-image width="28" height="28" :src="getFullUrl(getCardBankInfo(account.card_id).bankIcon)" fit="contain" />
             </div>
             <div class="account-info">
               <div class="account-name">
-                {{ account.card_alias || '银行卡' }}
+                {{ getCardBankInfo(account.card_id).bankName || account.card_alias || '银行卡' }}
               </div>
               <div class="account-type">
-                <span v-if="account.card_alias && account.card_last4">****{{ account.card_last4 }}</span>
-                <span v-else-if="account.card_last4">卡号 ****{{ account.card_last4 }}</span>
+                <span v-if="account.card_last4 || getCardBankInfo(account.card_id).cardLast4">****{{ account.card_last4 || getCardBankInfo(account.card_id).cardLast4 }}</span>
                 <span v-else>借记卡</span>
               </div>
             </div>
@@ -101,11 +103,27 @@ import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { showToast } from "vant";
 import { getBalanceList } from "@/utils/api/account";
+import { getCardList } from "@/utils/api/card";
+import { categoryApi } from "@/utils/api/category";
+import ENV from "@/utils/env";
+
+const BASE_URL = ENV.FILE_BASE_URL;
 
 const router = useRouter();
 const showAmount = ref(true);
 const loading = ref(false);
 const accountList = ref([]);
+const bankList = ref([]);
+const cardList = ref([]);
+
+// 获取完整 URL
+const getFullUrl = (path) => {
+  if (!path) return "";
+  if (path.startsWith("http")) return path;
+  const pureBase = BASE_URL.replace(/\/+$/, "");
+  const purePath = path.startsWith("/") ? path : `/${path}`;
+  return pureBase + purePath;
+};
 
 // 虚拟账户配置
 const virtualConfig = {
@@ -134,7 +152,47 @@ const getAccountTypeLabel = (account) => {
   if (isVirtualAccount(account.card_id)) {
     return virtualConfig[account.card_id]?.label || "虚拟账户";
   }
-  return "借记卡";
+  const info = getCardBankInfo(account.card_id);
+  return info.bankName || "借记卡";
+};
+
+// 根据 bank_id 获取银行信息
+const getBankInfo = (bankId) => {
+  const bank = bankList.value.find((b) => b.id === bankId);
+  return bank || null;
+};
+
+// 通过 card_id 关联卡片 → 银行分类，获取银行名 + icon + 尾号
+const getCardBankInfo = (cardId) => {
+  const card = cardList.value.find((c) => c.id === cardId || c.card_id === cardId);
+  if (!card) return {};
+  const bankId = card.bank_id || card.bankId;
+  const bank = bankId ? getBankInfo(bankId) : null;
+  return {
+    bankName: bank?.name || "",
+    bankIcon: bank?.icon_url || bank?.iconUrl || "",
+    cardLast4: card.card_last4 || card.last4 || "",
+  };
+};
+
+// 加载银行分类
+const loadBankList = async () => {
+  try {
+    const res = await categoryApi.list("bank");
+    bankList.value = res.data || res || [];
+  } catch (e) {
+    bankList.value = [];
+  }
+};
+
+// 加载卡片列表
+const loadCardList = async () => {
+  try {
+    const res = await getCardList({ cardType: "debit" });
+    cardList.value = res.data || res || [];
+  } catch (e) {
+    cardList.value = [];
+  }
 };
 
 const virtualAccounts = computed(() =>
@@ -175,7 +233,10 @@ const loadData = async () => {
   }
 };
 
-onMounted(() => loadData());
+onMounted(async () => {
+  await Promise.all([loadBankList(), loadCardList()]);
+  loadData();
+});
 </script>
 
 <style scoped>
@@ -302,6 +363,14 @@ onMounted(() => loadData());
 
 .bank-icon {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.bank-icon-img {
+  background: #f7f8fa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
 }
 
 .account-info .account-name {

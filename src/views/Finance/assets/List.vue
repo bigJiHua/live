@@ -50,11 +50,11 @@
                   <div class="section-label">余额</div>
                   <div class="section-items">
                     <div
-                      v-for="(val, key) in item.asset_details.balance"
-                      :key="key"
+                      v-for="(val, idx) in item.asset_details.balance"
+                      :key="val.id || idx"
                       class="detail-item"
                     >
-                      <span>{{ val.customName || getBalanceName(key) }}</span>
+                      <span>{{ val.customName || getBalanceName(val.type || (typeof idx === 'string' ? idx : '')) }}</span>
                       <span>¥{{ formatAmount(val.amount) }}</span>
                     </div>
                   </div>
@@ -67,11 +67,11 @@
                   <div class="section-label">境外资产</div>
                   <div class="section-items">
                     <div
-                      v-for="(val, key) in item.asset_details.offshore"
-                      :key="key"
+                      v-for="(val, idx) in item.asset_details.offshore"
+                      :key="val.id || idx"
                       class="detail-item"
                     >
-                      <span>{{ val.customName || getOffshoreName(key) }}</span>
+                      <span>{{ val.customName || getOffshoreName(val.type || (typeof idx === 'string' ? idx : '')) }}</span>
                       <span
                         >{{ val.currency || "" }}
                         {{ formatAmount(val.amount) }}</span
@@ -87,11 +87,11 @@
                   <div class="section-label">信用卡欠款</div>
                   <div class="section-items">
                     <div
-                      v-for="(val, key) in item.asset_details.debt"
-                      :key="key"
+                      v-for="(val, idx) in item.asset_details.debt"
+                      :key="val.id || idx"
                       class="detail-item"
                     >
-                      <span>{{ val.customName || getDebtName(key) }}</span>
+                      <span>{{ val.customName || getDebtName(val.type || (typeof idx === 'string' ? idx : '')) }}</span>
                       <span class="danger"
                         >¥{{ formatAmount(val.amount) }}</span
                       >

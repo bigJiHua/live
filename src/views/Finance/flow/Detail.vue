@@ -62,7 +62,17 @@
         </van-cell>
         <van-cell title="关联卡片">
           <template #value>
-            <span>{{ getCardText(detail.card_id) }}</span>
+            <div class="card-cell">
+              <van-image
+                v-if="getCardBankIcon(detail.card_id)"
+                width="18"
+                height="18"
+                :src="getFullUrl(getCardBankIcon(detail.card_id))"
+                fit="contain"
+                class="card-cell-icon"
+              />
+              <span>{{ getCardText(detail.card_id) }}</span>
+            </div>
           </template>
         </van-cell>
         <van-cell title="交易日期">
@@ -158,8 +168,12 @@ import {
   reverseCreditExpense,
 } from "@/utils/api/account";
 import { getCardList } from "@/utils/api/card";
+import { categoryApi } from "@/utils/api/category";
+import ENV from "@/utils/env";
 
 dayjs.locale(zhCn);
+
+const BASE_URL = ENV.FILE_BASE_URL;
 
 const router = useRouter();
 const route = useRoute();
@@ -168,6 +182,7 @@ const route = useRoute();
 const loading = ref(true);
 const detail = ref(null);
 const cardList = ref([]);
+const bankList = ref([]);
 const showRemarkPopup = ref(false);
 const editRemark = ref("");
 const remarkLoading = ref(false);
@@ -212,22 +227,46 @@ const formatDateTime = (timestamp) => {
   return d.format("YYYY-MM-DD HH:mm:ss");
 };
 
+// 获取完整 URL
+const getFullUrl = (path) => {
+  if (!path) return "";
+  if (path.startsWith("http")) return path;
+  const pureBase = BASE_URL.replace(/\/+$/, "");
+  const purePath = path.startsWith("/") ? path : `/${path}`;
+  return pureBase + purePath;
+};
+
+// 根据 bank_id 获取银行信息
+const getBankInfo = (bankId) => {
+  return bankList.value.find((b) => b.id === bankId) || null;
+};
+
 // 获取卡片显示文本
 const getCardText = (cardId) => {
   if (!cardId) return "-";
   if (cardId === "xxxx") return "现金";
   if (cardId === "yyyy") return "余额";
-  // 优先使用返回的别名
-  if (detail.value?.card_alias) return detail.value.card_alias;
-  if (detail.value?.card_last4) return `****${detail.value.card_last4}`;
-  // 尝试从卡片列表匹配
+
   const card = cardList.value.find((c) => c.id === cardId);
-  if (card) {
-    return (
-      card.alias || card.bank_name || `****${card.last4_no || card.last4No}`
-    );
-  }
+  const bankId = card?.bank_id || card?.bankId;
+  const bank = bankId ? getBankInfo(bankId) : null;
+  const bankName = bank?.name || detail.value?.card_alias || card?.alias || card?.bank_name || "";
+  const last4 = detail.value?.card_last4 || card?.card_last4 || card?.last4_no || card?.last4No || "";
+
+  if (bankName && last4) return `${bankName} ****${last4}`;
+  if (bankName) return bankName;
+  if (last4) return `****${last4}`;
   return cardId;
+};
+
+// 获取卡片银行图标
+const getCardBankIcon = (cardId) => {
+  if (!cardId || cardId === "xxxx" || cardId === "yyyy") return "";
+  const card = cardList.value.find((c) => c.id === cardId);
+  if (!card) return "";
+  const bankId = card.bank_id || card.bankId;
+  const bank = bankId ? getBankInfo(bankId) : null;
+  return bank?.icon_url || bank?.iconUrl || "";
 };
 
 // 获取分类显示文本
@@ -238,13 +277,18 @@ const getCategoryText = (item) => {
   return item.category_name || "未知分类";
 };
 
-// 加载卡片列表
+// 加载卡片列表和银行分类
 const loadCardList = async () => {
   try {
-    const res = await getCardList();
-    cardList.value = res.data || res || [];
+    const [cardRes, bankRes] = await Promise.all([
+      getCardList(),
+      categoryApi.list("bank"),
+    ]);
+    cardList.value = cardRes.data || cardRes || [];
+    bankList.value = bankRes.data || bankRes || [];
   } catch (e) {
     cardList.value = [];
+    bankList.value = [];
   }
 };
 
@@ -430,6 +474,17 @@ onMounted(() => {
 .remark-text {
   color: #646566;
   word-break: break-all;
+}
+
+.card-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.card-cell-icon {
+  border-radius: 3px;
+  flex-shrink: 0;
 }
 
 .notice-banner {

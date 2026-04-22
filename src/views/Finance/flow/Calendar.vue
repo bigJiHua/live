@@ -46,8 +46,8 @@
         <span class="day-number">{{ day.day }}</span>
         <!-- 有收支记录 -->
         <div v-if="day.hasRecord" class="day-amounts">
-          <span v-if="day.income > 0" class="amount income">+{{ day.income }}</span>
-          <span v-if="day.expense > 0" class="amount expense">-{{ day.expense }}</span>
+          <span v-if="day.income > 0" class="amount income">+{{ formatAmount(day.income) }}</span>
+          <span v-if="day.expense > 0" class="amount expense">-{{ formatAmount(day.expense) }}</span>
         </div>
       </div>
     </div>
@@ -586,6 +586,10 @@ onMounted(() => {
 .amount {
   font-size: 10px;
   font-weight: 500;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .amount.income {

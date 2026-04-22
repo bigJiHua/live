@@ -83,8 +83,8 @@ import { useRouter } from "vue-router";
 import { authApi } from "@/utils/api/auth";
 
 const router = useRouter();
-const username = ref("admin");
-const password = ref("123456");
+const username = ref("");
+const password = ref("");
 const loading = ref(false);
 
 // 密码校验规则（实时）
@@ -214,7 +214,7 @@ const goToRegister = () => {
 }
 
 /* 调整 Vant 单元格组间距 */
-::deep(.van-cell-group--inset) {
+:deep(.van-cell-group--inset) {
   margin: 0;
 }
 

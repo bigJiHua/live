@@ -24,8 +24,8 @@
           </div>
 
           <div class="card-left">
-            <div class="card-icon" v-if="item.icon_url">
-              <van-image width="36" height="36" :src="item.icon_url" fit="cover" />
+            <div class="card-icon" v-if="item.icon_url || item.iconUrl">
+              <van-image width="36" height="36" :src="getFullUrl(item.icon_url || item.iconUrl)" fit="cover" />
             </div>
             <div class="card-icon default" v-else>
               <img src="@/assets/icon/cate.svg" alt="" width="22" height="22" />
@@ -48,41 +48,126 @@
       </div>
     </van-overlay>
 
-    <van-dialog
+    <!-- 新增/编辑弹窗 -->
+    <van-popup
       v-model:show="showAddDialog"
-      :title="editingItem ? '编辑分类' : '新增分类'"
-      show-cancel-button
-      @confirm="handleConfirm"
+      position="bottom"
+      round
+      :style="{ maxHeight: '70vh' }"
     >
-      <div class="dialog-form">
-        <van-field
-          v-model="formData.name"
-          label="名称"
-          placeholder="请输入分类名称"
-          :maxlength="20"
-          show-word-limit
-        />
-        <van-field
-          v-model="formData.iconUrl"
-          label="图标URL"
-          placeholder="选填"
-        />
-        <van-field
-          v-model="formData.remark"
-          label="备注"
-          placeholder="选填"
-          :maxlength="50"
-          show-word-limit
-        />
+      <div class="dialog-container">
+        <div class="dialog-header">
+          <span class="dialog-title">{{ editingItem ? '编辑分类' : '新增分类' }}</span>
+        </div>
+
+        <div class="dialog-form">
+          <van-field
+            v-model="formData.name"
+            label="名称"
+            placeholder="请输入分类名称"
+            :maxlength="20"
+            show-word-limit
+          />
+
+          <!-- 图标选择 -->
+          <div class="icon-select-wrap">
+            <div class="icon-label">选择图标</div>
+            <div class="icon-preview" @click="showIconPicker = true">
+              <van-image
+                v-if="formData.iconUrl"
+                width="48"
+                height="48"
+                :src="getFullUrl(formData.iconUrl)"
+                fit="cover"
+                round
+              />
+              <div v-else class="icon-placeholder">
+                <van-icon name="plus" size="24" />
+              </div>
+            </div>
+            <div class="icon-tip" v-if="formData.iconUrl">点击更换图标</div>
+          </div>
+
+          <van-field
+            v-model="formData.remark"
+            label="备注"
+            placeholder="选填"
+            :maxlength="50"
+            show-word-limit
+          />
+        </div>
+
+        <div class="dialog-actions">
+          <van-button plain size="large" round @click="showAddDialog = false">取消</van-button>
+          <van-button type="primary" size="large" round @click="handleConfirm">保存</van-button>
+        </div>
       </div>
-    </van-dialog>
+    </van-popup>
+
+    <!-- 图标选择弹窗 -->
+    <van-popup
+      v-model:show="showIconPicker"
+      position="bottom"
+      round
+      :style="{ height: '70%' }"
+    >
+      <div class="icon-picker">
+        <div class="picker-header">
+          <span class="picker-title">选择分类图标</span>
+          <van-icon name="cross" @click="showIconPicker = false" />
+        </div>
+
+        <!-- 上传新图标 -->
+        <div class="upload-section">
+          <van-uploader
+            v-model="uploadQueue"
+            :max-count="1"
+            :after-read="handleAfterRead"
+            :before-read="beforeUpload"
+            preview-size="60px"
+          >
+            <div class="upload-trigger">
+              <van-icon name="plus" size="20" />
+              <span>上传图标</span>
+            </div>
+          </van-uploader>
+        </div>
+
+        <!-- 图标列表 -->
+        <van-loading v-if="iconLoading" size="24px" class="icon-loading" />
+        <div v-else class="icon-grid-wrapper">
+          <div class="icon-grid">
+            <div
+              v-for="item in iconList"
+              :key="item.id"
+              class="icon-item"
+              :class="{ active: formData.iconUrl === (item.file_path || item.url) }"
+              @click="selectIcon(item)"
+            >
+              <van-image width="48" height="48" :src="getThumbUrl(item)" fit="cover" />
+              <van-icon
+                v-if="formData.iconUrl === (item.file_path || item.url)"
+                name="success"
+                class="check-icon"
+              />
+            </div>
+          </div>
+        </div>
+
+        <van-empty v-if="!iconLoading && iconList.length === 0" description="暂无图标，请上传" />
+      </div>
+    </van-popup>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, watch } from "vue";
 import { showToast, showConfirmDialog } from "vant";
 import { categoryApi } from "@/utils/api/category";
+import { uploadApi, BusType } from "@/utils/api/upload";
+import ENV from "@/utils/env";
+
+const BASE_URL = ENV.FILE_BASE_URL;
 
 const apiGetCategories = async (type) => {
   const res = await categoryApi.list(type);
@@ -109,6 +194,83 @@ const showAddDialog = ref(false);
 const editingItem = ref(null);
 const formData = ref({ name: "", remark: "", iconUrl: "" });
 
+// 图标选择
+const showIconPicker = ref(false);
+const iconList = ref([]);
+const iconLoading = ref(false);
+const uploadQueue = ref([]);
+
+// 获取完整URL
+const getFullUrl = (path) => {
+  if (!path) return "";
+  if (path.startsWith("http")) return path;
+  const pureBase = BASE_URL.replace(/\/+$/, "");
+  const purePath = path.startsWith("/") ? path : `/${path}`;
+  return pureBase + purePath;
+};
+
+// 获取缩略图URL
+const getThumbUrl = (item) => {
+  const path = item.thumbnail || item.file_path || item.url || "";
+  if (!path) return "";
+  if (path.startsWith("http")) return path;
+  const pureBase = BASE_URL.replace(/\/+$/, "");
+  const purePath = path.startsWith("/") ? path : `/${path}`;
+  return pureBase + purePath;
+};
+
+// 加载图标列表
+const loadIconList = async () => {
+  iconLoading.value = true;
+  try {
+    const res = await uploadApi.list({ busType: BusType.OTHER, busId: "", limit: 100, offset: 0 });
+    iconList.value = Array.isArray(res.data) ? res.data : [];
+  } catch (e) {
+    iconList.value = [];
+  } finally {
+    iconLoading.value = false;
+  }
+};
+
+watch(showIconPicker, (val) => {
+  if (val) loadIconList();
+});
+
+// 上传前校验
+const beforeUpload = (file) => {
+  const isImage = file.type.startsWith("image/");
+  if (!isImage) { showToast("只能上传图片文件"); return false; }
+  if (file.size / 1024 / 1024 >= 2) { showToast("图片大小不能超过 2MB"); return false; }
+  return true;
+};
+
+// 上传图标
+const handleAfterRead = async (file) => {
+  file.status = "uploading";
+  file.message = "上传中...";
+  try {
+    const res = await uploadApi.multiple([file.file], BusType.OTHER, "", "", []);
+    if (res.data && res.data.length > 0) {
+      iconList.value.unshift(res.data[0]);
+      formData.value.iconUrl = res.data[0].file_path || res.data[0].url;
+      file.status = "done";
+      file.message = "上传成功";
+      showToast("上传成功");
+    }
+  } catch (e) {
+    file.status = "failed";
+    file.message = "上传失败";
+    showToast("上传失败");
+  }
+  uploadQueue.value = [];
+};
+
+// 选择图标
+const selectIcon = (item) => {
+  formData.value.iconUrl = item.file_path || item.url;
+  showIconPicker.value = false;
+};
+
 const loadCategories = async (type) => {
   loading.value = true;
   try {
@@ -129,7 +291,7 @@ const onTypeChange = () => {
 
 const handleEdit = (item) => {
   editingItem.value = item;
-  formData.value = { name: item.name, remark: item.remark || "", iconUrl: item.iconUrl || "" };
+  formData.value = { name: item.name, remark: item.remark || "", iconUrl: item.icon_url || item.iconUrl || "" };
   showAddDialog.value = true;
 };
 
@@ -144,7 +306,7 @@ const handleConfirm = async () => {
       };
       await apiUpdateCategory(editingItem.value.id, updateData);
       const idx = allCategories.value[activeType.value].findIndex(c => c.id === editingItem.value.id);
-      if (idx !== -1) allCategories.value[activeType.value][idx] = { ...editingItem.value, ...updateData };
+      if (idx !== -1) allCategories.value[activeType.value][idx] = { ...editingItem.value, ...updateData, icon_url: updateData.iconUrl };
       showToast("更新成功");
     } else {
       const newItem = await apiCreateCategory({
@@ -161,6 +323,7 @@ const handleConfirm = async () => {
   }
   editingItem.value = null;
   formData.value = { name: "", remark: "", iconUrl: "" };
+  showAddDialog.value = false;
 };
 
 const handleDelete = async (item) => {
@@ -247,5 +410,146 @@ onMounted(() => loadCategories("expense"));
 }
 .dialog-form {
   padding: 16px;
+}
+
+/* 弹窗样式 */
+.dialog-container {
+  padding: 20px;
+}
+.dialog-header {
+  text-align: center;
+  margin-bottom: 20px;
+}
+.dialog-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #323233;
+}
+.dialog-form {
+  background: #f7f8fa;
+  border-radius: 12px;
+  padding: 8px 0;
+}
+.dialog-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+}
+.dialog-actions .van-button {
+  flex: 1;
+}
+
+/* 图标选择 */
+.icon-select-wrap {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  background: #fff;
+  border-bottom: 1px solid #ebedf0;
+}
+.icon-label {
+  font-size: 14px;
+  color: #646566;
+  flex-shrink: 0;
+}
+.icon-preview {
+  margin-left: auto;
+  cursor: pointer;
+}
+.icon-placeholder {
+  width: 48px;
+  height: 48px;
+  background: #f7f8fa;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #969799;
+}
+.icon-tip {
+  font-size: 12px;
+  color: #969799;
+  margin-left: 8px;
+}
+
+/* 图标选择弹窗 */
+.icon-picker {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  box-sizing: border-box;
+}
+.picker-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  flex-shrink: 0;
+}
+.picker-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #323233;
+}
+.upload-section {
+  padding-bottom: 16px;
+  border-bottom: 1px solid #ebedf0;
+  margin-bottom: 16px;
+  flex-shrink: 0;
+}
+.upload-trigger {
+  width: 60px;
+  height: 60px;
+  background: #f7f8fa;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: #969799;
+  font-size: 11px;
+}
+.icon-loading {
+  text-align: center;
+  padding: 20px;
+  flex-shrink: 0;
+}
+.icon-grid-wrapper {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.icon-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  padding: 4px 4px 16px;
+}
+.icon-item {
+  position: relative;
+  cursor: pointer;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 2px solid transparent;
+  transition: all 0.2s;
+}
+.icon-item:active {
+  transform: scale(0.95);
+}
+.icon-item.active {
+  border-color: #1989fa;
+}
+.icon-item .check-icon {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  background: #1989fa;
+  border-radius: 50%;
+  padding: 2px;
+  color: #fff;
+  font-size: 10px;
 }
 </style>

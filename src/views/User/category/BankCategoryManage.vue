@@ -147,27 +147,29 @@
 
         <!-- 图标列表 -->
         <van-loading v-if="iconLoading" size="24px" class="icon-loading" />
-        <div v-else class="icon-grid">
-          <div
-            v-for="item in iconList"
-            :key="item.id"
-            class="icon-item"
-            :class="{
-              active: formData.iconUrl === (item.file_path || item.url),
-            }"
-            @click="selectIcon(item)"
-          >
-            <van-image
-              width="48"
-              height="48"
-              :src="getThumbUrl(item)"
-              fit="cover"
-            />
-            <van-icon
-              v-if="formData.iconUrl === (item.file_path || item.url)"
-              name="success"
-              class="check-icon"
-            />
+        <div v-else class="icon-grid-wrapper">
+          <div class="icon-grid">
+            <div
+              v-for="item in iconList"
+              :key="item.id"
+              class="icon-item"
+              :class="{
+                active: formData.iconUrl === (item.file_path || item.url),
+              }"
+              @click="selectIcon(item)"
+            >
+              <van-image
+                width="48"
+                height="48"
+                :src="getThumbUrl(item)"
+                fit="cover"
+              />
+              <van-icon
+                v-if="formData.iconUrl === (item.file_path || item.url)"
+                name="success"
+                class="check-icon"
+              />
+            </div>
           </div>
         </div>
 
@@ -527,12 +529,14 @@ onMounted(() => loadCategories());
   display: flex;
   flex-direction: column;
   padding: 16px;
+  box-sizing: border-box;
 }
 .picker-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 16px;
+  flex-shrink: 0;
 }
 .picker-title {
   font-size: 16px;
@@ -543,6 +547,7 @@ onMounted(() => loadCategories());
   padding-bottom: 16px;
   border-bottom: 1px solid #ebedf0;
   margin-bottom: 16px;
+  flex-shrink: 0;
 }
 .upload-trigger {
   width: 60px;
@@ -560,14 +565,20 @@ onMounted(() => loadCategories());
 .icon-loading {
   text-align: center;
   padding: 20px;
+  flex-shrink: 0;
+}
+/* 滚动容器：占据剩余空间，内部溢出滚动 */
+.icon-grid-wrapper {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .icon-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 16px;
-  overflow-y: auto;
-  flex: 1;
-  padding-bottom: 16px;
+  padding: 4px 4px 16px;
 }
 .icon-item {
   position: relative;

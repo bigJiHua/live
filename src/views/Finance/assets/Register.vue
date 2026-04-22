@@ -20,19 +20,19 @@
         />
       </div>
       <div class="section-content">
-        <div v-if="Object.keys(balanceList).length === 0" class="empty-tip">
+        <div v-if="balanceList.length === 0" class="empty-tip">
           暂无登记，点击 + 添加
         </div>
         <div v-else class="item-list">
           <div
-            v-for="(item, key) in balanceList"
-            :key="key"
+            v-for="item in balanceList"
+            :key="item.id"
             class="asset-item"
-            @click="editBalance(key)"
+            @click="editBalance(item.id)"
           >
             <div class="item-info">
               <span class="item-name">{{
-                item.customName || getBalanceName(key)
+                item.customName || getBalanceName(item.type)
               }}</span>
               <span class="item-remark" v-if="item.remark">{{
                 item.remark
@@ -110,19 +110,19 @@
       </div>
 
       <div class="section-content">
-        <div v-if="Object.keys(offshoreList).length === 0" class="empty-tip">
+        <div v-if="offshoreList.length === 0" class="empty-tip">
           暂无登记，点击 + 添加
         </div>
         <div v-else class="item-list">
           <div
-            v-for="(item, key) in offshoreList"
-            :key="key"
+            v-for="item in offshoreList"
+            :key="item.id"
             class="asset-item"
-            @click="editOffshore(key)"
+            @click="editOffshore(item.id)"
           >
             <div class="item-info">
               <span class="item-name">{{
-                item.customName || getOffshoreName(key)
+                item.customName || getOffshoreName(item.type)
               }}</span>
               <span class="item-currency">
                 {{ item.currency }} {{ formatAmount(item.amount) }}
@@ -155,19 +155,19 @@
         <van-icon name="plus" class="add-icon" @click="openAddPopup('debt')" />
       </div>
       <div class="section-content">
-        <div v-if="Object.keys(debtList).length === 0" class="empty-tip">
+        <div v-if="debtList.length === 0" class="empty-tip">
           暂无负债，点击 + 添加
         </div>
         <div v-else class="item-list">
           <div
-            v-for="(item, key) in debtList"
-            :key="key"
+            v-for="item in debtList"
+            :key="item.id"
             class="asset-item"
-            @click="editDebt(key)"
+            @click="editDebt(item.id)"
           >
             <div class="item-info">
               <span class="item-name">{{
-                item.customName || getDebtName(key)
+                item.customName || getDebtName(item.type)
               }}</span>
               <span class="item-remark" v-if="item.remark">{{
                 item.remark
@@ -203,7 +203,7 @@
     <van-popup v-model:show="showBalancePopup" position="bottom" round>
       <div class="add-popup">
         <div class="popup-header">
-          <span>{{ editBalanceKey ? "编辑境内资产" : "添加境内资产" }}</span>
+          <span>{{ editBalanceId ? "编辑境内资产" : "添加境内资产" }}</span>
           <van-icon name="cross" @click="showBalancePopup = false" />
         </div>
         <div class="popup-form">
@@ -225,7 +225,7 @@
             type="number"
             label="金额"
             placeholder="请输入金额"
-            :max="9999999999.999"
+            :max="999999999.999"
             :min="0"
             step="0.001"
           />
@@ -235,7 +235,7 @@
             placeholder="选填"
           />
 
-          <div v-if="editBalanceKey" class="delete-row">
+          <div v-if="editBalanceId" class="delete-row">
             <van-button type="danger" size="small" block @click="deleteBalance"
               >删除此项</van-button
             >
@@ -265,7 +265,7 @@
     <van-popup v-model:show="showOffshorePopup" position="bottom" round>
       <div class="add-popup">
         <div class="popup-header">
-          <span>{{ editOffshoreKey ? "编辑境外资产" : "添加境外资产" }}</span>
+          <span>{{ editOffshoreId ? "编辑境外资产" : "添加境外资产" }}</span>
           <van-icon name="cross" @click="showOffshorePopup = false" />
         </div>
         <div class="popup-form">
@@ -287,7 +287,7 @@
             type="number"
             label="金额"
             placeholder="输入外币金额"
-            :max="9999999999.999"
+            :max="999999999.999"
             :min="0"
             step="0.001"
           />
@@ -298,7 +298,7 @@
             placeholder="自动带出"
           />
 
-          <div v-if="editOffshoreKey" class="delete-row">
+          <div v-if="editOffshoreId" class="delete-row">
             <van-button type="danger" size="small" block @click="deleteOffshore"
               >删除此项</van-button
             >
@@ -328,7 +328,7 @@
     <van-popup v-model:show="showDebtPopup" position="bottom" round>
       <div class="add-popup">
         <div class="popup-header">
-          <span>{{ editDebtKey ? "编辑负债" : "添加负债" }}</span>
+          <span>{{ editDebtId ? "编辑负债" : "添加负债" }}</span>
           <van-icon name="cross" @click="showDebtPopup = false" />
         </div>
         <div class="popup-form">
@@ -350,7 +350,7 @@
             type="number"
             label="欠款金额"
             placeholder="请输入金额"
-            :max="9999999999.999"
+            :max="999999999.999"
             :min="0"
             step="0.001"
           />
@@ -360,7 +360,7 @@
             placeholder="选填"
           />
 
-          <div v-if="editDebtKey" class="delete-row">
+          <div v-if="editDebtId" class="delete-row">
             <van-button type="danger" size="small" block @click="deleteDebt"
               >删除此项</van-button
             >
@@ -426,11 +426,11 @@ const convertToCNY = (amount, currency) => {
 };
 
 // ========== 余额（编辑+删除） ==========
-const balanceList = ref({});
+const balanceList = ref([]);
 const showBalancePopup = ref(false);
 const showBalanceTypePicker = ref(false);
 const balanceForm = ref({ type: "", customName: "", amount: "", remark: "" });
-const editBalanceKey = ref(null);
+const editBalanceId = ref(null);
 
 const balanceTypes = [
   { text: "微信余额", value: "wechat" },
@@ -449,25 +449,25 @@ const balanceTypeColumns = balanceTypes.map((t) => ({
 const getBalanceName = (key) =>
   balanceTypes.find((t) => t.value === key)?.text || key;
 const balanceTotal = computed(() =>
-  Object.values(balanceList.value).reduce(
-    (s, i) => s + Number(i.amount || 0),
-    0
-  )
+  balanceList.value.reduce((s, i) => s + Number(i.amount || 0), 0)
 );
 
 const openBalancePopup = () => {
-  editBalanceKey.value = null;
+  editBalanceId.value = null;
   balanceForm.value = { type: "", customName: "", amount: "", remark: "" };
   showBalancePopup.value = true;
 };
-const editBalance = (key) => {
-  const item = balanceList.value[key];
-  editBalanceKey.value = key;
+const editBalance = (id) => {
+  const item = balanceList.value.find((i) => i.id === id);
+  if (!item) return;
+  editBalanceId.value = id;
   balanceForm.value = { ...item };
   showBalancePopup.value = true;
 };
 const deleteBalance = () => {
-  if (editBalanceKey.value) delete balanceList.value[editBalanceKey.value];
+  if (editBalanceId.value) {
+    balanceList.value = balanceList.value.filter((i) => i.id !== editBalanceId.value);
+  }
   showBalancePopup.value = false;
   showToast("已删除");
 };
@@ -475,19 +475,33 @@ const onBalanceTypeConfirm = ({ selectedOptions }) => {
   balanceForm.value.type = selectedOptions[0].value;
   showBalanceTypePicker.value = false;
 };
-const handleAddBalance = () => {
+const handleAddBalance = async () => {
   if (!balanceForm.value.amount) return showToast("请输入金额");
-  const key =
-    editBalanceKey.value || balanceForm.value.type || `custom_${Date.now()}`;
-  balanceList.value[key] = {
-    ...balanceForm.value,
-    amount: Number(balanceForm.value.amount),
-  };
+  const data = { ...balanceForm.value, amount: Number(balanceForm.value.amount) };
+  if (editBalanceId.value) {
+    const idx = balanceList.value.findIndex((i) => i.id === editBalanceId.value);
+    if (idx !== -1) balanceList.value[idx] = { ...data, id: editBalanceId.value };
+    showBalancePopup.value = false;
+    return;
+  }
+  // 新增时检查同类型是否已存在
+  const duplicate = balanceList.value.find((i) => i.type === data.type);
+  if (duplicate) {
+    try {
+      await showConfirmDialog({
+        title: "确认添加",
+        message: `已存在「${getBalanceName(data.type)}」类型，是否继续添加？`,
+      });
+    } catch {
+      return; // 用户取消
+    }
+  }
+  balanceList.value.push({ ...data, id: `bl_${Date.now()}` });
   showBalancePopup.value = false;
 };
 
 // ========== 境外资产（编辑+删除） ==========
-const offshoreList = ref({});
+const offshoreList = ref([]);
 const showOffshorePopup = ref(false);
 const showOffshoreTypePicker = ref(false);
 const offshoreForm = ref({
@@ -496,7 +510,7 @@ const offshoreForm = ref({
   amount: "",
   currency: "",
 });
-const editOffshoreKey = ref(null);
+const editOffshoreId = ref(null);
 
 const offshoreTypes = [
   { text: "工商银行(港)", value: "ICBCA", currency: "HKD" },
@@ -517,25 +531,25 @@ const offshoreTypeColumns = offshoreTypes.map((t) => ({
 const getOffshoreName = (key) =>
   offshoreTypes.find((t) => t.value === key)?.text || key;
 const offshoreTotal = computed(() =>
-  Object.values(offshoreList.value).reduce(
-    (s, i) => s + convertToCNY(i.amount, i.currency),
-    0
-  )
+  offshoreList.value.reduce((s, i) => s + convertToCNY(i.amount, i.currency), 0)
 );
 
 const openOffshorePopup = () => {
-  editOffshoreKey.value = null;
+  editOffshoreId.value = null;
   offshoreForm.value = { type: "", customName: "", amount: "", currency: "" };
   showOffshorePopup.value = true;
 };
-const editOffshore = (key) => {
-  const item = offshoreList.value[key];
-  editOffshoreKey.value = key;
+const editOffshore = (id) => {
+  const item = offshoreList.value.find((i) => i.id === id);
+  if (!item) return;
+  editOffshoreId.value = id;
   offshoreForm.value = { ...item };
   showOffshorePopup.value = true;
 };
 const deleteOffshore = () => {
-  if (editOffshoreKey.value) delete offshoreList.value[editOffshoreKey.value];
+  if (editOffshoreId.value) {
+    offshoreList.value = offshoreList.value.filter((i) => i.id !== editOffshoreId.value);
+  }
   showOffshorePopup.value = false;
   showToast("已删除");
 };
@@ -545,23 +559,37 @@ const onOffshoreTypeConfirm = ({ selectedOptions }) => {
   offshoreForm.value.currency = info.currency;
   showOffshoreTypePicker.value = false;
 };
-const handleAddOffshore = () => {
+const handleAddOffshore = async () => {
   if (!offshoreForm.value.amount) return showToast("请输入金额");
-  const key =
-    editOffshoreKey.value || offshoreForm.value.type || `custom_${Date.now()}`;
-  offshoreList.value[key] = {
-    ...offshoreForm.value,
-    amount: Number(offshoreForm.value.amount),
-  };
+  const data = { ...offshoreForm.value, amount: Number(offshoreForm.value.amount) };
+  if (editOffshoreId.value) {
+    const idx = offshoreList.value.findIndex((i) => i.id === editOffshoreId.value);
+    if (idx !== -1) offshoreList.value[idx] = { ...data, id: editOffshoreId.value };
+    showOffshorePopup.value = false;
+    return;
+  }
+  // 新增时检查同类型是否已存在
+  const duplicate = offshoreList.value.find((i) => i.type === data.type);
+  if (duplicate) {
+    try {
+      await showConfirmDialog({
+        title: "确认添加",
+        message: `已存在「${getOffshoreName(data.type)}」类型，是否继续添加？`,
+      });
+    } catch {
+      return; // 用户取消
+    }
+  }
+  offshoreList.value.push({ ...data, id: `of_${Date.now()}` });
   showOffshorePopup.value = false;
 };
 
 // ========== 负债（编辑+删除） ==========
-const debtList = ref({});
+const debtList = ref([]);
 const showDebtPopup = ref(false);
 const showDebtTypePicker = ref(false);
 const debtForm = ref({ type: "", customName: "", amount: "", remark: "" });
-const editDebtKey = ref(null);
+const editDebtId = ref(null);
 
 const debtTypes = [
   { text: "工商银行信用卡", value: "ICBC" },
@@ -583,22 +611,25 @@ const debtTypeColumns = debtTypes.map((t) => ({
 const getDebtName = (key) =>
   debtTypes.find((t) => t.value === key)?.text || key;
 const debtTotal = computed(() =>
-  Object.values(debtList.value).reduce((s, i) => s + Number(i.amount || 0), 0)
+  debtList.value.reduce((s, i) => s + Number(i.amount || 0), 0)
 );
 
 const openDebtPopup = () => {
-  editDebtKey.value = null;
+  editDebtId.value = null;
   debtForm.value = { type: "", customName: "", amount: "", remark: "" };
   showDebtPopup.value = true;
 };
-const editDebt = (key) => {
-  const item = debtList.value[key];
-  editDebtKey.value = key;
+const editDebt = (id) => {
+  const item = debtList.value.find((i) => i.id === id);
+  if (!item) return;
+  editDebtId.value = id;
   debtForm.value = { ...item };
   showDebtPopup.value = true;
 };
 const deleteDebt = () => {
-  if (editDebtKey.value) delete debtList.value[editDebtKey.value];
+  if (editDebtId.value) {
+    debtList.value = debtList.value.filter((i) => i.id !== editDebtId.value);
+  }
   showDebtPopup.value = false;
   showToast("已删除");
 };
@@ -606,14 +637,28 @@ const onDebtTypeConfirm = ({ selectedOptions }) => {
   debtForm.value.type = selectedOptions[0].value;
   showDebtTypePicker.value = false;
 };
-const handleAddDebt = () => {
+const handleAddDebt = async () => {
   if (!debtForm.value.amount) return showToast("请输入金额");
-  const key =
-    editDebtKey.value || debtForm.value.type || `custom_${Date.now()}`;
-  debtList.value[key] = {
-    ...debtForm.value,
-    amount: Number(debtForm.value.amount),
-  };
+  const data = { ...debtForm.value, amount: Number(debtForm.value.amount) };
+  if (editDebtId.value) {
+    const idx = debtList.value.findIndex((i) => i.id === editDebtId.value);
+    if (idx !== -1) debtList.value[idx] = { ...data, id: editDebtId.value };
+    showDebtPopup.value = false;
+    return;
+  }
+  // 新增时检查同类型是否已存在
+  const duplicate = debtList.value.find((i) => i.type === data.type);
+  if (duplicate) {
+    try {
+      await showConfirmDialog({
+        title: "确认添加",
+        message: `已存在「${getDebtName(data.type)}」类型，是否继续添加？`,
+      });
+    } catch {
+      return; // 用户取消
+    }
+  }
+  debtList.value.push({ ...data, id: `db_${Date.now()}` });
   showDebtPopup.value = false;
 };
 
@@ -699,13 +744,23 @@ const initFromQuery = () => {
     try {
       const assetDetails = JSON.parse(data);
       if (assetDetails.balance) {
-        balanceList.value = assetDetails.balance;
+        // 兼容旧的对象格式和新的数组格式
+        const bal = assetDetails.balance;
+        balanceList.value = Array.isArray(bal)
+          ? bal
+          : Object.entries(bal).map(([key, val]) => ({ ...val, id: val.id || `bl_${key}` }));
       }
       if (assetDetails.offshore) {
-        offshoreList.value = assetDetails.offshore;
+        const off = assetDetails.offshore;
+        offshoreList.value = Array.isArray(off)
+          ? off
+          : Object.entries(off).map(([key, val]) => ({ ...val, id: val.id || `of_${key}` }));
       }
       if (assetDetails.debt) {
-        debtList.value = assetDetails.debt;
+        const dbt = assetDetails.debt;
+        debtList.value = Array.isArray(dbt)
+          ? dbt
+          : Object.entries(dbt).map(([key, val]) => ({ ...val, id: val.id || `db_${key}` }));
       }
     } catch (e) {
       console.error("解析资产数据失败", e);

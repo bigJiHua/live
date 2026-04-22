@@ -66,6 +66,20 @@
                     {{ item.pay_method || "-" }} ·
                     {{ formatTime(item.create_time) }}
                   </div>
+                  <div
+                    v-if="item.card_id && !['xxxx', 'yyyy'].includes(item.card_id)"
+                    class="card-tag-inline"
+                  >
+                    <van-image
+                      v-if="getCardBankIcon(item.card_id)"
+                      width="14"
+                      height="14"
+                      :src="getFullUrl(getCardBankIcon(item.card_id))"
+                      fit="contain"
+                      class="card-tag-icon"
+                    />
+                    <span>{{ getCardName(item.card_id) }}</span>
+                  </div>
                 </div>
               </div>
               <div class="item-right">
@@ -79,14 +93,7 @@
                   {{ item.direction === 1 ? "+" : "-"
                   }}{{ formatAmount(item.amount) }}
                 </div>
-                <div
-                  v-if="
-                    item.card_id && !['xxxx', 'yyyy'].includes(item.card_id)
-                  "
-                  class="card-tag"
-                >
-                  {{ getCardName(item.card_id) }}
-                </div>
+
               </div>
             </div>
           </div>
@@ -119,9 +126,13 @@ import dayjs from "dayjs";
 import zhCn from "dayjs/locale/zh-cn";
 import { getAccountList, getMonthStats } from "@/utils/api/account";
 import { getCardList } from "@/utils/api/card";
+import { categoryApi } from "@/utils/api/category";
+import ENV from "@/utils/env";
 
 dayjs.locale(zhCn);
 const router = useRouter();
+
+const BASE_URL = ENV.FILE_BASE_URL;
 
 // 筛选状态
 const filterType = ref("all");
@@ -143,6 +154,21 @@ const page = ref(1);
 const limit = 20;
 const summaryData = ref(null);
 const cardList = ref([]);
+const bankList = ref([]);
+
+// 获取完整 URL
+const getFullUrl = (path) => {
+  if (!path) return "";
+  if (path.startsWith("http")) return path;
+  const pureBase = BASE_URL.replace(/\/+$/, "");
+  const purePath = path.startsWith("/") ? path : `/${path}`;
+  return pureBase + purePath;
+};
+
+// 根据 bank_id 获取银行信息
+const getBankInfo = (bankId) => {
+  return bankList.value.find((b) => b.id === bankId) || null;
+};
 
 const dateRangeText = computed(
   () => `${currentYear.value}年${currentMonth.value}月`
@@ -224,8 +250,29 @@ const getCategoryName = (item) => {
 };
 
 const getCardName = (id) => {
+  if (!id) return "";
+  if (id === "xxxx") return "现金";
+  if (id === "yyyy") return "余额";
   const card = cardList.value.find((c) => c.id === id);
-  return card ? card.alias || card.bank_name : "";
+  if (!card) return id;
+  const bankId = card.bank_id || card.bankId;
+  const bank = bankId ? getBankInfo(bankId) : null;
+  const bankName = bank?.name || card.alias || card.bank_name || "";
+  const last4 = card.card_last4 || card.last4_no || card.last4No || "";
+  if (bankName && last4) return `${bankName} ****${last4}`;
+  if (bankName) return bankName;
+  if (last4) return `****${last4}`;
+  return card.alias || card.bank_name || id;
+};
+
+// 获取卡片银行图标
+const getCardBankIcon = (id) => {
+  if (!id || id === "xxxx" || id === "yyyy") return "";
+  const card = cardList.value.find((c) => c.id === id);
+  if (!card) return "";
+  const bankId = card.bank_id || card.bankId;
+  const bank = bankId ? getBankInfo(bankId) : null;
+  return bank?.icon_url || bank?.iconUrl || "";
 };
 
 const groupedList = computed(() => {
@@ -308,6 +355,7 @@ const onRefresh = () => {
 const onFilterChange = () => onRefresh();
 
 onMounted(() => {
+  categoryApi.list("bank").then((res) => (bankList.value = res.data || res || [])).catch(() => {});
   getCardList().then((res) => (cardList.value = res.data || []));
   loadSummary();
   loadData();
@@ -486,5 +534,22 @@ const goCalendar = () => router.push("/finance/flow/calendar");
   font-size: 11px;
   color: #969799;
   margin-top: 2px;
+}
+
+.card-tag-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  color: #969799;
+  margin-top: 2px;
+  background: #f7f8fa;
+  border-radius: 3px;
+  padding: 1px 5px;
+}
+
+.card-tag-icon {
+  border-radius: 2px;
+  flex-shrink: 0;
 }
 </style>

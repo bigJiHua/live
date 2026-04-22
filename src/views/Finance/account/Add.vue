@@ -173,6 +173,7 @@ import dayjs from "dayjs";
 import { categoryApi } from "@/utils/api/category";
 import { getCardList } from "@/utils/api/card";
 import { createAccount } from "@/utils/api/account";
+import ENV from '@/utils/env'
 
 // ============================================
 // 常量配置
@@ -215,6 +216,7 @@ const showPayMethodPicker = ref(false)
 
 // 卡片状态
 const cardList = ref([])
+const bankList = ref([])
 const selectedCard = ref(null)
 const showCardPicker = ref(false)
 
@@ -268,6 +270,22 @@ const loadCardList = async () => {
   } catch (e) {
     cardList.value = []
   }
+}
+
+// 加载银行分类
+const loadBankList = async () => {
+  try {
+    const res = await categoryApi.list('bank')
+    bankList.value = res.data || res || []
+  } catch (e) {
+    bankList.value = []
+  }
+}
+
+// 根据 bank_id 获取银行名称
+const getBankName = (bankId) => {
+  const bank = bankList.value.find((b) => b.id === bankId)
+  return bank?.name || ''
 }
 
 // 计算属性
@@ -342,8 +360,13 @@ const getCardDisplayText = (card) => {
   if (card.card_type === 'virtual_cash' || card.card_type === 'virtual_balance') {
     return typeText
   }
-  // 其他卡片显示类型 + 卡号后四位
+  // 优先显示银行名 + 尾号，如"招商银行 6666"
+  const bankName = getBankName(card.bank_id || card.bankId)
   const cardNo = card.last4_no || card.last4No || card.card_last4 || '****'
+  if (bankName) {
+    return `${bankName} ${cardNo}`
+  }
+  // 没有银行名时退化为类型 + 尾号
   return `${typeText} ${cardNo}`
 }
 
@@ -522,7 +545,8 @@ const handleSubmit = async () => {
 }
 
 // 初始化
-onMounted(() => {
+onMounted(async () => {
+  await loadBankList()
   loadCategories()
   loadCardList()
 })

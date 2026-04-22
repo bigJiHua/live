@@ -160,3 +160,12 @@ export function createRepay(data) {
 export function updateRepay(id, data) {
   return request.put(`/card/repay/${id}`, data);
 }
+
+/**
+ * 删除还款记录
+ * DELETE /api/v1/card/repay/:id
+ * @param {string} id - 还款记录ID
+ */
+export function deleteRepay(id) {
+  return request.delete(`/card/repay/${id}`);
+}
