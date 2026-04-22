@@ -3,7 +3,7 @@ const router = express.Router();
 const securityController = require("../controller");
 const authGuard = require("../../../common/middleware/authGuard");
 const createValidator = require("../../../common/middleware/validate");
-const AuthRules = require("../../auth/Rules");
+const AuthRules = require("../../auth/rules");
 
 // 获取 PIN状态
 router.get("/pin/check", authGuard, securityController.PinStatus);

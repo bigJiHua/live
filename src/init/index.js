@@ -2,12 +2,11 @@
  * 系统初始化模块
  * 
  * 完整的初始化流程：
- * 1. 检查是否启用初始化
- * 2. 检查数据库是否存在
- * 3. 检查表数量是否正确
- * 4. 检查表字段是否完整
- * 5. 创建管理员账户
- * 6. 清理 .env 配置（删除敏感信息）
+ * 1. 检查数据库是否存在，不存在则自动创建
+ * 2. 检查表数量是否正确
+ * 3. 检查表字段是否完整
+ * 4. 创建管理员账户（仅在 INIT_ENABLE=true 时）
+ * 5. 清理 .env 配置（删除敏感信息）
  */
 
 const fs = require('fs');
@@ -43,6 +42,7 @@ const EXPECTED_TABLES = [
   'user_log',
   'work_job',
   'work_salary',
+  'security_verify_log',
 ];
 
 // 关键表的必填字段（表名 -> 字段列表）
@@ -156,10 +156,10 @@ async function getConnectionWithDb() {
 }
 
 /**
- * 步骤 1: 检查数据库是否存在，不存在则自动创建
+ * 步骤 1: 检查数据库和表是否存在，不存在则自动创建
  */
 async function checkDatabase() {
-  console.log('\n📦 [步骤 1/5] 检查数据库');
+  console.log('\n📦 [步骤 1/5] 检查数据库和表');
   printDivider();
   
   const dbName = process.env.DB_NAME || 'live';
@@ -172,30 +172,48 @@ async function checkDatabase() {
     
     logInit('已建立连接，正在查询...');
     const [rows] = await conn.query(`SHOW DATABASES LIKE '${dbName}'`);
+    
+    let dbExists = rows.length > 0;
+    
+    // 如果数据库不存在，先创建
+    if (!dbExists) {
+      logInit(`⚠️ 数据库 ${dbName} 不存在，尝试自动创建...`, 'warn');
+      await conn.query(`CREATE DATABASE \`${dbName}\` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
+      dbExists = true;
+      logInit(`✅ 数据库 ${dbName} 创建成功`, 'success');
+    } else {
+      logInit(`✅ 数据库 ${dbName} 存在`, 'success');
+    }
+    
     await conn.end();
     
-    const elapsed = Date.now() - startTime;
+    // 检查表是否存在
+    const connWithDb = await getConnectionWithDb();
+    const [tables] = await connWithDb.query('SHOW TABLES');
+    await connWithDb.end();
     
-    if (rows.length === 0) {
-      logInit(`⚠️ 数据库 ${dbName} 不存在，尝试自动创建...`, 'warn');
+    const tableCount = tables.length;
+    const elapsed = Date.now() - startTime;
+    logInit(`查询耗时: ${elapsed}ms`);
+    
+    if (tableCount === 0) {
+      logInit(`⚠️ 数据库中没有表，尝试自动创建...`, 'warn');
       
-      // 导入自动数据库初始化模块
+      // 调用自动创建表
       const { autoInitDatabase } = require('./autoDatabase');
       const autoResult = await autoInitDatabase();
       
       if (autoResult.success) {
-        logInit(`✅ 数据库 ${dbName} 自动创建成功`, 'success');
+        logInit(`✅ 表结构自动创建成功`, 'success');
         stats.checks.database = true;
         return true;
       } else {
-        logInit(`❌ 自动创建失败: ${autoResult.reason}`, 'error');
+        logInit(`❌ 表结构创建失败: ${autoResult.reason}`, 'error');
         stats.checks.database = false;
         return false;
       }
     }
     
-    logInit(`✅ 数据库 ${dbName} 存在`, 'success');
-    logInit(`查询耗时: ${elapsed}ms`);
     stats.checks.database = true;
     return true;
   } catch (error) {
@@ -378,7 +396,7 @@ async function createAdmin() {
   logInit('开始创建管理员账户...');
   
   try {
-    const idUtils = require('../../common/utils/idUtils');
+    const idUtils = require('../common/utils/idUtils');
     const id = idUtils.userId();
     const saltRounds = parseInt(process.env.BCRYPT_SALT_ROUNDS || '10', 10);
     
@@ -575,19 +593,11 @@ async function init() {
   // 显示配置
   printConfig();
   
-  // 检查是否启用初始化
-  if (!isInitEnabled()) {
-    console.log('\n⏭️ [跳过] 初始化未启用 (INIT_ENABLE≠true)');
-    logInit('提示: 如需初始化，请在 .env 中设置 INIT_ENABLE=true');
-    return { success: true, skipped: true, reason: 'disabled' };
-  }
-
-  logInit('初始化已启用，开始执行检测...\n');
-
+  // 数据库检查始终执行
   let allPassed = true;
 
   try {
-    // 步骤 1: 检查数据库
+    // 步骤 1: 检查/创建数据库（始终执行）
     const dbOk = await checkDatabase();
     if (!dbOk) {
       allPassed = false;
@@ -598,6 +608,17 @@ async function init() {
       printSummary(false);
       return { success: false, step: 1 };
     }
+
+    // 检查是否启用完整初始化（创建管理员等）
+    if (!isInitEnabled()) {
+      console.log('\n⏭️ [跳过] 管理员创建未启用 (INIT_ENABLE≠true)');
+      logInit('提示: 如需创建管理员，请在 .env 中设置 INIT_ENABLE=true');
+      logInit('数据库和表已自动创建完成 ✓');
+      printSummary(true);
+      return { success: true, skipped: true, reason: 'admin_disabled' };
+    }
+
+    logInit('初始化已启用，开始执行检测...\n');
 
     // 步骤 2: 检查表数量
     const tablesOk = await checkTableCount();

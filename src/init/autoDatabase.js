@@ -5,7 +5,6 @@
  * 1. 检测 mysql/live.sql 文件
  * 2. 自动创建数据库（如不存在）
  * 3. 导入表结构和初始数据
- * 4. 与 init/index.js 配合使用
  */
 
 const fs = require('fs');
@@ -15,7 +14,7 @@ const mysql = require('mysql2/promise');
 const SQL_FILE_PATH = path.join(__dirname, '../../mysql/live.sql');
 
 /**
- * 获取数据库连接（不带 database，用于创建数据库）
+ * 获取数据库连接（不带 database）
  */
 async function getConnectionWithoutDb() {
   return mysql.createConnection({
@@ -49,7 +48,6 @@ function checkSqlFile() {
   
   if (!fs.existsSync(SQL_FILE_PATH)) {
     console.log(`  ❌ SQL 文件不存在: ${SQL_FILE_PATH}`);
-    console.log('  提示: 请确保 mysql/live.sql 文件存在');
     return false;
   }
   
@@ -59,55 +57,17 @@ function checkSqlFile() {
 }
 
 /**
- * 读取并处理 SQL 文件
+ * 读取 SQL 文件内容
  */
 function readSqlFile() {
   console.log('  📖 读取 SQL 文件...');
   
   let content = fs.readFileSync(SQL_FILE_PATH, 'utf-8');
   
-  // 移除 SQL 注释和版权信息
-  content = content.replace(/-- phpMyAdmin SQL Dump[\s\S]*?-- version.*?\n/g, '');
-  content = content.replace(/-- https:\/\/.*?\n/g, '');
-  content = content.replace(/-- \d{4}-\d{2}-\d{2}.*?\n/g, '');
+  // 统一换行符
+  content = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
   
-  // 移除 SET 语句（设置模式）
-  content = content.replace(/SET SQL_MODE\s*=.*?;/gi, '');
-  content = content.replace(/SET time_zone\s*=.*?;/gi, '');
-  content = content.replace(/START TRANSACTION;/gi, '');
-  content = content.replace(/COMMIT;/gi, '');
-  content = content.replace(/SET.*?;/gi, '');
-  
-  // 移除文件头部的 SET 语句块
-  content = content.replace(/\/\*!40101 SET @OLD_CHARACTER_SET_CLIENT.*?\*\/;[\s\n]*/gs, '');
-  content = content.replace(/\/\*!40101 SET @OLD_CHARACTER_SET_RESULTS.*?\*\/;[\s\n]*/gs, '');
-  content = content.replace(/\/\*!40101 SET @OLD_CHARLECTION_CONNECTION.*?\*\/;[\s\n]*/gs, '');
-  content = content.replace(/\/\*!40101 SET NAMES utf8mb4 \*\/;[\s\n]*/gs, '');
-  
-  // 移除文件尾部的恢复语句
-  content = content.replace(/\/\*!40101 SET CHARACTER_SET_CLIENT.*?\*\/;[\s\n]*/gs, '');
-  content = content.replace(/\/\*!40101 SET CHARACTER_SET_RESULTS.*?\*\/;[\s\n]*/gs, '');
-  content = content.replace(/\/\*!40101 SET COLLATION_CONNECTION.*?\*\/;[\s\n]*/gs, '');
-  
-  // 清理多余的空行
-  content = content.replace(/\n{3,}/g, '\n\n');
-  
-  // 移除注释行
-  const lines = content.split('\n');
-  const cleanLines = lines.filter(line => {
-    const trimmed = line.trim();
-    // 保留空行
-    if (!trimmed) return true;
-    // 移除单行注释
-    if (trimmed.startsWith('--')) return false;
-    // 移除块注释
-    if (trimmed.startsWith('/*')) return false;
-    return true;
-  });
-  
-  content = cleanLines.join('\n').trim();
-  
-  console.log(`  ✓ SQL 内容已处理 (${content.length} 字符)`);
+  console.log(`  ✓ SQL 文件已读取 (${content.length} 字符)`);
   return content;
 }
 
@@ -142,43 +102,22 @@ async function createDatabase() {
 }
 
 /**
- * 导入 SQL 表结构
+ * 直接执行整个 SQL 文件
  */
-async function importTables(sqlContent) {
-  console.log('  📦 导入表结构...');
+async function importSqlFile(sqlContent) {
+  console.log('  📦 执行 SQL 文件...');
   
   try {
     const conn = await getConnectionWithDb();
     
-    // 分割 SQL 语句
-    const statements = sqlContent
-      .split(/;\s*\n/)
-      .map(s => s.trim())
-      .filter(s => s.length > 0);
+    // 直接执行整个 SQL 内容（mysql2 支持 multipleStatements）
+    await conn.query(sqlContent);
     
-    let successCount = 0;
-    let failCount = 0;
-    
-    for (const statement of statements) {
-      if (!statement || statement.length < 10) continue;
-      
-      try {
-        await conn.query(statement);
-        successCount++;
-      } catch (err) {
-        // 忽略已存在的表等非致命错误
-        if (!err.message.includes('already exists')) {
-          console.log(`  ⚠️  执行失败: ${err.message.substring(0, 60)}...`);
-        }
-        failCount++;
-      }
-    }
-    
-    console.log(`  ✅ 表导入完成 (成功: ${successCount}, 跳过: ${failCount})`);
+    console.log('  ✅ SQL 文件执行成功');
     await conn.end();
     return true;
   } catch (error) {
-    console.log(`  ❌ 导入表失败: ${error.message}`);
+    console.log(`  ❌ 执行失败: ${error.message}`);
     return false;
   }
 }
@@ -195,8 +134,16 @@ async function verifyTables() {
     await conn.end();
     
     const tableCount = rows.length;
-    console.log(`  ✅ 验证通过，共 ${tableCount} 张表`);
-    return true;
+    console.log(`  ✅ 共 ${tableCount} 张表`);
+    
+    if (tableCount > 0) {
+      rows.forEach((row, i) => {
+        const tableName = Object.values(row)[0];
+        console.log(`     ${String(i + 1).padStart(2, '0')}. ${tableName}`);
+      });
+    }
+    
+    return tableCount > 0;
   } catch (error) {
     console.log(`  ❌ 验证失败: ${error.message}`);
     return false;
@@ -218,9 +165,6 @@ async function autoInitDatabase() {
   
   // 2. 读取 SQL 内容
   const sqlContent = readSqlFile();
-  if (!sqlContent) {
-    return { success: false, reason: 'sql_content_empty' };
-  }
   
   // 3. 创建数据库
   const dbCreated = await createDatabase();
@@ -228,18 +172,21 @@ async function autoInitDatabase() {
     return { success: false, reason: 'database_creation_failed' };
   }
   
-  // 4. 导入表结构
-  const tablesImported = await importTables(sqlContent);
-  if (!tablesImported) {
-    return { success: false, reason: 'table_import_failed' };
+  // 4. 执行 SQL 文件
+  const sqlExecuted = await importSqlFile(sqlContent);
+  if (!sqlExecuted) {
+    return { success: false, reason: 'sql_execution_failed' };
   }
   
   // 5. 验证
   const verified = await verifyTables();
   
-  console.log('\n✅ 数据库初始化完成！\n');
-  
-  return { success: true };
+  if (verified) {
+    console.log('\n✅ 数据库初始化完成！\n');
+    return { success: true };
+  } else {
+    return { success: false, reason: 'verification_failed' };
+  }
 }
 
 // 直接运行脚本

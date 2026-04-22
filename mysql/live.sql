@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- 主机： 127.0.0.1:3306
--- 生成日期： 2026-04-20 13:09:01
+-- 生成日期： 2026-04-22 10:11:52
 -- 服务器版本： 5.7.40
 -- PHP 版本： 8.0.26
 
@@ -191,7 +191,7 @@ CREATE TABLE IF NOT EXISTS `budget` (
   `budget_type` varchar(20) NOT NULL COMMENT '预算类型 吃/买/行',
   `budget_amount` decimal(12,2) NOT NULL COMMENT '预算金额',
   `used_amount` decimal(12,2) DEFAULT '0.00' COMMENT '已使用',
-  `budget_details` varchar(512) NOT NULL COMMENT '明细',
+  `budget_details` varchar(20000) NOT NULL COMMENT '明细',
   `cycle` varchar(20) NOT NULL COMMENT '周期 月/季/年',
   `plan_date` varchar(20) NOT NULL COMMENT '预计日期',
   `is_over_budget` tinyint(4) DEFAULT '0' COMMENT '是否超支',

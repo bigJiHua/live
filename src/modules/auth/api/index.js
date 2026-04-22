@@ -4,7 +4,7 @@ const createValidator = require("../../../common/middleware/validate");
 const authController = require("../controller");
 const authGuard = require("../../../common/middleware/authGuard");
 const accountLockCheck = require("../../../common/middleware/accountLockCheck");
-const AuthRules = require("../Rules");
+const AuthRules = require("../rules");
 
 /**
  *   非权限接口部分
