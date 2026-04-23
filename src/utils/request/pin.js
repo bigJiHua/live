@@ -22,6 +22,7 @@ let pendingRequests = []
 let isRetrying = false
 let pinDialogInstance = null
 let forceLoginFn = null // 由 response.js 注入
+let isPageLoad = false // 是否是页面首次加载时触发的验证
 
 /**
  * 注册 PIN 弹窗实例
@@ -45,12 +46,42 @@ export function registerForceLogin(fn) {
 }
 
 /**
+ * 检查 app 根元素下是否只有 PIN 弹窗（无实际页面内容）
+ * 如果是，说明是页面首次加载时触发的验证
+ */
+function checkAppOnlyHasPinOverlay() {
+  const app = document.getElementById('app')
+  if (!app) return false
+
+  const children = Array.from(app.children)
+  if (children.length !== 2) return false
+
+  const hasVanOverlay = children.some(el =>
+    el.classList.contains('van-overlay')
+  )
+  const hasPinKeyboard = children.some(el =>
+    el.classList.contains('pin-keyboard-overlay')
+  )
+
+  return hasVanOverlay && hasPinKeyboard
+}
+
+/**
  * 请求 PIN 验证
  * @param {object} originalRequest - 被拦截的原始请求配置
  * @returns {Promise} 验证成功 resolve，失败/锁定 reject
  */
 export function requestPinVerify(originalRequest) {
   pendingRequests.push(originalRequest)
+
+  // 检测是否是页面首次加载时触发的验证
+  // 通过检查 app 根元素下是否只有 PIN 弹窗来判断
+  const isPageLoadCheck = checkAppOnlyHasPinOverlay()
+  if (pendingRequests.length === 1 && isPageLoadCheck) {
+    isPageLoad = true
+  } else {
+    isPageLoad = false
+  }
 
   // 已在验证中，复用当前等待
   if (isVerifying) {
@@ -126,6 +157,17 @@ async function onPinSuccess() {
     pinResolve.__extraResolvers.forEach(({ resolve }) => resolve())
     pinResolve = null
     pinReject = null
+  }
+
+  // 如果是页面首次加载时触发的验证，验证成功后刷新页面
+  // 避免页面内容被弹窗遮挡导致空白
+  // 在验证成功时检查 app 下是否只有弹窗（此时弹窗已显示）
+  const onlyHasPin = checkAppOnlyHasPinOverlay()
+  if ((isPageLoad || onlyHasPin) && requests.length > 0) {
+    isPageLoad = false
+    isRetrying = false
+    window.location.reload()
+    return
   }
 
   // 依次重发请求（串行避免并发风暴）

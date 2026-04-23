@@ -83,7 +83,16 @@
               </div>
               <div class="item-info">
                 <div class="item-title">{{ getCategoryName(item) }}</div>
-                <div class="item-desc">{{ formatTime(item.create_time) }} · {{ item.pay_method || '-' }}</div>
+                <div class="item-desc">
+                  {{ formatTime(item.create_time) }}
+                  <template v-if="item.card_id && item.card_id !== 'xxxx' && item.card_id !== 'yyyy'">
+                    · <img v-if="getCardBankIcon(item.card_id)" :src="getFullUrl(getCardBankIcon(item.card_id))" class="card-icon-mini" />
+                    {{ getCardText(item.card_id) }}
+                  </template>
+                  <template v-else>
+                    · {{ item.pay_method || '-' }}
+                  </template>
+                </div>
               </div>
             </div>
             <div class="item-right">
@@ -110,7 +119,16 @@
               </div>
               <div class="item-info">
                 <div class="item-title">{{ getCategoryName(item) }}</div>
-                <div class="item-desc">{{ formatTime(item.create_time) }} · {{ item.pay_method || '-' }}</div>
+                <div class="item-desc">
+                  {{ formatTime(item.create_time) }}
+                  <template v-if="item.card_id && item.card_id !== 'xxxx' && item.card_id !== 'yyyy'">
+                    · <img v-if="getCardBankIcon(item.card_id)" :src="getFullUrl(getCardBankIcon(item.card_id))" class="card-icon-mini" />
+                    {{ getCardText(item.card_id) }}
+                  </template>
+                  <template v-else>
+                    · {{ item.pay_method || '-' }}
+                  </template>
+                </div>
               </div>
             </div>
             <div class="item-right">
@@ -147,6 +165,11 @@ import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import dayjs from "dayjs";
 import { getAccountList } from "@/utils/api/account";
+import { getCardList } from "@/utils/api/card";
+import { categoryApi } from "@/utils/api/category";
+import ENV from "@/utils/env";
+
+const BASE_URL = ENV.FILE_BASE_URL;
 
 const router = useRouter();
 const weekDays = ["日", "一", "二", "三", "四", "五", "六"];
@@ -172,6 +195,10 @@ const monthData = ref({
 
 // 选中的日期
 const selectedDate = ref(null);
+
+// 卡片和银行列表
+const cardList = ref([]);
+const bankList = ref([]);
 
 // 月份选择器列
 const pickerColumns = computed(() => {
@@ -426,10 +453,71 @@ const loadMonthData = async () => {
 };
 
 onMounted(() => {
+  loadCardAndBankData();
   loadMonthData();
   // 默认选中今天
   selectedDate.value = dayjs().format("YYYY-MM-DD");
 });
+
+// 加载卡片和银行数据
+const loadCardAndBankData = async () => {
+  try {
+    const [cardRes, bankRes] = await Promise.all([
+      getCardList(),
+      categoryApi.list("bank")
+    ]);
+    cardList.value = cardRes.data || cardRes || [];
+    bankList.value = bankRes.data || bankRes || [];
+  } catch (e) {
+    console.error("加载卡片银行数据失败:", e);
+  }
+};
+
+// 获取完整 URL
+const getFullUrl = (path) => {
+  if (!path) return "";
+  if (path.startsWith("http")) return path;
+  const pureBase = BASE_URL.replace(/\/+$/, "");
+  const purePath = path.startsWith("/") ? path : `/${path}`;
+  return pureBase + purePath;
+};
+
+// 根据 bank_id 获取银行信息
+const getBankInfo = (bankId) => {
+  return bankList.value.find((b) => b.id === bankId) || null;
+};
+
+// 获取卡片关联的银行图标
+const getCardBankIcon = (cardId) => {
+  if (!cardId || cardId === "xxxx" || cardId === "yyyy") return "";
+  const card = cardList.value.find((c) => c.id === cardId);
+  if (!card) return "";
+  const bankId = card.bank_id || card.bankId;
+  if (!bankId) return "";
+  const bank = getBankInfo(bankId);
+  return bank?.icon || bank?.image || "";
+};
+
+// 获取卡片显示信息（银行名称 + 卡尾号）
+const getCardText = (cardId) => {
+  if (!cardId) return "-";
+  if (cardId === "xxxx") return "现金";
+  if (cardId === "yyyy") return "余额";
+  const card = cardList.value.find((c) => c.id === cardId);
+  if (!card) return "-";
+  const bankId = card.bank_id || card.bankId;
+  const bank = getBankInfo(bankId);
+  const bankName = bank?.name || card.alias || card.bank_name || "";
+  const last4 = card.last4_no || card.last4No || card.card_last4 || "";
+  if (bankName && last4) {
+    return `${bankName} · ${last4}`;
+  } else if (bankName) {
+    return bankName;
+  } else if (last4) {
+    return last4;
+  }
+  return "-";
+};
 </script>
 
 <style scoped>
@@ -565,8 +653,8 @@ onMounted(() => {
 }
 
 .day-cell.today .day-number {
-  background: #1989fa;
-  color: #fff;
+  background: #e8f4ff;
+  color: #1989fa;
   border-radius: 50%;
 }
 
@@ -709,6 +797,17 @@ onMounted(() => {
   font-size: 11px;
   color: #969799;
   margin-top: 2px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.card-icon-mini {
+  width: 14px;
+  height: 14px;
+  border-radius: 2px;
+  object-fit: cover;
+  vertical-align: middle;
 }
 
 .item-right {

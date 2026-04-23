@@ -67,9 +67,6 @@
         <van-button type="primary" block round @click="goToRepay">
           添加还款记录
         </van-button>
-        <van-button plain block round @click="goToEdit">
-          编辑账单
-        </van-button>
         <van-button plain block round type="danger" @click="handleDelete">
           删除账单
         </van-button>
@@ -136,11 +133,6 @@ const onClickLeft = () => {
 // 添加还款记录
 const goToRepay = () => {
   router.push(`/card/repay/add?billId=${billData.value.id}&cardId=${billData.value.card_id}`);
-};
-
-// 编辑账单
-const goToEdit = () => {
-  router.push(`/card/bill/edit?id=${billData.value.id}`);
 };
 
 // 删除账单

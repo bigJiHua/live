@@ -45,6 +45,11 @@
         <div class="bill-header">
           <div class="bill-info">
             <div class="bill-name-row">
+              <img 
+                v-if="getCardBankIcon(item)" 
+                :src="getFullUrl(getCardBankIcon(item))" 
+                class="bank-icon"
+              />
               <span class="bill-card-name">{{ getCardDisplayName(item) }}</span>
               <span class="bill-card-last4" v-if="item.card_last4">**** {{ item.card_last4 }}</span>
             </div>
@@ -152,11 +157,16 @@ import { showToast } from "vant";
 import { useRouter } from "vue-router";
 import dayjs from "dayjs";
 import { getBillList, getCardList, rebuildBill } from "@/utils/api/card";
+import { categoryApi } from "@/utils/api/category";
+import ENV from "@/utils/env";
+
+const BASE_URL = ENV.FILE_BASE_URL;
 
 const router = useRouter();
 
 const billList = ref([]);
 const cardList = ref([]);
+const bankList = ref([]);
 const loading = ref(false);
 const selectedCardId = ref(null);
 const selectedCardName = ref("");
@@ -243,6 +253,16 @@ const loadCardList = async () => {
   }
 };
 
+// 加载银行分类列表
+const loadBankList = async () => {
+  try {
+    const res = await categoryApi.list("bank");
+    bankList.value = res.data || res || [];
+  } catch (error) {
+    // 忽略错误
+  }
+};
+
 // 卡片选择确认
 const onCardConfirm = ({ selectedOptions }) => {
   selectedCardId.value = selectedOptions[0].value;
@@ -285,9 +305,38 @@ const formatDay = (date) => {
   return match ? match[1] : "--";
 };
 
+// 根据 bank_id 获取银行信息
+const getBankInfo = (bankId) => {
+  return bankList.value.find((b) => b.id === bankId) || null;
+};
+
+// 获取完整 URL
+const getFullUrl = (path) => {
+  if (!path) return "";
+  if (path.startsWith("http")) return path;
+  const pureBase = BASE_URL.replace(/\/+$/, "");
+  const purePath = path.startsWith("/") ? path : `/${path}`;
+  return pureBase + purePath;
+};
+
+// 获取卡片关联的银行图标
+const getCardBankIcon = (item) => {
+  const card = cardList.value.find(c => c.id === item.card_id);
+  if (!card) return "";
+  const bankId = card.bank_id || card.bankId;
+  if (!bankId) return "";
+  const bank = getBankInfo(bankId);
+  return bank?.icon || bank?.image || "";
+};
+
 // 获取卡片显示名称
 const getCardDisplayName = (item) => {
+  const card = cardList.value.find(c => c.id === item.card_id);
+  const bankId = card?.bank_id || card?.bankId;
+  const bank = getBankInfo(bankId);
+  const bankName = bank?.name || "";
   if (item.card_alias) return item.card_alias;
+  if (bankName) return bankName;
   return '信用卡';
 };
 
@@ -354,6 +403,7 @@ const onClickLeft = () => {
 
 onMounted(() => {
   loadCardList();
+  loadBankList();
   loadBillList();
 });
 </script>
@@ -402,6 +452,13 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.bank-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  object-fit: cover;
 }
 
 .bill-card-name {

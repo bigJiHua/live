@@ -44,7 +44,7 @@
 
 /* --- 2. 覆盖 Vant 组件的主题色 --- */
 :root {
-  --van-primary-color: var(--theme-primary);
+  --van-primary-color: #1989fa;
   --van-success-color: var(--theme-success);
   --van-warning-color: var(--theme-warning);
   --van-danger-color: var(--theme-danger);
@@ -139,4 +139,14 @@ body {
 /* 隐藏滚动条但保留滚动功能 */
 ::-webkit-scrollbar {
   display: none;
+}
+
+/* 折叠面板标题内容水平居中 */
+.van-collapse-item__title {
+  justify-content: center;
+  align-items: center;
+}
+
+.van-collapse-item__title::after {
+  right: 30px !important;
 }

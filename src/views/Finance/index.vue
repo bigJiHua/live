@@ -56,11 +56,11 @@
           /></template>
           <template #text><span class="grid-text">流水明细</span></template>
         </van-grid-item>
-        <van-grid-item @click="goFunction('assets-list')">
+        <van-grid-item @click="goFunction('fixed-assets')">
           <template #icon
-            ><van-icon name="todo-list-o" class="grid-icon gray"
+            ><van-icon name="shop-o" class="grid-icon teal"
           /></template>
-          <template #text><span class="grid-text">登记记录</span></template>
+          <template #text><span class="grid-text">固定资产</span></template>
         </van-grid-item>
         <van-grid-item @click="goFunction('credit')">
           <template #icon
@@ -86,11 +86,11 @@
           /></template>
           <template #text><span class="grid-text">资产结构登记</span></template>
         </van-grid-item>
-        <van-grid-item @click="goFunction('fixed-assets')">
+        <van-grid-item @click="goFunction('assets-list')">
           <template #icon
-            ><van-icon name="shop-o" class="grid-icon teal"
+            ><van-icon name="todo-list-o" class="grid-icon gray"
           /></template>
-          <template #text><span class="grid-text">固定资产</span></template>
+          <template #text><span class="grid-text">登记记录</span></template>
         </van-grid-item>
         <!-- <van-grid-item @click="goFunction('super-calc')" class="special-item">
           <template #icon

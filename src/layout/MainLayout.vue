@@ -7,6 +7,10 @@
       :left-arrow="showBackButton"
       @click-left="onBack"
     >
+      <template #left>
+        <van-icon name="arrow-left" v-if="showBackButton" @click.stop="onBack" />
+        <van-icon name="wap-home-o" size="20" style="margin-left: 8px;" @click="goHome" />
+      </template>
       <template #right>
         <van-icon name="lock" size="20" @click="handleLockSystem" style="margin-right: 12px;" />
         <van-icon name="expand" size="20" @click="toggleFullscreen" />
@@ -122,6 +126,10 @@ const onBack = () => {
   if (showBackButton.value) {
     router.back();
   }
+};
+
+const goHome = () => {
+  router.replace('/home');
 };
 </script>
 

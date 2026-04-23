@@ -357,6 +357,17 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.van-tag--purple {
+  background: #f3e8ff !important;
+  color: #9333ea !important;
+  border-color: #9333ea !important;
+}
+.van-tag--orange {
+  background: #fff7e6 !important;
+  color: #ff8c00 !important;
+  border-color: #ff8c00 !important;
+}
+
 .page-budget-detail {
   min-height: 100vh;
   background: #f7f8fa;

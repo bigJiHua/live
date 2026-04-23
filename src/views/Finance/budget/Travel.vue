@@ -1,80 +1,74 @@
 <template>
   <div class="page-budget-travel">
     <div class="page-content">
-      <div class="info-card">
-        <div class="card-header">
-          <van-icon name="location-o" class="header-icon" />
-          <span class="header-title">行程概览</span>
-        </div>
-        <van-cell-group :border="false">
-          <van-field
-            v-model="formData.title"
-            label="行程标题"
-            placeholder="如：香港3天2晚"
-            label-width="70px"
-            required
-          />
-          <van-field
-            v-model="formData.route"
-            label="路线规划"
-            placeholder="深圳 → 香港"
-            label-width="70px"
-            required
-          />
-          <div class="date-row">
+      <van-collapse v-model="activeCollapse">
+        <van-collapse-item name="info" title="行程概览" icon="location-o">
+          <van-cell-group :border="false">
             <van-field
-              v-model="formData.start_date"
-              label="出发日期"
-              type="date"
-              class="flex-1"
+              v-model="formData.title"
+              label="行程标题"
+              placeholder="如：香港3天2晚"
+              label-width="70px"
+              required
             />
             <van-field
-              v-model="formData.end_date"
-              label="返程日期"
-              type="date"
-              class="flex-1"
+              v-model="formData.route"
+              label="路线规划"
+              placeholder="深圳 → 香港"
+              label-width="70px"
+              required
             />
-          </div>
-          <van-field
-            v-model="formData.budget_amount"
-            label="总预算"
-            type="number"
-            placeholder="0.00"
-            label-width="70px"
-            required
-          >
-            <template #extra><span class="unit-text">CNY</span></template>
-          </van-field>
-          <van-field
-            v-model="formData.cycle"
-            label="预算周期"
-            readonly
-            placeholder="请选择"
-            @click="showCyclePicker = true"
-          >
-            <template #extra><van-icon name="arrow-down" /></template>
-          </van-field>
-        </van-cell-group>
-
-        <div class="exchange-rates-section">
-          <div class="sub-title">常用汇率 (1外币 = ? CNY)</div>
-          <div class="rate-grid">
-            <div
-              v-for="rate in exchangeRates"
-              :key="rate.currency"
-              class="rate-tag"
+            <van-field
+              v-model="formData.budget_amount"
+              label="总预算"
+              type="number"
+              placeholder="0.00"
+              label-width="70px"
+              required
             >
-              <span class="currency-name">{{ rate.currency }}</span>
-              <input
-                v-model="rate.value"
-                type="number"
-                class="rate-mini-input"
-                @input="refreshAllCNY"
-              />
+              <template #extra><span class="unit-text">CNY</span></template>
+            </van-field>
+            <van-field
+              v-model="formData.cycle"
+              label="预算周期"
+              readonly
+              placeholder="请选择"
+              @click="showCyclePicker = true"
+            >
+              <template #extra><van-icon name="arrow-down" /></template>
+            </van-field>
+            <van-field
+              v-model="formData.plan_date"
+              label="计划日期"
+              readonly
+              placeholder="请选择"
+              label-width="70px"
+              @click="openPlanDatePicker"
+            >
+              <template #extra><van-icon name="arrow-down" /></template>
+            </van-field>
+          </van-cell-group>
+
+          <div class="exchange-rates-section">
+            <div class="sub-title">常用汇率 (1外币 = ? CNY)</div>
+            <div class="rate-grid">
+              <div
+                v-for="rate in exchangeRates"
+                :key="rate.currency"
+                class="rate-tag"
+              >
+                <span class="currency-name">{{ rate.currency }}</span>
+                <input
+                  v-model="rate.value"
+                  type="number"
+                  class="rate-mini-input"
+                  @input="refreshAllCNY"
+                />
+              </div>
             </div>
           </div>
-        </div>
-      </div>
+        </van-collapse-item>
+      </van-collapse>
 
       <div class="summary-card">
         <div class="summary-main">
@@ -132,12 +126,17 @@
           >
         </div>
 
-        <div
-          v-for="(day, dayIndex) in days"
-          :key="dayIndex"
-          class="day-block"
-        >
-          <div class="day-header">
+        <van-collapse v-model="activeDays">
+            <van-collapse-item
+              v-for="(day, dayIndex) in days"
+              :key="dayIndex"
+              :name="dayIndex"
+              :title="day.date || '未设置日期'"
+            >
+            <template #icon>
+              <van-icon name="calendar-o" />
+            </template>
+            <div class="day-header">
             <div class="day-info" @click="editDayDate(dayIndex)">
               <van-icon name="calendar-o" />
               <span class="date-text">{{ day.date || "未设置日期" }}</span>
@@ -209,7 +208,8 @@
             <span class="label">当日小计:</span>
             <span class="val">¥{{ formatAmount(dayTotal(day)) }}</span>
           </div>
-        </div>
+          </van-collapse-item>
+        </van-collapse>
 
         <van-empty
           v-if="days.length === 0"
@@ -245,6 +245,9 @@
     <van-popup v-model:show="showDatePicker" position="bottom" round>
       <van-date-picker
         title="选择日期"
+        :min-date="new Date(2021, 0, 1)"
+        :max-date="new Date(2031, 11, 31)"
+        v-model="datePickerValue"
         @confirm="onDateConfirm"
         @cancel="showDatePicker = false"
       />
@@ -273,13 +276,23 @@
         @cancel="showCyclePicker = false"
       />
     </van-popup>
+    <van-popup v-model:show="showPlanDatePicker" position="bottom" round>
+      <van-date-picker
+        title="选择日期"
+        :min-date="new Date(2021, 0, 1)"
+        :max-date="new Date(2031, 11, 31)"
+        v-model="planDatePickerValue"
+        @confirm="onPlanDateConfirm"
+        @cancel="showPlanDatePicker = false"
+      />
+    </van-popup>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from "vue";
 import { useRouter, useRoute } from "vue-router";
-import { showToast, showSuccessToast } from "vant";
+import { showToast, showSuccessToast, showConfirmDialog } from "vant";
 import { createBudget, updateBudget, getBudget } from "@/utils/api/budget";
 
 const router = useRouter();
@@ -287,11 +300,16 @@ const route = useRoute();
 const isEdit = computed(() => !!route.params.id);
 
 const formRef = ref(null);
+const activeCollapse = ref(["info"]);
+const activeDays = ref([]);
 const saving = ref(false);
 const showDatePicker = ref(false);
+const datePickerValue = ref([]);
 const showTypePopup = ref(false);
 const showCurrencyPopup = ref(false);
 const showCyclePicker = ref(false);
+const showPlanDatePicker = ref(false);
+const planDatePickerValue = ref([]);
 const tempDayIndex = ref(0);
 const tempItemIndex = ref(0);
 
@@ -332,8 +350,6 @@ const defaultExchangeRates = [
 const formData = ref({
   title: "",
   route: "",
-  start_date: "",
-  end_date: "",
   budget_amount: "",
   cycle: "",
   plan_date: "",
@@ -357,8 +373,8 @@ const getTypeColor = (type) => {
     吃: "danger",
     喝: "success",
     买: "warning",
-    住: "primary",
-    玩: "purple",
+    住: "purple",
+    玩: "orange",
   };
   return colors[type] || "default";
 };
@@ -420,12 +436,32 @@ const formatAmount = (val) =>
 
 const addDay = () => {
   tempDayIndex.value = days.value.length;
+  if (!datePickerValue.value.length) {
+    const today = new Date();
+    datePickerValue.value = [
+      String(today.getFullYear()),
+      String(today.getMonth() + 1).padStart(2, "0"),
+      String(today.getDate()).padStart(2, "0"),
+    ];
+  }
   showDatePicker.value = true;
 };
 
-const removeDay = (index) => formData.value.budget_details.days.splice(index, 1);
+const removeDay = async (index) => {
+  try {
+    await showConfirmDialog({
+      title: '确认删除',
+      message: '确定要删除这一天吗？',
+    });
+    formData.value.budget_details.days.splice(index, 1);
+  } catch {}
+};
 const editDayDate = (index) => {
   tempDayIndex.value = index;
+  const existingDate = days.value[index]?.date;
+  if (existingDate) {
+    datePickerValue.value = existingDate.split("-");
+  }
   showDatePicker.value = true;
 };
 
@@ -450,8 +486,15 @@ const addItem = (dayIndex) => {
   });
 };
 
-const removeItem = (dayIndex, itemIndex) =>
-  formData.value.budget_details.days[dayIndex].items.splice(itemIndex, 1);
+const removeItem = async (dayIndex, itemIndex) => {
+  try {
+    await showConfirmDialog({
+      title: '确认删除',
+      message: '确定要删除这笔消费吗？',
+    });
+    formData.value.budget_details.days[dayIndex].items.splice(itemIndex, 1);
+  } catch {}
+};
 
 const showTypePicker = (dIdx, iIdx) => {
   tempDayIndex.value = dIdx;
@@ -484,6 +527,23 @@ const onCycleConfirm = ({ selectedOptions }) => {
   showCyclePicker.value = false;
 };
 
+const openPlanDatePicker = () => {
+  if (!planDatePickerValue.value.length) {
+    const today = new Date();
+    planDatePickerValue.value = [
+      String(today.getFullYear()),
+      String(today.getMonth() + 1).padStart(2, "0"),
+      String(today.getDate()).padStart(2, "0"),
+    ];
+  }
+  showPlanDatePicker.value = true;
+};
+
+const onPlanDateConfirm = ({ selectedValues }) => {
+  formData.value.plan_date = selectedValues.join("-");
+  showPlanDatePicker.value = false;
+};
+
 const loadData = async () => {
   if (!route.params.id) return;
   try {
@@ -492,15 +552,18 @@ const loadData = async () => {
     formData.value = {
       title: data.title || "",
       route: data.route || "",
-      start_date: data.start_date || "",
-      end_date: data.end_date || "",
+      plan_date: data.plan_date || "",
       budget_amount: data.budget_amount || "",
+      cycle: data.cycle || "",
       notes: data.notes || "",
       budget_details: data.budget_details || {
         days: [],
         exchange_rates: [...defaultExchangeRates],
       },
     };
+    if (data.plan_date) {
+      planDatePickerValue.value = data.plan_date.split("-");
+    }
     refreshAllCNY();
   } catch (e) {
     showToast("加载失败");
@@ -510,17 +573,48 @@ const loadData = async () => {
 const submit = async () => {
   if (!formData.value.title || !formData.value.budget_amount)
     return showToast("请完善基本信息");
+  
+  const days = formData.value.budget_details?.days || [];
+  if (days.length > 15) {
+    return showToast("计划天数最多15天");
+  }
+  
+  for (const day of days) {
+    const items = day.items || [];
+    const validItems = items.filter(item => item.amount && item.description);
+    if (validItems.length > 15) {
+      return showToast(`日期 ${day.date} 消费条目最多15条`);
+    }
+  }
+  
+  const hasValidItems = days.some(day => {
+    return (day.items || []).some(item => item.amount && item.description);
+  });
+  if (!hasValidItems) {
+    return showToast("请至少添加一条消费记录");
+  }
+  
   saving.value = true;
   try {
+    const filteredDays = days
+      .map(day => ({
+        ...day,
+        items: (day.items || []).filter(item => item.amount && item.description)
+      }))
+      .filter(day => day.items.length > 0);
+    
     const payload = {
       title: formData.value.title,
       route: formData.value.route,
       budget_type: "行",
       budget_amount: parseFloat(formData.value.budget_amount),
       cycle: formData.value.cycle || "月",
-      plan_date: formData.value.plan_date || formData.value.start_date,
-      notes: formData.value.notes,
-      budget_details: formData.value.budget_details,
+      plan_date: formData.value.plan_date,
+      budget_details: {
+        ...formData.value.budget_details,
+        days: filteredDays,
+        notes: formData.value.notes,
+      },
       total_expense: parseFloat(totalCNYExpense.value.toFixed(2)),
     };
     isEdit.value
@@ -541,6 +635,17 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.van-tag--purple {
+  background: #f3e8ff !important;
+  color: #9333ea !important;
+  border-color: #9333ea !important;
+}
+.van-tag--orange {
+  background: #fff7e6 !important;
+  color: #ff8c00 !important;
+  border-color: #ff8c00 !important;
+}
+
 .page-budget-travel {
   min-height: 100vh;
   background: #f7f8fa;
@@ -570,13 +675,6 @@ onMounted(() => {
 .header-title {
   font-weight: 600;
   font-size: 15px;
-}
-.date-row {
-  display: flex;
-  border-top: 1px solid #f2f3f5;
-}
-.flex-1 {
-  flex: 1;
 }
 .unit-text {
   color: #969799;
