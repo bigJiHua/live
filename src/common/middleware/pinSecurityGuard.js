@@ -38,6 +38,13 @@ const verifiedMap = new Map();
  * }
  */
 
+// 🔥 待验证插入锁（防止并发重复插入）
+const insertLocks = new Map();
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 function slidingWindowCheck(map, key, windowSec, limit) {
   const now = Date.now();
   const windowMs = windowSec * 1000;
@@ -84,12 +91,27 @@ async function getLatestRecord(userId) {
 }
 
 async function insertRecord(userId, url, action) {
-  await db.execute(
-    `INSERT INTO security_verify_log 
-     (user_id, request_url, action_type, pin_status, error_count, remark, create_time)
-     VALUES (?, ?, ?, 0, 0, ?, NOW())`,
-    [userId, url, action || "verify", "待验证"]
-  );
+  // 如果已有同用户的插入在执行中，等待完成后直接返回
+  if (insertLocks.has(userId)) {
+    await insertLocks.get(userId);
+    return;
+  }
+
+  const lockPromise = (async () => {
+    try {
+      await db.execute(
+        `INSERT INTO security_verify_log
+         (user_id, request_url, action_type, pin_status, error_count, remark, create_time)
+         VALUES (?, ?, ?, 0, 0, ?, NOW())`,
+        [userId, url, action || "verify", "待验证"]
+      );
+    } finally {
+      insertLocks.delete(userId);
+    }
+  })();
+
+  insertLocks.set(userId, lockPromise);
+  await lockPromise;
 }
 
 async function markSuccess(userId) {

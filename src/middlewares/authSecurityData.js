@@ -53,7 +53,6 @@ const decryptWithSecurity = async (req, res, next) => {
     // 4. 挂载数据
     try {
       req.body = JSON.parse(decryptedStr);
-      console.log(req.body.data);
       
     } catch (e) {
       throw new Error("INVALID_JSON");

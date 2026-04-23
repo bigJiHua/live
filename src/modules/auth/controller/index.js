@@ -61,6 +61,7 @@ class AuthController {
   async login(req, res) {
     // 这里的 req.body 已经是经过 decryptWithSecurity 中间件解密后的完整对象了
     const clientData = req.body;
+    
     const { nameOrEmail, password } = req.body.data;
     try {
       // 1. 基本校验
@@ -160,6 +161,44 @@ class AuthController {
       res
         .status(500)
         .json({ message: "获取用户信息失败", error: error.message });
+    }
+  }
+
+  // 锁定系统（强制下次登录需要验证PIN）
+  async lockSystem(req, res) {
+    try {
+      const userId = req.userId;
+      const db = require("../../../common/config/db");
+
+      // 检查是否已有待验证记录
+      const [existing] = await db.execute(
+        `SELECT id FROM security_verify_log WHERE user_id = ? AND pin_status = 0 LIMIT 1`,
+        [userId]
+      );
+
+      if (existing && existing.length > 0) {
+        return res.status(200).json({
+          status: 200,
+          message: "系统已经是锁定状态",
+        });
+      }
+
+      // 插入待验证记录（pin_status=0 表示待验证）
+      await db.execute(
+        `INSERT INTO security_verify_log (user_id, request_url, action_type, pin_status, error_count, remark, create_time)
+         VALUES (?, ?, ?, 0, 0, ?, NOW())`,
+        [userId, '/lock-system', 'lock', '系统锁定']
+      );
+
+      res.status(200).json({
+        code: 8303,
+        status: 200,
+        message: "系统已锁定，下次登录需验证PIN",
+        locked: true,
+      });
+    } catch (error) {
+      console.error("锁定系统错误:", error);
+      res.status(500).json({ message: "锁定失败", error: error.message });
     }
   }
 

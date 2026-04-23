@@ -41,6 +41,8 @@ class MomentController {
       });
       res.status(200).json({ status: 200, message: "发布成功", id: result.id });
     } catch (error) {
+      console.log(error);
+      
       res.status(500).json({ status: 500, message: "发布失败" });
     }
   };

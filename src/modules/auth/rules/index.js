@@ -9,7 +9,7 @@ const pinRule = joi.string().length(6).pattern(/^\d+$/).required().messages({
 
 // 登录规则（保留你原来的）
 const dataSchema = joi.object({
-  nameOrEmail: joi.string().min(3).max(15).required(),
+  nameOrEmail: joi.string().min(3).max(50).required(),
   password: joi
     .string()
     .pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[^]{8,30}$/)

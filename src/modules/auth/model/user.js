@@ -114,20 +114,24 @@ class User {
             };
           }
 
-          // B. 校验修改周期：1年 (31536000000 毫秒)
+          // B. 校验修改周期：从日志中查询上次修改用户名的记录，1年限制
           const oneYearMs = 365 * 24 * 60 * 60 * 1000;
           const now = Date.now();
-          const lastUpdate = new Date(currentUser.update_time).getTime();
-
-          if (now - lastUpdate < oneYearMs) {
-            const diffDays = Math.ceil(
-              (oneYearMs - (now - lastUpdate)) / (24 * 60 * 60 * 1000)
-            );
-            console.log(`用户${id}，还需等待 ${diffDays} 天`);
-            return {
-              status: 206,
-              message: "用户名一年只能修改一次！",
-            };
+          const [logRows] = await db.execute(
+            `SELECT create_time FROM user_log WHERE user_id = ? AND type = 'change_username' ORDER BY id DESC LIMIT 1`,
+            [id]
+          );
+          if (logRows && logRows.length > 0) {
+            const lastChangeTime = Number(logRows[0].create_time);
+            if (now - lastChangeTime < oneYearMs) {
+              const diffDays = Math.ceil(
+                (oneYearMs - (now - lastChangeTime)) / (24 * 60 * 60 * 1000)
+              );
+              return {
+                status: 206,
+                message: `用户名距离上次修改已过 ${diffDays} 天，还需等待`,
+              };
+            }
           }
 
           // 标记：更新成功后需要写日志
@@ -174,7 +178,7 @@ class User {
       // --- 4. 自动化记录 UserLog ---
       // 数据全部从 req.body 中获取（解密中间件已平铺）
       if (_logData && req) {
-        const UserLog = require("./UserLog");
+        const UserLog = require("./log");
         await UserLog.append({
           user_id: id,
           type: "change_username",

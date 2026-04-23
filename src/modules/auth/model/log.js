@@ -23,24 +23,25 @@ class UserLog {
     if (!logData.user_id) {
         return console.error('传入日志用户ID 不能为空！')
     }
+    // 支持驼峰和下划线两种命名
     const values = [
       logData.user_id || null,
       logData.type || 'login',
       logData.token ? logData.token.substring(0, 50) : null, // 只存 Token 存根，安全起见不存全称
-      logData.login_ip || '0.0.0.0',
-      logData.login_location || '未知',
-      logData.login_isp || '未知',
-      logData.user_agent || '',
-      logData.os_info || '',
-      logData.browser_info || '',
-      logData.device_model || '',
-      logData.fingerprint || '',
-      logData.viewport || '',
-      logData.pixel_ratio || '1',
+      logData.login_ip || logData.loginIp || '0.0.0.0',
+      logData.login_location || logData.loginLocation || '未知',
+      logData.login_isp || logData.loginIsp || '未知',
+      logData.user_agent || logData.userAgent || '',
+      logData.os_info || logData.osInfo || '',
+      logData.browser_info || logData.browserInfo || '',
+      logData.device_model || logData.deviceModel || '',
+      logData.fingerprint || logData.fingerprint || '',
+      logData.viewport || logData.viewport || '',
+      logData.pixel_ratio || logData.pixelRatio || '1',
       logData.status ?? 1, // 1成功 0失败
-      logData.error_message || '',
-      logData.login_lang || 'zh-CN',
-      logData.path || '/',
+      logData.error_message || logData.errorMessage || '',
+      logData.login_lang || logData.language || 'zh-CN',
+      logData.path || logData.path || '/',
       now,
       now
     ];

@@ -41,4 +41,7 @@ router.post("/refresh", authController.refreshToken);
 // 获取用户信息 (需要认证)
 router.get("/me", authGuard, authController.getCurrentUser);
 
+// 锁定系统（强制下次登录需要验证PIN）
+router.post("/lock-system", authGuard, authController.lockSystem);
+
 module.exports = router;
