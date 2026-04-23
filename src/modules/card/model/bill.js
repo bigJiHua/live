@@ -7,8 +7,8 @@ const AccountSettlement = require('../../account/service/settlement');
  *
  * 业务规则：
  * 1. 账单按月生成，每卡每月一条
- * 2. 账单周期：每月16日 ~ 次月15日
- * 3. 消费日期 <= 15日 归属当月账单，消费日期 >= 16日 归属下月账单（新周期）
+ * 2. 账单周期：账单日(bill_day)次日 ~ 次月账单日前一天
+ * 3. 消费日期 < 账单日 归属当月账单，消费日期 >= 账单日 归属下月账单（新周期）
  * 4. 还款日：账单月的下一月repayDay
  * 5. 逾期状态：当前日期 > repay_date 且 need_repay > 0
  *
@@ -29,10 +29,12 @@ class CardBill {
 
   /**
    * 获取账单月 YYYY-MM
-   * 账单周期：每月16日 ~ 次月15日
-   * 消费日期 <= 15日 属于当月账单，消费日期 >= 16日 属于下月账单（开启新周期）
+   * 账单周期：账单日(bill_day)次日 ~ 次月账单日前一天
+   * 消费日期 < 账单日 属于当月账单，消费日期 >= 账单日 属于下月账单（开启新周期）
+   * @param {string|Date|number} transDate - 交易日期
+   * @param {number} billDay - 账单日（几号），如果不传则默认为15保持兼容
    */
-  static getBillMonthByDate(transDate) {
+  static getBillMonthByDate(transDate, billDay = 15) {
     let date;
     if (transDate) {
       // 处理不同格式：日期字符串 或 时间戳（秒/毫秒）
@@ -59,8 +61,8 @@ class CardBill {
     const year = date.getFullYear();
     const month = date.getMonth() + 1;
 
-    // day <= 15 属于当月账单，day >= 16 属于下月账单（开启新周期）
-    if (day >= 16) {
+    // day < billDay 属于当月账单，day > billDay 属于下月账单（账单日当天仍属当月）
+    if (day > billDay) {
       const nextMonth = month === 12 ? 1 : month + 1;
       const nextYear = month === 12 ? year + 1 : year;
       return `${nextYear}-${String(nextMonth).padStart(2, '0')}`;
@@ -330,7 +332,7 @@ class CardBill {
     const card = await this.getCardInfo(cardId);
     if (!card || card.card_type !== 'credit') return;
 
-    const billMonth = this.getBillMonthByDate(transDate);
+    const billMonth = this.getBillMonthByDate(transDate, card.bill_day);
     const bill = await this.getOrCreateBill(cardId, userId, billMonth);
     if (!bill) return;
 
@@ -367,7 +369,7 @@ class CardBill {
     const card = await this.getCardInfo(cardId);
     if (!card || card.card_type !== 'credit') return;
 
-    const billMonth = this.getBillMonthByDate(transDate);
+    const billMonth = this.getBillMonthByDate(transDate, card.bill_day);
     const bill = await this.findByCardAndMonth(cardId, billMonth);
     if (!bill) return;
 
@@ -408,7 +410,7 @@ class CardBill {
     const card = await this.getCardInfo(cardId);
     if (!card || card.card_type !== 'credit') return;
 
-    const billMonth = this.getBillMonthByDate(transDate);
+    const billMonth = this.getBillMonthByDate(transDate, card.bill_day);
     const bill = await this.findByCardAndMonth(cardId, billMonth);
     if (!bill) return;
 
@@ -605,7 +607,7 @@ class CardBill {
 
     // 处理消费流水
     for (const row of rows) {
-      const billMonth = this.getBillMonthByDate(row.trans_date);
+      const billMonth = this.getBillMonthByDate(row.trans_date, card.bill_day);
       if (!billMonthData[billMonth]) {
         billMonthData[billMonth] = { totalExpense: 0, totalRepaid: 0 };
       }
@@ -634,7 +636,7 @@ class CardBill {
     // 处理 card_repay 表的还款记录（使用 create_time 计算账单月）
     for (const repay of repayRows) {
       if (repay.is_deleted === 1) continue; // 跳过已删除的还款记录
-      const billMonth = this.getBillMonthByDate(repay.create_time);
+      const billMonth = this.getBillMonthByDate(repay.create_time, card.bill_day);
       if (!billMonthData[billMonth]) {
         billMonthData[billMonth] = { totalExpense: 0, totalRepaid: 0 };
       }

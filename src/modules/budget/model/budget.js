@@ -110,11 +110,13 @@ class Budget {
     const existing = await this.findById(id, userId);
     if (!existing) throw new Error('预算记录不存在');
 
+    // 允许更新的字段白名单
+    const allowedFields = ['title', 'route', 'budget_type', 'budget_amount', 'used_amount', 'budget_details', 'cycle', 'plan_date', 'is_over_budget', 'is_excute'];
     const fields = [];
     const params = [];
 
     Object.keys(updates).forEach(key => {
-      if (updates[key] !== undefined) {
+      if (updates[key] !== undefined && allowedFields.includes(key)) {
         fields.push(`${key} = ?`);
         if (key === 'budget_details' && typeof updates[key] === 'object') {
           params.push(JSON.stringify(updates[key]));

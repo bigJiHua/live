@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- 主机： 127.0.0.1:3306
--- 生成日期： 2026-04-22 10:11:52
+-- 生成日期： 2026-04-23 13:58:58
 -- 服务器版本： 5.7.40
 -- PHP 版本： 8.0.26
 
@@ -483,20 +483,20 @@ CREATE TABLE IF NOT EXISTS `fund` (
 
 DROP TABLE IF EXISTS `moment`;
 CREATE TABLE IF NOT EXISTS `moment` (
-  `id` varchar(50) NOT NULL COMMENT 'id主键',
-  `user_id` varchar(50) NOT NULL COMMENT '用户ID',
-  `content` text NOT NULL COMMENT '内容',
-  `img_url` varchar(255) DEFAULT NULL COMMENT '图片',
-  `mood` varchar(50) DEFAULT NULL COMMENT '心情',
-  `location` varchar(255) DEFAULT NULL COMMENT '位置',
+  `id` varchar(50) CHARACTER SET utf8 NOT NULL COMMENT 'id主键',
+  `user_id` varchar(50) CHARACTER SET utf8 NOT NULL COMMENT '用户ID',
+  `content` text COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '内容',
+  `img_url` varchar(10000) CHARACTER SET utf8 DEFAULT NULL COMMENT '图片',
+  `mood` varchar(50) CHARACTER SET utf8 DEFAULT NULL COMMENT '心情',
+  `location` varchar(255) CHARACTER SET utf8 DEFAULT NULL COMMENT '位置',
   `visible_type` tinyint(4) DEFAULT '0' COMMENT '0仅自己可见',
-  `parent_id` varchar(50) DEFAULT NULL COMMENT '父ID 单日聚合',
-  `create_time` varchar(20) DEFAULT NULL COMMENT '发布时间',
-  `update_time` varchar(20) DEFAULT NULL COMMENT '修改时间',
+  `parent_id` varchar(50) CHARACTER SET utf8 DEFAULT NULL COMMENT '父ID 单日聚合',
+  `create_time` varchar(20) CHARACTER SET utf8 DEFAULT NULL COMMENT '发布时间',
+  `update_time` varchar(20) CHARACTER SET utf8 DEFAULT NULL COMMENT '修改时间',
   `is_deleted` tinyint(4) DEFAULT '0' COMMENT '是否删除',
   PRIMARY KEY (`id`),
   KEY `idx_user_id` (`user_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='动态发布表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='动态发布表';
 
 -- --------------------------------------------------------
 
