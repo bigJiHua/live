@@ -42,6 +42,13 @@ import { ref, watch } from "vue";
 import { submitPin, cancelPinVerify } from "@/utils/request/pin";
 import SafeKeyboard from "@/components/KeyBoard/index.vue";
 
+const props = defineProps({
+  onSuccess: {
+    type: Function,
+    default: null
+  }
+});
+
 const visible = ref(false);
 const pinValue = ref("");
 const errorMessage = ref("");
@@ -80,7 +87,27 @@ function onOverlayClick() {
 function onConfirm() {
   if (pinValue.value.length !== 6) return;
   errorMessage.value = "";
-  submitPin(pinValue.value);
+  
+  // 直接调用 submitPin 并处理成功回调
+  (async () => {
+    try {
+      const { securityApi } = await import('@/utils/api/security')
+      const res = await securityApi.verifyPin({ pin: pinValue.value })
+      const data = res.data || res
+      
+      if (data.code === 8301 || data.status === 200) {
+        hide()
+        if (props.onSuccess) {
+          props.onSuccess()
+        }
+      } else {
+        setError(data.message || 'PIN 码错误')
+      }
+    } catch (err) {
+      const resData = err.response?.data || err
+      setError(resData.message || '验证失败')
+    }
+  })()
 }
 
 function handleKeyInput(val) {

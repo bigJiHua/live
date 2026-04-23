@@ -6,7 +6,12 @@
       placeholder
       :left-arrow="showBackButton"
       @click-left="onBack"
-    />
+    >
+      <template #right>
+        <van-icon name="lock" size="20" @click="handleLockSystem" style="margin-right: 12px;" />
+        <van-icon name="expand" size="20" @click="toggleFullscreen" />
+      </template>
+    </van-nav-bar>
 
     <div class="main-body">
       <router-view v-slot="{ Component }">
@@ -16,7 +21,9 @@
       </router-view>
     </div>
 
-    <nav v-if="!route.meta.hideTabbar" class="floating-island-nav">
+    <nav v-if="!route.meta.hideTabbar" 
+         class="floating-island-nav"
+         style="backdrop-filter: blur(15px) saturate(160%); -webkit-backdrop-filter: blur(15px) saturate(160%);">
       <router-link to="/home" class="nav-item">
         <van-icon name="wap-home-o" class="nav-icon" />
         <span class="nav-text">首页</span>
@@ -38,14 +45,52 @@
       </router-link>
     </nav>
   </div>
+
+  <!-- PIN 验证弹窗 -->
+  <PinVerifyDialog ref="pinVerifyRef" />
 </template>
 
 <script setup>
-import { computed, ref } from "vue";
+import { ref, computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import { showToast } from "vant";
+import { authApi } from "@/utils/api/auth";
+import PinVerifyDialog from "@/components/PinVerifyDialog.vue";
 
 const route = useRoute();
 const router = useRouter();
+
+// PIN 验证引用
+const pinVerifyRef = ref(null);
+
+// 锁定系统
+const handleLockSystem = async () => {
+  console.log('🔒 锁定按钮被点击了');
+  try {
+    console.log('🔒 开始调用 lockSystem API');
+    await authApi.lockSystem();
+    console.log('🔒 API 调用成功');
+    showToast({ message: '系统已锁定', position: 'top' });
+    
+    if (pinVerifyRef.value) {
+      pinVerifyRef.value.show();
+    }
+  } catch (error) {
+    console.error('🔒 锁定失败:', error);
+    showToast({ message: error.message || '锁定失败', position: 'top' });
+  }
+};
+
+// 全屏切换
+const toggleFullscreen = () => {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen();
+  } else {
+    if (document.exitFullscreen) {
+      document.exitFullscreen();
+    }
+  }
+};
 
 // 映射路由标题 - 优先从 meta.title 获取
 const pageTitle = computed(() => {
@@ -68,6 +113,7 @@ const showBackButton = computed(() => {
   const mainPages = ["/home", "/finance", "/diary", "/user"];
   return !mainPages.includes(route.path);
 });
+
 let cNum = ref(0)
 // 执行返回 (保持原样)
 const onBack = () => {
@@ -87,6 +133,7 @@ const onBack = () => {
   /* 规整：清爽背景，突出毛玻璃 */
   background-color: #f7f8fa;
 }
+
 /* TODO 待定 */
 .main-body {
   width: 100%;
@@ -115,11 +162,12 @@ const onBack = () => {
   z-index: 999; /* 保证在最顶层 */
 
   /* ———— 极致核心：毛玻璃效果 (Backdrop Blur) ———— */
-  /* 使用半透明白色背景 (0.75 比较规整，平衡清晰度与果味) */
-  background: rgba(255, 255, 255, 0);
+  /* 透明背景 + 毛玻璃模糊 */
+  background-color: transparent;
+  background-image: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%);
   /* 核心：模糊背景 + 提升饱和度，非常果味 */
-  backdrop-filter: blur(15px) saturate(160%);
-  -webkit-backdrop-filter: blur(15px) saturate(160%); /* 兼容 iOS */
+  backdrop-filter: blur(15px) saturate(160%) !important;
+  -webkit-backdrop-filter: blur(15px) saturate(160%) !important;
 
   /* ———— 阴影与边框，增加精致感和悬浮感 ———— */
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);

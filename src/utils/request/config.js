@@ -23,6 +23,9 @@ export const config = {
   
   /** 需要加密的方法 */
   encryptedMethods: ['post', 'put', 'delete'],
+
+  /** 跳过加密的接口 */
+  skipEncryptionUrls: ['/auth/lock-system'],
 }
 
 export default config

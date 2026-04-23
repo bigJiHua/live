@@ -6,22 +6,31 @@
 import axios from "axios";
 
 /**
+ * 格式化经纬度为十进制格式（如 22.54321,113.876544）
+ */
+function formatCoord(lat, lng, decimals = 6) {
+  return `${lat.toFixed(decimals)}, ${lng.toFixed(decimals)}`;
+}
+
+/**
  * 浏览器原生定位
- * @returns {Promise<{success: boolean, address: string, lat: number, lng: number}>}
+ * @returns {Promise<{success: boolean, address: string, lat: number, lng: number, error?: string}>}
  */
 export function getBrowserLocation() {
   return new Promise((resolve) => {
     if (!navigator.geolocation) {
-      resolve({ success: false, address: "" });
+      resolve({ success: false, address: "", error: "浏览器不支持定位" });
       return;
     }
 
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         const { latitude, longitude } = position.coords;
-        // 使用逆地理编码获取地址
+        const coordStr = formatCoord(latitude, longitude);
+        
+        // 尝试获取地址（可选）
+        let address = coordStr;
         try {
-          // 使用免费的 Nominatim 地理编码服务
           const res = await axios.get(
             `https://nominatim.openstreetmap.org/reverse`,
             {
@@ -37,35 +46,37 @@ export function getBrowserLocation() {
               timeout: 5000,
             }
           );
-
-          const address = res.data?.display_name || "";
-          // 简化地址：只取省-市-区
-          const simpleAddress = simplifyAddress(address);
-
-          resolve({
-            success: true,
-            address: simpleAddress,
-            lat: latitude,
-            lng: longitude,
-            fullAddress: address,
-          });
+          
+          if (res.data?.display_name) {
+            address = simplifyAddress(res.data.display_name) || coordStr;
+          }
         } catch (err) {
-          console.error("逆地理编码失败:", err);
-          resolve({
-            success: true,
-            address: `${latitude.toFixed(2)}°, ${longitude.toFixed(2)}°`,
-            lat: latitude,
-            lng: longitude,
-          });
+          console.log("逆地理编码失败，使用坐标:", err.message);
         }
+
+        resolve({
+          success: true,
+          address: address,
+          lat: latitude,
+          lng: longitude,
+        });
       },
       (error) => {
         console.error("浏览器定位失败:", error);
-        resolve({ success: false, address: "" });
+        let errorMsg = "定位失败";
+        // 检查错误类型
+        if (error.code === 1) {
+          errorMsg = "用户拒绝授权定位";
+        } else if (error.code === 2) {
+          errorMsg = "位置不可用";
+        } else if (error.code === 3) {
+          errorMsg = "定位超时";
+        }
+        resolve({ success: false, address: "", error: errorMsg });
       },
       {
-        enableHighAccuracy: false,
-        timeout: 10000,
+        enableHighAccuracy: true, // 启用高精度定位
+        timeout: 15000,
         maximumAge: 300000, // 缓存5分钟
       }
     );
@@ -153,6 +164,34 @@ export async function getFullLocation() {
     lat: 0,
     lng: 0,
   };
+}
+
+/**
+ * 获取两种定位选项供用户选择
+ * @returns {Promise<{browser: {name: string, lat: number, lng: number, error?: string}, ip: {name: string, lat: number, lng: number, error?: string}}>}
+ */
+export async function getLocationOptions() {
+  // 并行获取浏览器定位和IP定位
+  const [browserLoc, ipLoc] = await Promise.all([
+    getBrowserLocation(),
+    getIpLocation().catch(() => ({ success: false, address: "" }))
+  ]);
+
+  const result = {
+    browser: {
+      name: browserLoc.success ? (browserLoc.address || formatCoord(browserLoc.lat, browserLoc.lng)) : (browserLoc.error || "定位失败"),
+      lat: browserLoc.lat || 0,
+      lng: browserLoc.lng || 0,
+      error: browserLoc.error,
+    },
+    ip: {
+      name: ipLoc.success ? (ipLoc.address || "未知") : "未知",
+      lat: ipLoc.lat || 0,
+      lng: ipLoc.lng || 0,
+    },
+  };
+
+  return result;
 }
 
 /**

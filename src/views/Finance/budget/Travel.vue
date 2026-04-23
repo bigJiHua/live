@@ -1,13 +1,5 @@
 <template>
   <div class="page-budget-travel">
-    <van-nav-bar
-      :title="isEdit ? '编辑出行预算' : '出行预算'"
-      left-arrow
-      fixed
-      placeholder
-      @click-left="router.back()"
-    />
-
     <div class="page-content">
       <div class="info-card">
         <div class="card-header">
@@ -25,7 +17,7 @@
           <van-field
             v-model="formData.route"
             label="路线规划"
-            placeholder="北海 → 深圳 → 香港"
+            placeholder="深圳 → 香港"
             label-width="70px"
             required
           />

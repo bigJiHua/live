@@ -1,11 +1,5 @@
 <template>
   <div class="page-budget-eat">
-    <van-nav-bar
-      :title="isEdit ? '编辑餐饮' : '餐饮登记'"
-      left-arrow
-      @click-left="router.back()"
-    />
-
     <van-form ref="formRef">
       <!-- 基本信息 -->
       <van-cell-group inset title="本次餐饮">

@@ -2,7 +2,13 @@
   <div class="page-diary-add">
     <van-nav-bar>
       <template #left>
-        <van-button size="small" plain type="default" round @click="handleCancel">
+        <van-button
+          size="small"
+          plain
+          type="default"
+          round
+          @click="handleCancel"
+        >
           取消
         </van-button>
       </template>
@@ -26,13 +32,13 @@
 
       <!-- 已选择图片预览 -->
       <div v-if="selectedImages.length > 0" class="selected-preview">
-        <div
-          v-for="item in selectedImages"
-          :key="item.id"
-          class="preview-item"
-        >
+        <div v-for="item in selectedImages" :key="item.id" class="preview-item">
           <van-image fit="cover" :src="getFullUrl(item.file_path)" />
-          <van-icon name="cross" class="remove-icon" @click="removeSelected(item.id)" />
+          <van-icon
+            name="cross"
+            class="remove-icon"
+            @click="removeSelected(item.id)"
+          />
         </div>
       </div>
 
@@ -66,6 +72,14 @@
       v-model:show="showMood"
       :actions="moodActions"
       @select="onMoodSelect"
+    />
+
+    <!-- 位置选择弹窗 -->
+    <van-action-sheet
+      v-model:show="showLocationPicker"
+      title="选择位置"
+      :actions="locationActions"
+      @select="onLocationSelect"
     />
 
     <!-- 图片选择弹窗 -->
@@ -106,11 +120,7 @@
         <!-- 图片列表 -->
         <van-checkbox-group v-model="localSelected" class="image-list-wrapper">
           <div class="image-grid">
-            <div
-              v-for="item in imageList"
-              :key="item.id"
-              class="image-item"
-            >
+            <div v-for="item in imageList" :key="item.id" class="image-item">
               <van-image
                 fit="cover"
                 :src="getThumbUrl(item)"
@@ -146,14 +156,20 @@
 <script setup>
 import { ref, watch } from "vue";
 import { useRouter } from "vue-router";
-import { showToast, showConfirmDialog, showLoadingToast, closeToast } from "vant";
+import {
+  showToast,
+  showConfirmDialog,
+  showLoadingToast,
+  closeToast,
+} from "vant";
 import { uploadApi, BusType } from "@/utils/api/upload";
-import { getFullLocation } from "@/utils/geolocation";
+import { getFullLocation, getLocationOptions } from "@/utils/geolocation";
 import { momentApi } from "@/utils/api/moment";
+import imageCompression from "browser-image-compression";
 
 const router = useRouter();
 
-import ENV from '@/utils/env'
+import ENV from "@/utils/env";
 const BASE_URL = ENV.FILE_BASE_URL;
 const getFullUrl = (path) => {
   if (!path) return "";
@@ -167,20 +183,80 @@ const showMood = ref(false);
 const showImagePicker = ref(false);
 const saving = ref(false);
 
-// 位置信息
+// ================== 📍 位置 ==================
 const locationText = ref("点击获取位置");
-const locationData = ref(null); // 完整位置对象 { name, lat, lng }
+const locationData = ref(null);
 const hasLocated = ref(false);
 
-// 已选择的图片（最终确认的）
-const selectedImages = ref([]);
+const showLocationPicker = ref(false);
+const locationActions = ref([]);
 
-// 图片选择弹窗内
-const imageList = ref([]);       // 全部图片列表
-const localSelected = ref([]);   // 弹窗内临时选中
-const uploadQueue = ref([]);     // 上传队列
-const loading = ref(false);
+// 👉 点击只弹选择（不请求）
+const handleGetLocation = () => {
+  locationActions.value = [
+    {
+      name: "精确定位",
+      subname: "GPS（需要授权）",
+      type: "gps",
+    },
+    {
+      name: "大致位置",
+      subname: "IP 定位",
+      type: "ip",
+    },
+  ];
 
+  showLocationPicker.value = true;
+};
+
+// 👉 用户选择后才执行
+const onLocationSelect = async (item) => {
+  showLocationPicker.value = false;
+
+  // ===== GPS =====
+  if (item.type === "gps") {
+    try {
+      showToast("正在获取精确位置...");
+
+      const loc = await getFullLocation();
+
+      locationText.value = loc.name;
+      locationData.value = loc;
+      hasLocated.value = true;
+    } catch (err) {
+      console.error(err);
+      showToast("定位失败或未授权");
+    }
+  }
+
+  // ===== IP =====
+  if (item.type === "ip") {
+    try {
+      showToast("正在获取大致位置...");
+
+      const res = await getLocationOptions();
+      const ip = res.ip;
+
+      if (!ip || ip.name === "未知") {
+        showToast("IP定位失败");
+        return;
+      }
+
+      locationText.value = ip.name;
+      locationData.value = {
+        name: ip.name,
+        lat: ip.lat,
+        lng: ip.lng,
+      };
+      hasLocated.value = true;
+    } catch (err) {
+      console.error(err);
+      showToast("IP定位失败");
+    }
+  }
+};
+
+// ================== 😊 心情 ==================
 const moodActions = [
   { name: "开心" },
   { name: "平静" },
@@ -190,34 +266,18 @@ const moodActions = [
   { name: "郁闷" },
 ];
 
-// 心情选择
 const onMoodSelect = (item) => {
   mood.value = item.name;
   showMood.value = false;
 };
 
-// 获取当前位置
-const locationLoading = ref(false);
+// ================== 🖼 图片 ==================
+const selectedImages = ref([]);
+const imageList = ref([]);
+const localSelected = ref([]);
+const uploadQueue = ref([]);
+const loading = ref(false);
 
-const handleGetLocation = async () => {
-  if (locationLoading.value) return;
-
-  locationLoading.value = true;
-  try {
-    // 获取完整位置（含经纬度）
-    const loc = await getFullLocation();
-    locationText.value = loc.name;
-    locationData.value = loc;
-    hasLocated.value = true;
-  } catch (err) {
-    console.error("获取位置失败:", err);
-    showToast("获取位置失败，请检查定位权限");
-  } finally {
-    locationLoading.value = false;
-  }
-};
-
-// 加载图片列表
 const loadImageList = async () => {
   loading.value = true;
   try {
@@ -229,120 +289,116 @@ const loadImageList = async () => {
     });
     imageList.value = Array.isArray(res.data) ? res.data : [];
   } catch (err) {
-    console.error("加载图片列表失败:", err);
+    console.error("加载图片失败:", err);
   } finally {
     loading.value = false;
   }
 };
 
-// 获取缩略图路径（列表展示用）
 const getThumbUrl = (item) => {
   const path = item.thumbnail || item.file_path;
   return getFullUrl(path);
 };
 
-// 弹窗打开时加载列表
 watch(showImagePicker, (val) => {
   if (val) {
     loadImageList();
-    localSelected.value = [...selectedImages.value.map((i) => i.id)];
+    localSelected.value = selectedImages.value.map((i) => i.id);
   }
 });
 
-// 上传前校验
+// ================== 📤 上传 ==================
+const MAX_FILE_SIZE = 35;
+
 const beforeUpload = (file) => {
-  const isImage = file.type.startsWith("image/");
-  if (!isImage) {
-    showToast("只能上传图片文件");
+  if (!file.type.startsWith("image/")) {
+    showToast("只能上传图片");
     return false;
   }
-  const isLt5M = file.size / 1024 / 1024 < 5;
-  if (!isLt5M) {
-    showToast("图片大小不能超过 5MB");
+  if (file.size / 1024 / 1024 > MAX_FILE_SIZE) {
+    showToast(`不能超过 ${MAX_FILE_SIZE}MB`);
     return false;
   }
   return true;
 };
 
-// 上传图片
-const handleAfterRead = async (file) => {
-  const files = Array.isArray(file) ? file : [file];
-
-  for (const f of files) {
-    f.status = "uploading";
-    f.message = "上传中...";
-
-    try {
-      const res = await uploadApi.single(f.file, BusType.POST);
-      if (res.data) {
-        // 上传成功，添加到列表并自动选中
-        // 统一 file_path 字段：url -> file_path，确保预览能正常显示
-        const newItem = {
-          ...res.data,
-          file_path: res.data.url || res.data.file_path,
-          uploading: false,
-        };
-        imageList.value.unshift(newItem);
-        // 自动选中刚上传的图片
-        if (!localSelected.value.includes(newItem.id) && localSelected.value.length < MAX_SELECT) {
-          localSelected.value.push(newItem.id);
-        }
-        f.status = "done";
-        f.message = "上传成功";
-      } else {
-        f.status = "failed";
-        f.message = "上传失败";
-      }
-    } catch (err) {
-      f.status = "failed";
-      f.message = "上传失败";
-      console.error("上传失败:", err);
+const uploadSingleFile = async (fileItem) => {
+  try {
+    const res = await uploadApi.single(fileItem.file, BusType.POST);
+    if (res.data) {
+      const newItem = {
+        ...res.data,
+        file_path: res.data.url || res.data.file_path,
+      };
+      imageList.value.unshift(newItem);
+      fileItem.status = "done";
+      return newItem;
     }
+  } catch {
+    fileItem.status = "failed";
+  }
+};
+
+const compressAndUpload = async (fileItem) => {
+  const file = fileItem.file;
+
+  if (file.size / 1024 / 1024 < 5) {
+    return uploadSingleFile(fileItem);
   }
 
+  fileItem.status = "uploading";
+  fileItem.message = "压缩中...";
+
+  try {
+    const compressed = await imageCompression(file, {
+      maxSizeMB: 4.9,
+      maxWidthOrHeight: 4096,
+      useWebWorker: true,
+    });
+
+    fileItem.file = compressed;
+    return uploadSingleFile(fileItem);
+  } catch {
+    fileItem.status = "failed";
+  }
+};
+
+const handleAfterRead = async (file) => {
+  const files = Array.isArray(file) ? file : [file];
+  for (const f of files) {
+    await compressAndUpload(f);
+  }
   uploadQueue.value = [];
 };
 
-// 点击图片（未选中则选中，已选中则取消）
+// ================== 🧠 选择 ==================
 const MAX_SELECT = 9;
 
 const handleImageClick = (item) => {
-  const id = item.id;
-  const index = localSelected.value.indexOf(id);
-  if (index > -1) {
-    // 取消选中
-    localSelected.value.splice(index, 1);
+  const i = localSelected.value.indexOf(item.id);
+  if (i > -1) {
+    localSelected.value.splice(i, 1);
   } else {
-    // 选中，最多9张
     if (localSelected.value.length >= MAX_SELECT) {
-      showToast(`最多只能选择 ${MAX_SELECT} 张图片`);
+      showToast("最多9张");
       return;
     }
-    localSelected.value.push(id);
+    localSelected.value.push(item.id);
   }
 };
 
-// 确认选择
 const confirmSelection = () => {
-  selectedImages.value = imageList.value
-    .filter((item) => localSelected.value.includes(item.id))
-    .map((item) => ({
-      ...item,
-      // 统一 file_path 字段：优先用 file_path，否则 fallback 到 url
-      file_path: item.file_path || item.url,
-    }));
+  selectedImages.value = imageList.value.filter((i) =>
+    localSelected.value.includes(i.id)
+  );
   showImagePicker.value = false;
 };
 
-// 移除已选图片
 const removeSelected = (id) => {
-  const index = selectedImages.value.findIndex((i) => i.id === id);
-  if (index > -1) {
-    selectedImages.value.splice(index, 1);
-  }
+  selectedImages.value = selectedImages.value.filter((i) => i.id !== id);
 };
 
-// 发布
+// ================== 🚀 发布 ==================
 const handleSave = async () => {
   if (!content.value.trim()) {
     showToast("请输入内容");
@@ -350,46 +406,27 @@ const handleSave = async () => {
   }
 
   try {
-    await showConfirmDialog({
-      title: "确认发布",
-      message: `将发布动态${selectedImages.value.length > 0 ? `，附带 ${selectedImages.value.length} 张图片` : ""}`,
-    });
+    await showConfirmDialog({ title: "确认发布" });
 
-    saving.value = true;
-    showLoadingToast({ message: "发布中...", forbidClick: true });
+    showLoadingToast({ message: "发布中..." });
 
-    // 构建图片列表（使用 url 字段）
-    const images = selectedImages.value.map((item) => ({
-      url: item.file_path || item.url || "",
-    }));
-
-    // 构建位置对象
-    const location = locationData.value || null;
-
-    // 调用 API
     await momentApi.create({
       content: content.value,
-      images,
+      images: selectedImages.value.map((i) => ({ url: i.file_path })),
       mood: mood.value,
-      location,
+      location: locationData.value,
       visibleType: 0,
     });
 
     closeToast();
-    showToast("发布成功");
-    setTimeout(() => router.replace("/diary"), 1000);
+    showToast("成功");
+    router.replace("/diary");
   } catch (err) {
     closeToast();
-    if (err !== "cancel") {
-      console.error("发布失败:", err);
-      showToast("发布失败，请重试");
-    }
-  } finally {
-    saving.value = false;
+    if (err !== "cancel") showToast("失败");
   }
 };
 
-// 取消
 const handleCancel = () => {
   router.back();
 };
@@ -501,7 +538,7 @@ const handleCancel = () => {
 }
 /* 图片展示区域 */
 :deep(.van-checkbox-group) {
-  height: 50vh!important;
+  height: 50vh !important;
   overflow-y: scroll;
 }
 

@@ -73,4 +73,9 @@ export const authApi = {
   changePassword(data) {
     return request.put("/user/password/change", data);
   },
+
+  // 锁定系统
+  lockSystem() {
+    return request.post("/auth/lock-system");
+  },
 };

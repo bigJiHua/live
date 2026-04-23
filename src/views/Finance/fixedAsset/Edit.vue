@@ -1,10 +1,5 @@
 <template>
   <div class="page-asset-edit">
-    <van-nav-bar
-      title="编辑资产"
-      left-arrow
-      @click-left="router.back()"
-    />
 
     <van-form ref="formRef">
       <!-- 图片上传 -->

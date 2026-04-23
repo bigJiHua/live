@@ -1,11 +1,5 @@
 <template>
   <div class="page-budget-shopping">
-    <van-nav-bar
-      :title="isEdit ? '编辑购物预算' : '购物预算'"
-      left-arrow
-      @click-left="router.back()"
-    />
-
     <van-form ref="formRef">
       <!-- 基本信息 -->
       <van-cell-group inset title="购物计划">

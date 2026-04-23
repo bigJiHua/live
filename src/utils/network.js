@@ -8,7 +8,7 @@ import axios from "axios";
 // 缓存网络信息
 let cachedNetworkInfo = null;
 let cacheTimestamp = null;
-const CACHE_DURATION = 5 * 60 * 1000; // 5分钟缓存
+const CACHE_DURATION = 30 * 60 * 1000; // 30分钟缓存，避免频繁请求
 
 /**
  * 从 ip.sb 获取网络信息
@@ -20,13 +20,6 @@ const CACHE_DURATION = 5 * 60 * 1000; // 5分钟缓存
  * - 经纬度
  */
 export async function getNetworkInfo() {
-  // 返回基础信息（即使失败也返回本地可获取的信息）
-  // TODO 上线后改
-  return {
-    ip: "unknown",
-    error: error.message,
-    timestamp: Date.now(),
-  };
   // 检查缓存
   if (
     cachedNetworkInfo &&

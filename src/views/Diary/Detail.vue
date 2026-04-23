@@ -32,7 +32,6 @@
         <div
           v-if="detail.img_url?.length"
           class="image-grid"
-          :class="'grid-' + Math.min(detail.img_url.length, 3)"
         >
           <div
             v-for="(img, index) in detail.img_url"
@@ -48,8 +47,13 @@
         </div>
 
         <div class="main-footer">
-          <div class="share-btn" @click="handleShare">
-            <van-icon name="share-o" /> 分享给好友
+          <div class="action-btns">
+            <div class="share-btn" @click="handleShare">
+              <van-icon name="share-o" /> 分享给好友
+            </div>
+            <div class="delete-btn" @click="openDeleteDialog('main', null, '确定要删除这条动态吗？')">
+              <van-icon name="delete-o" /> 删除
+            </div>
           </div>
         </div>
       </div>
@@ -83,28 +87,29 @@
               <div class="append-content">{{ child.content }}</div>
 
               <div v-if="child.img_url?.length" class="append-image-list">
-                <van-image
+                <div
                   v-for="(img, i) in child.img_url"
                   :key="i"
-                  fit="cover"
-                  radius="6"
-                  width="64"
-                  height="64"
-                  :src="img.url"
-                  @click="previewChildImage(child, i)"
-                />
+                  class="append-grid-item"
+                >
+                  <van-image
+                    fit="cover"
+                    radius="6"
+                    :src="img.url"
+                    @click="previewChildImage(child, i)"
+                  />
+                </div>
               </div>
 
               <div class="append-bottom">
-                <span class="time">{{ formatTime(child.create_time) }}</span>
-                <div class="tags">
-                  <span v-if="child.mood" class="tag mood">
-                    <van-icon name="smile-o" size="10" /> {{ child.mood }}
-                  </span>
-                  <span v-if="child.location?.name" class="tag location">
-                    <van-icon name="location-o" size="10" />
-                    {{ child.location.name }}
-                  </span>
+                <div class="append-bottom-left">
+                  <span class="time">{{ formatTime(child.create_time) }}</span>
+                  <span v-if="child.location?.name" class="loc-text">· {{ child.location.name }}</span>
+                </div>
+                <div class="append-actions">
+                  <div class="delete-btn" @click="openDeleteDialog('child', child.id, '确定要删除这条追文吗？')">
+                    <van-icon name="delete-o" size="12" />
+                  </div>
                 </div>
               </div>
             </div>
@@ -123,11 +128,22 @@
     <div class="add-diary-btn" @click="$router.push('/diary/add')">
       <van-icon name="plus" />
     </div>
+
+    <!-- 删除确认弹窗 -->
+    <van-dialog
+      v-model:show="showDeleteDialog"
+      title="确认删除"
+      :message="deleteMessage"
+      show-cancel-button
+      :confirm-button-disabled="confirmCountdown > 0"
+      :confirm-button-text="confirmCountdown > 0 ? `${confirmCountdown}秒后确认` : '确认'"
+      @confirm="executeDelete"
+    />
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import { showToast } from "vant";
 import { momentApi } from "@/utils/api/moment";
@@ -140,6 +156,66 @@ const userStore = useUserStore();
 const loading = ref(false);
 const detail = ref(null);
 const childrenLoading = ref(false);
+
+// 删除确认弹窗
+const showDeleteDialog = ref(false);
+const deleteMessage = ref('');
+const deleteTarget = ref(null); // { type: 'main' | 'child', id?: string }
+
+// 确认弹窗倒计时
+const confirmCountdown = ref(0);
+let confirmTimer = null;
+
+const resetConfirmCountdown = () => {
+  confirmCountdown.value = 0;
+  if (confirmTimer) {
+    clearInterval(confirmTimer);
+    confirmTimer = null;
+  }
+};
+
+const startConfirmCountdown = () => {
+  confirmCountdown.value = 10;
+  confirmTimer = setInterval(() => {
+    confirmCountdown.value--;
+    if (confirmCountdown.value <= 0) {
+      clearInterval(confirmTimer);
+      confirmTimer = null;
+    }
+  }, 1000);
+};
+
+// 打开删除弹窗
+const openDeleteDialog = (type, id = null, message = '') => {
+  deleteTarget.value = { type, id };
+  deleteMessage.value = message;
+  showDeleteDialog.value = true;
+  startConfirmCountdown();
+};
+
+// 执行删除
+const executeDelete = async () => {
+  const target = deleteTarget.value;
+  if (!target) return;
+  
+  try {
+    if (target.type === 'main') {
+      await momentApi.delete(detail.value.id);
+      showToast("删除成功");
+      router.back();
+    } else if (target.type === 'child') {
+      await momentApi.delete(target.id);
+      showToast("删除成功");
+      const childIds = detail.value.children || [];
+      if (childIds.length > 0) {
+        await loadChildren(childIds);
+      }
+    }
+  } catch (err) {
+    console.error("删除失败:", err);
+    showToast(err.message || "删除失败");
+  }
+};
 
 // 基础 URL
 import ENV from '@/utils/env'
@@ -306,6 +382,7 @@ onMounted(() => {
   min-height: 100vh;
   padding-bottom: 20px;
 }
+
 .loading-center {
   padding: 60px 0;
   display: flex;
@@ -355,17 +432,9 @@ onMounted(() => {
 }
 .image-grid {
   display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: 4px;
   padding: 0 16px 16px;
-}
-.grid-1 {
-  grid-template-columns: 1fr;
-}
-.grid-2 {
-  grid-template-columns: 1fr 1fr;
-}
-.grid-3 {
-  grid-template-columns: 1fr 1fr 1fr;
 }
 .grid-item {
   aspect-ratio: 1;
@@ -377,12 +446,29 @@ onMounted(() => {
   display: flex;
   justify-content: flex-end;
 }
+.action-btns {
+  display: flex;
+  gap: 8px;
+}
 .share-btn {
   font-size: 13px;
   color: #666;
   background: #f5f5f5;
   padding: 6px 12px;
   border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.delete-btn {
+  font-size: 13px;
+  color: #ee0a24;
+  background: #fff0f0;
+  padding: 6px 12px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 /* 正文补充（完全匹配你要的风格） */
@@ -462,9 +548,15 @@ onMounted(() => {
   margin-bottom: 10px;
 }
 .append-image-list {
-  display: flex;
-  gap: 6px;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 4px;
   margin-bottom: 10px;
+}
+.append-grid-item {
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: 6px;
 }
 .append-bottom {
   display: flex;
@@ -472,6 +564,24 @@ onMounted(() => {
   align-items: center;
   font-size: 11px;
   color: #999;
+}
+.append-bottom-left {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.loc-text {
+  color: #999;
+}
+.append-actions {
+  display: flex;
+  gap: 8px;
+}
+.append-actions .delete-btn {
+  color: #ee0a24;
+  padding: 2px 6px;
+  background: #fff0f0;
+  border-radius: 4px;
 }
 .tags {
   display: flex;
@@ -489,11 +599,12 @@ onMounted(() => {
   color: #07c160;
 }
 
-/* 悬浮按钮保持原样 */
+/* 悬浮按钮 */
 .add-diary-btn {
   position: fixed;
-  bottom: 80px;
-  right: 20px; /* 瀑布流布局适合放在右侧 */
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
   width: 50px;
   height: 50px;
   background: var(--app-primary);
