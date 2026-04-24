@@ -187,6 +187,37 @@ class AssetController {
       });
     }
   }
+
+  /**
+   * 获取登记记录详情
+   */
+  async getRegisterById(req, res) {
+    try {
+      const userId = req.userId;
+      const { id } = req.params;
+
+      const register = await AssetRegister.findById(id, userId);
+
+      if (!register) {
+        return res.status(404).json({
+          status: 404,
+          message: '记录不存在'
+        });
+      }
+
+      return res.json({
+        status: 200,
+        message: '获取成功',
+        data: register
+      });
+    } catch (error) {
+      console.error('获取登记详情错误:', error);
+      return res.status(500).json({
+        status: 500,
+        message: error.message || '获取失败'
+      });
+    }
+  }
 }
 
 module.exports = new AssetController();

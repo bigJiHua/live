@@ -21,6 +21,9 @@ router.get('/snapshot/list', assetController.getSnapshots);
 // 获取用户登记列表
 router.get('/register/list', assetController.getRegisters);
 
+// 获取登记记录详情
+router.get('/register/:id', assetController.getRegisterById);
+
 // 用户登记资产
 router.post('/register', assetController.createRegister);
 

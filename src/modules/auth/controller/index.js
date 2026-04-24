@@ -446,9 +446,9 @@ class AuthController {
       // 查询现有记录（通过 fingerprint + scene + aes_key 三个条件查询）
       const selectSql = `
         SELECT * FROM device_crypto
-        WHERE fingerprint = ? AND aes_key = ?
+        WHERE fingerprint = ? AND scene = ? AND aes_key = ?
       `;
-      const [rows] = await db.execute(selectSql, [fingerprint, aes_key]);
+      const [rows] = await db.execute(selectSql, [fingerprint, scene, aes_key]);
 
       let insertOrUpdateSql;
       let params;
@@ -516,18 +516,13 @@ class AuthController {
       const dat = await db.execute(insertOrUpdateSql, params);
       if (dat[0].affectedRows === 0) return res.say("验证码发送错误", 500);
 
-      // TODO: 开发阶段留2个要填的值
-      // 1. EMAIL_HOST 和 EMAIL_PORT 在 .env 中配置
-      // 2. EMAIL_USER 和 EMAIL_PASS 在 .env 中配置
-      // 当前使用模拟发送
-      console.log(
-        `请配置环境变量 EMAIL_HOST、EMAIL_PORT、EMAIL_USER、EMAIL_PASS 以启用真实发送`
-      );
-      console.log(
-        `[发送验证码] 用户ID: ${userId}, 邮箱: ${email}, 类型: ${type}, 验证码: ${code}, 过期时间: ${new Date(
-          expiresAt
-        )}`
-      );
+      // 发送邮件
+      try {
+        await sendVerificationEmail(email, code);
+        console.log(`[发送验证码] 用户ID: ${userId}, 邮箱: ${email}, 类型: ${type}, 验证码: ${code}, 过期时间: ${new Date(expiresAt)}`);
+      } catch (emailError) {
+        console.error(`[发送验证码] 邮件发送失败: ${emailError.message}, 但验证码已保存到数据库`);
+      }
 
       return res.status(200).send({
         status: 200,

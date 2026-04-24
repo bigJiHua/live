@@ -223,7 +223,7 @@ class Account {
       currency || 'CNY',
       exchangeRate || 1,
       transDate || now.substring(0, 10),
-      remark || '普通支出',
+      remark || '',
       cardId,
       now,
       now

@@ -32,7 +32,7 @@ exports.create = {
       // ========== 【非必填字段】有默认值 ==========
       currency: joi.string().default('CNY'),
       exchangeRate: joi.number().min(0.001).precision(5).default(1),
-      remark: joi.string().allow('', null).default('普通支出'),
+      remark: joi.string().allow('', null),
     }).unknown(true),
   }).unknown(true),
 };
