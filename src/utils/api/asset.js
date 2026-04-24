@@ -58,3 +58,11 @@ export function updateAssetRegister(id, data) {
 export function deleteAssetRegister(id) {
   return request.delete(`/asset/register/${id}`)
 }
+
+/**
+ * 获取单条登记记录
+ * @param {string} id - 记录ID
+ */
+export function getAssetRegister(id) {
+  return request.get(`/asset/register/${id}`)
+}

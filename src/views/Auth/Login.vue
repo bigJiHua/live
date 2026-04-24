@@ -1,7 +1,9 @@
 <template>
   <div class="login-container">
     <div class="login-header">
-      <div class="logo">💰</div>
+      <div class="logo">
+        <img src="/logo.png" alt="Gold 财管" class="icon" />
+      </div>
       <h1 class="title">Gold 财管</h1>
       <p class="subtitle">开启您的数字资产管理</p>
     </div>
@@ -19,14 +21,16 @@
         />
         <van-field
           v-model="password"
-          type="password"
+          :type="passwordVisible ? 'text' : 'password'"
           name="password"
           label="密码"
           placeholder="请输入密码"
           left-icon="lock"
+          right-icon="eye-o"
           autocomplete="current-password"
           maxlength="15"
           :rules="passwordRules"
+          @click-right-icon="togglePasswordVisibility"
         />
       </van-cell-group>
       <!-- 
@@ -86,6 +90,11 @@ const router = useRouter();
 const username = ref("");
 const password = ref("");
 const loading = ref(false);
+const passwordVisible = ref(false);
+
+const togglePasswordVisibility = () => {
+  passwordVisible.value = !passwordVisible.value;
+};
 
 // 密码校验规则（实时）
 const passwordRulesComputed = computed(() => {
@@ -193,8 +202,14 @@ const goToRegister = () => {
 }
 
 .logo {
-  font-size: 60px;
-  margin-bottom: 20px;
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 20px;
+  > img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
 }
 
 .title {
@@ -258,5 +273,18 @@ const goToRegister = () => {
 
 .password-requirements li.invalid {
   color: #969799;
+}
+
+.login-tip {
+  text-align: center;
+  padding: 20px 10px;
+  margin-top: auto;
+}
+
+.login-tip p {
+  margin: 0;
+  font-size: 12px;
+  color: #646566;
+  line-height: 1.8;
 }
 </style>

@@ -61,6 +61,12 @@ const RouterMap = [
         meta: { title: "资产结构登记", hideTabbar: true },
       },
       {
+        path: "finance/assets/edit",
+        name: "FinanceAssetsEdit",
+        component: () => import("../views/Finance/assets/Edit.vue"),
+        meta: { title: "编辑资产登记", hideTabbar: true },
+      },
+      {
         path: "finance/assets/list",
         name: "FinanceAssetsList",
         component: () => import("../views/Finance/assets/List.vue"),

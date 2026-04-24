@@ -64,6 +64,14 @@
                   class="rate-mini-input"
                   @input="refreshAllCNY"
                 />
+                <van-icon 
+                  name="cross" 
+                  class="rate-delete" 
+                  @click="deleteRate(rate.currency)"
+                />
+              </div>
+              <div class="rate-tag add-rate" @click="showAddRatePopup = true">
+                <van-icon name="plus" />
               </div>
             </div>
           </div>
@@ -268,6 +276,41 @@
         @cancel="showCurrencyPopup = false"
       />
     </van-popup>
+    <van-popup v-model:show="showAddRatePopup" position="bottom" round>
+      <div class="custom-currency-popup">
+        <div class="popup-header">
+          <span class="popup-title">添加常用汇率</span>
+        </div>
+        <van-cell-group inset>
+          <van-field
+            v-model="newCustomRate.name"
+            label="币种名称"
+            placeholder="如：韩元"
+            label-width="70px"
+          />
+          <van-field
+            v-model="newCustomRate.code"
+            label="币种代码"
+            placeholder="如：KRW"
+            label-width="70px"
+            :formatter="formatCurrencyCode"
+          />
+          <van-field
+            v-model="newCustomRate.value"
+            label="汇率"
+            placeholder="1外币 = ? CNY"
+            label-width="70px"
+            type="number"
+            precision="4"
+            :formatter="formatRate"
+          />
+        </van-cell-group>
+        <div class="popup-actions">
+          <van-button block round @click="showAddRatePopup = false">取消</van-button>
+          <van-button block round type="primary" @click="addCustomRate">确定</van-button>
+        </div>
+      </div>
+    </van-popup>
     <van-popup v-model:show="showCyclePicker" position="bottom" round>
       <van-picker
         title="选择周期"
@@ -307,6 +350,25 @@ const showDatePicker = ref(false);
 const datePickerValue = ref([]);
 const showTypePopup = ref(false);
 const showCurrencyPopup = ref(false);
+const showAddRatePopup = ref(false);
+const newCustomRate = ref({ name: "", code: "", value: "" });
+
+const formatCurrencyCode = (value) => {
+  return value.replace(/[^a-zA-Z]/g, '').toUpperCase();
+};
+
+const formatRate = (val) => {
+  if (!val) return '';
+  let num = val.replace(/[^\d.]/g, '');
+  num = num.replace(/\.{2,}/g, '.');
+  num = num.replace('.', '#').replace(/\./g, '').replace('#', '.');
+  num = num.replace(/^(\d+)(\.\d{0,4})?.*$/, '$1$2');
+  if (parseFloat(num) > 999.9999) {
+    num = '999.9999';
+  }
+  return num;
+};
+
 const showCyclePicker = ref(false);
 const showPlanDatePicker = ref(false);
 const planDatePickerValue = ref([]);
@@ -329,7 +391,6 @@ const currencyColumns = [
   { text: "美元", value: "USD" },
   { text: "欧元", value: "EUR" },
   { text: "英镑", value: "GBP" },
-  { text: "日元", value: "JPY" },
 ];
 
 const cycleColumns = [
@@ -344,7 +405,6 @@ const defaultExchangeRates = [
   { currency: "USD", value: "7.25" },
   { currency: "EUR", value: "7.80" },
   { currency: "GBP", value: "9.00" },
-  { currency: "JPY", value: "0.048" },
 ];
 
 const formData = ref({
@@ -520,6 +580,59 @@ const onCurrencyConfirm = ({ selectedOptions }) => {
   item.currency = selectedOptions[0].value;
   calcItemCNY(item);
   showCurrencyPopup.value = false;
+};
+
+const addCustomRate = () => {
+  if (!newCustomRate.value.code || !newCustomRate.value.value) {
+    showToast("请输入币种代码和汇率");
+    return;
+  }
+  const code = newCustomRate.value.code.toUpperCase();
+  const existingIndex = exchangeRates.value.findIndex(r => r.currency === code);
+  if (existingIndex >= 0) {
+    exchangeRates.value[existingIndex].value = newCustomRate.value.value;
+  } else {
+    exchangeRates.value.push({
+      currency: code,
+      value: newCustomRate.value.value
+    });
+    currencyColumns.push({ 
+      text: newCustomRate.value.name || code, 
+      value: code 
+    });
+  }
+  refreshAllCNY();
+  showAddRatePopup.value = false;
+  newCustomRate.value = { name: "", code: "", value: "" };
+};
+
+const deleteRate = (currency) => {
+  const days = formData.value.budget_details?.days || [];
+  let isUsed = false;
+  for (const day of days) {
+    for (const item of (day.items || [])) {
+      if (item.currency === currency && item.amount) {
+        isUsed = true;
+        break;
+      }
+    }
+    if (isUsed) break;
+  }
+  
+  if (isUsed) {
+    showToast("该汇率已被使用，无法删除");
+    return;
+  }
+  
+  const index = exchangeRates.value.findIndex(r => r.currency === currency);
+  if (index >= 0) {
+    exchangeRates.value.splice(index, 1);
+  }
+  const colIndex = currencyColumns.findIndex(c => c.value === currency);
+  if (colIndex >= 0) {
+    currencyColumns.splice(colIndex, 1);
+  }
+  refreshAllCNY();
 };
 
 const onCycleConfirm = ({ selectedOptions }) => {
@@ -704,6 +817,29 @@ onMounted(() => {
   border-radius: 4px;
   font-size: 12px;
 }
+
+.rate-tag.add-rate {
+  background: #e6f7ff;
+  color: #1890ff;
+  cursor: pointer;
+  padding: 6px 10px;
+}
+
+.rate-tag.add-rate:hover {
+  background: #bae7ff;
+}
+
+.rate-delete {
+  margin-left: 4px;
+  color: #969799;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.rate-delete:hover {
+  color: #ee0a24;
+}
+
 .currency-name {
   color: #646566;
   margin-right: 4px;
@@ -926,4 +1062,29 @@ onMounted(() => {
   padding-bottom: calc(16px + env(safe-area-inset-bottom));
   z-index: 10;
 }
+
+.custom-currency-popup {
+  padding: 16px;
+}
+
+.popup-header {
+  text-align: center;
+  padding-bottom: 16px;
+}
+
+.popup-title {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.popup-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.popup-actions .van-button {
+  flex: 1;
+}
+
 </style>

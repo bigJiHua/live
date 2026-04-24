@@ -23,7 +23,7 @@
         <van-cell title="PIN 码访问锁定" label="进入系统需二次验证" center>
           <template #right-icon>
             <van-switch
-              v-model="security.pinEnabled"
+              v-model="userStore.pinEnabled"
               size="22px"
               @change="onPinSwitch"
             />
@@ -68,9 +68,9 @@ import { securityApi } from "@/utils/api/security";
 const router = useRouter();
 const userStore = useUserStore();
 
-const security = reactive({ pinEnabled: false, hasPinSet: false });
+const security = reactive({ hasPinSet: false });
 
-// 检查 PIN 设置状态（后端 + 本地双校验）
+// 检查 PIN 设置状态（后端 + 本地双校验，首次加载时调用）
 const checkPinStatus = async () => {
   try {
     const res = await securityApi.checkPin();
@@ -84,9 +84,8 @@ const checkPinStatus = async () => {
     // 400 或其他错误 = 未设置 PIN
     security.hasPinSet = false;
   }
-  // 同步本地状态与后端一致
-  localStorage.setItem("pin_enabled", security.hasPinSet ? "true" : "false");
-  security.pinEnabled = security.hasPinSet;
+  // 静默保存到 store，避免切换界面闪烁
+  userStore.setPinState(security.hasPinSet, security.hasPinSet);
 };
 
 // 计算属性显示用户信息
@@ -114,9 +113,9 @@ const getUserInfo = async () => {
 const onPinSwitch = (checked) => {
   if (checked && !security.hasPinSet) {
     showToast("请先设置 PIN 码");
-    security.pinEnabled = false;
+    userStore.pinEnabled = false;
   } else {
-    security.pinEnabled = true;
+    userStore.pinEnabled = true;
     showToast("请到设置PIN码页面修改");
   }
 };
@@ -133,6 +132,7 @@ const onLogout = async () => {
   showConfirmDialog({ title: "提醒", message: "确定退出登录？" }).then(
     async () => {
       userStore.clearUserInfo();
+      userStore.setPinState(false, false);
       router.push("/login");
       localStorage.removeItem("finance_token");
       showToast("已安全退出");

@@ -283,14 +283,9 @@ const loadList = async () => {
 // 跳转到登记页面
 const goToRegister = (item) => {
   if (item) {
-    // 传递数据用于编辑
     router.push({
-      path: "/finance/assets/register",
-      query: {
-        id: item.id,
-        data: JSON.stringify(item.asset_details),
-        rates: JSON.stringify(item.exchange_rates || {}),
-      },
+      path: "/finance/assets/edit",
+      query: { id: item.id },
     });
   } else {
     router.push("/finance/assets/register");
@@ -299,14 +294,12 @@ const goToRegister = (item) => {
 
 // 复制到新登记
 const copyToNew = (item) => {
-  router.push({
-    path: "/finance/assets/register",
-    query: {
-      data: JSON.stringify(item.asset_details),
-      rates: JSON.stringify(item.exchange_rates || {}),
-      copy: "1",
-    },
-  });
+  sessionStorage.setItem('editAssetData', JSON.stringify({
+    asset_details: item.asset_details,
+    exchange_rates: item.exchange_rates || {},
+    copy: "1"
+  }));
+  router.push("/finance/assets/register");
 };
 
 // 删除记录

@@ -109,7 +109,7 @@
 
     <van-empty
       v-if="!loading && cardList.length === 0"
-      description="暂无借记卡"
+      description="暂无借记卡，如需添加银行卡请先到应用设置-银行分类新增银行信息！"
     />
 
     <div class="add-btn-wrap" v-if="selectedId === null">

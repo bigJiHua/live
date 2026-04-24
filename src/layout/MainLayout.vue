@@ -85,13 +85,42 @@ const handleLockSystem = async () => {
   }
 };
 
-// 全屏切换
+// 全屏切换（适配全机型）
 const toggleFullscreen = () => {
+  const docEl = document.documentElement;
+  
+  // 检测是否为 iOS Safari
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+  const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+  
+  // 尝试标准 API
   if (!document.fullscreenElement) {
-    document.documentElement.requestFullscreen();
+    if (docEl.requestFullscreen) {
+      docEl.requestFullscreen().catch(() => {});
+      return;
+    }
+    
+    // iOS Safari 使用 webkit API
+    if (isIOS || isSafari) {
+      if (docEl.webkitRequestFullscreen) {
+        docEl.webkitRequestFullscreen();
+        return;
+      }
+    }
+    
+    // 降级方案：使用 CSS 模拟全屏
+    docEl.style.overflow = 'hidden';
+    docEl.style.height = '100vh';
+    showToast({ message: '已最大化显示', position: 'bottom', duration: 1500 });
   } else {
     if (document.exitFullscreen) {
-      document.exitFullscreen();
+      document.exitFullscreen().catch(() => {});
+    } else if (document.webkitExitFullscreen) {
+      document.webkitExitFullscreen();
+    } else {
+      // 恢复降级方案
+      docEl.style.overflow = '';
+      docEl.style.height = '';
     }
   }
 };

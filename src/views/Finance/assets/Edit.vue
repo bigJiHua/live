@@ -39,6 +39,7 @@
               }}</span>
             </div>
             <div class="item-amount">¥{{ formatAmount(item.amount) }}</div>
+            <div v-if="item.amount === 0" class="zero-warning">该项数据金额为0 请检查</div>
           </div>
         </div>
       </div>
@@ -75,10 +76,10 @@
               :formatter="formatRate"
               @input="onRateChange"
             />
-            <van-icon 
+            <van-icon
               v-if="rate.currency !== 'HKD'"
-              name="cross" 
-              class="rate-delete" 
+              name="cross"
+              class="rate-delete"
               @click="deleteRate(rate.currency)"
             />
           </div>
@@ -118,24 +119,29 @@
             <div class="item-amount" v-else>
               {{ item.currency }} {{ formatAmount(item.amount) }}
             </div>
+            <div v-if="item.amount === 0" class="zero-warning">该项数据金额为0 请检查</div>
           </div>
         </div>
       </div>
       <div class="section-total">
-        <span>境外资产折合（CNY）</span>
-        <span class="total-value">¥{{ formatAmount(offshoreTotal) }}</span>
+        <span>境外资产小计</span>
+        <span class="total-value">≈ ¥{{ formatAmount(offshoreTotal) }}</span>
       </div>
     </div>
 
-    <!-- 信用卡欠款 -->
-    <div class="asset-section debt-section">
+    <!-- 负债区域 -->
+    <div class="asset-section">
       <div class="section-header">
-        <span class="section-title">信用卡 / 负债</span>
-        <van-icon name="plus" class="add-icon" @click="openAddPopup('debt')" />
+        <span class="section-title">负债</span>
+        <van-icon
+          name="plus"
+          class="add-icon"
+          @click="openAddPopup('debt')"
+        />
       </div>
       <div class="section-content">
         <div v-if="debtList.length === 0" class="empty-tip">
-          暂无负债，点击 + 添加
+          暂无登记，点击 + 添加
         </div>
         <div v-else class="item-list">
           <div
@@ -152,20 +158,19 @@
                 item.remark
               }}</span>
             </div>
-            <div class="item-amount danger">
-              ¥{{ formatAmount(item.amount) }}
-            </div>
+            <div class="item-amount danger">¥{{ formatAmount(item.amount) }}</div>
+            <div v-if="item.amount === 0" class="zero-warning">该项数据金额为0 请检查</div>
           </div>
         </div>
       </div>
       <div class="section-total">
-        <span>负债合计</span>
+        <span>负债小计</span>
         <span class="total-value danger">¥{{ formatAmount(debtTotal) }}</span>
       </div>
     </div>
 
-    <!-- 提交 -->
-    <div class="submit-wrap">
+    <!-- 提交按钮 -->
+    <div class="submit-section">
       <van-button
         type="primary"
         block
@@ -203,32 +208,38 @@
             v-model.number="balanceForm.amount"
             type="number"
             label="金额"
-            placeholder="请输入金额"
-            :max="999999999.999"
-            :min="0"
-            step="0.001"
+            placeholder="输入人民币金额"
+            :formatter="formatAmountInput"
           />
           <van-field
             v-model="balanceForm.remark"
             label="备注"
             placeholder="选填"
           />
-
-          <div v-if="editBalanceId" class="delete-row">
-            <van-button type="danger" size="small" block @click="deleteBalance"
-              >删除此项</van-button
+          <div class="delete-row" v-if="editBalanceId">
+            <van-button block round type="danger" @click="deleteBalance"
+              >删除</van-button
             >
           </div>
         </div>
         <div class="popup-footer">
-          <van-button size="small" @click="showBalancePopup = false"
+          <van-button block round @click="showBalancePopup = false"
             >取消</van-button
           >
-          <van-button type="primary" size="small" @click="handleAddBalance"
-            >保存</van-button
+          <van-button block round type="primary" @click="handleAddBalance"
+            >确定</van-button
           >
         </div>
       </div>
+    </van-popup>
+
+    <van-popup v-model:show="showBalanceTypePicker" position="bottom">
+      <van-picker
+        title="选择类型"
+        :columns="balanceTypeColumns"
+        @confirm="onBalanceTypeConfirm"
+        @cancel="showBalanceTypePicker = false"
+      />
     </van-popup>
 
     <!-- 添加自定义汇率弹窗 -->
@@ -261,12 +272,12 @@
       </div>
     </van-popup>
 
-    <van-popup v-model:show="showBalanceTypePicker" position="bottom">
+    <van-popup v-model:show="showOffshoreTypePicker" position="bottom">
       <van-picker
-        title="选择类型"
-        :columns="balanceTypeColumns"
-        @confirm="onBalanceTypeConfirm"
-        @cancel="showBalanceTypePicker = false"
+        title="选择境外账户"
+        :columns="offshoreTypeColumns"
+        @confirm="onOffshoreTypeConfirm"
+        @cancel="showOffshoreTypePicker = false"
       />
     </van-popup>
 
@@ -304,31 +315,21 @@
             disabled
             placeholder="自动带出"
           />
-
           <div v-if="editOffshoreId" class="delete-row">
-            <van-button type="danger" size="small" block @click="deleteOffshore"
-              >删除此项</van-button
+            <van-button block round type="danger" @click="deleteOffshore"
+              >删除</van-button
             >
           </div>
         </div>
         <div class="popup-footer">
-          <van-button size="small" @click="showOffshorePopup = false"
+          <van-button block round @click="showOffshorePopup = false"
             >取消</van-button
           >
-          <van-button type="primary" size="small" @click="handleAddOffshore"
-            >保存</van-button
+          <van-button block round type="primary" @click="handleAddOffshore"
+            >确定</van-button
           >
         </div>
       </div>
-    </van-popup>
-
-    <van-popup v-model:show="showOffshoreTypePicker" position="bottom">
-      <van-picker
-        title="选择境外账户"
-        :columns="offshoreTypeColumns"
-        @confirm="onOffshoreTypeConfirm"
-        @cancel="showOffshoreTypePicker = false"
-      />
     </van-popup>
 
     <!-- 负债弹窗 -->
@@ -364,19 +365,18 @@
             label="备注"
             placeholder="选填"
           />
-
-          <div v-if="editDebtId" class="delete-row">
-            <van-button type="danger" size="small" block @click="deleteDebt"
-              >删除此项</van-button
+          <div class="delete-row" v-if="editDebtId">
+            <van-button block round type="danger" @click="deleteDebt"
+              >删除</van-button
             >
           </div>
         </div>
         <div class="popup-footer">
-          <van-button size="small" @click="showDebtPopup = false"
+          <van-button block round @click="showDebtPopup = false"
             >取消</van-button
           >
-          <van-button type="primary" size="small" @click="handleAddDebt"
-            >保存</van-button
+          <van-button block round type="primary" @click="handleAddDebt"
+            >确定</van-button
           >
         </div>
       </div>
@@ -390,6 +390,11 @@
         @cancel="showDebtTypePicker = false"
       />
     </van-popup>
+
+    <!-- 加载状态 -->
+    <div v-if="pageLoading" class="page-loading">
+      <van-loading type="spinner" size="48px">加载中...</van-loading>
+    </div>
   </div>
 </template>
 
@@ -402,12 +407,15 @@ import {
   closeToast,
   showConfirmDialog,
 } from "vant";
-import { useRoute } from "vue-router";
-import { createAssetRegister, updateAssetRegister } from "@/utils/api/asset";
+import { useRoute, useRouter } from "vue-router";
+import { getAssetRegister, updateAssetRegister } from "@/utils/api/asset";
 
 const route = useRoute();
+const router = useRouter();
 
 const loading = ref(false);
+const pageLoading = ref(true);
+const recordId = ref(null);
 
 // ========== 汇率限制 0~999.9999 ==========
 const exchangeRateList = ref([
@@ -425,7 +433,6 @@ const exchangeRates = computed(() => {
   return obj;
 });
 
-// 判断是否有有效汇率
 const hasValidRate = (currency) => {
   if (!currency) return false;
   const rate = exchangeRates.value[currency];
@@ -480,18 +487,6 @@ const formatRate = (val) => {
   return num;
 };
 
-const formatAmountInput = (val) => {
-  if (!val) return '';
-  let num = val.replace(/[^\d.]/g, '');
-  num = num.replace(/\.{2,}/g, '.');
-  num = num.replace('.', '#').replace(/\./g, '').replace('#', '.');
-  num = num.replace(/^(\d+)(\.\d{0,3})?.*$/, '$1$2');
-  if (parseFloat(num) > 999999999.999) {
-    num = '999999999.999';
-  }
-  return num;
-};
-
 const addCustomRate = () => {
   if (!newCustomRate.value.code || !newCustomRate.value.value) {
     showToast("请输入币种代码和汇率");
@@ -528,20 +523,23 @@ const balanceTypes = [
   { text: "现金", value: "cash" },
   { text: "其他", value: "other" },
 ];
-const balanceTypeColumns = balanceTypes.map((t) => ({
-  text: t.text,
-  value: t.value,
-}));
+const balanceTypeColumns = balanceTypes;
 const getBalanceName = (key) =>
   balanceTypes.find((t) => t.value === key)?.text || key;
 const balanceTotal = computed(() =>
   balanceList.value.reduce((s, i) => s + Number(i.amount || 0), 0)
 );
 
-const openBalancePopup = () => {
-  editBalanceId.value = null;
-  balanceForm.value = { type: "", customName: "", amount: "", remark: "" };
-  showBalancePopup.value = true;
+const openAddPopup = (type) => {
+  if (type === "balance") {
+    editBalanceId.value = null;
+    balanceForm.value = { type: "", customName: "", amount: "", remark: "" };
+    showBalancePopup.value = true;
+  } else if (type === "offshore") {
+    openOffshorePopup();
+  } else if (type === "debt") {
+    openDebtPopup();
+  }
 };
 const editBalance = (id) => {
   const item = balanceList.value.find((i) => i.id === id);
@@ -555,13 +553,8 @@ const deleteBalance = () => {
     balanceList.value = balanceList.value.filter((i) => i.id !== editBalanceId.value);
   }
   showBalancePopup.value = false;
-  showToast("已删除");
 };
-const onBalanceTypeConfirm = ({ selectedOptions }) => {
-  balanceForm.value.type = selectedOptions[0].value;
-  showBalanceTypePicker.value = false;
-};
-const handleAddBalance = async () => {
+const handleAddBalance = () => {
   if (!balanceForm.value.amount) return showToast("请输入金额");
   const data = { ...balanceForm.value, amount: Number(balanceForm.value.amount) };
   if (editBalanceId.value) {
@@ -570,32 +563,22 @@ const handleAddBalance = async () => {
     showBalancePopup.value = false;
     return;
   }
-  // 新增时检查同类型是否已存在
-  const duplicate = balanceList.value.find((i) => i.type === data.type);
-  if (duplicate) {
-    try {
-      await showConfirmDialog({
-        title: "确认添加",
-        message: `已存在「${getBalanceName(data.type)}」类型，是否继续添加？`,
-      });
-    } catch {
-      return; // 用户取消
-    }
-  }
   balanceList.value.push({ ...data, id: `bl_${Date.now()}` });
   showBalancePopup.value = false;
+};
+const onBalanceTypeConfirm = ({ selectedOptions }) => {
+  const idx = balanceTypes.findIndex(
+    (t) => t.text === selectedOptions[0]
+  );
+  balanceForm.value.type = balanceTypes[idx].value;
+  showBalanceTypePicker.value = false;
 };
 
 // ========== 境外资产（编辑+删除） ==========
 const offshoreList = ref([]);
 const showOffshorePopup = ref(false);
 const showOffshoreTypePicker = ref(false);
-const offshoreForm = ref({
-  type: "",
-  customName: "",
-  amount: "",
-  currency: "",
-});
+const offshoreForm = ref({ type: "", customName: "", amount: "", currency: "" });
 const editOffshoreId = ref(null);
 
 const offshoreTypes = computed(() => {
@@ -610,12 +593,8 @@ const offshoreTypes = computed(() => {
   return [baseType, ...additionalTypes];
 });
 
-const offshoreTypeColumns = computed(() => {
-  return offshoreTypes.value.map((t) => ({
-    text: t.text,
-    value: t.value,
-  }));
-});
+const offshoreTypeColumns = computed(() => offshoreTypes.value);
+
 const getOffshoreName = (key) => {
   if (key.startsWith("Other")) return `其他${key.replace("Other", "")}`;
   return offshoreTypes.value.find((t) => t.value === key)?.text || key;
@@ -641,13 +620,6 @@ const deleteOffshore = () => {
     offshoreList.value = offshoreList.value.filter((i) => i.id !== editOffshoreId.value);
   }
   showOffshorePopup.value = false;
-  showToast("已删除");
-};
-const onOffshoreTypeConfirm = ({ selectedOptions }) => {
-  const value = selectedOptions[0].value;
-  offshoreForm.value.type = value;
-  offshoreForm.value.currency = value.replace("Other", "");
-  showOffshoreTypePicker.value = false;
 };
 const handleAddOffshore = async () => {
   if (!offshoreForm.value.amount) return showToast("请输入金额");
@@ -659,19 +631,25 @@ const handleAddOffshore = async () => {
     return;
   }
   // 新增时检查同类型是否已存在
-  const duplicate = offshoreList.value.find((i) => i.type === data.type);
-  if (duplicate) {
+  const exists = offshoreList.value.some((i) => i.type === data.type && !i.customName);
+  if (exists) {
     try {
       await showConfirmDialog({
-        title: "确认添加",
+        title: "提示",
         message: `已存在「${getOffshoreName(data.type)}」类型，是否继续添加？`,
       });
     } catch {
-      return; // 用户取消
+      return;
     }
   }
   offshoreList.value.push({ ...data, id: `of_${Date.now()}` });
   showOffshorePopup.value = false;
+};
+const onOffshoreTypeConfirm = ({ selectedOptions }) => {
+  const item = selectedOptions[0];
+  offshoreForm.value.type = item.value;
+  offshoreForm.value.currency = item.currency || item.value.replace("Other", "");
+  showOffshoreTypePicker.value = false;
 };
 
 // ========== 负债（编辑+删除） ==========
@@ -689,10 +667,7 @@ const debtTypes = [
   { text: "美团月付", value: "Meituan" },
   { text: "其他", value: "Other" },
 ];
-const debtTypeColumns = debtTypes.map((t) => ({
-  text: t.text,
-  value: t.value,
-}));
+const debtTypeColumns = debtTypes;
 const getDebtName = (key) =>
   debtTypes.find((t) => t.value === key)?.text || key;
 const debtTotal = computed(() =>
@@ -716,13 +691,8 @@ const deleteDebt = () => {
     debtList.value = debtList.value.filter((i) => i.id !== editDebtId.value);
   }
   showDebtPopup.value = false;
-  showToast("已删除");
 };
-const onDebtTypeConfirm = ({ selectedOptions }) => {
-  debtForm.value.type = selectedOptions[0].value;
-  showDebtTypePicker.value = false;
-};
-const handleAddDebt = async () => {
+const handleAddDebt = () => {
   if (!debtForm.value.amount) return showToast("请输入金额");
   const data = { ...debtForm.value, amount: Number(debtForm.value.amount) };
   if (editDebtId.value) {
@@ -731,57 +701,56 @@ const handleAddDebt = async () => {
     showDebtPopup.value = false;
     return;
   }
-  // 新增时检查同类型是否已存在
-  const duplicate = debtList.value.find((i) => i.type === data.type);
-  if (duplicate) {
-    try {
-      await showConfirmDialog({
-        title: "确认添加",
-        message: `已存在「${getDebtName(data.type)}」类型，是否继续添加？`,
-      });
-    } catch {
-      return; // 用户取消
-    }
-  }
   debtList.value.push({ ...data, id: `db_${Date.now()}` });
   showDebtPopup.value = false;
 };
-
-// ========== 通用 ==========
-const openAddPopup = (type) => {
-  if (type === "balance") openBalancePopup();
-  if (type === "offshore") openOffshorePopup();
-  if (type === "debt") openDebtPopup();
+const onDebtTypeConfirm = ({ selectedOptions }) => {
+  const idx = debtTypes.findIndex(
+    (t) => t.text === selectedOptions[0]
+  );
+  debtForm.value.type = debtTypes[idx].value;
+  showDebtTypePicker.value = false;
 };
 
-const finalBalance = computed(
-  () => balanceTotal.value + offshoreTotal.value - debtTotal.value
+// ========== 计算 ==========
+const finalBalance = computed(() =>
+  Math.round((balanceTotal.value + offshoreTotal.value - debtTotal.value) * 100) / 100
 );
-const formatAmount = (amount) =>
-  (Number(amount) || 0).toLocaleString("zh-CN", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+
+// ========== 格式化 ==========
+const formatAmount = (val) => {
+  const num = Number(val) || 0;
+  return num.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
+
+const formatAmountInput = (val) => {
+  if (!val) return '';
+  let num = val.replace(/[^\d.]/g, '');
+  num = num.replace(/\.{2,}/g, '.');
+  num = num.replace('.', '#').replace(/\./g, '').replace('#', '.');
+  num = num.replace(/^(\d+)(\.\d{0,3})?.*$/, '$1$2');
+  if (parseFloat(num) > 999999999.999) {
+    num = '999999999.999';
+  }
+  return num;
+};
 
 // ========== 提交 ==========
 const handleSubmit = async () => {
   const totalAsset = balanceTotal.value + offshoreTotal.value;
   const debt = debtTotal.value;
-  const net = finalBalance.value;
 
   if (totalAsset === 0 && debt === 0)
     return showToast("至少填写一项资产或负债");
 
-  // 确认框
-  const isEdit = !!route.query.id;
   try {
     await showConfirmDialog({
       title: "确认提交",
-      message: isEdit ? "确定要更新这条资产登记记录吗？" : "确定要提交这条资产登记记录吗？",
+      message: "确定要更新这条资产登记记录吗？",
       confirmButtonColor: "#07c160",
     });
   } catch {
-    return; // 用户取消
+    return;
   }
 
   loading.value = true;
@@ -798,21 +767,15 @@ const handleSubmit = async () => {
     const payload = {
       total_asset: Math.round(totalAsset * 100) / 100,
       credit_debt: Math.round(debt * 100) / 100,
-      total_balance: Math.round(net * 100) / 100,
+      total_balance: Math.round(finalBalance.value * 100) / 100,
       asset_details: asset_details,
       remark: "手动资产登记",
     };
 
-    // 有 id 则更新，无 id 则创建
-    const recordId = route.query.id;
-    if (recordId) {
-      await updateAssetRegister(recordId, payload);
-    } else {
-      await createAssetRegister(payload);
-    }
+    await updateAssetRegister(recordId.value, payload);
 
     closeToast();
-    showSuccessToast({ message: "保存成功", onClose: () => history.back() });
+    showSuccessToast({ message: "保存成功", onClose: () => router.back() });
   } catch (e) {
     closeToast();
     showToast(e.message || "保存失败");
@@ -821,59 +784,54 @@ const handleSubmit = async () => {
   }
 };
 
-// ========== 初始化 - 从 sessionStorage 读取数据 ==========
-const initFromQuery = () => {
-  const storedData = sessionStorage.getItem('editAssetData');
+// ========== 初始化 - 从 API 读取数据 ==========
+const initFromApi = async () => {
+  recordId.value = route.query.id;
+  if (!recordId.value) {
+    showToast("缺少记录ID");
+    router.back();
+    return;
+  }
 
-  if (storedData) {
-    try {
-      const { id, asset_details, exchange_rates, copy } = JSON.parse(storedData);
+  try {
+    const res = await getAssetRegister(recordId.value);
+    const data = res.data || res;
 
-      if (id && !copy) {
-        route.query.id = id;
+    if (data.asset_details) {
+      if (data.asset_details.balance) {
+        balanceList.value = Array.isArray(data.asset_details.balance)
+          ? data.asset_details.balance
+          : Object.entries(data.asset_details.balance).map(([key, val]) => ({ ...val, type: key, id: val.id || `bl_${key}` }));
       }
-      if (copy) {
-        route.query.copy = "1";
+      if (data.asset_details.offshore) {
+        offshoreList.value = Array.isArray(data.asset_details.offshore)
+          ? data.asset_details.offshore
+          : Object.entries(data.asset_details.offshore).map(([key, val]) => ({ ...val, type: key, id: val.id || `of_${key}` }));
       }
-
-      if (asset_details) {
-        if (asset_details.balance) {
-          const bal = asset_details.balance;
-          balanceList.value = Array.isArray(bal)
-            ? bal
-            : Object.entries(bal).map(([key, val]) => ({ ...val, id: val.id || `bl_${key}` }));
-        }
-        if (asset_details.offshore) {
-          const off = asset_details.offshore;
-          offshoreList.value = Array.isArray(off)
-            ? off
-            : Object.entries(off).map(([key, val]) => ({ ...val, id: val.id || `of_${key}` }));
-        }
-        if (asset_details.debt) {
-          const dbt = asset_details.debt;
-          debtList.value = Array.isArray(dbt)
-            ? dbt
-            : Object.entries(dbt).map(([key, val]) => ({ ...val, id: val.id || `db_${key}` }));
-        }
+      if (data.asset_details.debt) {
+        debtList.value = Array.isArray(data.asset_details.debt)
+          ? data.asset_details.debt
+          : Object.entries(data.asset_details.debt).map(([key, val]) => ({ ...val, type: key, id: val.id || `db_${key}` }));
       }
-
-      if (exchange_rates) {
-        Object.entries(exchange_rates).forEach(([key, val]) => {
+      if (data.asset_details.exchangeRates) {
+        Object.entries(data.asset_details.exchangeRates).forEach(([key, val]) => {
           const rateItem = exchangeRateList.value.find(r => r.currency === key);
           if (rateItem) {
             rateItem.value = String(val);
           }
         });
       }
-    } catch (e) {
-      console.error("解析资产数据失败", e);
     }
-    sessionStorage.removeItem('editAssetData');
+  } catch (e) {
+    console.error("加载资产数据失败", e);
+    showToast("加载数据失败");
+  } finally {
+    pageLoading.value = false;
   }
 };
 
 onMounted(() => {
-  initFromQuery();
+  initFromApi();
 });
 </script>
 
@@ -885,90 +843,201 @@ onMounted(() => {
 }
 
 .balance-card {
-  background: linear-gradient(135deg, #4a6cf7 0%, #7c4dff 100%);
-  color: #fff;
-  text-align: center;
-  padding: 36px 20px;
-  margin: 16px;
-  border-radius: 20px;
-  box-shadow: 0 8px 25px rgba(74, 108, 247, 0.25);
+  background: linear-gradient(135deg, #07c160 0%, #10b981 100%);
+  color: white;
+  padding: 24px 20px;
+  margin-bottom: 12px;
 }
+
 .balance-label {
-  font-size: 15px;
-  opacity: 0.92;
+  font-size: 14px;
+  opacity: 0.9;
   margin-bottom: 8px;
 }
+
 .balance-value {
   display: flex;
-  justify-content: center;
   align-items: baseline;
+  gap: 4px;
 }
-.currency {
-  font-size: 22px;
-  margin-right: 6px;
+
+.balance-value .currency {
+  font-size: 20px;
+  font-weight: 600;
 }
-.amount {
-  font-size: 40px;
+
+.balance-value .amount {
+  font-size: 32px;
   font-weight: 700;
-  letter-spacing: 1px;
 }
 
 .asset-section {
-  background: #fff;
-  margin: 16px;
-  border-radius: 16px;
-  overflow: hidden;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+  background: white;
+  margin-bottom: 12px;
+  padding: 16px;
 }
+
 .section-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px;
-  border-bottom: 1px solid #f3f4f6;
+  margin-bottom: 12px;
 }
+
 .section-title {
   font-size: 16px;
   font-weight: 600;
   color: #1f2937;
 }
+
 .add-icon {
-  font-size: 19px;
-  color: #4a6cf7;
+  font-size: 20px;
+  color: #07c160;
+  cursor: pointer;
+}
+
+.section-content {
+  padding: 16px;
+  min-height: 70px;
+}
+
+.empty-tip {
+  text-align: center;
+  color: #9ca3af;
+  font-size: 14px;
+  padding: 20px 0;
+}
+
+.item-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.asset-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  background: #f9fafb;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.item-name {
+  font-size: 15px;
+  color: #1f2937;
+  font-weight: 500;
+}
+
+.item-remark {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.item-currency {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.item-currency .convert {
+  color: #07c160;
+  margin-left: 4px;
+}
+
+.item-amount {
+  font-size: 15px;
+  font-weight: 600;
+  color: #07c160;
+}
+
+.item-amount.danger {
+  color: #ef4444;
+}
+
+.zero-warning {
+  font-size: 12px;
+  color: #ef4444;
+  margin-top: 4px;
+}
+
+.section-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 12px;
+  border-top: 1px solid #f3f4f6;
+  font-size: 14px;
+  color: #6b7280;
+  margin-top: 12px;
+}
+
+.total-value {
+  font-weight: 600;
+  color: #07c160;
+}
+
+.total-value.danger {
+  color: #ef4444;
+}
+
+.submit-section {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 16px;
+  background: white;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
 }
 
 .exchange-rate-section {
-  padding: 12px 16px;
+  margin-bottom: 16px;
+  padding: 12px;
   background: #f9fafb;
+  border-radius: 8px;
 }
+
 .rate-title {
-  font-size: 12px;
+  font-size: 13px;
   color: #6b7280;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
 }
+
 .rate-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
 }
+
 .rate-item {
   display: flex;
   align-items: center;
   gap: 8px;
 }
+
 .rate-item span {
   width: 40px;
   font-size: 13px;
   color: #374151;
 }
+
 .rate-delete {
   color: #999;
   cursor: pointer;
   font-size: 14px;
 }
+
 .rate-delete:active {
   color: #ee0a24;
 }
+
 .add-rate {
   display: flex;
   align-items: center;
@@ -979,93 +1048,15 @@ onMounted(() => {
   cursor: pointer;
   color: #666;
 }
+
 .add-rate:active {
   background: #eee;
-}
-
-.section-content {
-  padding: 16px;
-  min-height: 70px;
-}
-.empty-tip {
-  text-align: center;
-  color: #9ca3af;
-  font-size: 13px;
-  padding: 20px 0;
-}
-.item-list {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.asset-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 4px 0;
-}
-.item-info {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-.item-name {
-  font-size: 15px;
-  color: #1f2937;
-  font-weight: 500;
-}
-.item-currency {
-  font-size: 12px;
-  color: #6b7280;
-}
-.convert {
-  color: #4a6cf7;
-  margin-left: 4px;
-  font-weight: 500;
-}
-.item-remark {
-  font-size: 12px;
-  color: #9ca3af;
-}
-.item-amount {
-  font-size: 15px;
-  font-weight: 600;
-  color: #1f2937;
-}
-.item-amount.danger {
-  color: #f43f5e;
-}
-
-.section-total {
-  display: flex;
-  justify-content: space-between;
-  padding: 14px 16px;
-  background: #f9fafb;
-  font-size: 14px;
-  color: #4b5563;
-  font-weight: 500;
-}
-.total-value {
-  font-weight: 700;
-  color: #1f2937;
-}
-.total-value.danger {
-  color: #f43f5e;
-}
-
-.submit-wrap {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  padding: 16px;
-  background: #fff;
-  box-shadow: 0 -2px 15px rgba(0, 0, 0, 0.05);
 }
 
 .add-popup {
   padding: 20px;
 }
+
 .popup-header {
   display: flex;
   justify-content: space-between;
@@ -1075,42 +1066,67 @@ onMounted(() => {
   font-weight: 600;
   color: #1f2937;
 }
+
 .popup-header .van-icon {
   font-size: 20px;
   color: #9ca3af;
 }
+
 .popup-form {
   gap: 10px;
   display: flex;
   flex-direction: column;
 }
+
+.popup-footer {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.popup-footer .van-button {
+  flex: 1;
+}
+
+.delete-row {
+  margin-top: 12px;
+}
+
 .custom-currency-popup {
   padding: 20px;
   padding-bottom: 30px;
 }
+
 .custom-currency-popup .popup-title {
   font-size: 17px;
   font-weight: 600;
   color: #1f2937;
 }
+
 .custom-currency-popup .popup-header {
   margin-bottom: 20px;
 }
+
 .popup-actions {
   display: flex;
   gap: 12px;
   margin-top: 20px;
 }
+
 .popup-actions .van-button {
   flex: 1;
 }
-.delete-row {
-  margin-top: 12px;
-}
-.popup-footer {
+
+.page-loading {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  margin-top: 20px;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.9);
+  z-index: 999;
 }
 </style>

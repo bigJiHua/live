@@ -13,6 +13,9 @@ export const useUserStore = defineStore("user", {
     token: localStorage.getItem("finance_token") || null,
     // 加载状态
     loading: false,
+    // PIN 码状态（静默保存，避免切换界面闪烁）
+    pinEnabled: localStorage.getItem("pin_enabled") === "true",
+    hasPinSet: localStorage.getItem("pin_has_set") === "true",
   }),
 
   getters: {
@@ -78,6 +81,18 @@ export const useUserStore = defineStore("user", {
       this.email = "";
       this.avatar = "";
       this.token = null;
+    },
+
+    /**
+     * 设置 PIN 状态（静默保存）
+     */
+    setPinState(enabled, hasSet = null) {
+      this.pinEnabled = enabled;
+      localStorage.setItem("pin_enabled", enabled ? "true" : "false");
+      if (hasSet !== null) {
+        this.hasPinSet = hasSet;
+        localStorage.setItem("pin_has_set", hasSet ? "true" : "false");
+      }
     },
   },
 });
