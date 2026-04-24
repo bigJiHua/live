@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="public/logo.png" width="120" alt="Logo" />
+</p>
+
 # 智慧个人财务管理系统
 
 ## 项目简介
