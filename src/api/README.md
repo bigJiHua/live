@@ -2,116 +2,53 @@
 
 本目录包含所有 API 路由入口文件，负责定义 HTTP 端点并将请求分发到相应的控制器。
 
-## 文件说明
+## 路由注册
 
-### auth.js
-**认证相关路由**
+所有路由统一在 `src/api/index.js` 中注册，最终 API 前缀为 `/api/v1`。
 
-| 方法 | 路径 | 说明 | 中间件 |
-|------|------|------|--------|
-| POST | `/api/auth/register` | 用户注册 | - |
-| POST | `/api/auth/login` | 用户登录 | - |
-| GET | `/api/auth/me` | 获取当前用户信息 | authGuard |
-| POST | `/api/auth/refresh` | 刷新 Token | - |
+## 完整路由清单
 
----
+| 前缀 | 文件 | 模块 | 说明 |
+|------|------|------|------|
+| `/api/v1/auth` | auth | 认证模块 | 用户注册、登录、Token |
+| `/api/v1/security` | security | 安全模块 | PIN码设置/验证/修改 |
+| `/api/v1/account` | account | 账务模块 | 收支流水管理 |
+| `/api/v1/accountBalance` | account | 账务模块 | 账户余额管理 |
+| `/api/v1/category` | category | 分类模块 | 收支分类管理 |
+| `/api/v1/bank` | category | 分类模块 | 银行分类管理 |
+| `/api/v1/card` | card | 银行卡模块 | 卡片管理 |
+| `/api/v1/card/bill` | card | 银行卡模块 | 信用卡账单管理 |
+| `/api/v1/card/repay` | card | 银行卡模块 | 信用卡还款管理 |
+| `/api/v1/user` | user | 用户模块 | 用户管理 |
+| `/api/v1/database` | database | 数据库模块 | 数据库状态查询 |
+| `/api/v1/upload` | upload | 上传模块 | 文件上传 |
+| `/api/v1/moment` | moment | 时刻模块 | 动态/日记 |
+| `/api/v1/asset` | asset | 资产模块 | 资产快照与登记 |
+| `/api/v1/todo` | todo | 待办模块 | 待办日程 |
+| `/api/v1/work` | work | 工作模块 | 工作与工资 |
+| `/api/v1/fixedAsset` | fixed_asset | 固定资产模块 | 固定资产管理 |
+| `/api/v1/budget` | budget | 预算模块 | 预算管理 |
 
-### security.js
-**安全相关路由 (PIN 码管理)**
+## 认证机制
 
-| 方法 | 路径 | 说明 | 中间件 |
-|------|------|------|--------|
-| POST | `/api/security/pin/verify` | 验证 PIN 码 | authGuard |
-| POST | `/api/security/pin/set` | 设置 PIN 码 | authGuard |
-| POST | `/api/security/pin/change` | 修改 PIN 码 | authGuard |
-| POST | `/api/security/pin/reset` | 重置 PIN 码 | - |
+除 `/api/v1/auth` 和 `/api/v1/security` 部分接口外，其他所有接口都需要：
 
----
+1. **JWT Token** 验证 - 通过 `authGuard` 中间件
+2. **PIN 码验证** - 通过 `pinLockGuard` 中间件
 
-### account.js
-**账务管理路由 (需要 PIN 验证)**
-
-| 方法 | 路径 | 说明 | 中间件 |
-|------|------|------|--------|
-| GET | `/api/account/transactions` | 获取账务流水列表 | authGuard + pinLockGuard |
-| GET | `/api/account/transactions/:id` | 获取账务流水详情 | authGuard + pinLockGuard |
-| POST | `/api/account/transactions` | 创建账务流水 | authGuard + pinLockGuard |
-| PUT | `/api/account/transactions/:id` | 更新账务流水 | authGuard + pinLockGuard |
-| DELETE | `/api/account/transactions/:id` | 删除账务流水 | authGuard + pinLockGuard |
-| GET | `/api/account/categories` | 获取分类列表 | authGuard + pinLockGuard |
-| POST | `/api/account/categories` | 创建分类 | authGuard + pinLockGuard |
-| PUT | `/api/account/categories/:id` | 更新分类 | authGuard + pinLockGuard |
-| DELETE | `/api/account/categories/:id` | 删除分类 | authGuard + pinLockGuard |
-| GET | `/api/account/report` | 获取财务报表 | authGuard + pinLockGuard |
-| POST | `/api/account/calculate-irr` | 计算 IRR | authGuard + pinLockGuard |
-
----
-
-### user.js
-**用户管理路由**
-
-| 方法 | 路径 | 说明 | 中间件 |
-|------|------|------|--------|
-| PUT | `/api/user/profile` | 更新用户资料 | authGuard |
-| POST | `/api/user/password/change` | 修改密码 | authGuard |
-| GET | `/api/user/settings` | 获取用户设置 | authGuard |
-| PUT | `/api/user/settings` | 更新用户设置 | authGuard |
-
----
-
-### moment.js
-**动态(朋友圈)路由**
-
-| 方法 | 路径 | 说明 | 中间件 |
-|------|------|------|--------|
-| POST | `/api/v1/moment` | 发布动态 | authGuard |
-| GET | `/api/v1/moment/list` | 获取动态列表 | authGuard |
-| GET | `/api/v1/moment/today` | 获取今日动态(含子动态) | authGuard |
-| GET | `/api/v1/moment/:id` | 获取动态详情 | authGuard |
-| POST | `/api/v1/moment/batch` | 批量获取子动态详情 | authGuard |
-| PUT | `/api/v1/moment/:id` | 更新动态 | authGuard |
-| DELETE | `/api/v1/moment/:id` | 删除动态 | authGuard |
-
----
-
-### upload.js
-**文件上传路由**
-
-| 方法 | 路径 | 说明 | 中间件 |
-|------|------|------|--------|
-| POST | `/api/v1/upload/single` | 单文件上传 | authGuard |
-| POST | `/api/v1/upload/multiple` | 多文件上传 | authGuard |
-| GET | `/api/v1/upload/list` | 查询附件列表 | authGuard |
-| GET | `/api/v1/upload/search` | 搜索附件 | authGuard |
-| POST | `/api/v1/upload/:id` | 编辑附件(remark/tags) | authGuard |
-| POST | `/api/v1/upload/batch-delete` | 批量删除附件 | authGuard |
-
-**busType 类型**: `post`(动态图片) / `product`(资产图片) / `bank`(银行Icon) / `other`(其他)
-
----
-
-### database.js
-**数据库管理路由**
-
-| 方法 | 路径 | 说明 | 中间件 |
-|------|------|------|--------|
-| GET | `/api/database/status` | 数据库状态 | - |
-
----
-
-## 中间件说明
+### 中间件说明
 
 | 中间件 | 说明 |
 |--------|------|
 | `authGuard` | 验证 JWT Token，将用户信息添加到请求对象 |
 | `pinLockGuard` | 检查会话是否需要 PIN 验证，未验证时返回 423 状态码 |
 
-## 状态码说明
+### 状态码说明
 
 | 状态码 | 说明 |
 |--------|------|
 | 200 | 成功 |
-| 200 | 创建成功 |
+| 201 | 创建成功 |
 | 400 | 请求参数错误 |
 | 401 | 未认证或认证失败 |
 | 403 | 权限不足 |

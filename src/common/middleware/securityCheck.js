@@ -35,7 +35,7 @@ const securityCheck = (req, res, next) => {
     const ua = h["user-agent"] || "";
     const customUa = h["x-user-agent-custom"] || "";
     
-    if (!fp || ua !== customUa) {
+    if (fp && customUa && ua !== customUa) {
       console.warn('设备环境异常')
       return res.say("非法请求！", 400);
     }

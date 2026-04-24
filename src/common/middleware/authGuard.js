@@ -1,30 +1,44 @@
 const jwt = require("jsonwebtoken");
+const db = require("../config/db");
 
 /**
- * 认证中间件 - 验证 JWT Token
+ * JWT 认证守卫
+ * 验证请求头中的 Bearer Token
  */
-const authGuard = (req, res, next) => {
+const authGuard = async (req, res, next) => {
   try {
-    // 从请求头获取 Token
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.say("请重新登录！", 401);
+      return res.json({ status: 401, message: "未提供认证令牌" });
     }
-    const token = authHeader.substring(7); // 移除 'Bearer ' 前缀
-    // 验证 Token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    // 将用户信息添加到请求对象
-    req.userId = decoded.userId;
-    req.userEmail = decoded.email;
+    const token = authHeader.split(" ")[1];
 
-    next();
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      req.userId = decoded.userId;
+
+      // 验证用户是否存在
+      const [users] = await db.execute(
+        "SELECT id FROM user_info WHERE id = ? AND is_deleted = 0",
+        [req.userId]
+      );
+
+      if (users.length === 0) {
+        return res.json({ status: 401, message: "用户不存在" });
+      }
+
+      next();
+    } catch (err) {
+      if (err.name === "TokenExpiredError") {
+        return res.json({ status: 401, message: "令牌已过期" });
+      }
+      return res.json({ status: 401, message: "无效的认证令牌" });
+    }
   } catch (error) {
-    console.log(error);
-    
-    console.error("认证中间件错误:", error);
-    return res.say("非法闯入！ 401", 401);
+    console.error("Auth Guard Error:", error);
+    return res.json({ status: 500, message: "认证检查失败" });
   }
 };
 

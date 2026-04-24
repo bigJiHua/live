@@ -19,7 +19,7 @@
 
 ### 1. 用户注册
 
-**路径**：`POST /api/v1/auth/register`
+**路径**：`POST /api/auth/register`
 
 **请求体** `req.body.data`：
 

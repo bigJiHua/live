@@ -1,7 +1,7 @@
 // 1. 环境变量必须最先加载
 require("dotenv").config();
-const { securityCheck } = require("./src/middlewares/securityCheck");
-const decryptWithSecurity = require("./src/middlewares/authSecurityData");
+const { securityCheck } = require("./src/common/middleware/securityCheck");
+const decryptWithSecurity = require("./src/common/middleware/authSecurityData");
 const { pinSecurityGuard } = require("./src/common/middleware/pinSecurityGuard");
 const express = require("express");
 const cors = require("cors");
@@ -75,7 +75,7 @@ app.use("/api/public", express.static(path.join(__dirname, "public")));// 【已
 const {
   errorHandler,
   notFoundHandler,
-} = require("./src/middlewares/errorMiddleware");
+} = require("./src/common/middleware/errorMiddleware");
 
 // 404 处理
 app.use(notFoundHandler);

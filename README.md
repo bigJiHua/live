@@ -1,55 +1,82 @@
 # 生活管理系统 API
 
-一个功能完整的生活管理系统后端 API，提供用户认证、账务管理、PIN 码安全验证等功能。
+一个功能完整的生活管理系统后端 API，提供用户认证、账务管理、银行卡管理、PIN 码安全验证等功能。
 
 ## 功能特性
 
 - 🔐 用户注册、登录、JWT 认证
 - 🔑 PIN 码安全验证（支持 423 状态码锁定机制）
-- 💰 账务流水管理（收入/支出）
+- � 银行卡管理（支持信用卡账单周期计算）
+- �💰 账务流水管理（收入/支出）
+- 🏦 账户余额管理
 - 📊 财务报表生成
 - 📈 投资回报率 (IRR) 计算
-- 🏷️ 分类管理
-- 📧 邮件验证功能
-- 🛡️ 安全中间件（认证、PIN 锁定）
+- 🏷️ 分类管理、银行管理
+- � 文件上传
+- � 时刻/日记记录
+- ✅ 待办日程管理
+- 💼 工作与工资管理
+- 🏠 固定资产管理
+- 📉 预算管理
+- �🛡️ 安全中间件（认证、PIN 锁定）
 
 ## 项目结构
 
 ```
-Finance_API
+live-api
 ├─ src
-│  ├─ api                  # 路由入口
-│  │  ├─ auth.js           # 认证路由
-│  │  ├─ security.js       # 安全路由（PIN码验证）
-│  │  ├─ account.js        # 账务路由
-│  │  └─ user.js           # 用户路由
-│  ├─ controllers          # 控制器层
-│  │  ├─ authController.js
-│  │  ├─ financeController.js
-│  │  └─ securityController.js
-│  ├─ middlewares          # 中间件
-│  │  ├─ authGuard.js      # JWT 验证
-│  │  └─ pinLockGuard.js   # PIN 锁定检查（返回423状态码）
-│  ├─ models               # 数据模型
-│  │  ├─ User.js
-│  │  ├─ Transaction.js
-│  │  └─ Category.js
-│  ├─ services             # 业务逻辑层
-│  │  └─ financeService.js
-│  ├─ utils                # 工具类
-│  │  ├─ crypto.js
-│  │  └─ mailer.js
-│  └─ config               # 配置文件
-│     ├─ db.js
-│     └─ jwt.js
-├─ public                  # 静态资源
+│  ├─ api                    # 路由入口
+│  │  └─ index.js            # API 路由注册
+│  ├─ modules                # 业务模块（按功能划分）
+│  │  ├─ auth/              # 认证模块
+│  │  ├─ security/          # 安全模块（PIN码）
+│  │  ├─ account/           # 账务模块（流水+余额）
+│  │  ├─ category/         # 分类+银行模块
+│  │  ├─ card/              # 银行卡模块（卡片+账单+还款）
+│  │  ├─ user/              # 用户模块
+│  │  ├─ upload/            # 文件上传模块
+│  │  ├─ moment/            # 时刻/日记模块
+│  │  ├─ asset/             # 资产快照模块
+│  │  ├─ todo/              # 待办日程模块
+│  │  ├─ work/             # 工作与工资模块
+│  │  ├─ fixed_asset/      # 固定资产模块
+│  │  └─ budget/            # 预算模块
+│  ├─ common                # 公共模块
+│  │  ├─ config/           # 配置文件
+│  │  ├─ middleware/       # 中间件
+│  │  └─ utils/            # 工具类
+│  └─ app.js               # Express 实例配置
+├─ mysql/                   # 数据库脚本
+│  └─ live.sql             # 数据库表结构
+├─ public                   # 静态资源
 ├─ logs                    # 系统日志
-├─ tests                   # 测试文件
 ├─ .env                    # 环境变量
 ├─ .env.example            # 环境变量示例
-├─ app.js                  # Express 实例配置
+├─ package.json
 └─ server.js               # 程序启动入口
 ```
+
+## API 路由总览
+
+| 前缀 | 模块 | 说明 |
+|------|------|------|
+| `/api/auth` | auth | 用户认证（注册、登录、Token） |
+| `/api/security` | security | 安全设置（PIN码设置/验证/修改） |
+| `/api/account` | account | 账务流水管理 |
+| `/api/accountBalance` | account | 账户余额管理 |
+| `/api/category` | category | 收支分类管理 |
+| `/api/bank` | category | 银行分类管理 |
+| `/api/card` | card | 银行卡管理 |
+| `/api/card/bill` | card | 信用卡账单管理 |
+| `/api/card/repay` | card | 信用卡还款管理 |
+| `/api/user` | user | 用户管理 |
+| `/api/upload` | upload | 文件上传 |
+| `/api/moment` | moment | 时刻/日记 |
+| `/api/asset` | asset | 资产快照与登记 |
+| `/api/todo` | todo | 待办日程 |
+| `/api/work` | work | 工作与工资 |
+| `/api/fixedAsset` | fixed_asset | 固定资产 |
+| `/api/budget` | budget | 预算管理 |
 
 ## 快速开始
 
@@ -86,6 +113,12 @@ mysql -u root -p
 CREATE DATABASE life_manager DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
+### 导入数据库结构
+
+```bash
+mysql -u root -p life_manager < mysql/live.sql
+```
+
 ### 启动服务
 
 开发模式：
@@ -100,116 +133,50 @@ npm start
 
 服务将在 `http://localhost:3000` 启动。
 
-## API 文档
+## 认证机制
+
+所有业务接口都需要 **JWT 认证 + PIN 码验证**。
+
+- JWT Token：用于身份验证
+- PIN 码：6位数字，用于保护敏感操作
+- 423 状态码：会话被 PIN 锁定，前端需引导用户验证 PIN
 
 ### 认证接口 (`/api/auth`)
 
-#### 注册
-```
-POST /api/auth/register
-Body: { username, email, password }
-```
-
-#### 登录
-```
-POST /api/auth/login
-Body: { email, password }
-Response: { token, user }
-```
-
-#### 获取当前用户
-```
-GET /api/auth/me
-Headers: Authorization: Bearer <token>
-```
-
-#### 刷新 Token
-```
-POST /api/auth/refresh
-Body: { token }
-```
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/auth/register` | 用户注册 |
+| POST | `/api/auth/login` | 用户登录 |
+| GET | `/api/auth/me` | 获取当前用户 |
+| POST | `/api/auth/refresh` | 刷新 Token |
 
 ### 安全接口 (`/api/security`)
 
-#### 设置 PIN 码
-```
-POST /api/security/pin/set
-Headers: Authorization: Bearer <token>
-Body: { pin, confirmPassword }
-```
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/security/pin/set` | 设置 PIN 码 |
+| POST | `/api/security/pin/verify` | 验证 PIN 码 |
+| POST | `/api/security/pin/change` | 修改 PIN 码 |
 
-#### 验证 PIN 码
-```
-POST /api/security/pin/verify
-Headers: Authorization: Bearer <token>
-Body: { pin }
-```
+## 银行卡业务规则
 
-#### 修改 PIN 码
-```
-POST /api/security/pin/change
-Headers: Authorization: Bearer <token>
-Body: { oldPin, newPin, confirmPassword }
-```
+### 账单周期计算
 
-### 账务接口 (`/api/account`)
+- **账单周期**：账单日(bill_day)次日 ~ 次月账单日前一天
+- **账单月归属**：
+  - 消费日期 **<** 账单日 → 当月账单
+  - 消费日期 **>** 账单日 → 下月账单（账单日当天仍属当月）
+- **还款日**：账单月的下一月 repayDay
+- **逾期判定**：当前日期 > repay_date 且 need_repay > 0
 
-所有账务接口都需要 JWT 认证 + PIN 码验证。如果会话未验证 PIN 码，将返回 423 状态码。
+### 举例说明
 
-#### 获取账务流水列表
-```
-GET /api/account/transactions?page=1&limit=20&type=income
-Headers: Authorization: Bearer <token>
-```
+假设账单日=12号，还款日=次月6号：
 
-#### 创建账务流水
-```
-POST /api/account/transactions
-Headers: Authorization: Bearer <token>
-Body: { amount, type, categoryId, description, date }
-```
-
-#### 获取分类列表
-```
-GET /api/account/categories?type=income
-Headers: Authorization: Bearer <token>
-```
-
-#### 创建分类
-```
-POST /api/account/categories
-Headers: Authorization: Bearer <token>
-Body: { name, type, color, icon }
-```
-
-#### 获取财务报表
-```
-GET /api/account/report?startDate=2024-01-01&endDate=2024-12-31
-Headers: Authorization: Bearer <token>
-```
-
-#### 计算 IRR
-```
-POST /api/account/calculate-irr
-Headers: Authorization: Bearer <token>
-Body: { cashFlows: [-10000, 3000, 4000, 5000, 6000] }
-```
-
-### 用户接口 (`/api/user`)
-
-#### 更新用户资料
-```
-PUT /api/user/profile
-Headers: Authorization: Bearer <token>
-Body: { username }
-```
-
-#### 修改密码
-```
-POST /api/user/password/change
-Headers: Authorization: Bearer <token>
-Body: { oldPassword, newPassword }
-```
+| 消费日期 | 归属账单月 | 出账日 | 还款日 |
+|---------|-----------|--------|--------|
+| 4月1日 ~ 4月12日 | 4月 | 4月12日 | 5月6日 |
+| 4月13日 ~ 4月30日 | 5月 | 5月12日 | 6月6日 |
 
 ## 技术栈
 
@@ -229,55 +196,3 @@ Body: { oldPassword, newPassword }
 3. **423 状态码**: 会话被 PIN 锁定时返回 423 状态码，前端需要处理并引导用户验证 PIN
 4. **密码加密**: 使用 bcryptjs 加密存储密码
 5. **安全头**: 使用 Helmet 添加安全相关的 HTTP 头
-
-## 数据库表结构
-
-### users 表
-- id: 用户 ID
-- username: 用户名
-- email: 邮箱
-- password: 密码哈希
-- pin_hash: PIN 码哈希
-- settings: 用户设置（JSON）
-- email_verified: 邮箱是否已验证
-
-### categories 表
-- id: 分类 ID
-- user_id: 所属用户 ID
-- name: 分类名称
-- type: 类型（income/expense）
-- color: 颜色
-- icon: 图标
-
-### transactions 表
-- id: 流水 ID
-- user_id: 所属用户 ID
-- amount: 金额
-- type: 类型（income/expense）
-- category_id: 所属分类 ID
-- description: 描述
-- date: 日期
-
-## 开发说明
-
-### PIN 码验证流程
-
-1. 用户登录成功后，访问敏感 API（如账务管理）
-2. 如果用户设置了 PIN 码且会话未验证，返回 423 状态码
-3. 前端收到 423 状态码后，引导用户输入 PIN 码
-4. 用户输入 PIN 码，调用 `/api/security/pin/verify` 接口
-5. 验证成功后，会话标记为已验证，可以正常访问敏感 API
-
-### IRR 计算
-
-使用牛顿迭代法计算内部收益率 (IRR)：
-
-```javascript
-// 现金流数组：负数表示投资，正数表示收益
-const cashFlows = [-10000, 3000, 4000, 5000, 6000];
-// 调用计算接口，返回 IRR 百分比
-```
-
-## License
-
-MIT
