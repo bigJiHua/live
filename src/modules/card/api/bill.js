@@ -15,14 +15,18 @@ router.use(pinLockGuard);
 // 获取账单列表
 router.get("/", cardBillController.getList);
 
-// 获取单个账单详情
-router.get("/:id", cardBillController.getById);
-
+// 👍 具体路由放在通用路由之前，避免被 /:id 劫持
 // 获取卡片最新账单
 router.get("/card/:cardId/latest", cardBillController.getLatestByCardId);
 
 // 重建账单（从流水重新计算）
 router.post("/card/:cardId/rebuild", cardBillController.rebuild);
+
+// 批量重建所有信用卡账单
+router.post("/rebuild-all", cardBillController.rebuildAll);
+
+// 获取单个账单详情
+router.get("/:id", cardBillController.getById);
 
 // 创建账单
 router.post(

@@ -7,7 +7,7 @@ const Card = require("../model");
  */
 class CardBillController {
   /**
-   * 获取账单列表（自动重建遗留账单）
+   * 获取账单列表
    */
   async getList(req, res) {
     try {
@@ -17,17 +17,16 @@ class CardBillController {
       if (cardId) filters.cardId = cardId;
       if (billMonth) filters.billMonth = billMonth;
 
-      // 1. 先获取账单
       let bills = await CardBill.findAll(req.userId, filters);
 
-      // 2. 如果指定了卡片，自动重建遗留账单
-      if (cardId) {
+      // 如果没有账单且指定了卡片，尝试自动重建
+      if ((!bills || bills.length === 0) && cardId) {
         await CardBill.rebuildBillFromAccount(cardId, req.userId);
         bills = await CardBill.findAll(req.userId, filters);
       }
 
-      // 3. 如果没有账单，自动为所有信用卡创建当前月账单
-      if (!bills || bills.length === 0) {
+      // 仍然没有，且没有指定卡片，尝试为所有信用卡重建
+      if ((!bills || bills.length === 0) && !cardId) {
         const creditCards = await Card.findAll(req.userId, { cardType: 'credit' });
         for (const card of creditCards) {
           await CardBill.rebuildBillFromAccount(card.id, req.userId);
@@ -162,6 +161,39 @@ class CardBillController {
     } catch (error) {
       console.error("重建账单错误:", error);
       return res.say("重建失败", 500);
+    }
+  }
+
+  /**
+   * 批量重建所有信用卡账单（修复历史数据）
+   */
+  async rebuildAll(req, res) {
+    try {
+      const creditCards = await Card.findAll(req.userId, { cardType: 'credit' });
+      const results = { total: 0, success: 0, failed: 0, cards: [] };
+
+      for (const card of creditCards) {
+        try {
+          const billData = await CardBill.rebuildBillFromAccount(card.id, req.userId);
+          results.total++;
+          if (billData) {
+            results.success++;
+            results.cards.push({ cardId: card.id, cardName: card.alias || card.last4_no, months: billData.length });
+          }
+        } catch (cardError) {
+          results.failed++;
+          console.error(`重建卡片 ${card.id} 失败:`, cardError.message);
+        }
+      }
+
+      return res.json({
+        status: 200,
+        message: `批量重建完成：成功 ${results.success} 张, 失败 ${results.failed} 张`,
+        data: results,
+      });
+    } catch (error) {
+      console.error("批量重建错误:", error);
+      return res.say("批量重建失败", 500);
     }
   }
 

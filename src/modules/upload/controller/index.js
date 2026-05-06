@@ -63,6 +63,12 @@ async function generateThumbnail(originalPath, busType) {
     cleanOriginalPath
   );
 
+  // 检查原文件是否存在
+  if (!fs.existsSync(fullOriginalPath)) {
+    console.log(`[缩略图] 原文件不存在，跳过: ${fullOriginalPath}`);
+    return null;
+  }
+
   // 如果缩略图已存在，直接返回
   if (fs.existsSync(fullThumbPath)) {
     return thumbPath;
@@ -75,14 +81,19 @@ async function generateThumbnail(originalPath, busType) {
   }
 
   // 生成超压缩缩略图：质量 30%，最大 200x200
-  await sharp(fullOriginalPath)
-    .rotate()
-    .resize(200, 200, {
-      fit: "inside",
-      withoutEnlargement: true,
-    })
-    .webp({ quality: 30, effort: 4 })
-    .toFile(fullThumbPath);
+  try {
+    await sharp(fullOriginalPath)
+      .rotate()
+      .resize(200, 200, {
+        fit: "inside",
+        withoutEnlargement: true,
+      })
+      .webp({ quality: 30, effort: 4 })
+      .toFile(fullThumbPath);
+  } catch (sharpError) {
+    console.log(`[缩略图] 生成失败: ${sharpError.message}`);
+    return null; // 生成失败不阻塞，返回 null
+  }
 
   return thumbPath;
 }
@@ -560,17 +571,17 @@ class UploadController {
             );
             return {
               ...item,
-              tags, // 解析后的数组
-              url: item.file_path, // 原图路径
-              thumbnail: `/${thumbnail}`, // 缩略图路径
+              tags,
+              url: item.file_path,
+              thumbnail: thumbnail ? `/${thumbnail}` : null,
             };
           }
 
           return {
             ...item,
-            tags, // 解析后的数组
-            url: item.file_path, // 原图路径
-            thumbnail: item.file_path, // 非图片无缩略图
+            tags,
+            url: item.file_path,
+            thumbnail: item.file_path,
           };
         })
       );

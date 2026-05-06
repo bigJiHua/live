@@ -20,12 +20,10 @@ app.use(
   })
 );
 const allowedOrigin = [
-  "http://192.168.0.103:5173",
-  "http://192.168.0.103:3000",
-  "http://192.168.0.103:3001",
+  "http://192.168.1.4:5173",
+  "http://192.168.1.4:5174",
   "http://localhost:5173",
-  "http://localhost:3000",
-  "http://localhost:3001",
+  "http://localhost:5174",
 ];
 app.use(
   cors({
@@ -39,6 +37,14 @@ app.use(
       "viewportheight",
       "pixelratio",
       "navigatorplatform",
+      "X-Requested-With",
+      "x-client-timestamp",
+      "x-fingerprint-hash",
+      "x-user-agent-custom",
+      "x-device-model",
+      "x-os-name",
+      "x-device-type",
+      "X-FP-ID",
     ],
   })
 );
@@ -63,6 +69,7 @@ app.use(pinSecurityGuard);
 // --- 路由层 ---
 const apiRouter = require("./src/api");
 app.use("/api/v1", securityCheck, apiRouter); // 【已启用】
+app.use("/api/v11", apiRouter); // 【已启用】
 app.use("/api/public", express.static(path.join(__dirname, "public")));// 【已启用】
 // app.use("/api", apiRouter); // 【已启用】
 // --- 静态资源与健康检查 ---

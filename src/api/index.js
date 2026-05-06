@@ -24,6 +24,10 @@ const todoRouter = require("../modules/todo/api");
 const workRouter = require("../modules/work/api");
 const fixedAssetRouter = require("../modules/fixed_asset/api");
 const budgetRouter = require("../modules/budget/api");
+const dashboardRouter = require("../modules/dashboard/api");
+const resourceRouter = require("../modules/resource/api");
+const bankCategoryRouter = require("../modules/bankCategory/api");
+const flowRouter = require("../modules/flow/api");
 
 // 注册子路由
 router.use("/auth", authRouter);       // 认证模块
@@ -45,5 +49,9 @@ router.use("/todo", todoRouter);              // 待办日程
 router.use("/work", workRouter);              // 工作与工资
 router.use("/fixedAsset", fixedAssetRouter);  // 固定资产管理
 router.use("/budget", budgetRouter);           // 预算管理
+router.use("/dashboard", dashboardRouter);    // 仪表盘（桌面端新增）
+router.use("/resource", resourceRouter);      // 文件资源管理（桌面端新增）
+router.use("/bank-category", bankCategoryRouter); // 银行分类管理（桌面端新增）
+router.use("/flow", flowRouter);              // 流水详情/日历（桌面端新增）
 
 module.exports = router;

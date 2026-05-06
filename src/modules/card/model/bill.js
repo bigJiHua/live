@@ -525,133 +525,115 @@ class CardBill {
    * 自动检测并修复旧数据异常（还款冲正方向错误导致余额丢失）
    */
   static async rebuildBillFromAccount(cardId, userId) {
-    console.log(`[重建账单] ========== 函数被调用 ========== cardId=${cardId}, userId=${userId}`);
+    console.log(`[重建账单] ========== cardId=${cardId}, userId=${userId}`);
     const card = await this.getCardInfo(cardId);
     if (!card || card.card_type !== 'credit') {
-      console.log(`[重建账单] 卡不存在或非信用卡，退出`);
+      console.log(`[重建账单] 非信用卡，退出`);
       return null;
     }
-    console.log(`[重建账单] card: card_type=${card.card_type}, id=${card.id}, bill_day=${card.bill_day}, repay_day=${card.repay_day}`);
 
     const now = String(Date.now());
 
-    // ===== 检测并修复旧数据异常 =====
-    // 旧版：原还款 direction=1（收入），冲正 direction=0（支出）→ 余额被多扣
-    // 新版：原还款 direction=0（支出），冲正 direction=1（收入）→ 余额正确恢复
-    // 检测：冲正 direction=0 且原还款 direction=1（才是旧版格式）
-    const [reversalRows] = await db.execute(
-      `SELECT r.id as reversal_id, r.amount, r.trans_date,
-              o.id as original_id, o.amount as original_amount, o.direction as original_direction
-       FROM account r
-       LEFT JOIN account o ON r.reversed_id = o.id
-       WHERE r.card_id = ? AND r.user_id = ? 
-         AND r.reversed_id IS NOT NULL AND r.is_deleted = 0
-         AND r.direction = 0 AND o.direction = 1`,
-      [cardId, userId]
-    );
-
-    if (reversalRows.length > 0) {
-      console.log(`[重建账单] 检测到 ${reversalRows.length} 条旧版冲正记录需要修复`);
-
-      for (const reversal of reversalRows) {
-        // 创建补偿流水（direction=1 收入）来恢复余额
-        const [existingCompensation] = await db.execute(
-          `SELECT id FROM account WHERE reversed_id = ? AND is_deleted = 0`,
-          [reversal.reversal_id]
-        );
-
-        if (existingCompensation.length === 0) {
-          const compensationId = idUtils.billId();
-          await db.execute(
-            `INSERT INTO account (id, user_id, direction, category_id, pay_type, pay_method, 
-              amount, currency, exchange_rate, trans_date, remark, card_id, 
-              create_time, update_time, is_deleted, reversed_id)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)`,
-            [
-              compensationId, userId, 1, 'CATEGORY_REPAY', '还款', '余额',
-              reversal.original_amount, 'CNY', 1, 
-              reversal.trans_date ? (reversal.trans_date.includes('-') ? reversal.trans_date.substring(0, 10) : reversal.trans_date) : now.substring(0, 10),
-              `余额补偿-冲正修复(${reversal.original_amount}元)`,
-              cardId, now, now, reversal.reversal_id
-            ]
-          );
-          console.log(`[重建账单] 已创建补偿流水 ${compensationId}，金额 ${reversal.original_amount}，关联冲正 ${reversal.reversal_id}`);
-        }
-      }
-    }
-
-    // ===== 重新获取流水（包含新创建的补偿流水）=====
-    console.log(`[重建账单] 查询 account 表: card_id=${cardId}, user_id=${userId}`);
-    const [rows] = await db.execute(
+    // ===== 1. 获取该信用卡的所有消费流水（account 表） =====
+    // 注意：还款流水在 account 表中的 card_id 指向的是还款来源卡（借记卡），不是本信用卡
+    // 所以这里只获取 direction=0 的普通消费
+    const [expenseRows] = await db.execute(
       `SELECT id, direction, amount, trans_date, category_id, reversed_id, is_deleted
        FROM account 
        WHERE card_id = ? AND user_id = ? AND is_deleted = 0
+         AND direction = 0 AND (category_id IS NULL OR category_id != 'CATEGORY_REPAY')
        ORDER BY trans_date ASC`,
       [cardId, userId]
     );
-    console.log(`[重建账单] account 流水记录数:`, rows.length);
-    if (rows.length > 0) {
-      console.log(`[重建账单] 前3条流水:`, rows.slice(0, 3));
-    }
 
-    // ===== 从 card_repay 表汇总还款（使用 create_time 计算账单月）=====
+    // ===== 2. 获取该信用卡的还款记录（card_repay 表） =====
+    // 注：需要验证 account_id 对应的流水未被删除，避免脏数据
     const [repayRows] = await db.execute(
-      `SELECT repay_amount, create_time, is_deleted
-       FROM card_repay 
-       WHERE card_id = ? AND is_deleted = 0`,
+      `SELECT r.id, r.repay_amount, r.bill_month, r.bill_id,
+              COALESCE(r.bill_month, b.bill_month) AS target_bill_month
+       FROM card_repay r
+       LEFT JOIN card_bill b ON r.bill_id = b.id AND b.is_deleted = 0
+       LEFT JOIN account a ON r.account_id = a.id
+       WHERE r.card_id = ? AND r.is_deleted = 0
+         AND (r.account_id IS NULL OR a.is_deleted = 0)`,
       [cardId]
     );
 
-    // 按账单月聚合消费和还款
+    // ===== 3. 查找并记录被撤销的消费流水ID（避免被重复计入） =====
+    const [reversalFlows] = await db.execute(
+      `SELECT id, reversed_id, direction FROM account
+       WHERE card_id = ? AND user_id = ? AND is_deleted = 0
+         AND reversed_id IS NOT NULL AND direction = 1`,
+      [cardId, userId]
+    );
+    const reversedExpenseIds = new Set(reversalFlows.map(r => r.reversed_id));
+
+    // ===== 4. 按账单月聚合消费 =====
     const billMonthData = {};
 
-    // 处理消费流水
-    for (const row of rows) {
+    for (const row of expenseRows) {
+      const amount = parseFloat(row.amount) || 0;
+      if (amount <= 0) continue;
+
+      // 跳过被冲正的流水（已有 direction=1 的反向记录）
+      if (row.reversed_id || reversedExpenseIds.has(row.id)) continue;
+
       const billMonth = this.getBillMonthByDate(row.trans_date, card.bill_day);
       if (!billMonthData[billMonth]) {
-        billMonthData[billMonth] = { totalExpense: 0, totalRepaid: 0 };
+        billMonthData[billMonth] = { totalExpense: 0, repayments: [] };
       }
-
-      const amount = parseFloat(row.amount) || 0;
-
-      // 被冲正的流水，跳过（冲正流水会抵消原流水）
-      if (row.reversed_id) {
-        continue;
-      }
-
-      // 判断流水类型
-      if (row.category_id === 'CATEGORY_REPAY') {
-        // 还款流水（direction=0 支出）
-        if (row.direction === 0) {
-          billMonthData[billMonth].totalRepaid += amount;
-        }
-      } else {
-        // 普通消费流水（direction=0 支出）
-        if (row.direction === 0) {
-          billMonthData[billMonth].totalExpense += amount;
-        }
-      }
+      billMonthData[billMonth].totalExpense += amount;
     }
 
-    // 处理 card_repay 表的还款记录（使用 create_time 计算账单月）
+    // ===== 5. 按账单月聚合还款 =====
     for (const repay of repayRows) {
-      if (repay.is_deleted === 1) continue; // 跳过已删除的还款记录
-      const billMonth = this.getBillMonthByDate(repay.create_time, card.bill_day);
+      const amount = parseFloat(repay.repay_amount) || 0;
+      if (amount <= 0) continue;
+
+      // 优先使用 card_bill 表的 bill_month（通过 bill_id 关联），更准确
+      // 其次使用 card_repay 自身记录的 bill_month
+      const billMonth = repay.target_bill_month || repay.bill_month || this.getCurrentBillMonth();
       if (!billMonthData[billMonth]) {
-        billMonthData[billMonth] = { totalExpense: 0, totalRepaid: 0 };
+        billMonthData[billMonth] = { totalExpense: 0, repayments: [] };
       }
-      billMonthData[billMonth].totalRepaid += parseFloat(repay.repay_amount) || 0;
+      billMonthData[billMonth].repayments.push(amount);
     }
 
+    // ===== 5. 按账单月从旧到新处理：消费统计 + 溢缴款顺延 =====
+    const sortedMonths = Object.keys(billMonthData).sort();
+    let carryOver = 0; // 溢缴款（多还部分）顺延到下一期
+
+    for (const billMonth of sortedMonths) {
+      const data = billMonthData[billMonth];
+      const totalExpense = data.totalExpense;
+      
+      // 本账单收到的还款总额
+      const totalRepaidThisMonth = data.repayments.reduce((a, b) => a + b, 0);
+      
+      // 实际可抵金额 = 本期还款 + 上期溢缴款
+      const availableRepaid = totalRepaidThisMonth + carryOver;
+      
+      // 本期应还 = 消费总额
+      const billAmount = totalExpense;
+      
+      // 实际用于本期还款的金额（不超过应还金额）
+      const appliedToThisBill = Math.min(availableRepaid, billAmount);
+      
+      // 溢缴款 = 可用还款 - 实际用于本期还款
+      carryOver = Math.max(0, availableRepaid - billAmount);
+      
+      data.repaid = appliedToThisBill;
+      data.needRepay = billAmount - appliedToThisBill;
+    }
+
+    // ===== 6. 更新或创建账单 =====
     const results = [];
     const creditLimit = parseFloat(card.credit_limit) || 0;
     const tempLimit = parseFloat(card.temp_limit) || 0;
 
-    console.log(`[重建账单] billMonthData:`, JSON.stringify(billMonthData));
-    console.log(`[重建账单] 将处理的账单月:`, Object.keys(billMonthData).sort().reverse());
-
-    for (const billMonth of Object.keys(billMonthData).sort().reverse()) {
-      const { totalExpense, totalRepaid } = billMonthData[billMonth];
+    for (const billMonth of sortedMonths) {
+      const data = billMonthData[billMonth];
+      const { totalExpense, repaid, needRepay } = data;
 
       let bill = await this.findByCardAndMonth(cardId, billMonth);
       if (!bill) {
@@ -661,13 +643,7 @@ class CardBill {
 
       const { billStartDate, billEndDate } = this.calculateBillPeriod(billMonth, card.bill_day);
       const usedLimit = totalExpense;
-      const billAmount = totalExpense;
-      // 实际已还金额 = 还款流水（冲正已被过滤）
-      const repaid = Math.max(0, totalRepaid);
-      // 可用额度 = 额度 - 已用
-      const availLimit = creditLimit + tempLimit - usedLimit;
-      // 需还款 = 账单金额 - 已还款
-      const needRepay = Math.max(0, billAmount - repaid);
+      const availLimit = Math.max(0, creditLimit + tempLimit - usedLimit);
       const points = Math.round(usedLimit * (card.points_rate || 1));
 
       let repayStatus = '未还款';
@@ -682,51 +658,35 @@ class CardBill {
            repay_status = ?, update_time = ?
          WHERE id = ? AND is_deleted = 0`,
         [creditLimit, availLimit.toFixed(2), usedLimit.toFixed(2), tempLimit,
-         billStartDate, billEndDate, billAmount.toFixed(2), Math.max(0, billAmount * 0.1).toFixed(2),
+         billStartDate, billEndDate, totalExpense.toFixed(2),
+         Math.max(0, totalExpense * 0.1).toFixed(2),
          repaid.toFixed(2), needRepay.toFixed(2), points, repayStatus, now, bill.id]
       );
 
-      results.push({ 
-        billMonth, 
-        billId: bill.id, 
-        totalExpense, 
-        totalRepaid, 
-        needRepay: needRepay.toFixed(2) 
-      });
+      results.push({ billMonth, billId: bill.id, totalExpense, repaid, needRepay: needRepay.toFixed(2) });
     }
 
-    // ===== 确保当前月有账单（新卡无历史流水时也创建空账单）=====
+    // ===== 7. 确保当前月有账单（不覆盖已存在的账单数据） =====
     const currentBillMonth = this.getCurrentBillMonth();
-    console.log(`[重建账单] 检查当前月账单: ${currentBillMonth}, card.bill_day=${card.bill_day}`);
-    
     const existingCurrentBill = await this.findByCardAndMonth(cardId, currentBillMonth);
-    
+
     if (!existingCurrentBill) {
-      console.log(`[重建账单] 当前月无账单，创建新账单...`);
       const newBill = await this.create({ userId, cardId, billMonth: currentBillMonth });
       if (newBill) {
-        results.push({ billMonth: currentBillMonth, billId: newBill.id, totalExpense: 0, totalRepaid: 0, needRepay: '0.00' });
-        console.log(`[重建账单] 新账单创建成功: id=${newBill.id}`);
+        results.push({ billMonth: currentBillMonth, billId: newBill.id, totalExpense: 0, repaid: 0, needRepay: '0.00', created: true });
       }
-    } else {
-      // 即使没有流水，也需要更新账单的账单周期（因为账单日可能变了）
-      console.log(`[重建账单] 当前月已有账单 id=${existingCurrentBill.id}，更新账单周期...`);
+    } else if (!billMonthData[currentBillMonth]) {
+      // 当前月有账单但不在本次重建范围内，只更新周期
       const { billStartDate, billEndDate } = this.calculateBillPeriod(currentBillMonth, card.bill_day);
       await db.execute(
         `UPDATE ${this.tableName} SET bill_start_date = ?, bill_end_date = ?, update_time = ? WHERE id = ? AND is_deleted = 0`,
         [billStartDate, billEndDate, now, existingCurrentBill.id]
       );
-      console.log(`[重建账单] 账单周期已更新: ${billStartDate} ~ ${billEndDate}`);
-      results.push({ billMonth: currentBillMonth, billId: existingCurrentBill.id, totalExpense: 0, totalRepaid: 0, needRepay: '0.00', updated: true });
+      results.push({ billMonth: currentBillMonth, billId: existingCurrentBill.id, totalExpense: 0, repaid: 0, needRepay: '0.00', updatedPeriod: true });
     }
-    
-    // 如果有其他历史账单月份（由流水生成），也需要更新它们的账单周期
-    const otherBillMonths = Object.keys(billMonthData);
-    console.log(`[重建账单] 其他历史账单月: ${otherBillMonths.join(', ')}`);
 
     await AccountSettlement.syncBalanceSnapshot(cardId, userId);
-
-    console.log(`[重建账单] 重建完成，结果:`, JSON.stringify(results));
+    console.log(`[重建账单] 完成:`, JSON.stringify(results));
     return results;
   }
 }
