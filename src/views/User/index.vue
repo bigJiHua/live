@@ -30,6 +30,18 @@
           </template>
         </van-cell>
         <van-cell title="PIN 码管理" is-link center @click="goToPinManage" />
+
+        <!-- TODO 注释 -->
+        <div
+          style="
+            padding: 12px 16px;
+            font-size: 13px;
+            color: #07c160;
+            background: #f0f9eb;
+          "
+        >
+          当前 PIN 码为 123456
+        </div>
       </van-cell-group>
 
       <div class="section-title">系统管理</div>
@@ -161,6 +173,7 @@ onMounted(() => {
   align-items: center;
   transition: background 0.2s;
 }
+
 .profile-card:active {
   background: #f2f3f5;
 }
@@ -198,10 +211,12 @@ onMounted(() => {
   color: #969799;
   font-weight: 500;
 }
+
 .app-card {
   border-radius: 12px;
   overflow: hidden;
 }
+
 .logout-wrapper {
   margin: 40px 24px;
 }

@@ -59,9 +59,14 @@
               <span>{{ getFeeFreeRuleText(item.fee_free_rule) }}</span>
             </div>
           </div>
-          <van-tag :type="getStatusType(item)" :class="{ 'tag-normal': getStatusType(item) === '' }">
-            {{ getStatusText(item) }}
-          </van-tag>
+          <div class="bill-status-col">
+            <van-tag :type="getStatusType(item)" :class="{ 'tag-normal': getStatusType(item) === '' }">
+              {{ getStatusText(item) }}
+            </van-tag>
+            <div class="status-extra" v-if="getStatusExtra(item)">
+              {{ getStatusExtra(item) }}
+            </div>
+          </div>
         </div>
 
         <div class="bill-body">
@@ -235,7 +240,19 @@ const loadBillList = async () => {
     const billMonth = `${currentYear.value}-${String(currentMonth.value).padStart(2, '0')}`;
     params.billMonth = billMonth;
     const res = await getBillList(params);
-    billList.value = res.data || res || [];
+    let list = res.data || res || [];
+    // 排序：有欠款（need_repay > 0）按账单日升序排前面，无欠款的放底部
+    list.sort((a, b) => {
+      const aHasDebt = Number(a.need_repay) > 0
+      const bHasDebt = Number(b.need_repay) > 0
+      // 有欠款的优先
+      if (aHasDebt !== bHasDebt) return aHasDebt ? -1 : 1
+      // 都有欠款或都无欠款时，按账单日排序
+      const aDate = dayjs(`${a.bill_month}-${String(a.bill_day).padStart(2, '0')}`)
+      const bDate = dayjs(`${b.bill_month}-${String(b.bill_day).padStart(2, '0')}`)
+      return aDate.valueOf() - bDate.valueOf()
+    })
+    billList.value = list
   } catch (error) {
     showToast(error.message || '加载失败');
   } finally {
@@ -271,25 +288,64 @@ const onCardConfirm = ({ selectedOptions }) => {
   loadBillList();
 };
 
-// 获取状态类型
-const getStatusType = (item) => {
-  if (item.is_overdue || item.overdue_days > 0) return "danger";
-  if (item.repay_status === "已还清") return "success";
-  if (item.need_repay > 0) return "warning";
-  return "";  // 正常状态，返回空使用蓝色背景
-};
+// 计算账单状态（核心逻辑）
+// 基于 bill_day（账单日）和 repay_day（次月还款日）做本地计算
+const getBillStatus = (item) => {
+  if (!item) return { type: '', text: '正常', extra: '' }
 
-// 获取状态文本
-const getStatusText = (item) => {
-  if (item.is_overdue || item.overdue_days > 0) {
-    const days = item.overdue_days || 0;
-    return `已逾期${days}天`;
+  const now = dayjs()
+  const billMonth = item.bill_month
+  const billDayNum = Number(item.bill_day)
+  const repayDayNum = Number(item.repay_day)
+
+  // 账单日：bill_month 月的 bill_day 号
+  const billDate = dayjs(`${billMonth}-${String(billDayNum).padStart(2, '0')}`)
+  if (!billDate.isValid()) return { type: '', text: '正常', extra: '' }
+
+  // 还款日：账单日所在月的**次月**的 repay_day 号
+  const repayDate = billDate.add(1, 'month').date(repayDayNum)
+
+  const needRepay = Number(item.need_repay) || 0
+  const daysToBill = billDate.diff(now, 'day')
+  const daysToRepay = repayDate.diff(now, 'day')
+  const daysAfterBill = now.diff(billDate, 'day')
+
+  // ① 已逾期：超过还款日且仍有欠款
+  if (needRepay > 0 && now.isAfter(repayDate, 'day')) {
+    const overdueDays = now.diff(repayDate, 'day')
+    return { type: 'danger', text: `已逾期${overdueDays}天`, extra: '' }
   }
-  if (item.repay_status === "已还清") return "已还清";
-  if (item.need_repay > 0) return "待还款";
-  return "正常";
-  return "正常";
-};
+
+  // ② 已过账单日（已出账）
+  if (!now.isBefore(billDate, 'day')) {
+    // 无欠款或已还清
+    if (needRepay === 0 || item.repay_status === '已还清') {
+      const extra = daysAfterBill > 0 ? `已出账${daysAfterBill}天` : ''
+      return { type: 'success', text: '已还清', extra }
+    }
+    // 有欠款且在还款日前 → 待还款
+    const extra = daysToRepay >= 0 ? `${daysToRepay}天后还款日` : ''
+    return { type: 'warning', text: '待还款', extra }
+  }
+
+  // ③ 未到账单日（未出账）
+  if (needRepay > 0) {
+    const extra = `出账${daysToBill}天·还款${daysToRepay}天`
+    return { type: 'default', text: '未出账', extra }
+  }
+
+  // ④ 默认：正常
+  return { type: '', text: '正常', extra: '' }
+}
+
+// 获取状态类型（供模板使用）
+const getStatusType = (item) => getBillStatus(item).type
+
+// 获取状态文本（供模板使用）
+const getStatusText = (item) => getBillStatus(item).text
+
+// 获取附加信息（如"XX天后出账"等，供模板使用）
+const getStatusExtra = (item) => getBillStatus(item).extra
 
 // 格式化金额
 const formatMoney = (amount) => {
@@ -554,6 +610,19 @@ onMounted(() => {
 .tag-normal {
   background: #1989fa !important;
   color: #fff !important;
+}
+
+.bill-status-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.status-extra {
+  font-size: 10px;
+  color: #999;
+  white-space: nowrap;
 }
 
 .bill-footer {

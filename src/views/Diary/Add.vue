@@ -311,16 +311,20 @@ watch(showImagePicker, (val) => {
 const MAX_FILE_SIZE = 35;
 
 const beforeUpload = (file) => {
-  if (!file.type.startsWith("image/")) {
-    showToast("只能上传图片");
-    return false;
+  // 支持多选时传入 File[] 数组
+  const files = Array.isArray(file) ? file : [file]
+  for (const f of files) {
+    if (!f.type.startsWith("image/")) {
+      showToast("只能上传图片")
+      return false
+    }
+    if (f.size / 1024 / 1024 > MAX_FILE_SIZE) {
+      showToast(`不能超过 ${MAX_FILE_SIZE}MB`)
+      return false
+    }
   }
-  if (file.size / 1024 / 1024 > MAX_FILE_SIZE) {
-    showToast(`不能超过 ${MAX_FILE_SIZE}MB`);
-    return false;
-  }
-  return true;
-};
+  return true
+}
 
 const uploadSingleFile = async (fileItem) => {
   try {
@@ -331,6 +335,7 @@ const uploadSingleFile = async (fileItem) => {
         file_path: res.data.url || res.data.file_path,
       };
       imageList.value.unshift(newItem);
+      localSelected.value.unshift(newItem.id);
       fileItem.status = "done";
       return newItem;
     }

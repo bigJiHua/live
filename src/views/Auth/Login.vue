@@ -78,6 +78,10 @@
         </van-row>
       </div>
     </van-form>
+    <!-- TODO 注释 -->
+    <div style="text-align: center; padding: 20px; font-size: 12px; color: #999;">
+      本站点仅作演示效果，推荐使用手机Chrome浏览器打开预览。锁定PIN码为 123456
+    </div>
   </div>
 </template>
 

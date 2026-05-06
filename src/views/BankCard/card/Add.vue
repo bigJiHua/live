@@ -19,6 +19,35 @@
             :rules="[{ required: true, message: '请选择银行' }]"
           />
           <van-field
+            v-model="formData.cardOrg"
+            label="卡组织"
+            placeholder="请选择"
+            is-link
+            readonly
+            clickable
+            @click="showCardOrgPicker = true"
+            :rules="[{ required: true, message: '请选择卡组织' }]"
+          />
+          <van-field
+            v-model="formData.cardLength"
+            label="卡号长度"
+            placeholder="请选择"
+            is-link
+            readonly
+            clickable
+            @click="showCardLengthPicker = true"
+            :rules="[{ required: true, message: '请选择卡号长度' }]"
+          />
+          <van-field
+            v-model="formData.cardBin"
+            label="卡号前位"
+            placeholder="请输入"
+            readonly
+            clickable
+            @click="openKeyboard('cardBin')"
+            :rules="[{ required: true, message: '请输入卡BIN' }]"
+          />
+          <van-field
             v-model="formData.last4No"
             label="卡号后4位"
             placeholder="请输入"
@@ -26,15 +55,6 @@
             clickable
             @click="openKeyboard('last4No')"
             :rules="[{ required: true, message: '请输入4位卡号' }]"
-          />
-          <van-field
-            v-model="formData.cardBin"
-            label="卡BIN"
-            placeholder="请输入"
-            readonly
-            clickable
-            @click="openKeyboard('cardBin')"
-            :rules="[{ required: true, message: '请输入6位卡BIN' }]"
           />
           <van-field
             v-model="formData.openDate"
@@ -69,7 +89,7 @@
             @click-right-icon="showCardLevelPicker = true"
           >
             <template #right-icon>
-              <van-icon name="arrow-down" />
+              <van-icon name="arrow" />
             </template>
           </van-field>
           <van-field
@@ -79,24 +99,6 @@
             readonly
             clickable
             @click="showMainSubPicker = true"
-          />
-          <van-field
-            v-model="formData.cardOrg"
-            label="卡组织"
-            placeholder="请选择或输入"
-            @click-right-icon="showCardOrgPicker = true"
-          >
-            <template #right-icon>
-              <van-icon name="arrow-down" />
-            </template>
-          </van-field>
-          <van-field
-            v-model="formData.cardLength"
-            label="卡号长度"
-            placeholder="请输入"
-            readonly
-            clickable
-            @click="openKeyboard('cardLength')"
           />
           <van-field
             v-model="formData.alias"
@@ -150,7 +152,11 @@
           <van-field
             v-model="formData.currency"
             label="币种"
-            placeholder="默认CNY"
+            placeholder="请选择"
+            is-link
+            readonly
+            clickable
+            @click="showCurrencyPicker = true"
           />
           <van-field
             v-model="formData.status"
@@ -242,12 +248,32 @@
       />
     </van-popup>
 
+    <!-- 卡号长度选择 -->
+    <van-popup v-model:show="showCardLengthPicker" position="bottom">
+      <van-picker
+        title="选择卡号长度"
+        :columns="cardLengthColumns"
+        @confirm="onCardLengthConfirm"
+        @cancel="showCardLengthPicker = false"
+      />
+    </van-popup>
+
     <!-- 卡片状态选择 -->
     <van-popup v-model:show="showStatusPicker" position="bottom">
       <van-picker
         :columns="statusColumns"
         @confirm="onStatusConfirm"
         @cancel="showStatusPicker = false"
+      />
+    </van-popup>
+
+    <!-- 币种选择 -->
+    <van-popup v-model:show="showCurrencyPicker" position="bottom">
+      <van-picker
+        title="选择币种"
+        :columns="currencyColumns"
+        @confirm="onCurrencyConfirm"
+        @cancel="showCurrencyPicker = false"
       />
     </van-popup>
 
@@ -367,15 +393,64 @@ const mainSubColumns = [
   { text: "副卡", value: "副卡" },
 ];
 
+// 卡组织有效期（年）
+const cardOrgValidity = {
+  '银联': 10,
+  '万事达': 8,
+  'Visa': 5,
+  '运通': 5,
+  '大莱': 5,
+  'JCB': 5,
+};
+
+// 卡组织BIN前缀（用户只需输入的位数）
+const cardOrgBinPrefix = {
+  '银联': { prefix: '62', needInput: 4 },      // 62xxxx，用户输入4位
+  '万事达': { prefix: '53', needInput: 4 },     // 53xxx，用户输入4位
+  'Visa': { prefix: '4', needInput: 5 },        // 4xxxx，用户输入5位
+  '运通': { prefix: '37', needInput: 4 },        // 37xxx，用户输入4位
+  '大莱': { prefix: '36', needInput: 4 },         // 36xxx，用户输入4位
+  'JCB': { prefix: '35', needInput: 4 },        // 35xxx，用户输入4位
+};
+
+// 卡组织卡号长度
+const cardOrgLength = {
+  '银联': 19,
+  '万事达': 16,
+  'Visa': 16,
+  '运通': 15,
+  '大莱': 16,
+  'JCB': 16,
+};
+
 // 卡组织
 const cardOrgColumns = [
   { text: "银联", value: "银联" },
   { text: "万事达", value: "万事达" },
   { text: "Visa", value: "Visa" },
-  { text: "Amex", value: "Amex" },
+  { text: "运通", value: "运通" },
   { text: "大莱", value: "大莱" },
   { text: "JCB", value: "JCB" },
 ];
+
+const cardLengthColumns = [
+  { text: "15位", value: 15 },
+  { text: "16位", value: 16 },
+  { text: "19位", value: 19 },
+];
+
+// 计算到期日期
+const calculateExpireDate = (openDateStr, cardOrg) => {
+  const validityYears = cardOrgValidity[cardOrg] || 5;
+  const [year, month] = openDateStr.split('-');
+  const openYear = parseInt(year);
+  const openMonth = parseInt(month);
+
+  let expireYear = openYear + validityYears;
+  let expireMonth = openMonth;
+
+  return [String(expireYear), String(expireMonth).padStart(2, '0')];
+};
 
 // 卡片状态
 const statusColumns = [
@@ -384,10 +459,24 @@ const statusColumns = [
   { text: "注销", value: "注销" },
 ];
 
+const currencyColumns = [
+  { text: "CNY 人民币", value: "CNY" },
+  { text: "USD 美元", value: "USD" },
+  { text: "HKD 港币", value: "HKD" },
+];
+
 // 日期选择
 const minDate = new Date(2000, 0, 1);
 const maxDate = new Date(2050, 11, 31);
-const openDate = reactive(["2024", "01", "01"]);
+const getCurrentDate = () => {
+  const now = new Date();
+  return [
+    String(now.getFullYear()),
+    String(now.getMonth() + 1).padStart(2, "0"),
+    String(now.getDate()).padStart(2, "0")
+  ];
+};
+const openDate = reactive(getCurrentDate());
 const expireDate = reactive(["2030", "12"]);
 
 // 弹出状态
@@ -395,7 +484,9 @@ const showBankPicker = ref(false);
 const showCardLevelPicker = ref(false);
 const showMainSubPicker = ref(false);
 const showCardOrgPicker = ref(false);
+const showCardLengthPicker = ref(false);
 const showStatusPicker = ref(false);
+const showCurrencyPicker = ref(false);
 const showOpenDatePicker = ref(false);
 const showExpireDatePicker = ref(false);
 const showColorPicker = ref(false);
@@ -416,8 +507,10 @@ const validateLast4No = () => {
 
 // 验证卡BIN
 const validateCardBin = () => {
-  if (formData.cardBin && formData.cardBin.length < 6) {
-    showToast("卡BIN必须至少6位数字");
+  const binConfig = cardOrgBinPrefix[formData.cardOrg] || { prefix: '', needInput: 6 };
+  const expectedLength = binConfig.prefix.length + binConfig.needInput;
+  if (formData.cardBin && formData.cardBin.length < expectedLength) {
+    showToast(`卡BIN必须至少${expectedLength}位数字`);
     formData.cardBin = "";
   }
 };
@@ -505,7 +598,22 @@ const onMainSubConfirm = ({ selectedOptions }) => {
 
 const onCardOrgConfirm = ({ selectedOptions }) => {
   formData.cardOrg = selectedOptions[0].value;
+  const binConfig = cardOrgBinPrefix[formData.cardOrg] || { prefix: '', needInput: 6 };
+  formData.cardBin = binConfig.prefix;
+  formData.cardLength = cardOrgLength[formData.cardOrg] || 16;
+  fieldConfig.cardBin.maxlength = binConfig.prefix.length + binConfig.needInput;
+  if (formData.openDate) {
+    const [expireYear, expireMonth] = calculateExpireDate(formData.openDate, formData.cardOrg);
+    expireDate[0] = expireYear;
+    expireDate[1] = expireMonth;
+    formData.expireDate = `${expireYear}-${expireMonth}`;
+  }
   showCardOrgPicker.value = false;
+};
+
+const onCardLengthConfirm = ({ selectedOptions }) => {
+  formData.cardLength = selectedOptions[0].value;
+  showCardLengthPicker.value = false;
 };
 
 const onStatusConfirm = ({ selectedOptions }) => {
@@ -513,8 +621,17 @@ const onStatusConfirm = ({ selectedOptions }) => {
   showStatusPicker.value = false;
 };
 
+const onCurrencyConfirm = ({ selectedOptions }) => {
+  formData.currency = selectedOptions[0].value;
+  showCurrencyPicker.value = false;
+};
+
 const onOpenDateConfirm = ({ selectedValues }) => {
   formData.openDate = selectedValues.join("-");
+  const [expireYear, expireMonth] = calculateExpireDate(formData.openDate, formData.cardOrg);
+  expireDate[0] = expireYear;
+  expireDate[1] = expireMonth;
+  formData.expireDate = `${expireYear}-${expireMonth}`;
   showOpenDatePicker.value = false;
 };
 
@@ -549,7 +666,7 @@ const onSubmit = async () => {
       last4No: formData.last4No,
       cardBin: formData.cardBin,
       openDate: formData.openDate,
-      expireDate: formData.expireDate,
+      expireDate: formData.expireDate ? `${formData.expireDate}-01` : '',
       sourceFrom: formData.sourceFrom,
     };
 

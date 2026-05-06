@@ -63,28 +63,11 @@
             readonly
           />
           <van-field
-            v-model="formData.last4No"
-            name="last4No"
-            label="卡号后4位"
-            placeholder="请输入"
-            readonly
-            clickable
-            @click="openKeyboard('last4No')"
-            :rules="[{ required: true, message: '请输入卡号后4位' }]"
-          />
-          <van-field
             v-model="formData.alias"
             name="alias"
             label="卡片别名"
             placeholder="如：工资卡、留学卡"
           />
-        </van-cell-group>
-      </div>
-
-      <!-- 卡片信息 -->
-      <div class="form-section">
-        <div class="section-title">卡片信息</div>
-        <van-cell-group inset>
           <van-field
             v-model="formData.cardLevel"
             name="cardLevel"
@@ -99,17 +82,23 @@
             readonly
             @click="showMainSubPicker = true"
           />
+        </van-cell-group>
+      </div>
+
+      <!-- 卡片信息 -->
+      <div class="form-section">
+        <div class="section-title">卡片信息</div>
+        <van-cell-group inset>
           <van-field
             v-model="formData.cardOrg"
             name="cardOrg"
             label="卡组织"
-            placeholder="请输入或选择卡组织"
-            @click-right-icon="showCardOrgPicker = true"
-          >
-            <template #right-icon>
-              <van-icon name="arrow-down" @click="showCardOrgPicker = true" />
-            </template>
-          </van-field>
+            placeholder="请选择"
+            is-link
+            readonly
+            clickable
+            @click="showCardOrgPicker = true"
+          />
           <van-field
             v-model="formData.cardLength"
             name="cardLength"
@@ -120,6 +109,16 @@
             @click="openKeyboard('cardLength')"
           />
           <van-field
+            v-model="formData.currency"
+            name="currency"
+            label="币种"
+            placeholder="请选择"
+            is-link
+            readonly
+            clickable
+            @click="showCurrencyPicker = true"
+          />
+          <van-field
             v-model="formData.cardBin"
             name="cardBin"
             label="卡BIN"
@@ -127,6 +126,31 @@
             readonly
             clickable
             @click="openKeyboard('cardBin')"
+          />
+          <van-field
+            v-model="formData.last4No"
+            name="last4No"
+            label="卡号后4位"
+            placeholder="请输入"
+            readonly
+            clickable
+            @click="openKeyboard('last4No')"
+          />
+          <van-field
+            v-model="formData.openDate"
+            name="openDate"
+            label="开卡日期"
+            is-link
+            readonly
+            @click="showOpenDatePicker = true"
+          />
+          <van-field
+            v-model="formData.expireDate"
+            name="expireDate"
+            label="过期日期"
+            is-link
+            readonly
+            @click="showExpireDatePicker = true"
           />
         </van-cell-group>
       </div>
@@ -192,38 +216,10 @@
         </van-cell-group>
       </div>
 
-      <!-- 日期设置 -->
-      <div class="form-section">
-        <div class="section-title">日期设置</div>
-        <van-cell-group inset>
-          <van-field
-            v-model="formData.openDate"
-            name="openDate"
-            label="开卡日期"
-            is-link
-            readonly
-            @click="showOpenDatePicker = true"
-          />
-          <van-field
-            v-model="formData.expireDate"
-            name="expireDate"
-            label="过期日期"
-            is-link
-            readonly
-            @click="showExpireDatePicker = true"
-          />
-        </van-cell-group>
-      </div>
-
       <!-- 基本设置 -->
       <div class="form-section">
         <div class="section-title">基本设置</div>
         <van-cell-group inset>
-          <van-field
-            v-model="formData.currency"
-            name="currency"
-            label="币种"
-          />
           <van-field
             v-model="formData.status"
             name="status"
@@ -379,6 +375,16 @@
         :columns="cardOrgColumns"
         @confirm="onCardOrgConfirm"
         @cancel="showCardOrgPicker = false"
+      />
+    </van-popup>
+
+    <!-- 币种选择 -->
+    <van-popup v-model:show="showCurrencyPicker" position="bottom">
+      <van-picker
+        title="选择币种"
+        :columns="currencyColumns"
+        @confirm="onCurrencyConfirm"
+        @cancel="showCurrencyPicker = false"
       />
     </van-popup>
 
@@ -584,11 +590,29 @@ const mainSubColumns = [
 
 // 卡组织
 const cardOrgColumns = [
-  { text: '银联', value: 'UnionPay' },
-  { text: 'Visa', value: 'Visa' },
-  { text: 'Mastercard', value: 'Mastercard' },
-  { text: 'American Express', value: 'Amex' },
-  { text: 'JCB', value: 'JCB' }
+  { text: "银联", value: "银联" },
+  { text: "万事达", value: "万事达" },
+  { text: "Visa", value: "Visa" },
+  { text: "运通", value: "运通" },
+  { text: "大莱", value: "大莱" },
+  { text: "JCB", value: "JCB" },
+]
+
+// 卡组织对应的卡号长度
+const cardOrgLength = {
+  '银联': 19,
+  '万事达': 16,
+  'Visa': 16,
+  '运通': 15,
+  '大莱': 16,
+  'JCB': 16,
+}
+
+// 币种
+const currencyColumns = [
+  { text: "CNY 人民币", value: "CNY" },
+  { text: "USD 美元", value: "USD" },
+  { text: "HKD 港币", value: "HKD" },
 ]
 
 // 卡片状态
@@ -608,6 +632,7 @@ const expireDate = reactive(['2030', '12'])
 const showBankPicker = ref(false)
 const showMainSubPicker = ref(false)
 const showCardOrgPicker = ref(false)
+const showCurrencyPicker = ref(false)
 const showStatusPicker = ref(false)
 const showOpenDatePicker = ref(false)
 const showExpireDatePicker = ref(false)
@@ -746,9 +771,14 @@ const onBankConfirm = ({ selectedOptions }) => {
 
 const onCardOrgConfirm = ({ selectedOptions }) => {
   formData.cardOrg = selectedOptions[0].value
-  // 更新卡组织图标
+  formData.cardLength = cardOrgLength[formData.cardOrg] || 16
   cardOrgIconUrl.value = getCardOrgIcon(selectedOptions[0].value)
   showCardOrgPicker.value = false
+}
+
+const onCurrencyConfirm = ({ selectedOptions }) => {
+  formData.currency = selectedOptions[0].value
+  showCurrencyPicker.value = false
 }
 
 const onMainSubConfirm = ({ selectedOptions }) => {

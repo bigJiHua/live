@@ -316,12 +316,6 @@ const onDisableDialogClose = async (action) => {
   border-radius: 12px;
   overflow: hidden;
 }
-
-/* 安全提示 */
-.security-tips {
-  margin-top: 24px;
-}
-
 /* 关闭 PIN 弹窗 */
 .disable-dialog-content {
   padding: 20px 16px;

@@ -105,13 +105,30 @@
     </van-popup>
 
     <!-- 借记卡选择 -->
-    <van-popup v-model:show="showDebitCardPicker" position="bottom">
-      <van-picker
-        title="选择还款银行卡"
-        :columns="debitCardColumns"
-        @confirm="onDebitCardConfirm"
-        @cancel="showDebitCardPicker = false"
-      />
+    <van-popup v-model:show="showDebitCardPicker" position="bottom" round>
+      <div class="debit-card-popup">
+        <div class="popup-header">
+          <span>选择还款银行卡</span>
+          <van-icon name="cross" @click="showDebitCardPicker = false" />
+        </div>
+        <van-search
+          v-model="bankSearchKey"
+          placeholder="搜索银行"
+          @clear="bankSearchKey = ''"
+        />
+        <div class="card-list">
+          <div
+            v-for="card in filteredDebitCardColumns"
+            :key="card.value"
+            class="card-item"
+            @click="onDebitCardSelect(card)"
+          >
+            <span class="card-text">{{ card.text }}</span>
+            <van-icon v-if="card.value === formData.repayMethodCardId" name="success" color="#07c160" />
+          </div>
+          <div v-if="filteredDebitCardColumns.length === 0" class="empty-tip">未找到匹配的银行卡</div>
+        </div>
+      </div>
     </van-popup>
 
     <!-- 日期选择 -->
@@ -144,6 +161,7 @@ import { ref, reactive, computed, onMounted } from "vue";
 import { showToast, showLoadingToast, closeToast } from "vant";
 import { useRouter, useRoute } from "vue-router";
 import { createRepay, getBillDetail, getBillList, getCardList } from "@/utils/api/card";
+import { categoryApi } from "@/utils/api/category";
 
 const router = useRouter();
 const route = useRoute();
@@ -160,6 +178,8 @@ const showKeyboard = ref(false);
 
 // 借记卡列表
 const debitCardList = ref([]);
+const bankCategoryList = ref([]);
+const bankSearchKey = ref('');
 
 // 数字键盘控制
 const currentField = ref("");
@@ -195,11 +215,35 @@ const getDebitCardName = () => {
 
 // 借记卡列
 const debitCardColumns = computed(() => {
-  return debitCardList.value.map(card => ({
-    text: `借记卡 ****${card.last4_no || card.last4No || card.card_last4 || "****"}`,
-    value: card.id
-  }));
+  return debitCardList.value.map(card => {
+    const bankName = getBankNameById(card.bank_id);
+    const last4 = card.last4_no || card.last4No || card.card_last4 || "****";
+    const displayName = bankName ? `${bankName} ${last4}` : `借记卡 ****${last4}`;
+    return {
+      text: displayName,
+      value: card.id,
+      bankName,
+      last4
+    };
+  });
 });
+
+const filteredDebitCardColumns = computed(() => {
+  const key = bankSearchKey.value.toLowerCase().trim();
+  if (!key) return debitCardColumns.value;
+  return debitCardColumns.value.filter(card =>
+    card.text.toLowerCase().includes(key) ||
+    card.bankName?.toLowerCase().includes(key) ||
+    card.last4?.includes(key)
+  );
+});
+
+// 根据银行ID获取银行名称
+const getBankNameById = (bankId) => {
+  if (!bankId) return "";
+  const bank = bankCategoryList.value.find(b => String(b.id) === String(bankId));
+  return bank ? bank.name : "";
+};
 
 // 字段配置
 const fieldConfig = {
@@ -283,6 +327,16 @@ const loadDebitCards = async () => {
   }
 };
 
+// 加载银行分类
+const loadBankCategories = async () => {
+  try {
+    const res = await categoryApi.list('bank');
+    bankCategoryList.value = res.data || res || [];
+  } catch (error) {
+    bankCategoryList.value = [];
+  }
+};
+
 // 加载账单数据
 const loadBillData = async () => {
   try {
@@ -321,8 +375,9 @@ const onMethodConfirm = ({ selectedOptions }) => {
 };
 
 // 借记卡确认
-const onDebitCardConfirm = ({ selectedOptions }) => {
-  formData.repayMethodCardId = selectedOptions[0].value;
+const onDebitCardSelect = (card) => {
+  formData.repayMethodCardId = card.value;
+  bankSearchKey.value = '';
   showDebitCardPicker.value = false;
 };
 
@@ -393,6 +448,7 @@ const onSubmit = async () => {
 onMounted(() => {
   loadBillData();
   loadDebitCards();
+  loadBankCategories();
   // 初始化还款时间
   const now = new Date();
   currentDate.value = [
@@ -427,5 +483,52 @@ onMounted(() => {
 
 .submit-btn-wrap {
   margin: 32px 16px;
+}
+
+.debit-card-popup {
+  max-height: 60vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.popup-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  border-bottom: 1px solid #eee;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.card-list {
+  flex: 1;
+  overflow-y: auto;
+  max-height: 300px;
+}
+
+.card-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 16px;
+  border-bottom: 1px solid #f5f5f5;
+  cursor: pointer;
+}
+
+.card-item:active {
+  background: #f7f8fa;
+}
+
+.card-text {
+  font-size: 14px;
+  color: #323233;
+}
+
+.empty-tip {
+  text-align: center;
+  padding: 30px;
+  color: #969799;
+  font-size: 14px;
 }
 </style>

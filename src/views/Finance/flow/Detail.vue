@@ -62,16 +62,16 @@
         </van-cell>
         <van-cell title="关联卡片">
           <template #value>
-            <div class="card-cell">
+            <div style="display: flex; align-items: center; justify-content: flex-end;">
               <van-image
-                v-if="getCardBankIcon(detail.card_id)"
-                width="18"
-                height="18"
-                :src="getFullUrl(getCardBankIcon(detail.card_id))"
-                fit="contain"
-                class="card-cell-icon"
-              />
-              <span>{{ getCardText(detail.card_id) }}</span>
+              v-if="getCardBankIcon(detail.card_id)"
+              width="18"
+              height="18"
+              :src="getFullUrl(getCardBankIcon(detail.card_id))"
+              fit="contain"
+              style="vertical-align: middle; margin-right: 5px;"
+            />
+            <span>{{ getCardText(detail.card_id) }}</span>
             </div>
           </template>
         </van-cell>
@@ -253,9 +253,9 @@ const getCardText = (cardId) => {
   const bankName = bank?.name || detail.value?.card_alias || card?.alias || card?.bank_name || "";
   const last4 = detail.value?.card_last4 || card?.card_last4 || card?.last4_no || card?.last4No || "";
 
-  if (bankName && last4) return `${bankName} ****${last4}`;
+  if (bankName && last4) return `${bankName} ${last4}`;
   if (bankName) return bankName;
-  if (last4) return `****${last4}`;
+  if (last4) return ` ${last4}`;
   return cardId;
 };
 
@@ -479,12 +479,16 @@ onMounted(() => {
 .card-cell {
   display: inline-flex;
   align-items: center;
+  justify-content: flex-start;
   gap: 5px;
+  flex-wrap: nowrap;
+  text-align: left;
 }
 
 .card-cell-icon {
   border-radius: 3px;
   flex-shrink: 0;
+  align-self: center;
 }
 
 .notice-banner {

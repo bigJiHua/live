@@ -73,6 +73,18 @@
       </van-row>
     </div>
 
+    <!-- TODO 注释 -->
+    <div
+      style="
+        padding: 12px 16px;
+        font-size: 13px;
+        color: #e6a23c;
+        background: #fdf6ec;
+      "
+    >
+      ！当前项目部署在英国伦敦服务器上，所以数据加载可能会有延迟
+    </div>
+
     <div class="app-card menu-grid-card">
       <van-grid :column-num="4" :border="false" clickable>
         <van-grid-item @click="goSubPage('flow')">
@@ -128,6 +140,18 @@
           <van-icon name="arrow" class="arrow-right" />
         </div>
       </div>
+    </div>
+
+    <div class="quick-add-bar">
+      <van-button
+        type="primary"
+        plain
+        size="small"
+        round
+        icon="plus"
+        @click="goToAddFlow"
+        >快速登记流水</van-button
+      >
     </div>
 
     <van-cell-group inset class="recent-records">
@@ -245,16 +269,16 @@ const loadReminder = async () => {
 const dailySalary = computed(() => {
   if (todaySalaryData.value) {
     // 从 API 获取今日薪酬
-    let total = 0
+    let total = 0;
     if (todaySalaryData.value.formal?.income) {
-      total += parseFloat(todaySalaryData.value.formal.income) || 0
+      total += parseFloat(todaySalaryData.value.formal.income) || 0;
     }
     if (todaySalaryData.value.parttimes) {
-      todaySalaryData.value.parttimes.forEach(p => {
-        total += parseFloat(p.income) || 0
-      })
+      todaySalaryData.value.parttimes.forEach((p) => {
+        total += parseFloat(p.income) || 0;
+      });
     }
-    return total
+    return total;
   }
   // 兜底：按月收入估算
   const today = new Date();
@@ -270,11 +294,11 @@ const dailySalary = computed(() => {
 // 加载今日薪酬
 const loadTodaySalary = async () => {
   try {
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Date().toISOString().split("T")[0];
     const res = await getSalaryDay({ work_date: today });
     todaySalaryData.value = res.data || null;
   } catch (e) {
-    console.error('加载今日薪酬失败', e);
+    console.error("加载今日薪酬失败", e);
     todaySalaryData.value = null;
   }
 };
@@ -295,6 +319,10 @@ const goSubPage = (page) => {
     todo: "/todo/calendar",
   };
   if (routes[page]) router.push(routes[page]);
+};
+
+const goToAddFlow = () => {
+  router.push("/finance/add");
 };
 
 const formatMoney = (val) =>
@@ -369,6 +397,7 @@ onMounted(() => {
   backdrop-filter: blur(6px);
   overflow: hidden;
 }
+
 .date-month {
   width: 100%;
   height: 0.9rem;
@@ -379,6 +408,7 @@ onMounted(() => {
   font-size: 0.5rem;
   font-weight: bold;
 }
+
 .date-day {
   flex: 1;
   display: flex;
@@ -462,34 +492,44 @@ onMounted(() => {
   font-size: 26px;
   margin-bottom: 8px;
 }
+
 .grid-text {
   font-size: 13px;
   color: #646566;
 }
+
 .blue {
   color: #1989fa;
 }
+
 .green {
   color: #07c160;
 }
+
 .orange {
   color: #ff976a;
 }
+
 .red {
   color: #ee0a24;
 }
+
 .purple {
   color: #7232dd;
 }
+
 .cyan {
   color: #00bcd4;
 }
+
 .teal {
   color: #009688;
 }
+
 .pink {
   color: #e91e63;
 }
+
 .gold {
   color: #ffb300;
 }
@@ -554,6 +594,7 @@ onMounted(() => {
   font-weight: bold;
   color: #ee0a24 !important;
 }
+
 .text-expense {
   color: #07c160 !important;
 }
@@ -567,11 +608,23 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
 }
+
+.quick-add-bar {
+  margin: 12px 16px;
+  display: flex;
+  justify-content: center;
+}
+
+.quick-add-bar .van-button {
+  flex: 1;
+}
+
 .recent-records {
   background: #fff;
   border-radius: 1.2rem;
   overflow: hidden;
 }
+
 .view-detail {
   font-size: 0.8rem;
   color: #0a4ba8;

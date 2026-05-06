@@ -3,7 +3,9 @@ import vue from '@vitejs/plugin-vue'
 import { resolve } from 'path'
 
 // 显式加载 .env 文件
-const env = loadEnv('', process.cwd(), '')
+const env = loadEnv(process.env.NODE_ENV || 'development', process.cwd(), '')
+// console.log('VITE_API_BASE_URL:', env.VITE_API_BASE_URL)
+// console.log('Loaded env keys:', Object.keys(env).filter(key => key.startsWith('VITE_')))
 
 export default defineConfig({
   plugins: [

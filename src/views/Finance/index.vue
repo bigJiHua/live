@@ -327,13 +327,6 @@ onMounted(() => loadMonthStats());
   background: #fff9e6;
   border-radius: 12px;
 }
-.footer-tips {
-  text-align: center;
-  font-size: 11px;
-  color: #c8c9cc;
-  margin-top: 30px;
-  padding-bottom: 20px;
-}
 .text-income {
   color: #07c160;
 }

@@ -50,9 +50,16 @@
 
       <!-- 银行卡 -->
       <div class="section-title" v-if="bankCards.length > 0">银行卡</div>
+      <div class="bank-search" v-if="bankCards.length > 0">
+        <van-search
+          v-model="bankSearchKey"
+          placeholder="搜索银行卡"
+          @clear="bankSearchKey = ''"
+        />
+      </div>
       <div class="account-list" v-if="bankCards.length > 0">
         <div
-          v-for="account in bankCards"
+          v-for="account in filteredBankCards"
           :key="account.card_id"
           class="account-item"
         >
@@ -115,6 +122,7 @@ const loading = ref(false);
 const accountList = ref([]);
 const bankList = ref([]);
 const cardList = ref([]);
+const bankSearchKey = ref('');
 
 // 获取完整 URL
 const getFullUrl = (path) => {
@@ -202,6 +210,20 @@ const virtualAccounts = computed(() =>
 const bankCards = computed(() =>
   accountList.value.filter(acc => !isVirtualAccount(acc.card_id))
 );
+
+const filteredBankCards = computed(() => {
+  const key = bankSearchKey.value.toLowerCase().trim()
+  if (!key) return bankCards.value
+  return bankCards.value.filter(acc => {
+    const bankInfo = getCardBankInfo(acc.card_id)
+    const bankName = bankInfo.bankName || ''
+    const cardAlias = acc.card_alias || ''
+    const cardNo = acc.card_last4 || bankInfo.cardLast4 || ''
+    return bankName.toLowerCase().includes(key) ||
+           cardAlias.toLowerCase().includes(key) ||
+           cardNo.toLowerCase().includes(key)
+  })
+});
 
 const totalBalance = computed(() =>
   accountList.value.reduce((sum, acc) => sum + Number(acc.balance), 0)
@@ -421,5 +443,10 @@ onMounted(async () => {
   height: 100%;
   align-items: center;
   justify-content: center;
+}
+
+.bank-search {
+  padding: 0 16px;
+  background: #fff;
 }
 </style>

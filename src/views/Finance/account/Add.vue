@@ -1,4 +1,4 @@
-﻿<template>
+﻿﻿<template>
   <div class="page-finance-add" @click="showKeyboard = false">
     <!-- 顶部金额卡片 -->
     <div class="amount-card" @click.stop="showKeyboard = true">
@@ -136,12 +136,30 @@
 
     <!-- 卡片选择弹框 -->
     <van-popup v-model:show="showCardPicker" position="bottom" round>
-      <van-picker
-        title="选择关联卡片"
-        :columns="cardColumns"
-        @confirm="onCardConfirm"
-        @cancel="showCardPicker = false"
-      />
+      <div class="card-picker-popup">
+        <div class="popup-header">
+          <span>选择关联卡片</span>
+          <van-icon name="cross" @click="showCardPicker = false" />
+        </div>
+        <van-search
+          v-model="cardSearchKey"
+          placeholder="搜索银行卡"
+          show-action
+          @cancel="cardSearchKey = ''"
+        />
+        <div class="card-list">
+          <div
+            v-for="card in filteredCardColumns"
+            :key="card.value"
+            class="card-item"
+            @click="onCardSelect(card)"
+          >
+            <span class="card-text">{{ card.text }}</span>
+            <van-icon v-if="card.value === selectedCardId" name="success" color="#07c160" />
+          </div>
+          <div v-if="filteredCardColumns.length === 0" class="empty-tip">未找到匹配的银行卡</div>
+        </div>
+      </div>
     </van-popup>
 
     <!-- 币种选择弹框 -->
@@ -219,6 +237,8 @@ const cardList = ref([])
 const bankList = ref([])
 const selectedCard = ref(null)
 const showCardPicker = ref(false)
+const cardSearchKey = ref('')
+const selectedCardId = ref('')
 
 // 日期状态
 const minDate = new Date(2020, 0, 1)
@@ -346,6 +366,16 @@ const cardColumns = computed(() => {
   return []
 })
 
+const filteredCardColumns = computed(() => {
+  const key = cardSearchKey.value.toLowerCase().trim()
+  if (!key) return cardColumns.value
+  return cardColumns.value.filter(card =>
+    card.text.toLowerCase().includes(key) ||
+    card.card_no?.includes(key) ||
+    card.bank_name?.toLowerCase().includes(key)
+  )
+})
+
 // 是否显示关联卡片（借记卡/信用卡/微信支付/支付宝时显示）
 const showCardCell = computed(() => {
   const method = selectedPayMethod.value
@@ -440,6 +470,13 @@ const onPayMethodConfirm = ({ selectedOptions }) => {
 // 卡片选择
 const onCardConfirm = ({ selectedOptions }) => {
   selectedCard.value = selectedOptions[0]
+  showCardPicker.value = false
+}
+
+const onCardSelect = (card) => {
+  selectedCardId.value = card.value
+  selectedCard.value = card
+  cardSearchKey.value = ''
   showCardPicker.value = false
 }
 
@@ -622,5 +659,52 @@ onMounted(async () => {
 .submit-wrap {
   padding: 30px 20px;
   background: #f7f8fa;
+}
+
+.card-picker-popup {
+  max-height: 60vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.popup-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  border-bottom: 1px solid #eee;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.card-list {
+  flex: 1;
+  overflow-y: auto;
+  max-height: 300px;
+}
+
+.card-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 16px;
+  border-bottom: 1px solid #f5f5f5;
+  cursor: pointer;
+}
+
+.card-item:active {
+  background: #f7f8fa;
+}
+
+.card-text {
+  font-size: 14px;
+  color: #323233;
+}
+
+.empty-tip {
+  text-align: center;
+  padding: 30px;
+  color: #969799;
+  font-size: 14px;
 }
 </style>
