@@ -23,7 +23,7 @@ DB_HOST=localhost
 DB_PORT=3306
 DB_USER=root
 DB_PASSWORD=
-DB_NAME=life_manager
+DB_NAME=live
 
 # JWT 配置
 JWT_SECRET=your-super-secret-jwt-key
@@ -55,7 +55,7 @@ APP_NAME=生活管理系统
 ### db.js
 **数据库配置文件**
 
-提供数据库连接池和表结构初始化功能。
+提供数据库连接池和通用查询执行能力。表结构初始化由 `src/init/autoDatabase.js` 读取 `mysql/live.sql` 完成。
 
 #### 配置项
 
@@ -65,7 +65,7 @@ APP_NAME=生活管理系统
 | `DB_PORT` | 数据库端口 | 3306 |
 | `DB_USER` | 数据库用户名 | root |
 | `DB_PASSWORD` | 数据库密码 | - |
-| `DB_NAME` | 数据库名称 | life_manager |
+| `DB_NAME` | 数据库名称 | live |
 
 #### 主要功能
 
@@ -88,22 +88,7 @@ const pool = mysql.createPool({
 });
 ```
 
-**2. 初始化数据库表**
-
-自动创建所需的数据库表:
-
-```javascript
-const tables = [
-  // users 表
-  `CREATE TABLE IF NOT EXISTS users (...)`,
-  // categories 表
-  `CREATE TABLE IF NOT EXISTS categories (...)`,
-  // transactions 表
-  `CREATE TABLE IF NOT EXISTS transactions (...)`
-];
-```
-
-**3. 执行查询**
+**2. 执行查询**
 
 提供简化的查询接口:
 
@@ -111,86 +96,33 @@ const tables = [
 const { execute } = require('../config/db');
 
 // 执行查询
-const [rows] = await execute('SELECT * FROM users WHERE id = ?', [userId]);
+const [rows] = await execute('SELECT * FROM user_info WHERE id = ?', [userId]);
 
-// 插入数据
+// 更新数据
 const [result] = await execute(
-  'INSERT INTO users (username, email) VALUES (?, ?)',
-  ['张三', 'zhangsan@example.com']
+  'UPDATE user_info SET avatar = ? WHERE id = ?',
+  [avatar, userId]
 );
 ```
 
 #### 使用示例
 
 ```javascript
-const { initPool, execute, initTables } = require('../config/db');
+const { initPool, execute } = require('../config/db');
 
 // 初始化连接池 (首次使用时自动调用)
 initPool();
 
-// 初始化表结构
-await initTables();
-
 // 执行查询
-const [users] = await execute('SELECT * FROM users');
+const [users] = await execute('SELECT * FROM user_info');
 
 // 执行带参数的查询
-const [user] = await execute('SELECT * FROM users WHERE id = ?', [userId]);
+const [user] = await execute('SELECT * FROM user_info WHERE id = ?', [userId]);
 ```
 
 #### 表结构
 
-**users 表:**
-```sql
-CREATE TABLE users (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  username VARCHAR(50) NOT NULL,
-  email VARCHAR(100) NOT NULL UNIQUE,
-  password VARCHAR(255) NOT NULL,
-  pin_hash VARCHAR(255),
-  settings JSON,
-  email_verified BOOLEAN DEFAULT FALSE,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX idx_email (email)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-```
-
-**categories 表:**
-```sql
-CREATE TABLE categories (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  user_id INT NOT NULL,
-  name VARCHAR(50) NOT NULL,
-  type ENUM('income', 'expense') NOT NULL,
-  color VARCHAR(7) DEFAULT '#52c41a',
-  icon VARCHAR(10),
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-  INDEX idx_user_type (user_id, type)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-```
-
-**transactions 表:**
-```sql
-CREATE TABLE transactions (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  user_id INT NOT NULL,
-  amount DECIMAL(10, 2) NOT NULL,
-  type ENUM('income', 'expense') NOT NULL,
-  category_id INT,
-  description TEXT,
-  date DATE NOT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-  FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL,
-  INDEX idx_user_date (user_id, date),
-  INDEX idx_user_type (user_id, type),
-  INDEX idx_category (category_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-```
+当前项目表结构以 `mysql/live.sql` 为准。运行时初始化流程位于 `src/init/index.js` 和 `src/init/autoDatabase.js`，不会再通过 `db.js` 创建旧版 `users/categories/transactions` 表。
 
 ---
 
@@ -415,3 +347,11 @@ require('dotenv').config({
   path: `.env.${process.env.NODE_ENV || 'development'}`
 });
 ```
+
+---
+
+## 更新日志
+
+### 5月28日
+- 优化 `db.js` 连接池配置，启用 `enableKeepAlive` 选项，提升长连接稳定性。
+- 清理旧版本表创建逻辑，统一由 `src/init/` 管理表结构初始化。

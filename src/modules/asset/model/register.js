@@ -7,14 +7,30 @@ const idUtils = require('../../../common/utils/idUtils');
 class AssetRegister {
   static tableName = 'asset_register';
 
+  static formatLocalDate(date = new Date()) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  static formatLocalDateTime(date = new Date()) {
+    const time = [
+      date.getHours(),
+      date.getMinutes(),
+      date.getSeconds()
+    ].map(value => String(value).padStart(2, '0')).join(':');
+    return `${this.formatLocalDate(date)} ${time}`;
+  }
+
   /**
    * 用户登记资产
    */
   static async create({ userId, totalAsset, creditDebt, totalBalance, assetDetails, remark }) {
     const id = idUtils.billId();
     const now = String(Date.now());
-    const today = now.substring(0, 10);
-    const registerTime = new Date().toLocaleString('zh-CN', { hour12: false });
+    const today = this.formatLocalDate();
+    const registerTime = this.formatLocalDateTime();
 
     await db.execute(
       `INSERT INTO ${this.tableName} 

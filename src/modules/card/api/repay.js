@@ -6,9 +6,9 @@ const CardRules = require('../rules');
 const authGuard = require('../../../common/middleware/authGuard');
 const pinLockGuard = require('../../../common/middleware/pinLockGuard');
 
+
 // 所有还款路由都需要认证 + PIN 验证
 router.use(authGuard);
-router.use(pinLockGuard);
 
 // ========== 还款记录管理 ==========
 
@@ -25,6 +25,6 @@ router.post('/', createValidator(CardRules.createRepay), cardRepayController.cre
 router.put('/:id', createValidator(CardRules.updateRepay), cardRepayController.update);
 
 // 删除还款记录
-router.delete('/:id', cardRepayController.delete);
+router.delete('/:id', pinLockGuard, cardRepayController.delete);
 
 module.exports = router;

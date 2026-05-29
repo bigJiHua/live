@@ -84,3 +84,10 @@
 | `create_time` | varchar(20) | 发布时间 |
 | `update_time` | varchar(20) | 修改时间 |
 | `is_deleted` | tinyint | 是否删除 |
+
+---
+
+## 更新日志
+
+### 5月28日
+- 优化动态/日记模块 API 路由和 Controller 层，提升查询性能。

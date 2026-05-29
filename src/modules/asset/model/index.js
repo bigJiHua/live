@@ -2,10 +2,9 @@ const db = require('../../../common/config/db');
 
 /**
  * 资产模型 - 用于计算预估总资产
- * 包含: asset(流动资产), fixed_asset(固定资产), fund(理财), card_bill(信用卡负债)
+ * 包含: fixed_asset(固定资产), fund(理财), card_bill(信用卡负债)
  */
 class Asset {
-  static tableAsset = 'asset';
   static tableFixed = 'fixed_asset';
   static tableFund = 'fund';
   static tableCardBill = 'card_bill';
@@ -16,16 +15,15 @@ class Asset {
    */
   static async getTotalAssets(userId) {
     // 并行获取所有资产数据
-    const [liquidAssets, fixedAssets, funds, cardBills, cards] = await Promise.all([
-      this.getLiquidAssets(userId),      // 流动资产/负债
+    const [fixedAssets, funds, cardBills, cards] = await Promise.all([
       this.getFixedAssets(userId),       // 固定资产
       this.getFunds(userId),             // 理财基金
       this.getCardBills(userId),         // 信用卡账单
       this.getCards(userId)              // 银行卡列表
     ]);
 
-    // 计算总资产 = 流动资产 + 固定资产 + 理财市值
-    const totalAssets = liquidAssets.total + fixedAssets.total + funds.total;
+    // 计算总资产 = 固定资产 + 理财市值
+    const totalAssets = fixedAssets.total + funds.total;
     
     // 计算总负债 = 信用卡已用额度
     const totalLiabilities = cardBills.totalUsed;
@@ -38,48 +36,12 @@ class Asset {
       totalLiabilities: Math.round(totalLiabilities * 100) / 100,
       netAssets: Math.round(netAssets * 100) / 100,
       breakdown: {
-        liquid: liquidAssets,
         fixed: fixedAssets,
         fund: funds,
         cardBill: cardBills,
         cards
       }
     };
-  }
-
-  /**
-   * 获取流动资产/负债 (asset表)
-   * type: 资产(增加净资产) / 负债(减少净资产)
-   */
-  static async getLiquidAssets(userId) {
-    const query = `
-      SELECT 
-        id, name, amount, type,
-        create_time, update_time
-      FROM ${this.tableAsset}
-      WHERE user_id = ? AND is_deleted = 0
-    `;
-    const [rows] = await db.execute(query, [userId]);
-
-    let total = 0;
-    const items = [];
-
-    rows.forEach(row => {
-      const amount = parseFloat(row.amount) || 0;
-      if (row.type === '资产') {
-        total += amount;
-      } else if (row.type === '负债') {
-        total -= amount;
-      }
-      items.push({
-        id: row.id,
-        name: row.name,
-        amount,
-        type: row.type
-      });
-    });
-
-    return { total, items, count: items.length };
   }
 
   /**
@@ -170,7 +132,7 @@ class Asset {
     const cardQuery = `
       SELECT id, alias, last4_no, card_type, bank_id
       FROM ${this.tableCard}
-      WHERE user_id = ? AND is_deleted = 0 AND card_type = '信用卡'
+      WHERE user_id = ? AND is_deleted = 0 AND card_type = 'credit'
     `;
     const [cards] = await db.execute(cardQuery, [userId]);
 

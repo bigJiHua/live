@@ -36,7 +36,9 @@ router.get("/", async (req, res) => {
     );
 
     const [debtRows] = await execute(
-      `SELECT COALESCE(SUM(need_repay), 0) as total FROM card_bill WHERE user_id = ? AND repay_status != '已还' AND is_deleted = 0`, [userId]
+      `SELECT COALESCE(SUM(need_repay), 0) as total
+       FROM card_bill
+       WHERE user_id = ? AND is_deleted = 0 AND COALESCE(need_repay, 0) > 0`, [userId]
     );
 
     const [recentRows] = await execute(
@@ -97,7 +99,9 @@ router.get("/v2", async (req, res) => {
     );
 
     const [debtRows] = await execute(
-      `SELECT COALESCE(SUM(need_repay), 0) as total FROM card_bill WHERE user_id = ? AND repay_status != '已还' AND is_deleted = 0`, [userId]
+      `SELECT COALESCE(SUM(need_repay), 0) as total
+       FROM card_bill
+       WHERE user_id = ? AND is_deleted = 0 AND COALESCE(need_repay, 0) > 0`, [userId]
     );
 
     const [budgetRows] = await execute(

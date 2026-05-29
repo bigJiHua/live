@@ -44,4 +44,7 @@ router.get("/me", authGuard, authController.getCurrentUser);
 // 锁定系统（强制下次登录需要验证PIN）
 router.post("/lock-system", authGuard, authController.lockSystem);
 
+// 获取当前用户登录日志（最近30条）
+router.get("/login-logs", authGuard, authController.getLoginLogs);
+
 module.exports = router;

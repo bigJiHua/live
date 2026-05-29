@@ -144,7 +144,9 @@ class UploadController {
    */
   async upload(req, res) {
     try {
-      const { type = "image", busType = "other", remark, tags } = req.body;
+      const { type = "image", busType: requestedBusType, bus_type, busId, bus_id, remark, tags } = req.body;
+      const busType = requestedBusType || bus_type || "other";
+      const resolvedBusId = busId || bus_id || null;
       const file = req.file;
 
       // 1. 校验文件是否存在
@@ -235,6 +237,7 @@ class UploadController {
           // 写入数据库
           const result = await SysAttachment.create({
             userId: req.userId,
+            busId: resolvedBusId,
             busType: busType,
             remark: remark || "用户上传的图片",
             tags: tags || "默认",
@@ -255,6 +258,7 @@ class UploadController {
               fileName: newFileName,
               fileSize: finalSize,
               fileExt: ".webp",
+              busId: resolvedBusId,
               busType: busType,
               compressed: true,
             },
@@ -272,6 +276,7 @@ class UploadController {
           // 写入数据库
           const result = await SysAttachment.create({
             userId: req.userId,
+            busId: resolvedBusId,
             busType: busType,
             remark: remark || "用户上传的图片",
             tags: tags || "默认",
@@ -292,6 +297,7 @@ class UploadController {
               fileName: newFileName,
               fileSize: finalSize,
               fileExt: path.extname(newFileName),
+              busId: resolvedBusId,
               busType: busType,
               compressed: false,
             },
@@ -304,6 +310,7 @@ class UploadController {
         // 写入数据库
         const result = await SysAttachment.create({
           userId: req.userId,
+          busId: resolvedBusId,
           busType: busType,
           remark: remark || "用户上传的图片",
           tags: tags || "默认",
@@ -324,6 +331,7 @@ class UploadController {
             fileName: newFileName,
             fileSize: finalSize,
             fileExt: path.extname(newFileName),
+            busId: resolvedBusId,
             busType: busType,
           },
         });
@@ -343,7 +351,9 @@ class UploadController {
    */
   async uploadMultiple(req, res) {
     try {
-      const { type = "image", busType = "other", remark, tags } = req.body;
+      const { type = "image", busType: requestedBusType, bus_type, busId, bus_id, remark, tags } = req.body;
+      const busType = requestedBusType || bus_type || "other";
+      const resolvedBusId = busId || bus_id || null;
       const files = req.files;
 
       // 校验 remark 长度
@@ -431,6 +441,7 @@ class UploadController {
             // 写入数据库
             const result = await SysAttachment.create({
               userId: req.userId,
+              busId: resolvedBusId,
               busType: busType,
               remark: remark || "用户上传的图片",
               tags: tags || "默认",
@@ -447,6 +458,7 @@ class UploadController {
               fileName: newFileName,
               fileSize: finalSize,
               fileExt: ".webp",
+              busId: resolvedBusId,
               remark: remark || "用户上传的图片",
               tags: tags || "默认",
               compressed: true,
@@ -464,6 +476,7 @@ class UploadController {
             // 写入数据库
             const result = await SysAttachment.create({
               userId: req.userId,
+              busId: resolvedBusId,
               busType: busType,
               remark: remark || "用户上传的图片",
               tags: tags || "默认",
@@ -480,6 +493,7 @@ class UploadController {
               fileName: newFileName,
               fileSize: finalSize,
               fileExt: path.extname(newFileName),
+              busId: resolvedBusId,
               remark: remark || "用户上传的图片",
               tags: tags || "默认",
               compressed: false,
@@ -492,6 +506,7 @@ class UploadController {
           // 写入数据库
           const result = await SysAttachment.create({
             userId: req.userId,
+            busId: resolvedBusId,
             busType: busType,
             remark: remark || "用户上传的图片",
             tags: tags || "默认",
@@ -508,6 +523,7 @@ class UploadController {
             fileName: newFileName,
             fileSize: finalSize,
             fileExt: isSvg ? ".svg" : path.extname(newFileName).toLowerCase(),
+            busId: resolvedBusId,
             remark: remark || "用户上传的图片",
             tags: tags || "默认",
             compressed: false,
@@ -534,11 +550,13 @@ class UploadController {
    */
   async list(req, res) {
     try {
-      const { busType, busId, limit = 50, offset = 0 } = req.query;
+      const { busType: requestedBusType, bus_type, busId, bus_id, limit = 50, offset = 0 } = req.query;
+      const busType = requestedBusType || bus_type;
+      const resolvedBusId = busId || bus_id;
 
       let attachments;
-      if (busType && busId) {
-        attachments = await SysAttachment.findByBus(busType, busId, req.userId);
+      if (busType && resolvedBusId) {
+        attachments = await SysAttachment.findByBus(busType, resolvedBusId, req.userId);
       } else {
         attachments = await SysAttachment.findByUser(req.userId, {
           busType,

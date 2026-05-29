@@ -1,12 +1,19 @@
 /**
  * 系统初始化模块
- * 
+ *
  * 完整的初始化流程：
  * 1. 检查数据库是否存在，不存在则自动创建
- * 2. 检查表数量是否正确
- * 3. 检查表字段是否完整
- * 4. 创建管理员账户（仅在 INIT_ENABLE=true 时）
- * 5. 清理 .env 配置（删除敏感信息）
+ * 2. 全量备份 + Schema 同步（仅在 INIT_ENABLE=true 时执行）
+ *    - 2.1 全量备份数据库到 mysql/backups/
+ *    - 2.2 以 live.sql 为唯一真相源，对比并同步实际库结构
+ * 3. 检查表数量是否正确
+ * 4. 检查表字段是否完整
+ * 5. 创建管理员账户（仅在 INIT_ENABLE=true 时）
+ * 6. 清理 .env 配置（删除敏感信息）
+ *
+ * 两条路径：
+ * - INIT_ENABLE=false（日常启动）→ 步骤1 + 增量迁移
+ * - INIT_ENABLE=true （维护/升级）→ 步骤1~6 全部执行
  */
 
 const fs = require('fs');
@@ -15,13 +22,11 @@ const bcrypt = require('bcryptjs');
 const mysql = require('mysql2/promise');
 const dayjs = require('dayjs');
 
-// 期望的表列表（共 25 张）
+// 期望的表列表（共 24 张）
 const EXPECTED_TABLES = [
   'account',
   'account_balance',
   'account_transfer',
-  'app_config',
-  'asset',
   'asset_register',
   'asset_snapshot',
   'budget',
@@ -59,6 +64,7 @@ const stats = {
   endTime: null,
   checks: {
     database: null,
+    sync: null,
     tables: null,
     fields: null,
     admin: null,
@@ -159,7 +165,7 @@ async function getConnectionWithDb() {
  * 步骤 1: 检查数据库和表是否存在，不存在则自动创建
  */
 async function checkDatabase() {
-  console.log('\n📦 [步骤 1/5] 检查数据库和表');
+  console.log('\n📦 [步骤 1/6] 检查数据库和表');
   printDivider();
   
   const dbName = process.env.DB_NAME || 'live';
@@ -190,30 +196,32 @@ async function checkDatabase() {
     // 检查表是否存在
     const connWithDb = await getConnectionWithDb();
     const [tables] = await connWithDb.query('SHOW TABLES');
-    await connWithDb.end();
-    
+
     const tableCount = tables.length;
     const elapsed = Date.now() - startTime;
     logInit(`查询耗时: ${elapsed}ms`);
-    
+
     if (tableCount === 0) {
       logInit(`⚠️ 数据库中没有表，尝试自动创建...`, 'warn');
-      
+
       // 调用自动创建表
       const { autoInitDatabase } = require('./autoDatabase');
       const autoResult = await autoInitDatabase();
-      
+
       if (autoResult.success) {
         logInit(`✅ 表结构自动创建成功`, 'success');
-        stats.checks.database = true;
-        return true;
       } else {
         logInit(`❌ 表结构创建失败: ${autoResult.reason}`, 'error');
         stats.checks.database = false;
+        await connWithDb.end();
         return false;
       }
+    } else {
+      logInit(`✅ 已有 ${tableCount} 张表，跳过建表`);
     }
-    
+
+    await connWithDb.end();
+
     stats.checks.database = true;
     return true;
   } catch (error) {
@@ -225,10 +233,10 @@ async function checkDatabase() {
 }
 
 /**
- * 步骤 2: 检查表数量
+ * 步骤 3: 检查表数量
  */
 async function checkTableCount() {
-  console.log('\n📋 [步骤 2/5] 检查数据表');
+  console.log('\n📋 [步骤 3/6] 检查数据表');
   printDivider();
   
   const expectedCount = EXPECTED_TABLES.length;
@@ -284,10 +292,10 @@ async function checkTableCount() {
 }
 
 /**
- * 步骤 3: 检查关键表字段
+ * 步骤 4: 检查关键表字段
  */
 async function checkTableFields() {
-  console.log('\n🔍 [步骤 3/5] 检查表字段');
+  console.log('\n🔍 [步骤 4/6] 检查表字段');
   printDivider();
   
   const tableCount = Object.keys(REQUIRED_FIELDS).length;
@@ -353,10 +361,10 @@ async function checkTableFields() {
 }
 
 /**
- * 步骤 4: 检查/创建管理员
+ * 步骤 5: 检查/创建管理员
  */
 async function createAdmin() {
-  console.log('\n👤 [步骤 4/5] 管理账户');
+  console.log('\n👤 [步骤 5/6] 管理账户');
   printDivider();
   
   const username = process.env.INIT_ADMIN_USER || 'admin';
@@ -368,12 +376,12 @@ async function createAdmin() {
   logInit(`邮箱: ${email}`);
   printDivider();
   
-  // 检查是否已存在
+  // 检查是否已存在管理员（按 identity='admin' 查，而非按 username，避免重复创建）
   logInit('正在检查账户...');
   
   try {
     const conn = await getConnectionWithDb();
-    const [rows] = await conn.query(`SELECT id, username, identity, create_time FROM user_info WHERE username = ? LIMIT 1`, [username]);
+    const [rows] = await conn.query(`SELECT id, username, identity, create_time FROM user_info WHERE identity = 'admin' LIMIT 1`);
     
     if (rows.length > 0) {
       const admin = rows[0];
@@ -389,7 +397,10 @@ async function createAdmin() {
     
     await conn.end();
   } catch (error) {
-    logInit(`查询失败: ${error.message}`, 'warn');
+    logInit(`查询失败: ${error.message}`, 'error');
+    logInit('无法确认管理员是否存在，跳过创建以避免重复', 'warn');
+    stats.checks.admin = true;
+    return true;
   }
   
   printDivider();
@@ -436,10 +447,10 @@ async function createAdmin() {
 }
 
 /**
- * 步骤 5: 清理 .env 文件
+ * 步骤 6: 清理 .env 文件
  */
 function cleanupEnvFile() {
-  console.log('\n🧹 [步骤 5/5] 清理配置');
+  console.log('\n🧹 [步骤 6/6] 清理配置');
   printDivider();
   
   const envPath = path.join(__dirname, '../../.env');
@@ -549,6 +560,7 @@ function printSummary(success) {
   
   const checkNames = {
     database: '数据库连接',
+    sync: '备份与同步',
     tables: '数据表检查',
     fields: '字段完整性',
     admin: '管理员账户',
@@ -611,6 +623,15 @@ async function init() {
 
     // 检查是否启用完整初始化（创建管理员等）
     if (!isInitEnabled()) {
+      // 日常启动：只跑增量迁移（不备份，不 sync）
+      const conn2 = await getConnectionWithDb();
+      try {
+        const { runMigrations } = require('./migrationRunner');
+        await runMigrations(conn2);
+      } finally {
+        await conn2.end();
+      }
+
       console.log('\n⏭️ [跳过] 管理员创建未启用 (INIT_ENABLE≠true)');
       logInit('提示: 如需创建管理员，请在 .env 中设置 INIT_ENABLE=true');
       logInit('数据库和表已自动创建完成 ✓');
@@ -620,7 +641,36 @@ async function init() {
 
     logInit('初始化已启用，开始执行检测...\n');
 
-    // 步骤 2: 检查表数量
+    // ========== INIT_ENABLE=true：先备份，再以 live.sql 为唯一真相源同步 ==========
+    const { fullBackup, syncSchema } = require('./schemaSync');
+    const dbName = process.env.DB_NAME || 'live';
+    const conn2 = await getConnectionWithDb();
+
+    try {
+      console.log('\n💾 [步骤 2/6] 备份与 Schema 同步');
+      printDivider();
+
+      // 2.1 ⚠ 必须先全量备份原始数据库
+      await fullBackup(conn2, dbName);
+
+      // 2.2 以 live.sql 为基准对齐实际库结构（补列、删列、改类型）
+      await syncSchema(conn2);
+      stats.checks.sync = true;
+
+    } catch (err) {
+      console.error(`❌ Schema 同步失败: ${err.message}`);
+      console.error(`   数据库已备份，但同步未完成。请修复后重新启动。`);
+      stats.checks.sync = false;
+      stats.checks.fields = false;
+      allPassed = false;
+      // 同步失败不继续清理 .env，保留 INIT_ENABLE 以便下次重试
+      printSummary(false);
+      return { success: false, step: 2, reason: err.message };
+    } finally {
+      await conn2.end();
+    }
+
+    // 步骤 3: 检查表数量
     const tablesOk = await checkTableCount();
     if (!tablesOk) {
       allPassed = false;
@@ -629,10 +679,10 @@ async function init() {
       logInit('⚠️ 表检查未完全通过，继续执行...', 'warn');
     }
 
-    // 步骤 3: 检查表字段
+    // 步骤 4: 检查表字段
     await checkTableFields();
 
-    // 步骤 4: 创建管理员
+    // 步骤 5: 创建管理员
     const adminOk = await createAdmin();
     if (!adminOk) {
       allPassed = false;
@@ -640,10 +690,10 @@ async function init() {
       printDivider();
       logInit('❌ 管理员创建失败，初始化终止', 'error');
       printSummary(false);
-      return { success: false, step: 4 };
+      return { success: false, step: 5 };
     }
 
-    // 步骤 5: 清理配置
+    // 步骤 6: 清理配置
     cleanupEnvFile();
 
     // 标记完成

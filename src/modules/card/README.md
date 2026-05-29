@@ -147,7 +147,7 @@
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `id` | varchar(32) | 主键UUID |
+| `id` | varchar(50) | 主键UUID |
 | `user_id` | varchar(50) | 用户ID |
 | `bank_id` | varchar(255) | 银行ID |
 | `card_type` | varchar(20) | 卡类型 |
@@ -171,7 +171,7 @@
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `id` | varchar(32) | 主键UUID |
+| `id` | varchar(50) | 主键UUID |
 | `card_id` | varchar(50) | 关联卡片ID |
 | `bill_month` | varchar(7) | 账单月 YYYY-MM |
 | `user_id` | varchar(50) | 用户ID |
@@ -185,3 +185,10 @@
 | `overdue_days` | int | 逾期天数 |
 | `repay_status` | varchar(20) | 还款状态 |
 | `is_deleted` | tinyint | 是否删除 |
+
+---
+
+## 更新日志
+
+### 5月28日
+- 优化信用卡账单模块 `bill.js` Model 和 `billController.js` Controller，修复账单重建逻辑。

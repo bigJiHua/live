@@ -6,6 +6,10 @@
 
 ### live.sql
 **完整的数据库表结构**
+### live_old_version.sql
+**旧的的数据库表结构**
+### live_V1.0.0.sql
+**完整的V1.0.0版本数据库表结构，只适配V1.0.0版本！**
 
 包含以下表：
 
@@ -78,6 +82,7 @@ CREATE TABLE moment (
 CREATE TABLE sys_attachment (
   id VARCHAR(32) NOT NULL COMMENT 'id主键(nanoid)',
   user_id VARCHAR(255) NOT NULL COMMENT '谁的图片',
+  bus_id VARCHAR(50) COMMENT '关联业务ID',
   bus_type VARCHAR(50) NOT NULL COMMENT '业务类型: post/product/bank/other',
   remark VARCHAR(255) DEFAULT '用户上传的图片' COMMENT '图片说明',
   tags VARCHAR(255) DEFAULT '默认' COMMENT '标签(JSON数组)',
@@ -88,7 +93,6 @@ CREATE TABLE sys_attachment (
   create_time VARCHAR(20) NOT NULL,
   is_deleted TINYINT DEFAULT 0,
   PRIMARY KEY (id),
-  UNIQUE KEY bus_id (bus_id),
   KEY idx_bus_ref (bus_type, bus_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='文件附件索引表';
 ```
@@ -99,6 +103,14 @@ CREATE TABLE sys_attachment (
 
 1. 执行 `live.sql` 创建所有表
 2. 表名统一使用下划线命名法
-3. 主键使用 varchar(32) 存储 nanoid
+3. 主键使用 varchar(50) 存储业务 ID
 4. 时间字段使用 varchar(20) 存储时间戳字符串
 5. is_deleted = 0 表示未删除
+
+---
+
+## 更新日志
+
+### 5月28日
+- 更新 `live.sql` 核心表结构，统一主键和外键 `varchar` 字段长度为 50。
+- 新增多张业务表（`fund`、`bus_fund_history`、`bus_recurring`、`account_transfer`、`device_crypto`、`security_verify_log`、`_migrations` 等），共计 24 张表。

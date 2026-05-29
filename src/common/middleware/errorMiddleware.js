@@ -3,6 +3,8 @@
  */
 function errorHandler(err, req, res, next) {
   const statusCode = err.status || 500;
+  const isDev = process.env.NODE_ENV === 'development';
+  const isServerError = statusCode >= 500;
 
   console.error('错误:', {
     statusCode,
@@ -14,8 +16,8 @@ function errorHandler(err, req, res, next) {
 
   res.status(statusCode).json({
     code: statusCode,
-    message: err.message || '服务器内部错误',
-    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    message: isServerError && !isDev ? '服务器内部错误' : (err.message || '服务器内部错误'),
+    stack: isDev ? err.stack : undefined
   });
 }
 

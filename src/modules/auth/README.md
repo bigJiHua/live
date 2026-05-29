@@ -118,7 +118,7 @@
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `id` | varchar(32) | 主键UUID |
+| `id` | varchar(50) | 主键UUID |
 | `username` | varchar(50) | 用户名 |
 | `email` | varchar(50) | 邮箱 |
 | `avatar` | varchar(255) | 头像URL |
@@ -141,3 +141,10 @@
 | `login_location` | varchar(255) | 地理位置 |
 | `status` | tinyint | 状态：1成功/0失败 |
 | `login_time` | varchar(20) | 登录时间 |
+
+---
+
+## 更新日志
+
+### 5月28日
+- 重构认证模块校验规则（Joi），优化登录/注册参数校验逻辑。

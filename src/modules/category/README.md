@@ -121,7 +121,7 @@
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `id` | varchar(32) | 主键UUID |
+| `id` | varchar(50) | 主键UUID |
 | `user_id` | varchar(50) | 用户ID |
 | `name` | varchar(50) | 分类名称 |
 | `type` | varchar(20) | 类型：income/expense/asset/fixed |
@@ -129,3 +129,10 @@
 | `remark` | varchar(50) | 说明 |
 | `sort` | int | 排序 |
 | `is_deleted` | tinyint | 是否删除 |
+
+---
+
+## 更新日志
+
+### 5月28日
+- 优化分类模块 `bank.js` Model 和 Controller，统一银行分类 CRUD 逻辑。

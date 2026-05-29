@@ -7,10 +7,29 @@ const idUtils = require('../../../common/utils/idUtils');
 class AssetSnapshot {
   static tableName = 'asset_snapshot';
 
+  static formatLocalDate(date = new Date()) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  static formatLocalDateTime(date = new Date()) {
+    const time = [
+      date.getHours(),
+      date.getMinutes(),
+      date.getSeconds()
+    ].map(value => String(value).padStart(2, '0')).join(':');
+    return `${this.formatLocalDate(date)} ${time}`;
+  }
+
   /**
    * 计算当前资产数据
    */
   static async calculateCurrentAssets(userId) {
+    const now = new Date();
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
     // 计算现金类资产总和（account_balance，排除信用卡）
     const [balanceRows] = await db.execute(
       `SELECT COALESCE(SUM(balance), 0) as total 
@@ -21,13 +40,14 @@ class AssetSnapshot {
     );
     const totalBalance = parseFloat(balanceRows[0]?.total) || 0;
 
-    // 计算信用卡总欠款
+    // 计算本月信用卡待还欠款（仅当前账单月）
     const [debtRows] = await db.execute(
       `SELECT COALESCE(SUM(cb.need_repay), 0) as total 
        FROM card_bill cb
        LEFT JOIN card_base c ON cb.card_id = c.id
-       WHERE cb.user_id = ? AND cb.is_deleted = 0 AND c.card_type = 'credit'`,
-      [userId]
+       WHERE cb.user_id = ? AND cb.is_deleted = 0 AND c.card_type = 'credit'
+         AND cb.bill_month = ?`,
+      [userId, currentMonth]
     );
     const creditDebt = parseFloat(debtRows[0]?.total) || 0;
 
@@ -57,8 +77,7 @@ class AssetSnapshot {
    */
   static async autoSaveSnapshot(userId) {
     try {
-      const now = String(Date.now());
-      const today = now.substring(0, 10);
+      const today = this.formatLocalDate();
 
       // 1. 检查今日是否已有记录
       const [todayRecords] = await db.execute(
@@ -109,7 +128,7 @@ class AssetSnapshot {
    */
   static async saveSnapshot(userId, totalAsset, creditDebt, totalBalance) {
     const now = String(Date.now());
-    const today = now.substring(0, 10);
+    const today = this.formatLocalDate();
 
     // 查询今天最后一条记录
     const [existing] = await db.execute(
@@ -132,18 +151,27 @@ class AssetSnapshot {
 
     // 写入新快照
     const id = idUtils.billId();
-    const recordTime = new Date().toLocaleString('zh-CN', { hour12: false });
+    const recordTime = this.formatLocalDateTime();
 
     await db.execute(
       `INSERT INTO ${this.tableName} 
-       (id, user_id, total_asset, credit_debt, total_balance, record_date, record_time, create_time, is_deleted)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`,
-      [id, userId, totalAsset, creditDebt, totalBalance, today, recordTime, now]
+       (id, user_id, total_asset, credit_debt, total_balance, record_date, record_time, create_time, update_time, is_deleted)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+      [id, userId, totalAsset, creditDebt, totalBalance, today, recordTime, now, now]
     );
 
     console.log(`[资产快照] 记录成功，日期=${today}，总资产=${totalAsset}，信用卡欠款=${creditDebt}，余额=${totalBalance}`);
 
-    return { id, total_asset: totalAsset, credit_debt: creditDebt, total_balance: totalBalance };
+    return {
+      id,
+      total_asset: totalAsset,
+      credit_debt: creditDebt,
+      total_balance: totalBalance,
+      record_date: today,
+      record_time: recordTime,
+      create_time: now,
+      update_time: now
+    };
   }
 
   /**
@@ -167,16 +195,35 @@ class AssetSnapshot {
       snapshot = await this.createSnapshotNow(userId);
     }
 
-    // 计算实时数据
+    // 实时计算当前资产数据（确保与信用卡账单页数据一致）
+    const currentAssets = await this.calculateCurrentAssets(userId);
+
+    // 计算实时统计数据
     const realtime = await this.calculateRealtimeStats(userId);
 
     // 获取近期大额流水
     const largeTransactions = await this.getRecentLargeTransactions(userId);
 
+    // 获取待还账单明细
+    const pendingBills = await this.getPendingBills(userId);
+
+    // 返回实时数据（不依赖快照的历史值，确保与信用卡账单页一致）
     return {
-      ...snapshot,
-      ...realtime,
-      largeTransactions
+      total_asset: currentAssets.totalAsset,
+      credit_debt: currentAssets.creditDebt,
+      total_balance: currentAssets.finalBalance,
+      record_date: snapshot.record_date,
+      record_time: snapshot.record_time,
+      debitCardCount: realtime.debitCardCount,
+      creditCardCount: realtime.creditCardCount,
+      creditDebt: realtime.creditDebt,
+      monthIncome: realtime.monthIncome,
+      monthExpense: realtime.monthExpense,
+      monthBalance: realtime.monthBalance,
+      todayIncome: realtime.todayIncome,
+      todayExpense: realtime.todayExpense,
+      largeTransactions,
+      pendingBills
     };
   }
 
@@ -195,7 +242,7 @@ class AssetSnapshot {
     const now = new Date();
     const year = now.getFullYear();
     const month = now.getMonth() + 1;
-    const today = now.toISOString().substring(0, 10);
+    const today = this.formatLocalDate(now);
     const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
     const nextMonth = month === 12 ? 1 : month + 1;
     const nextYear = month === 12 ? year + 1 : year;
@@ -219,13 +266,15 @@ class AssetSnapshot {
     );
     const creditCardCount = creditRows[0]?.count || 0;
 
-    // 3. 信用卡代还金额（所有未还账单汇总）
+    // 3. 信用卡本月代还金额（仅当前账单月）
+    const currentMonth = `${year}-${String(month).padStart(2, '0')}`;
     const [debtRows] = await db.execute(
       `SELECT COALESCE(SUM(cb.need_repay), 0) as total 
        FROM card_bill cb
        LEFT JOIN card_base c ON cb.card_id = c.id
-       WHERE cb.user_id = ? AND cb.is_deleted = 0 AND c.card_type = 'credit'`,
-      [userId]
+       WHERE cb.user_id = ? AND cb.is_deleted = 0 AND c.card_type = 'credit'
+         AND cb.bill_month = ?`,
+      [userId, currentMonth]
     );
     const creditDebt = parseFloat(debtRows[0]?.total) || 0;
 
@@ -291,7 +340,7 @@ class AssetSnapshot {
     // 计算一周前日期
     const now = new Date();
     const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const weekAgoStr = weekAgo.toISOString().substring(0, 10);
+    const weekAgoStr = this.formatLocalDate(weekAgo);
 
     // 1. 获取一周内收支流水
     const [accountRows] = await db.execute(
@@ -314,11 +363,47 @@ class AssetSnapshot {
     // 3. 合并并按金额降序排列，取前 limit 条
     const allRows = [
       ...accountRows.map(r => ({ ...r, type: 'account' })),
-      ...repayRows.map(r => ({ ...r, type: 'repay' }))
+      ...repayRows.map(r => ({ ...r, type: 'repay', direction: 0 }))
     ];
 
     allRows.sort((a, b) => parseFloat(b.amount) - parseFloat(a.amount));
     return allRows.slice(0, limit);
+  }
+
+  /**
+   * 获取本月待还账单明细（need_repay > 0 的当前账单月）
+   */
+  static async getPendingBills(userId) {
+    const now = new Date();
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const [rows] = await db.execute(
+      `SELECT cb.id, cb.card_id, cb.bill_month, cb.bill_amount, cb.min_repay,
+              cb.repaid, cb.need_repay, cb.repay_status, cb.is_overdue,
+              cb.overdue_days, cb.bill_end_date, cb.update_time,
+              c.alias as card_alias, c.last4_no as card_last4
+       FROM card_bill cb
+       LEFT JOIN card_base c ON cb.card_id = c.id
+       WHERE cb.user_id = ? AND cb.is_deleted = 0
+         AND c.card_type = 'credit' AND cb.need_repay > 0
+         AND cb.bill_month = ?
+       ORDER BY cb.bill_end_date ASC`,
+      [userId, currentMonth]
+    );
+    return rows.map(r => ({
+      id: r.id,
+      card_id: r.card_id,
+      card_alias: r.card_alias,
+      card_last4: r.card_last4,
+      bill_month: r.bill_month,
+      bill_amount: parseFloat(r.bill_amount) || 0,
+      min_repay: parseFloat(r.min_repay) || 0,
+      repaid: parseFloat(r.repaid) || 0,
+      need_repay: parseFloat(r.need_repay) || 0,
+      repay_status: r.repay_status,
+      is_overdue: !!r.is_overdue,
+      overdue_days: r.overdue_days || 0,
+      bill_end_date: r.bill_end_date
+    }));
   }
 
   /**

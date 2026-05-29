@@ -28,8 +28,14 @@
 
 提供各种 ID 生成功能。
 
-#### nanoid(length = 21)
-生成唯一 ID。
+#### idUtils.userId()
+生成 50 位用户 ID，对齐当前库中 `varchar(50)` 的主键/用户字段。
+
+#### idUtils.shortId()
+生成 47 位短 ID，用于带业务前缀的轻量编号；例如 `BC_` 前缀后总长刚好不超过 `varchar(50)`。
+
+#### idUtils.billId()
+生成 50 位数字/大写字母业务 ID，对齐当前库中 `varchar(50)` 的业务主键/外键字段。
 
 #### generateUUID()
 生成 UUID v4 格式的唯一标识符。
@@ -73,3 +79,10 @@ EMAIL_PASS=your-email-app-password
 2. **不要存储明文**: 永远不要在数据库中存储明文密码
 3. **验证码有效期**: 验证码应该有过期时间
 4. **随机性**: 使用加密安全的随机数生成器
+
+---
+
+## 更新日志
+
+### 5月28日
+- 优化 `idUtils.js` — 统一 ID 生成策略，`userId()` 50位 / `shortId()` 47位 / `billId()` 50位，对齐数据库 `varchar(50)` 字段。

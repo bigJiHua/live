@@ -30,6 +30,20 @@ exports.verifyPin = {
     .unknown(true),
 };
 
+// 风险路由 PIN 验证
+exports.verifyRoutePin = {
+  body: joi
+    .object({
+      data: joi.object({
+        pin: pinRule,
+        challengeId: joi.alternatives(joi.number(), joi.string()).required(),
+        requestUrl: joi.string().max(255).required(),
+        method: joi.string().max(16).required(),
+      }),
+    })
+    .unknown(true),
+};
+
 // 设置 PIN
 exports.setPin = {
   body: joi

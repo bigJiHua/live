@@ -57,8 +57,8 @@ class MomentController {
       });
       result.list = result.list.map((item) => {
         const parsed = this._parseFields(item);
-        // content 只返回最多20个字符作为标题
-        parsed.content = parsed.content ? parsed.content.substring(0, 20) : "";
+        const stripped = parsed.content ? parsed.content.replace(/<[^>]*>/g, '') : '';
+        parsed.content = stripped.substring(0, 20);
         return parsed;
       });
       res.status(200).json({ status: 200, data: result });

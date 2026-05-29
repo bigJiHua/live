@@ -6,9 +6,9 @@ const CardRules = require("../rules");
 const authGuard = require("../../../common/middleware/authGuard");
 const pinLockGuard = require("../../../common/middleware/pinLockGuard");
 
+
 // 所有账单路由都需要认证 + PIN 验证
 router.use(authGuard);
-router.use(pinLockGuard);
 
 // ========== 账单管理 ==========
 
@@ -43,6 +43,6 @@ router.put(
 );
 
 // 删除账单
-router.delete("/:id", cardBillController.delete);
+router.delete("/:id", pinLockGuard, cardBillController.delete);
 
 module.exports = router;

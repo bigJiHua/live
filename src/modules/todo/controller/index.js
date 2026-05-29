@@ -1,4 +1,5 @@
 const Todo = require('../model');
+const RecurringExpense = require('../../recurring/model');
 
 /**
  * 待办事项控制器
@@ -77,6 +78,7 @@ class TodoController {
       }
 
       const data = await Todo.findByMonth(userId, parseInt(year), parseInt(month));
+      const recurringEvents = await RecurringExpense.getCalendarEvents(userId, parseInt(year), parseInt(month));
 
       // 转换为日历网格格式（补齐该月所有日期）
       const firstDay = new Date(parseInt(year), parseInt(month) - 1, 1);
@@ -99,13 +101,18 @@ class TodoController {
       for (let day = 1; day <= daysInMonth; day++) {
         const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
         const dayData = data.find(item => item.date === dateStr);
+        const fixedList = recurringEvents.filter(item => item.happen_date === dateStr);
+        const list = [
+          ...(dayData ? dayData.list : []),
+          ...fixedList
+        ];
         calendar.days.push({
           day,
           date: dateStr,
-          list: dayData ? dayData.list : [],
-          count: dayData ? dayData.count : 0,
-          hasCompleted: dayData ? dayData.hasCompleted : false,
-          hasOverdue: dayData ? dayData.hasOverdue : false
+          list,
+          count: list.length,
+          hasCompleted: list.some(item => item.status === '已完成'),
+          hasOverdue: list.some(item => item.status === '逾期')
         });
       }
 
@@ -204,7 +211,15 @@ class TodoController {
     try {
       const userId = req.userId;
       const { scope } = req.query;
-      const rows = await Todo.getUpcomingReminders(userId, scope);
+      const [todos, recurring] = await Promise.all([
+        Todo.getUpcomingReminders(userId, scope),
+        RecurringExpense.getUpcomingReminders(userId, scope)
+      ]);
+      const rows = [...todos, ...recurring].sort((a, b) => {
+        const left = a.happen_date || '';
+        const right = b.happen_date || '';
+        return left.localeCompare(right);
+      });
 
       return res.json({ status: 200, message: '查询成功', data: rows });
     } catch (error) {

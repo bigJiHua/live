@@ -2,11 +2,9 @@ const express = require('express');
 const router = express.Router();
 const accountBalanceController = require('../controller/balanceController');
 const authGuard = require('../../../common/middleware/authGuard');
-const pinLockGuard = require('../../../common/middleware/pinLockGuard');
 
-// 所有余额路由都需要认证 + PIN 验证
+// 所有余额路由都需要认证
 router.use(authGuard);
-router.use(pinLockGuard);
 
 // ========== 账户余额管理 ==========
 

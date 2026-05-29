@@ -40,7 +40,14 @@ live-api
 │  │  ├─ todo/              # 待办日程模块
 │  │  ├─ work/             # 工作与工资模块
 │  │  ├─ fixed_asset/      # 固定资产模块
-│  │  └─ budget/            # 预算模块
+│  │  ├─ budget/            # 预算模块
+│  │  ├─ bankCategory/      # 银行分类模块（桌面端）
+│  │  ├─ dashboard/         # 仪表盘模块（桌面端）
+│  │  ├─ flow/              # 流水日历模块（桌面端）
+│  │  ├─ resource/          # 文件资源模块（桌面端）
+│  │  ├─ dataManager/       # 数据管理模块
+│  │  ├─ fund/              # 理财投资模块
+│  │  └─ recurring/         # 周期支出模块
 │  ├─ common                # 公共模块
 │  │  ├─ config/           # 配置文件
 │  │  ├─ middleware/       # 中间件
@@ -77,6 +84,13 @@ live-api
 | `/api/work` | work | 工作与工资 |
 | `/api/fixedAsset` | fixed_asset | 固定资产 |
 | `/api/budget` | budget | 预算管理 |
+| `/api/dashboard` | dashboard | 仪表盘（桌面端） |
+| `/api/resource` | resource | 文件资源管理（桌面端） |
+| `/api/bank-category` | bankCategory | 银行分类管理（桌面端） |
+| `/api/flow` | flow | 流水详情/日历（桌面端） |
+| `/api/data-manager` | dataManager | 数据管理 |
+| `/api/fund` | fund | 理财投资 |
+| `/api/recurring` | recurring | 周期支出提醒 |
 
 ## 快速开始
 
@@ -110,13 +124,13 @@ mysql -u root -p
 ```
 
 ```sql
-CREATE DATABASE life_manager DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE live DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
 ### 导入数据库结构
 
 ```bash
-mysql -u root -p life_manager < mysql/live.sql
+mysql -u root -p live < mysql/live.sql
 ```
 
 ### 启动服务
@@ -196,3 +210,10 @@ npm start
 3. **423 状态码**: 会话被 PIN 锁定时返回 423 状态码，前端需要处理并引导用户验证 PIN
 4. **密码加密**: 使用 bcryptjs 加密存储密码
 5. **安全头**: 使用 Helmet 添加安全相关的 HTTP 头
+
+---
+
+## 更新日志
+
+详见 [logs/CHANGELOG_2026-05-28.md](logs/CHANGELOG_2026-05-28.md)
+详见 [logs/CHANGELOG_2026-05-28.md](logs/CHANGELOG_2026-05-29.md)

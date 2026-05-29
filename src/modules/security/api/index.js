@@ -15,6 +15,14 @@ router.post(
   securityController.verifyPin
 );
 
+// 验证风险路由 PIN，成功后返回一次性 token
+router.post(
+  "/pin/route-verify",
+  authGuard,
+  createValidator(AuthRules.verifyRoutePin),
+  securityController.verifyRoutePin
+);
+
 // 设置 PIN
 router.post(
   "/pin/set",

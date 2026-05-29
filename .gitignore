@@ -7,8 +7,12 @@ node_modules/
 # 环境变量
 .env
 
+# 初始化标记（本地运行时状态）
+.init.flag
+
 # 上传文件
 public/uploads/*
+data
 
 # 编辑器
 .vscode/

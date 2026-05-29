@@ -13,6 +13,9 @@
     "test:watch": "jest --watch"
   },
   "dependencies": {
+    "adm-zip": "^0.5.17",
+    "archiver": "^8.0.0",
+    "axios": "^1.16.1",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "crypto-js": "^4.2.0",
@@ -26,13 +29,14 @@
     "morgan": "^1.10.0",
     "multer": "^1.4.5-lts.1",
     "mysql2": "^3.9.7",
-    "sharp": "^0.33.0",
+    "mysqldump": "^3.2.0",
     "nanoid": "^3.3.11",
     "nodemailer": "^6.9.13",
+    "sharp": "^0.33.0",
     "uuid": "^13.0.0"
   },
   "devDependencies": {
-    "nodemon": "^3.1.0",
-    "jest": "^29.7.0"
+    "jest": "^29.7.0",
+    "nodemon": "^3.1.0"
   }
 }

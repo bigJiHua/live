@@ -6,7 +6,6 @@ const pinLockGuard = require('../../../common/middleware/pinLockGuard');
 
 // 所有路由都需要认证 + PIN 验证
 router.use(authGuard);
-router.use(pinLockGuard);
 
 // ========== 资产快照 ==========
 
@@ -31,6 +30,6 @@ router.post('/register', assetController.createRegister);
 router.put('/register/:id', assetController.updateRegister);
 
 // 删除登记记录
-router.delete('/register/:id', assetController.deleteRegister);
+router.delete('/register/:id', pinLockGuard, assetController.deleteRegister);
 
 module.exports = router;

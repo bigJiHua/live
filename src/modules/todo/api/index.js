@@ -4,9 +4,9 @@ const todoController = require('../controller');
 const authGuard = require('../../../common/middleware/authGuard');
 const pinLockGuard = require('../../../common/middleware/pinLockGuard');
 
+
 // 所有路由都需要认证 + PIN 验证
 router.use(authGuard);
-router.use(pinLockGuard);
 
 // ========== 待办日程 ==========
 
@@ -29,6 +29,6 @@ router.get('/:id', todoController.detail);
 router.put('/:id', todoController.update);
 
 // 删除待办
-router.delete('/:id', todoController.delete);
+router.delete('/:id', pinLockGuard, todoController.delete);
 
 module.exports = router;

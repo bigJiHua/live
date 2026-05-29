@@ -2,6 +2,8 @@ const express = require("express");
 const router = express.Router();
 const { execute } = require("../../../common/config/db");
 const authGuard = require("../../../common/middleware/authGuard");
+const pinLockGuard = require("../../../common/middleware/pinLockGuard");
+
 
 router.use(authGuard);
 
@@ -34,7 +36,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", pinLockGuard, async (req, res) => {
   try {
     const { id } = req.params;
     await execute("DELETE FROM attachment WHERE id = ? AND user_id = ?", [id, req.userId]);

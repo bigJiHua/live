@@ -6,9 +6,9 @@ const CategoryRules = require("../rules");
 const authGuard = require("../../../common/middleware/authGuard");
 const pinLockGuard = require("../../../common/middleware/pinLockGuard");
 
+
 // 所有分类路由都需要认证 + PIN 验证
 router.use(authGuard);
-router.use(pinLockGuard);
 
 // ========== 分类管理 ==========
 
@@ -33,6 +33,6 @@ router.put(
 );
 
 // 删除分类
-router.delete("/:id", categoryController.delete);
+router.delete("/:id", pinLockGuard, categoryController.delete);
 
 module.exports = router;

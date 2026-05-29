@@ -2,6 +2,8 @@ const express = require("express");
 const router = express.Router();
 const momentController = require("../controller");
 const authGuard = require("../../../common/middleware/authGuard");
+const pinLockGuard = require("../../../common/middleware/pinLockGuard");
+
 
 // 所有动态路由都需要认证
 router.use(authGuard);
@@ -25,6 +27,6 @@ router.post("/batch", momentController.batchDetail);
 router.put("/:id", momentController.update);
 
 // 【已启用】删除动态
-router.delete("/:id", momentController.delete);
+router.delete("/:id", pinLockGuard, momentController.delete);
 
 module.exports = router;

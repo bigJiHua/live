@@ -61,7 +61,7 @@ class AuthController {
   async login(req, res) {
     // 这里的 req.body 已经是经过 decryptWithSecurity 中间件解密后的完整对象了
     const clientData = req.body;
-    
+
     const { nameOrEmail, password } = req.body.data;
     try {
       // 1. 基本校验
@@ -116,7 +116,7 @@ class AuthController {
           email: user.email,
         },
         process.env.JWT_SECRET,
-        { expiresIn: "12h" }
+        { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
       );
 
       // 6. 🟢 登录成功统计
@@ -146,12 +146,23 @@ class AuthController {
     try {
       const user = await User.findById(req.userId);
       if (!user) return res.say("用户不存在", 404);
+
+      // 邮箱脱敏：前2位 + **** + 后2位 @域名
+      const email = user.email || "";
+      const atIdx = email.indexOf("@");
+      let maskedEmail = email;
+      if (atIdx > 3) {
+        const local = email.slice(0, atIdx);
+        const domain = email.slice(atIdx);
+        maskedEmail = local.slice(0, 2) + "***" + local.slice(-2) + domain;
+      }
+
       res.status(200).send({
         status: 200,
         message: "获取用户信息成功",
         data: {
           username: user.username,
-          email: user.email,
+          email: maskedEmail,
           avatar: user.avatar,
           identity: user.identity,
         },
@@ -199,6 +210,31 @@ class AuthController {
     } catch (error) {
       console.error("锁定系统错误:", error);
       res.status(500).json({ message: "锁定失败", error: error.message });
+    }
+  }
+
+  // 获取当前用户登录日志（最近30条）
+  async getLoginLogs(req, res) {
+    try {
+      const userId = req.userId;
+      const db = require("../../../common/config/db");
+
+      const [rows] = await db.execute(
+        `SELECT id, type, login_ip, login_location, login_isp, user_agent, os_info, browser_info, device_model, status, error_message, login_time, create_time
+         FROM user_log
+         WHERE user_id = ?
+         ORDER BY id DESC
+         LIMIT 30`,
+        [userId]
+      );
+
+      res.status(200).json({
+        status: 200,
+        data: rows,
+      });
+    } catch (error) {
+      console.error("获取登录日志错误:", error);
+      res.status(500).json({ message: "获取登录日志失败", error: error.message });
     }
   }
 
@@ -567,8 +603,7 @@ class AuthController {
       const now = Date.now();
       const expiresAt = record.captcha_expires_at;
       console.log(
-        `[验证码信息] 存储的验证码: ${
-          record.captcha_code
+        `[验证码信息] 存储的验证码: ${record.captcha_code
         }, 过期时间: ${new Date(expiresAt)}, 当前时间: ${new Date(
           now
         )}, 剩余时间: ${Math.floor((expiresAt - now) / 1000)}秒`

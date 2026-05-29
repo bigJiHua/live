@@ -4,9 +4,9 @@ const fixedAssetController = require('../controller');
 const authGuard = require('../../../common/middleware/authGuard');
 const pinLockGuard = require('../../../common/middleware/pinLockGuard');
 
+
 // 所有路由都需要认证 + PIN 验证
 router.use(authGuard);
-router.use(pinLockGuard);
 
 // ========== 固定资产 CRUD ==========
 
@@ -29,13 +29,13 @@ router.put('/:id', fixedAssetController.update);
 router.put('/:id/status', fixedAssetController.changeStatus);
 
 // 删除资产（软删除）
-router.delete('/:id', fixedAssetController.delete);
+router.delete('/:id', pinLockGuard, fixedAssetController.delete);
 
 // 恢复删除的资产
 router.put('/restore/:id', fixedAssetController.restore);
 
 // 永久删除资产
-router.delete('/permanent/:id', fixedAssetController.permanentDelete);
+router.delete('/permanent/:id', pinLockGuard, fixedAssetController.permanentDelete);
 
 // 手动触发折旧巡检
 router.post('/depreciate', fixedAssetController.depreciate);

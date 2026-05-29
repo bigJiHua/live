@@ -238,7 +238,7 @@
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `id` | varchar(32) | 主键UUID |
+| `id` | varchar(50) | 主键UUID |
 | `user_id` | varchar(50) | 用户ID |
 | `job_type` | varchar(20) | 工作类型 |
 | `company` | varchar(100) | 公司名称 |
@@ -264,9 +264,9 @@
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `id` | varchar(32) | 主键UUID |
+| `id` | varchar(50) | 主键UUID |
 | `user_id` | varchar(50) | 用户ID |
-| `job_id` | varchar(32) | 关联工作ID |
+| `job_id` | varchar(50) | 关联工作ID |
 | `job_type` | varchar(20) | 工作类型 |
 | `work_date` | varchar(20) | 日期文本 |
 | `work_date_dt` | date | 标准日期 |
@@ -282,6 +282,16 @@
 | `remark` | varchar(50) | 备注 |
 | `is_deleted` | tinyint | 是否删除 |
 | `update_at` | timestamp | 更新时间 |
+
+---
+
+---
+
+## 更新日志
+
+### 5月28日
+- **安全策略调整**：移除全局 `pinLockGuard`，仅在 `DELETE /job/:id` 和 `DELETE /salary` 路由上单独施加 PIN 验证，降低正常操作门槛。
+- **字段类型修正**：`id` 字段从 `varchar(32)` 统一为 `varchar(50)`；`job_id` 字段从 `varchar(32)` 统一为 `varchar(50)`。
 
 ---
 

@@ -33,6 +33,7 @@ exports.create = {
       currency: joi.string().default('CNY'),
       exchangeRate: joi.number().min(0.001).precision(5).default(1),
       remark: joi.string().allow('', null),
+      transferGroupId: joi.string().allow('', null),
     }).unknown(true),
   }).unknown(true),
 };

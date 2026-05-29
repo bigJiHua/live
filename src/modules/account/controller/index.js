@@ -34,10 +34,10 @@ class AccountController {
       );
 
       if (!result.rows || result.rows.length === 0) {
-        return res.status(200).send({
+        return res.json({
           status: 200,
           message: "暂无记录",
-          data: [],
+          data: { list: [], pagination: { page: parseInt(page), limit: parseInt(limit), total: 0, totalPages: 0 } },
         });
       }
 
@@ -272,6 +272,47 @@ class AccountController {
       });
     } catch (error) {
       console.error("信用卡还款撤销错误:", error);
+      return res.status(400).json({
+        status: 400,
+        message: error.message || "冲正失败"
+      });
+    }
+  }
+
+  /**
+   * 获取转账明细列表（含自动同步）
+   */
+  async getTransferList(req, res) {
+    try {
+      const { page = 1, limit = 20, yearMonth } = req.query;
+      const result = await Account.getTransferList(req.userId, parseInt(page), parseInt(limit), yearMonth);
+      return res.json({ status: 200, message: "获取成功", data: result });
+    } catch (error) {
+      console.error("获取转账明细错误:", error);
+      return res.status(400).json({ status: 400, message: error.message || "获取失败" });
+    }
+  }
+
+  /**
+   * 转账冲正
+   * 自转/提现的完整撤销：反转支出方 + 反转收入方
+   */
+  async reverseTransfer(req, res) {
+    try {
+      const { remark } = req.body || {};
+
+      const result = await Account.reverseTransferById(req.params.id, req.userId, remark);
+
+      return res.json({
+        status: 200,
+        message: "转账冲正成功",
+        data: {
+          reversed: result,
+          originalId: req.params.id
+        }
+      });
+    } catch (error) {
+      console.error("转账冲正错误:", error);
       return res.status(400).json({
         status: 400,
         message: error.message || "冲正失败"

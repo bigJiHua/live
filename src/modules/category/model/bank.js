@@ -20,13 +20,24 @@ class BusBank {
     'yyyy': { name: '余额', icon_url: '', remark: '系统虚拟账户（微信+支付宝）' },
   };
 
+  // 默认银行列表（首次使用时自动初始化）
+  static DEFAULT_BANKS = [
+    { name: '中国银行', remark: 'BOC' },
+    { name: '中国农业银行', remark: 'ABC' },
+    { name: '中国工商银行', remark: 'ICBC' },
+    { name: '中国建设银行', remark: 'CCB' },
+    { name: '中国邮政储蓄银行', remark: 'PSBC' },
+    { name: '交通银行', remark: 'BOCOM' },
+  ];
+
   /**
    * 获取银行分类列表（type='bank'）
-   * 自动初始化虚拟银行分类（如果不存在）
+   * 自动初始化虚拟银行和默认银行分类（如果不存在）
    */
   static async findAll(userId) {
-    // 确保虚拟银行分类已初始化
+    // 确保虚拟银行分类和默认银行已初始化
     await this.initVirtualBanks(userId);
+    await this.initDefaultBanks(userId);
 
     const query = `
       SELECT * FROM ${this.tableName}
@@ -170,6 +181,44 @@ class BusBank {
     }
 
     return results;
+  }
+
+  /**
+   * 初始化默认银行分类（系统内置）
+   * 首次获取银行列表时自动插入
+   */
+  static async initDefaultBanks(userId) {
+    // 检查用户是否已有非虚拟的银行分类
+    const [existing] = await db.execute(
+      `SELECT COUNT(*) as count FROM ${this.tableName}
+       WHERE user_id = ? AND type = 'bank' AND is_deleted = 0
+       AND id NOT IN ('xxxx', 'yyyy')`,
+      [userId]
+    );
+
+    // 已有银行分类则不重复初始化
+    if (existing[0].count > 0) {
+      return;
+    }
+
+    console.log(`[默认银行] 用户 ${userId} 首次初始化默认银行分类`);
+
+    for (const bank of this.DEFAULT_BANKS) {
+      // 检查是否已存在同名银行
+      const [dup] = await db.execute(
+        `SELECT id FROM ${this.tableName}
+         WHERE user_id = ? AND type = 'bank' AND name = ? AND is_deleted = 0`,
+        [userId, bank.name]
+      );
+      if (dup.length > 0) continue;
+
+      await this.create({
+        userId,
+        name: bank.name,
+        remark: bank.remark,
+      });
+      console.log(`  ✓ ${bank.name}`);
+    }
   }
 }
 

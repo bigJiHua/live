@@ -28,30 +28,38 @@ const dashboardRouter = require("../modules/dashboard/api");
 const resourceRouter = require("../modules/resource/api");
 const bankCategoryRouter = require("../modules/bankCategory/api");
 const flowRouter = require("../modules/flow/api");
+const dataManagerRouter = require("../modules/dataManager/api");
+const fundRouter = require("../modules/fund/api");
+const recurringRouter = require("../modules/recurring/api");
+const geoRouter = require("../modules/geo/api");
 
 // 注册子路由
-router.use("/auth", authRouter);       // 认证模块
+router.use("/auth", authRouter); // 认证模块
 router.use("/security", securityRouter); // 安全设置模块
 // 注册业务路由
-router.use("/account", accountRouter);        // 账户收支
+router.use("/account", accountRouter); // 账户收支
 router.use("/accountBalance", accountBalanceRouter); // 账户余额
-router.use("/category", categoryRouter);      // 分类管理
-router.use("/card/bill", cardBillRouter);    // 卡片账单
-router.use("/card/repay", cardRepayRouter);  // 卡片还款
-router.use("/card", cardRouter);              // 卡片管理
-router.use("/user", userRouter);              // 用户管理
-router.use("/database", databaseRouter);     // 临时数据库操控
-router.use("/upload", uploadRouter);          // 文件上传
-router.use("/moment", momentRouter);          // 动态/日记
-router.use("/bank", bankRouter);             // 银行分类
-router.use("/asset", assetRouter);            // 资产快照与登记
-router.use("/todo", todoRouter);              // 待办日程
-router.use("/work", workRouter);              // 工作与工资
-router.use("/fixedAsset", fixedAssetRouter);  // 固定资产管理
-router.use("/budget", budgetRouter);           // 预算管理
-router.use("/dashboard", dashboardRouter);    // 仪表盘（桌面端新增）
-router.use("/resource", resourceRouter);      // 文件资源管理（桌面端新增）
+router.use("/category", categoryRouter); // 分类管理
+router.use("/card/bill", cardBillRouter); // 卡片账单
+router.use("/card/repay", cardRepayRouter); // 卡片还款
+router.use("/card", cardRouter); // 卡片管理
+router.use("/user", userRouter); // 用户管理
+router.use("/database", databaseRouter); // 数据库只读管理（管理员）
+router.use("/upload", uploadRouter); // 文件上传
+router.use("/moment", momentRouter); // 动态/日记
+router.use("/bank", bankRouter); // 银行分类
+router.use("/asset", assetRouter); // 资产快照与登记
+router.use("/todo", todoRouter); // 待办日程
+router.use("/work", workRouter); // 工作与工资
+router.use("/fixedAsset", fixedAssetRouter); // 固定资产管理
+router.use("/budget", budgetRouter); // 预算管理
+// router.use("/dashboard", dashboardRouter); // 仪表盘（桌面端新增）【未启用】
+router.use("/resource", resourceRouter); // 文件资源管理（桌面端新增）
 router.use("/bank-category", bankCategoryRouter); // 银行分类管理（桌面端新增）
-router.use("/flow", flowRouter);              // 流水详情/日历（桌面端新增）
+router.use("/flow", flowRouter); // 流水详情/日历（桌面端新增）
+router.use("/data-manager", dataManagerRouter); // 数据管理（备份/导出/导入）
+router.use("/fund", fundRouter); // 理财投资模块
+router.use("/recurring", recurringRouter); // 固定周期支出提醒
+router.use("/geo", geoRouter); // 地理位置代理（IP定位 / 逆地理编码）
 
 module.exports = router;

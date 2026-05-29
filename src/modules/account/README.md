@@ -168,10 +168,10 @@
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `id` | varchar(32) | 主键UUID |
+| `id` | varchar(50) | 主键UUID |
 | `user_id` | varchar(50) | 用户ID |
-| `card_id` | varchar(32) | 关联卡片ID |
-| `reversed_id` | varchar(32) | 冲正流水ID |
+| `card_id` | varchar(50) | 关联卡片ID |
+| `reversed_id` | varchar(50) | 冲正流水ID |
 | `category_id` | varchar(50) | 分类ID |
 | `direction` | tinyint | 方向：1收入/0支出 |
 | `pay_type` | varchar(50) | 支出类型 |
@@ -185,3 +185,36 @@
 | `create_time` | varchar(20) | 创建时间 |
 | `update_time` | varchar(20) | 修改时间 |
 | `is_deleted` | tinyint | 是否删除 |
+
+---
+
+## 更新日志
+
+### 5月28日
+- **新增接口**：
+  - `PUT /:id` — 更新收支记录（支持完整字段更新）
+  - `POST /:id/reverse/transfer` — 冲正转账流水（自转/提现撤销）
+  - `GET /transfer/list` — 获取转账明细列表
+- **接口详情**：
+
+### 更新收支记录
+
+**路径**：`PUT /api/v1/account/:id`
+
+**请求体** `req.body.data`：同创建，字段可选，支持部分更新。
+
+---
+
+### 冲正转账
+
+**路径**：`POST /api/v1/account/:id/reverse/transfer`
+
+**说明**：撤销自转/提现类转账操作，将关联的转出和转入流水一并冲正。
+
+---
+
+### 转账明细列表
+
+**路径**：`GET /api/v1/account/transfer/list`
+
+**说明**：获取当前用户所有的转账记录列表（通过 `transfer_group_id` 关联）。

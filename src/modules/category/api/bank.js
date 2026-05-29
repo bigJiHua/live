@@ -4,9 +4,9 @@ const busBankController = require("../controller/bankController");
 const authGuard = require("../../../common/middleware/authGuard");
 const pinLockGuard = require("../../../common/middleware/pinLockGuard");
 
+
 // 所有银行分类路由都需要认证 + PIN 验证
 router.use(authGuard);
-router.use(pinLockGuard);
 
 // ========== 银行分类管理 ==========
 
@@ -26,6 +26,6 @@ router.post("/", busBankController.create);
 router.put("/:id", busBankController.update);
 
 // 删除银行分类
-router.delete("/:id", busBankController.delete);
+router.delete("/:id", pinLockGuard, busBankController.delete);
 
 module.exports = router;

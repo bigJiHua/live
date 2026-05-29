@@ -20,7 +20,7 @@
 | `/api/v1/card/bill` | card | 银行卡模块 | 信用卡账单管理 |
 | `/api/v1/card/repay` | card | 银行卡模块 | 信用卡还款管理 |
 | `/api/v1/user` | user | 用户模块 | 用户管理 |
-| `/api/v1/database` | database | 数据库模块 | 数据库状态查询 |
+| `/api/v1/database` | database | 数据库模块 | 管理员只读查询 |
 | `/api/v1/upload` | upload | 上传模块 | 文件上传 |
 | `/api/v1/moment` | moment | 时刻模块 | 动态/日记 |
 | `/api/v1/asset` | asset | 资产模块 | 资产快照与登记 |
@@ -28,6 +28,13 @@
 | `/api/v1/work` | work | 工作模块 | 工作与工资 |
 | `/api/v1/fixedAsset` | fixed_asset | 固定资产模块 | 固定资产管理 |
 | `/api/v1/budget` | budget | 预算模块 | 预算管理 |
+| `/api/v1/dashboard` | dashboard | 仪表盘模块 | 首页数据聚合（桌面端） |
+| `/api/v1/resource` | resource | 资源模块 | 文件资源管理（桌面端） |
+| `/api/v1/bank-category` | bankCategory | 银行分类模块 | 银行分类管理（桌面端） |
+| `/api/v1/flow` | flow | 流水模块 | 流水日历/详情（桌面端） |
+| `/api/v1/data-manager` | dataManager | 数据管理模块 | 备份/导出/导入 |
+| `/api/v1/fund` | fund | 理财模块 | 基金投资管理 |
+| `/api/v1/recurring` | recurring | 周期支出模块 | 固定周期支出提醒 |
 
 ## 认证机制
 
@@ -62,3 +69,12 @@
 2. **RESTful 设计**: 遵循 REST API 设计规范
 3. **中间件链**: 使用中间件处理认证、验证等通用逻辑
 4. **统一响应**: 所有接口返回统一的 JSON 格式
+
+---
+
+## 更新日志
+
+### 5月28日
+- **新增路由**：`/api/v1/dashboard`、`/api/v1/resource`、`/api/v1/bank-category`、`/api/v1/flow`（桌面端新增模块）。
+- **新增路由**：`/api/v1/data-manager`（数据备份/导出/导入）、`/api/v1/fund`（理财投资）、`/api/v1/recurring`（周期支出提醒）。
+- 所有新增路由统一在 `src/api/index.js` 中注册，遵循现有认证机制。

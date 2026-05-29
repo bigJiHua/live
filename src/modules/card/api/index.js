@@ -6,9 +6,9 @@ const CardRules = require('../rules');
 const authGuard = require('../../../common/middleware/authGuard');
 const pinLockGuard = require('../../../common/middleware/pinLockGuard');
 
+
 // 所有卡片路由都需要认证 + PIN 验证
 router.use(authGuard);
-router.use(pinLockGuard);
 
 // ========== 卡片管理 ==========
 
@@ -25,6 +25,6 @@ router.post('/', createValidator(CardRules.createCard), cardController.create);
 router.put('/:id', createValidator(CardRules.updateCard), cardController.update);
 
 // 删除卡片
-router.delete('/:id', cardController.delete);
+router.delete('/:id', pinLockGuard, cardController.delete);
 
 module.exports = router;

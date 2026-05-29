@@ -5,6 +5,8 @@ const path = require("path");
 const fs = require("fs");
 const uploadController = require("../controller");
 const authGuard = require("../../../common/middleware/authGuard");
+const pinLockGuard = require("../../../common/middleware/pinLockGuard");
+
 
 // 所有上传路由都需要认证
 router.use(authGuard);
@@ -55,7 +57,7 @@ router.get("/search", uploadController.search);
 
 // 【已启用】
 // 批量删除附件（必须在 /:id 前面，否则会被 :id 匹配）
-router.post("/batch-delete", uploadController.batchDelete);
+router.post("/batch-delete", pinLockGuard, uploadController.batchDelete);
 
 // 【已启用】
 // 编辑附件（修改 remark 和 tags）

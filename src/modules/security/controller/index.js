@@ -1,6 +1,8 @@
 const UserPin = require("../../auth/model/pin");
 const UserLog = require("../../auth/model/log");
 const User = require("../../auth/model/user");
+const db = require("../../../common/config/db");
+const pinLockGuard = require("../../../common/middleware/pinLockGuard");
 
 /**
  * 安全控制器 - PIN 码管理
@@ -75,6 +77,184 @@ class SecurityController {
       return res.json({ status: 200, message: "验证成功", verified: true });
     } catch (error) {
       console.error("验证 PIN 失败:", error);
+      return res.status(500).json({ status: 500, message: "验证失败" });
+    }
+  }
+
+  /**
+   * 风险路由 PIN 验证
+   * 验证通过后生成短时一次性 token，供原始风险请求重发时携带。
+   */
+  async verifyRoutePin(req, res) {
+    try {
+      const { pin, challengeId, requestUrl, method } = req.body.data || {};
+      const normalizedMethod = String(method || "").toUpperCase();
+
+      if (!pin || pin.length !== 6 || !/^\d+$/.test(pin)) {
+        return res.status(400).json({
+          code: pinLockGuard.CODE.ERROR,
+          status: 400,
+          message: "PIN 码格式错误",
+        });
+      }
+
+      if (!challengeId || !requestUrl || !normalizedMethod) {
+        return res.status(400).json({
+          status: 400,
+          message: "风险验证参数不完整",
+        });
+      }
+
+      const [rows] = await db.execute(
+        `SELECT *
+         FROM security_verify_log
+         WHERE id = ?
+           AND user_id = ?
+           AND request_url = ?
+           AND action_type = ?
+           AND pin_status IN (0, 2)
+           AND verify_expire_time > NOW()
+         LIMIT 1`,
+        [challengeId, req.userId, requestUrl, pinLockGuard.ACTION_TYPE]
+      );
+
+      const challenge = rows[0];
+      if (!challenge || !String(challenge.remark || "").includes(`method:${normalizedMethod}`)) {
+        return res.status(200).json({
+          code: pinLockGuard.CODE.NEED_VERIFY,
+          status: 200,
+          message: "风险验证已过期，请重新操作",
+          data: {
+            action_type: pinLockGuard.ACTION_TYPE,
+            expired: true,
+          },
+        });
+      }
+
+      const bodyHash = String(challenge.remark || "").match(/body:([a-f0-9]{64})/)?.[1];
+      if (!bodyHash) {
+        return res.status(200).json({
+          code: pinLockGuard.CODE.NEED_VERIFY,
+          status: 200,
+          message: "风险验证已更新，请重新操作",
+          data: {
+            action_type: pinLockGuard.ACTION_TYPE,
+            expired: true,
+          },
+        });
+      }
+
+      const user = await UserPin.findById(req.userId);
+      if (!user?.pin_code) {
+        return res.status(400).json({ status: 400, message: "请先设置 PIN 码" });
+      }
+
+      const isValid = await UserPin.verify(pin, user.pin_code);
+      if (!isValid) {
+        const errorCount = Number(challenge.error_count || 0) + 1;
+
+        if (errorCount >= pinLockGuard.CONFIG.MAX_ERROR_COUNT) {
+          await db.execute(
+            `UPDATE security_verify_log
+             SET pin_status = 2, error_count = ?, remark = ?
+             WHERE id = ? AND user_id = ?`,
+            [
+              errorCount,
+              `${challenge.remark.split(";验证失败第")[0]};触发系统锁定`,
+              challenge.id,
+              req.userId,
+            ]
+          );
+
+          // 防止短时间内重复插入软锁记录
+          const [existingLock] = await db.execute(
+            `SELECT id FROM security_verify_log
+             WHERE user_id = ? AND action_type = 'lock' AND pin_status = 0
+             LIMIT 1`,
+            [req.userId]
+          );
+
+          if (existingLock.length === 0) {
+            await db.execute(
+              `INSERT INTO security_verify_log
+               (user_id, request_url, action_type, pin_status, error_count, remark, create_time)
+               VALUES (?, ?, ?, 0, 0, ?, NOW())`,
+              [
+                req.userId,
+                "/lock-system",
+                "lock",
+                "风险操作 PIN 错误次数过多，临时锁定",
+              ]
+            );
+          }
+
+          return res.status(200).json({
+            code: pinLockGuard.CODE.ERROR,
+            status: 200,
+            message: "PIN 错误次数过多，操作受限，请验证系统 PIN",
+            data: {
+              action_type: pinLockGuard.ACTION_TYPE,
+            },
+          });
+        }
+
+        await db.execute(
+          `UPDATE security_verify_log
+           SET pin_status = 2, error_count = ?, remark = ?
+           WHERE id = ? AND user_id = ?`,
+          [
+            errorCount,
+            `${challenge.remark.split(";验证失败第")[0]};验证失败第${errorCount}次`,
+            challenge.id,
+            req.userId,
+          ]
+        );
+
+        return res.status(200).json({
+          code: pinLockGuard.CODE.ERROR,
+          status: 200,
+          message: "PIN 错误",
+          data: {
+            action_type: pinLockGuard.ACTION_TYPE,
+            challengeId: challenge.id,
+            requestUrl,
+            method: normalizedMethod,
+            remainingAttempts: pinLockGuard.CONFIG.MAX_ERROR_COUNT - errorCount,
+          },
+        });
+      }
+
+      const token = pinLockGuard.createToken();
+      const tokenHash = pinLockGuard.hashToken(token);
+
+      await db.execute(
+        `UPDATE security_verify_log
+         SET pin_status = 1,
+             error_count = 0,
+             verify_expire_time = DATE_ADD(NOW(), INTERVAL ? MINUTE),
+             remark = ?
+         WHERE id = ? AND user_id = ?`,
+        [
+          pinLockGuard.CONFIG.EXPIRE_MINUTES,
+          pinLockGuard.tokenRemark(tokenHash, normalizedMethod, bodyHash),
+          challenge.id,
+          req.userId,
+        ]
+      );
+
+      return res.status(200).json({
+        code: 8301,
+        status: 200,
+        message: "验证成功",
+        data: {
+          action_type: pinLockGuard.ACTION_TYPE,
+          token,
+          headerName: pinLockGuard.HEADER_TOKEN,
+          expiresIn: pinLockGuard.CONFIG.EXPIRE_MINUTES * 60,
+        },
+      });
+    } catch (error) {
+      console.error("风险路由 PIN 验证失败:", error);
       return res.status(500).json({ status: 500, message: "验证失败" });
     }
   }

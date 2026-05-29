@@ -3,7 +3,7 @@ const { nanoid } = require("nanoid");
 
 /**
  * 文件附件模型 - sys_attachment 表
- * 表结构: id, user_id, bus_type, remark, tags, file_name, file_path, file_size, file_ext, create_time, is_deleted
+ * 表结构: id, user_id, bus_id, bus_type, remark, tags, file_name, file_path, file_size, file_ext, create_time, is_deleted
  */
 class SysAttachment {
   static tableName = "sys_attachment";
@@ -14,19 +14,20 @@ class SysAttachment {
    * @param {Object} data - 附件数据
    * @returns {Promise<Object>} 创建结果
    */
-  static async create({ userId, busType, remark, tags, fileName, filePath, fileSize, fileExt }) {
+  static async create({ userId, busId, busType, remark, tags, fileName, filePath, fileSize, fileExt }) {
     try {
       const id = nanoid(); // 字符串主键
       const createTime = Date.now().toString(); // 存时间戳字符串
 
       const query = `
         INSERT INTO ${this.tableName}
-        (id, user_id, bus_type, remark, tags, file_name, file_path, file_size, file_ext, create_time, is_deleted)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+        (id, user_id, bus_id, bus_type, remark, tags, file_name, file_path, file_size, file_ext, create_time, is_deleted)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
       `;
       const [result] = await db.execute(query, [
         id,
         userId,
+        busId || null,
         busType,
         remark || "用户上传的图片",
         tags ? JSON.stringify(tags) : JSON.stringify(["默认"]),
@@ -37,7 +38,7 @@ class SysAttachment {
         createTime
       ]);
 
-      return { status: 200, id, message: "上传成功" };
+      return { status: 200, id, busId: busId || null, message: "上传成功" };
     } catch (error) {
       console.error("创建附件记录失败:", error);
       return { status: 500, message: "上传失败" };

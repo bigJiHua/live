@@ -72,7 +72,7 @@
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `id` | varchar(32) | 主键UUID |
+| `id` | varchar(50) | 主键UUID |
 | `user_id` | int | 用户ID |
 | `name` | varchar(100) | 项目名称 |
 | `amount` | decimal(12,2) | 数额 |
@@ -85,7 +85,7 @@
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `id` | varchar(32) | 主键UUID |
+| `id` | varchar(50) | 主键UUID |
 | `user_id` | varchar(50) | 用户ID |
 | `total_asset` | decimal(14,2) | 各类资产合计 |
 | `credit_debt` | decimal(14,2) | 信用卡总欠款 |
@@ -99,7 +99,7 @@
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `id` | varchar(32) | 主键UUID |
+| `id` | varchar(50) | 主键UUID |
 | `user_id` | varchar(50) | 用户ID |
 | `total_asset` | decimal(14,2) | 各类资产合计 |
 | `credit_debt` | decimal(14,2) | 信用卡总欠款 |
@@ -108,3 +108,10 @@
 | `record_time` | varchar(20) | 记录时间 |
 | `create_time` | varchar(20) | 创建时间 |
 | `is_deleted` | tinyint | 是否删除 |
+
+---
+
+## 更新日志
+
+### 5月28日
+- 重构资产模块 Model 层数据结构，统一 `register`、`snapshot` 模型导出方式。

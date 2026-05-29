@@ -164,7 +164,7 @@
 
 | 字段 | 数据库类型 | 说明 |
 |------|-----------|------|
-| `id` | varchar(32) | 主键UUID |
+| `id` | varchar(50) | 主键UUID |
 | `user_id` | varchar(50) | 用户ID |
 | `info` | varchar(255) | 资产名称 |
 | `tag` | varchar(50) | 品类 |
@@ -186,3 +186,10 @@
 | `deprec_finished` | tinyint | 折旧是否完结（0/1） |
 | `status` | varchar(20) | 状态 |
 | `is_deleted` | tinyint | 是否删除 |
+
+---
+
+## 更新日志
+
+### 5月28日
+- 优化折旧计算逻辑，确保折旧巡检自动补提的准确性。

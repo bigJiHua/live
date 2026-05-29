@@ -42,6 +42,22 @@
 
 **说明**：软删除
 
+### 3. 上传文件（v2，支持 busId 返回）
+
+**路径**：`POST /api/v1/upload/`
+
+**说明**：上传成功后响应中额外返回 `busId` 字段，便于前端关联业务记录。
+
+**响应**：
+```json
+{
+  "status": 200,
+  "id": "xxx",
+  "busId": "xxx",
+  "message": "上传成功"
+}
+```
+
 ---
 
 ## 字段说明
@@ -50,7 +66,7 @@
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `id` | varchar(32) | 主键UUID |
+| `id` | varchar(50) | 主键UUID |
 | `user_id` | varchar(255) | 用户ID |
 | `bus_id` | varchar(50) | 关联业务ID |
 | `bus_type` | varchar(50) | 业务类型 |

@@ -143,6 +143,11 @@ class Category {
       { name: '投资收益', type: 'income', remark: '理财分红等' },
       { name: '兼职', type: 'income', remark: '副业收入' },
       { name: '退款', type: 'income', remark: '退款返还' },
+      { name: '转账', type: 'income', remark: '账户转入' },
+      { name: '提现', type: 'income', remark: '提现到账' },
+      { name: '冲正', type: 'income', remark: '交易冲正退款' },
+      { name: '结汇', type: 'income', remark: '外币结汇收入' },
+      { name: '初始化余额', type: 'income', remark: '账户初始化余额' },
       { name: '其他收入', type: 'income' },
 
       // 支出分类
@@ -155,6 +160,9 @@ class Category {
       { name: '教育', type: 'expense', remark: '培训/书籍' },
       { name: '通讯', type: 'expense', remark: '话费/网费' },
       { name: '水电煤', type: 'expense', remark: '生活必需' },
+      { name: '转账', type: 'expense', remark: '账户转出' },
+      { name: '提现', type: 'expense', remark: '余额提现' },
+      { name: '购汇', type: 'expense', remark: '购买外币' },
       { name: '其他支出', type: 'expense' },
     ];
 

@@ -6,6 +6,12 @@ const db = require("../config/db");
  * 处理逻辑：验证指纹 -> 检查有效期 -> 执行 AES 解密 -> 挂载上下文
  */
 const decryptWithSecurity = async (req, res, next) => {
+  // 小程序跳过设备验证
+  // if (req.xcxBypass) {
+  //   console.log('小程序路过');
+  //    return next();
+  // }
+
   const fp = req.headers["x-fp-id"];
   const scene = req.headers["x-scene"] || "login";
   const payload = req.body?._p;
@@ -52,8 +58,7 @@ const decryptWithSecurity = async (req, res, next) => {
 
     // 4. 挂载数据
     try {
-      req.body = JSON.parse(decryptedStr);
-      
+      req.body = JSON.parse(decryptedStr);      
     } catch (e) {
       throw new Error("INVALID_JSON");
     }

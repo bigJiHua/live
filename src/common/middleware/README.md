@@ -152,3 +152,13 @@ Headers:
 | 403 | 权限不足 | 无权访问 |
 | 423 | 锁定 | 需要 PIN 验证 |
 | 500 | 服务器错误 | 内部错误 |
+
+---
+
+## 更新日志
+
+### 5月28日
+- 优化 `authSecurityData.js` — AES-CBC 解密中间件稳定性提升。
+- 优化 `pinLockGuard.js` — 修复 PIN token 过期判定和风险路由校验逻辑。
+- 优化 `pinSecurityGuard.js` — 调整滑动窗口频率限制参数。
+- 优化 `errorMiddleware.js` — 统一错误响应格式。

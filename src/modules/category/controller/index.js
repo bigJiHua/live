@@ -17,11 +17,24 @@ class CategoryController {
 
       let categories = await Category.findAll(req.userId, filters);
 
+      // bank 类型：确保虚拟银行和默认银行分类已初始化（幂等，已存在则跳过）
+      if (type === 'bank') {
+        const BusBank = require('../model/bank');
+        const hasBanks = categories.some(c => !['xxxx', 'yyyy'].includes(c.id));
+        if (!hasBanks) {
+          console.log(`[银行分类初始化] 用户 ${req.userId}`);
+          await BusBank.initDefaultBanks(req.userId);
+          categories = await Category.findAll(req.userId, filters);
+        }
+      }
+
       // 如果该类型没有分类，自动初始化默认分类
-      if (categories.length === 0) {
-        const allCategories = await Category.findAll(req.userId, {});
-        
-        if (allCategories.length === 0) {
+      if (categories.length === 0 && type !== 'bank') {
+        // 只检查收支分类是否存在（不被银行分类干扰）
+        const hasDefaults = await Category.findAll(req.userId, {});
+        const hasIncome = hasDefaults.some(c => c.type === 'income' || c.type === 'expense');
+
+        if (!hasIncome) {
           console.log(`[分类初始化] 用户 ${req.userId} 首次初始化默认分类`);
           await Category.createDefaults(req.userId);
           categories = await Category.findAll(req.userId, filters);

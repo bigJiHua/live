@@ -6,7 +6,7 @@ process.env.NODE_ENV = 'test';
 process.env.DB_HOST = 'localhost';
 process.env.DB_USER = 'root';
 process.env.DB_PASSWORD = '';
-process.env.DB_NAME = 'life_manager_test';
+process.env.DB_NAME = 'live_test';
 process.env.JWT_SECRET = 'test-jwt-secret-key';
 
 // 全局后置钩子

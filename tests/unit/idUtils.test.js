@@ -1,34 +1,33 @@
-// ID 生成工具测试示例
-const { generateId, generateUniqueId } = require('../../src/common/utils/idUtils');
+const idUtils = require('../../src/common/utils/idUtils');
 
 describe('ID 生成工具测试', () => {
-  describe('generateId', () => {
-    test('generateId 应该返回一个字符串', () => {
-      const id = generateId();
-      expect(typeof id).toBe('string');
-    });
+  test('userId 生成 50 位字符串', () => {
+    const id = idUtils.userId();
 
-    test('generateId 生成的 ID 长度应该正确', () => {
-      const id = generateId();
-      expect(id.length).toBeGreaterThan(0);
-    });
-
-    test('generateId 每次调用应该生成不同的 ID', () => {
-      const id1 = generateId();
-      const id2 = generateId();
-      expect(id1).not.toBe(id2);
-    });
+    expect(typeof id).toBe('string');
+    expect(id.length).toBe(50);
   });
 
-  describe('generateUniqueId', () => {
-    test('generateUniqueId 应该返回一个字符串', () => {
-      const id = generateUniqueId();
-      expect(typeof id).toBe('string');
-    });
+  test('shortId 为业务前缀预留 3 位空间', () => {
+    const id = idUtils.shortId();
 
-    test('generateUniqueId 生成的 ID 应该包含前缀', () => {
-      const id = generateUniqueId('TEST');
-      expect(id.startsWith('TEST')).toBe(true);
-    });
+    expect(typeof id).toBe('string');
+    expect(id.length).toBe(47);
+    expect(`BC_${id}`.length).toBe(50);
+  });
+
+  test('billId 生成 50 位大写字母数字 ID', () => {
+    const id = idUtils.billId();
+
+    expect(typeof id).toBe('string');
+    expect(id.length).toBe(50);
+    expect(id).toMatch(/^[0-9A-Z]+$/);
+  });
+
+  test('连续生成的业务 ID 不应重复', () => {
+    const id1 = idUtils.billId();
+    const id2 = idUtils.billId();
+
+    expect(id1).not.toBe(id2);
   });
 });

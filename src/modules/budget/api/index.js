@@ -6,9 +6,9 @@ const BudgetRules = require('../rules');
 const authGuard = require('../../../common/middleware/authGuard');
 const pinLockGuard = require('../../../common/middleware/pinLockGuard');
 
+
 // 所有路由都需要认证 + PIN 验证
 router.use(authGuard);
-router.use(pinLockGuard);
 
 // ========== 预算 CRUD ==========
 
@@ -28,6 +28,6 @@ router.post('/', createValidator(BudgetRules.create), budgetController.create);
 router.put('/:id', createValidator(BudgetRules.idParam), createValidator(BudgetRules.update), budgetController.update);
 
 // 删除预算（硬删除）
-router.delete('/:id', createValidator(BudgetRules.idParam), budgetController.delete);
+router.delete('/:id', pinLockGuard, createValidator(BudgetRules.idParam), budgetController.delete);
 
 module.exports = router;

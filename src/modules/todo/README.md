@@ -93,7 +93,7 @@
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `id` | varchar(32) | 主键UUID |
+| `id` | varchar(50) | 主键UUID |
 | `user_id` | varchar(50) | 用户ID |
 | `content` | varchar(255) | 事件内容 |
 | `event_type` | varchar(20) | 事件类型 |
@@ -107,3 +107,10 @@
 | `create_time` | varchar(20) | 创建时间 |
 | `update_time` | varchar(20) | 修改时间 |
 | `is_deleted` | tinyint | 是否删除 |
+
+---
+
+## 更新日志
+
+### 5月28日
+- 优化待办日程 Controller 层逻辑，提升 CRUD 操作稳定性。

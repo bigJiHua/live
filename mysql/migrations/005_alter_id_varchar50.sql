@@ -1,0 +1,19 @@
+-- 以下表的 id 字段从 varchar(32) 加长为 varchar(50)
+ALTER TABLE `account_balance`   MODIFY COLUMN `id` varchar(50) NOT NULL COMMENT '余额ID';
+ALTER TABLE `account_transfer` MODIFY COLUMN `id` varchar(50) NOT NULL COMMENT '转账ID';
+ALTER TABLE `asset_register`   MODIFY COLUMN `id` varchar(50) NOT NULL COMMENT '主键ID';
+ALTER TABLE `asset_snapshot`   MODIFY COLUMN `id` varchar(50) NOT NULL COMMENT '主键ID';
+ALTER TABLE `budget`           MODIFY COLUMN `id` varchar(50) NOT NULL COMMENT 'id主键';
+ALTER TABLE `bus_category`     MODIFY COLUMN `id` varchar(50) NOT NULL COMMENT 'id主键';
+ALTER TABLE `card_base`        MODIFY COLUMN `id` varchar(50) NOT NULL COMMENT '主键';
+ALTER TABLE `card_bill`        MODIFY COLUMN `id` varchar(50) NOT NULL COMMENT 'id主键';
+ALTER TABLE `card_log`         MODIFY COLUMN `id` varchar(50) NOT NULL COMMENT 'id主键';
+ALTER TABLE `card_repay`       MODIFY COLUMN `id` varchar(50) NOT NULL COMMENT 'id主键';
+ALTER TABLE `fixed_asset`      MODIFY COLUMN `id` varchar(50) NOT NULL COMMENT '主键';
+ALTER TABLE `moment`           MODIFY COLUMN `id` varchar(50) NOT NULL COMMENT 'id主键';
+ALTER TABLE `sys_attachment`   MODIFY COLUMN `id` varchar(50) NOT NULL COMMENT 'id主键';
+ALTER TABLE `todo`             MODIFY COLUMN `id` varchar(50) NOT NULL COMMENT 'id主键';
+ALTER TABLE `user_info`        MODIFY COLUMN `id` varchar(50) NOT NULL COMMENT 'id主键';
+ALTER TABLE `work_job`         MODIFY COLUMN `id` varchar(50) NOT NULL COMMENT '主键UUID';
+ALTER TABLE `work_salary`      MODIFY COLUMN `id` varchar(50) NOT NULL COMMENT '主键UUID';
+ALTER TABLE `fund`             MODIFY COLUMN `id` varchar(50) NOT NULL COMMENT 'id主键';
