@@ -1,221 +1,271 @@
 /**
  * 地理位置获取工具
- * 支持浏览器 Geolocation API 和 IP 定位回退
+ *
+ * ┌──────────┬──────────────────────────────────────────────┐
+ * │ 精确定位  │ 纯浏览器 GPS，不请求后端，需 GPS 授权        │
+ * │ 高德定位  │ GPS → 后端 /geo/regeo（高德逆地理），需授权  │
+ * │ 大致位置  │ 直调 ip.sb，≤5次免授权，>5次强制 GPS 授权    │
+ * └──────────┴──────────────────────────────────────────────┘
  */
-
 import axios from "axios";
+import { getAuthSecurityHeaders } from "./securityHeaders";
+
+const COORD_DECIMALS = 6;
+const IP_USAGE_KEY = "ip_location_usage";
+const IP_USAGE_LIMIT = 5;
+
+/* ================================================================
+ *  权限 — 直接触发浏览器原生授权弹窗
+ * ================================================================ */
 
 /**
- * 格式化经纬度为十进制格式（如 22.54321,113.876544）
+ * 强制 GPS 授权 — 循环弹窗直到用户同意
+ *
+ * navigator.geolocation.getCurrentPosition() 会直接触发：
+ *   Chrome / Safari / Android WebView / iPhone 系统级定位授权弹窗
+ *
+ * code=1 PERMISSION_DENIED → 用户点了"拒绝"，浏览器不会再弹，停止
+ * code=2 POSITION_UNAVAILABLE / code=3 TIMEOUT → 重试
+ * 最多重试 5 轮
  */
-function formatCoord(lat, lng, decimals = 6) {
-  return `${lat.toFixed(decimals)}, ${lng.toFixed(decimals)}`;
-}
-
-/**
- * 浏览器原生定位
- * @returns {Promise<{success: boolean, address: string, lat: number, lng: number, error?: string}>}
- */
-export function getBrowserLocation() {
+export function ensureGeoGranted() {
   return new Promise((resolve) => {
     if (!navigator.geolocation) {
-      resolve({ success: false, address: "", error: "浏览器不支持定位" });
-      return;
+      return resolve({ granted: false, lat: 0, lng: 0, reason: "unsupported" });
     }
 
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude } = position.coords;
-        const coordStr = formatCoord(latitude, longitude);
-        
-        // 尝试获取地址（可选）
-        let address = coordStr;
-        try {
-          const res = await axios.get(
-            `https://nominatim.openstreetmap.org/reverse`,
-            {
-              params: {
-                lat: latitude,
-                lon: longitude,
-                format: "json",
-                "accept-language": "zh",
-              },
-              headers: {
-                "Accept-Language": "zh",
-              },
-              timeout: 5000,
-            }
-          );
-          
-          if (res.data?.display_name) {
-            address = simplifyAddress(res.data.display_name) || coordStr;
-          }
-        } catch (err) {
-          console.log("逆地理编码失败，使用坐标:", err.message);
-        }
+    let retries = 0;
+    const maxRetries = 5;
 
-        resolve({
-          success: true,
-          address: address,
-          lat: latitude,
-          lng: longitude,
-        });
-      },
-      (error) => {
-        console.error("浏览器定位失败:", error);
-        let errorMsg = "定位失败";
-        // 检查错误类型
-        if (error.code === 1) {
-          errorMsg = "用户拒绝授权定位";
-        } else if (error.code === 2) {
-          errorMsg = "位置不可用";
-        } else if (error.code === 3) {
-          errorMsg = "定位超时";
+    function attempt() {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => resolve({
+          granted: true,
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+        }),
+        (err) => {
+          // 用户明确拒绝 → 立即停止
+          if (err.code === 1) {
+            console.log("[geo] 用户拒绝授权");
+            return resolve({ granted: false, lat: 0, lng: 0, reason: "denied" });
+          }
+
+          retries++;
+          if (retries >= maxRetries) {
+            console.log(`[geo] ${maxRetries} 次重试后放弃`);
+            return resolve({ granted: false, lat: 0, lng: 0, reason: "max_retries" });
+          }
+
+          console.log(`[geo] 第 ${retries} 次失败 (code=${err.code})，${500 * retries}ms 后重试…`);
+          setTimeout(attempt, 500 * retries); // 递增延迟 500ms/1000ms/1500ms…
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 0, // 不用缓存，强制实时位置
         }
-        resolve({ success: false, address: "", error: errorMsg });
-      },
-      {
-        enableHighAccuracy: true, // 启用高精度定位
-        timeout: 15000,
-        maximumAge: 300000, // 缓存5分钟
-      }
-    );
+      );
+    }
+
+    attempt();
   });
 }
 
-/**
- * IP 定位（回退方案）
- * @returns {Promise<{success: boolean, address: string, lat?: number, lng?: number}>}
- */
-export async function getIpLocation() {
-  try {
-    // 使用 ip.sb 获取 IP 信息
-    const res = await axios.get("https://api.ip.sb/geoip", {
-      timeout: 5000,
-    });
+/* ================================================================
+ *  大致位置频控（存储在 session，页面关闭重置）
+ * ================================================================ */
 
-    const { country, region, city, latitude, longitude } = res.data || {};
-    if (country && region && city) {
-      const address = `${region} ${city}`;
+function getIpUsageCount() {
+  try {
+    const raw = sessionStorage.getItem(IP_USAGE_KEY);
+    if (!raw) return 0;
+    const data = JSON.parse(raw);
+    // 当天有效
+    const today = new Date().toDateString();
+    if (data.date !== today) return 0;
+    return data.count || 0;
+  } catch {
+    return 0;
+  }
+}
+
+function incIpUsageCount() {
+  const count = getIpUsageCount() + 1;
+  sessionStorage.setItem(IP_USAGE_KEY, JSON.stringify({
+    date: new Date().toDateString(),
+    count,
+  }));
+  return count;
+}
+
+/* ================================================================
+ *  格式化工具
+ * ================================================================ */
+
+function formatCoord(lat, lng) {
+  return `${lat.toFixed(COORD_DECIMALS)}, ${lng.toFixed(COORD_DECIMALS)}`;
+}
+
+/* ================================================================
+ *  精确定位 — 纯浏览器 GPS，不调后端
+ * ================================================================ */
+export async function getBrowserLocation() {
+  const perm = await ensureGeoGranted();
+  if (!perm.granted) {
+    return {
+      success: false,
+      address: "",
+      lat: 0,
+      lng: 0,
+      error: perm.reason === "denied"
+        ? "请在浏览器设置中允许定位权限"
+        : perm.reason === "unsupported" ? "浏览器不支持定位" : "获取位置失败",
+    };
+  }
+  return {
+    success: true,
+    address: formatCoord(perm.lat, perm.lng),
+    lat: perm.lat,
+    lng: perm.lng,
+  };
+}
+
+/* ================================================================
+ *  高德定位 — GPS + 后端高德逆地理编码
+ * ================================================================ */
+export async function getAmapLocation() {
+  // 1. 强制 GPS 授权
+  const perm = await ensureGeoGranted();
+  if (!perm.granted) {
+    return {
+      success: false,
+      address: "",
+      lat: 0,
+      lng: 0,
+      error: perm.reason === "denied" ? "请在浏览器设置中允许定位权限" : "获取位置失败",
+    };
+  }
+
+  // 2. GPS 坐标 → 后端高德逆地理
+  try {
+    const { data } = await axios.get("/api/v1/geo/regeo", {
+      params: { lng: perm.lng, lat: perm.lat },
+      timeout: 5000,
+      headers: getAuthSecurityHeaders(),
+    });
+    if (data.status === 200 && data.data?.address) {
+      // 后端已拼好省市区
+      return { success: true, address: data.data.address, lat: perm.lat, lng: perm.lng };
+    }
+  } catch (err) {
+    console.log("[高德定位] 逆地理失败，回退坐标:", err.message);
+  }
+
+  // 3. 逆地理失败，返回坐标
+  return { success: true, address: formatCoord(perm.lat, perm.lng), lat: perm.lat, lng: perm.lng };
+}
+
+/* ================================================================
+ *  大致位置 — 浏览器直调 ip.sb
+ * ================================================================ */
+export async function getIpLocation() {
+  const count = incIpUsageCount();
+
+  // >5 次：强制 GPS 授权，拒绝则拦截
+  if (count > IP_USAGE_LIMIT) {
+    const perm = await ensureGeoGranted();
+    if (!perm.granted) {
       return {
-        success: true,
-        address,
-        lat: latitude,
-        lng: longitude,
+        success: false,
+        address: "",
+        lat: 0,
+        lng: 0,
+        error: "已超过每日 IP 定位次数，请授权定位后重试",
       };
     }
-
-    throw new Error("IP 定位信息不完整");
-  } catch (err) {
-    console.error("IP 定位失败:", err);
-    return { success: false, address: "" };
-  }
-}
-
-/**
- * 综合定位：优先浏览器定位，失败则 IP 定位
- * @returns {Promise<string>} 地址字符串
- */
-export async function getLocation() {
-  // 1. 先尝试浏览器定位
-  const browserLoc = await getBrowserLocation();
-  if (browserLoc.success && browserLoc.address) {
-    return browserLoc.address;
   }
 
-  // 2. 回退到 IP 定位
-  const ipLoc = await getIpLocation();
-  if (ipLoc.success && ipLoc.address) {
-    return ipLoc.address;
-  }
-
-  // 3. 都失败，返回默认
-  return "未知位置";
-}
-
-/**
- * 综合定位：优先浏览器定位，失败则 IP 定位
- * @returns {Promise<{name: string, lat: number, lng: number}>} 完整位置对象
- */
-export async function getFullLocation() {
-  // 1. 先尝试浏览器定位
-  const browserLoc = await getBrowserLocation();
-  if (browserLoc.success && browserLoc.address) {
-    return {
-      name: browserLoc.address,
-      lat: browserLoc.lat,
-      lng: browserLoc.lng,
-    };
-  }
-
-  // 2. 回退到 IP 定位
-  const ipLoc = await getIpLocation();
-  if (ipLoc.success && ipLoc.address) {
-    return {
-      name: ipLoc.address,
-      lat: ipLoc.lat || 0,
-      lng: ipLoc.lng || 0,
-    };
-  }
-
-  // 3. 都失败，返回默认
-  return {
-    name: "未知位置",
-    lat: 0,
-    lng: 0,
-  };
-}
-
-/**
- * 获取两种定位选项供用户选择
- * @returns {Promise<{browser: {name: string, lat: number, lng: number, error?: string}, ip: {name: string, lat: number, lng: number, error?: string}}>}
- */
-export async function getLocationOptions() {
-  // 并行获取浏览器定位和IP定位
-  const [browserLoc, ipLoc] = await Promise.all([
-    getBrowserLocation(),
-    getIpLocation().catch(() => ({ success: false, address: "" }))
-  ]);
-
-  const result = {
-    browser: {
-      name: browserLoc.success ? (browserLoc.address || formatCoord(browserLoc.lat, browserLoc.lng)) : (browserLoc.error || "定位失败"),
-      lat: browserLoc.lat || 0,
-      lng: browserLoc.lng || 0,
-      error: browserLoc.error,
-    },
-    ip: {
-      name: ipLoc.success ? (ipLoc.address || "未知") : "未知",
-      lat: ipLoc.lat || 0,
-      lng: ipLoc.lng || 0,
-    },
-  };
-
-  return result;
-}
-
-/**
- * 简化地址，只保留省-市-区
- */
-function simplifyAddress(fullAddress) {
-  if (!fullAddress) return "";
-
-  // 常见格式：中国 XX省 XX市 XX区 XX街道
-  const patterns = [
-    /([^省]+省)?([^市]+市)?([^区]+区)?/,
-    /([^省]+省)?([^市]+市)?([^县]+县)?/,
-  ];
-
-  for (const pattern of patterns) {
-    const match = fullAddress.match(pattern);
-    if (match) {
-      const parts = [match[1], match[2], match[3]].filter(Boolean);
-      if (parts.length > 0) {
-        return parts.join("");
+  // 直调 ip.sb
+  try {
+    const res = await axios.get("https://api.ip.sb/geoip", {
+      timeout: 5000,
+      headers: { Accept: "application/json" },
+    });
+    const { country, region, city, latitude, longitude } = res.data || {};
+    if (country && region && city) {
+      return {
+        success: true,
+        address: `${region} ${city}`,
+        lat: latitude || 0,
+        lng: longitude || 0,
+      };
+    }
+    // ip.sb 返回不完整，回退 ipinfo.io
+    throw new Error("ip.sb 数据不完整");
+  } catch (e1) {
+    console.warn("[大致位置] ip.sb 失败:", e1.message);
+    try {
+      const res = await axios.get("https://ipinfo.io", { timeout: 5000 });
+      const d = res.data || {};
+      const { city, region, loc } = d;
+      const address = [region, city].filter(Boolean).join(" ");
+      let lat = 0, lng = 0;
+      if (loc) {
+        const parts = loc.split(",").map(Number);
+        lat = parts[0] || 0;
+        lng = parts[1] || 0;
       }
+      return { success: !!address, address: address || "未知", lat, lng };
+    } catch (e2) {
+      console.error("[大致位置] ipinfo.io 也失败:", e2.message);
+      return { success: false, address: "", lat: 0, lng: 0 };
     }
   }
+}
 
-  // 如果匹配失败，截取前30个字符
-  return fullAddress.slice(0, 30);
+/* ================================================================
+ *  综合定位（向后兼容旧调用）
+ * ================================================================ */
+export async function getLocation() {
+  const loc = await getBrowserLocation();
+  if (loc.success) return loc.address;
+  const ip = await getIpLocation();
+  return ip.success ? ip.address : "未知位置";
+}
+
+export async function getFullLocation() {
+  const loc = await getBrowserLocation();
+  if (loc.success) return { name: loc.address, lat: loc.lat, lng: loc.lng };
+  const ip = await getIpLocation();
+  if (ip.success) return { name: ip.address, lat: ip.lat, lng: ip.lng };
+  return { name: "未知位置", lat: 0, lng: 0 };
+}
+
+export async function getLocationOptions() {
+  const [browser, amap, ip] = await Promise.all([
+    getBrowserLocation().catch(() => ({ success: false, address: "" })),
+    getAmapLocation().catch(() => ({ success: false, address: "" })),
+    getIpLocation().catch(() => ({ success: false, address: "" })),
+  ]);
+  return {
+    browser: {
+      name: browser.success ? browser.address : (browser.error || "定位失败"),
+      lat: browser.lat || 0,
+      lng: browser.lng || 0,
+      error: browser.error,
+    },
+    amap: {
+      name: amap.success ? amap.address : (amap.error || "高德定位失败"),
+      lat: amap.lat || 0,
+      lng: amap.lng || 0,
+      error: amap.error,
+    },
+    ip: {
+      name: ip.success ? ip.address : (ip.error || "未知"),
+      lat: ip.lat || 0,
+      lng: ip.lng || 0,
+      error: ip.error,
+    },
+  };
 }

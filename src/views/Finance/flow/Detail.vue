@@ -32,7 +32,7 @@
 
       <!-- 信息列表 -->
       <van-cell-group inset class="info-group">
-        <van-cell title="分类">
+        <van-cell title="分类" is-link @click="openCategoryPopup">
           <template #value>
             <span>{{ getCategoryText(detail) }}</span>
           </template>
@@ -94,12 +94,12 @@
       <!-- 操作按钮 -->
       <div class="action-btns">
         <van-button
-          v-if="getReverseType(detail) && getReverseType(detail) !== 'credit-repay'"
+          v-if="getReverseType(detail) && getReverseType(detail) !== 'credit-repay' && getReverseType(detail) !== 'transfer-legacy'"
           type="warning"
           round
           @click="handleReverse"
         >
-          {{ getReverseBtnText(getReverseType(detail)) }}
+          {{ getReverseBtnText(getReverseType(detail), detail) }}
         </van-button>
         <van-button
           v-if="getReverseType(detail) !== 'credit-repay'"
@@ -116,6 +116,12 @@
       <div class="repay-hint" v-if="getReverseType(detail) === 'credit-repay'">
         <van-icon name="info-o" />
         <span>本收支不计支出。如需撤销还款，请到还款记录编辑</span>
+      </div>
+
+      <!-- 旧转账记录提示 -->
+      <div class="repay-hint" v-if="getReverseType(detail) === 'transfer-legacy'">
+        <van-icon name="info-o" />
+        <span>此为旧版转账记录，暂不支持自动冲正。如需撤销请手动创建相反方向的收支记录</span>
       </div>
 
       <!-- 备注编辑弹窗 -->
@@ -148,6 +154,45 @@
           </div>
         </div>
       </van-popup>
+
+      <!-- 分类编辑弹窗 -->
+      <van-popup v-model:show="showCategoryPopup" position="bottom" round>
+        <div class="category-popup">
+          <div class="popup-header">
+            <span>选择支出分类</span>
+            <van-icon name="cross" @click="showCategoryPopup = false" />
+          </div>
+          <div class="popup-tip">请选择新的支出分类</div>
+          <div class="category-list">
+            <div
+              v-for="cat in categoryList"
+              :key="cat.id"
+              class="category-item"
+              :class="{ active: selectedCategoryId === cat.id }"
+              @click="selectCategory(cat)"
+            >
+              <van-image
+                v-if="cat.icon_url || cat.iconUrl"
+                width="28"
+                height="28"
+                :src="getFullUrl(cat.icon_url || cat.iconUrl)"
+                fit="contain"
+              />
+              <span class="category-name">{{ cat.name }}</span>
+              <van-icon v-if="selectedCategoryId === cat.id" name="success" color="#07c160" />
+            </div>
+          </div>
+          <div class="popup-footer">
+            <van-button size="small" @click="showCategoryPopup = false">取消</van-button>
+            <van-button
+              type="primary"
+              size="small"
+              :loading="categoryLoading"
+              @click="handleSaveCategory"
+            >保存</van-button>
+          </div>
+        </div>
+      </van-popup>
     </div>
 
     <!-- 空状态 -->
@@ -163,9 +208,11 @@ import dayjs from "dayjs";
 import zhCn from "dayjs/locale/zh-cn";
 import {
   getAccountDetail,
+  updateAccount,
   updateAccountRemark,
   reverseDebit,
   reverseCreditExpense,
+  reverseTransfer,
 } from "@/utils/api/account";
 import { getCardList } from "@/utils/api/card";
 import { categoryApi } from "@/utils/api/category";
@@ -186,6 +233,10 @@ const bankList = ref([]);
 const showRemarkPopup = ref(false);
 const editRemark = ref("");
 const remarkLoading = ref(false);
+const showCategoryPopup = ref(false);
+const categoryList = ref([]);
+const selectedCategoryId = ref(null);
+const categoryLoading = ref(false);
 
 // 格式化金额（根据币种和汇率计算）
 const formatAmount = (amount) => {
@@ -297,9 +348,17 @@ const loadDetail = async () => {
   loading.value = true;
   try {
     const res = await getAccountDetail(route.params.id);
-    detail.value = res.data || res;
+    const data = res.data || res;
+    if (!data || !data.id) {
+      // 流水不存在或已被删除 → 跳回列表页
+      showToast("记录不存在或已被删除");
+      router.replace("/finance/flow");
+      return;
+    }
+    detail.value = data;
   } catch (e) {
-    showToast("加载失败");
+    // 后端返回 404 或其他错误 → 跳回列表页
+    router.replace("/finance/flow");
   } finally {
     loading.value = false;
   }
@@ -326,6 +385,53 @@ const handleSaveRemark = async () => {
   }
 };
 
+// 加载支出分类列表
+const loadCategoryList = async () => {
+  try {
+    const res = await categoryApi.list("expense");
+    categoryList.value = res.data || res || [];
+  } catch (e) {
+    categoryList.value = [];
+  }
+};
+
+// 打开分类编辑弹窗
+const openCategoryPopup = () => {
+  selectedCategoryId.value = detail.value.category_id;
+  loadCategoryList();
+  showCategoryPopup.value = true;
+};
+
+// 选择分类
+const selectCategory = (cat) => {
+  selectedCategoryId.value = cat.id;
+};
+
+// 保存分类
+const handleSaveCategory = async () => {
+  if (!selectedCategoryId.value) {
+    showToast("请选择分类");
+    return;
+  }
+  if (selectedCategoryId.value === detail.value.category_id) {
+    showCategoryPopup.value = false;
+    return;
+  }
+  try {
+    categoryLoading.value = true;
+    await updateAccount(route.params.id, { data: { categoryId: selectedCategoryId.value } });
+    const selected = categoryList.value.find(c => c.id === selectedCategoryId.value);
+    detail.value.category_id = selectedCategoryId.value;
+    detail.value.category_name = selected?.name || "未知分类";
+    showCategoryPopup.value = false;
+    showToast("分类已更新");
+  } catch (e) {
+    // 错误已由拦截器处理
+  } finally {
+    categoryLoading.value = false;
+  }
+};
+
 // ========== 冲正相关 ==========
 
 /**
@@ -342,8 +448,19 @@ const getReverseType = (item) => {
     return "credit-repay";
   }
 
-  // 借记卡相关（包括 debit 和 virtual_balance）
-  if (accountType === "debit" || accountType === "virtual_balance") {
+  // 转账冲正（仅自转和提现）
+  // 转账记录的 pay_type 固定为 "转账"，有 transfer_group_id 的才是成对记录
+  if (payType === "转账" && item.transfer_group_id) {
+    return "transfer";
+  }
+
+  // 旧版转账记录（无 transfer_group_id）→ 不显示冲正按钮，仅提示
+  if (payType === "转账" && !item.transfer_group_id) {
+    return "transfer-legacy";
+  }
+
+  // 借记卡相关（包括 debit、virtual_balance、virtual_cash）
+  if (accountType === "debit" || accountType === "virtual_balance" || accountType === "virtual_cash") {
     return "debit";
   }
 
@@ -358,11 +475,17 @@ const getReverseType = (item) => {
 /**
  * 获取冲正按钮文本
  */
-const getReverseBtnText = (type) => {
+const getReverseBtnText = (type, item) => {
+  if (type === "debit" && item) {
+    const acct = item.account_type
+    if (acct === "virtual_balance") return "余额冲正"
+    if (acct === "virtual_cash") return "现金冲正"
+    return "借记卡冲正"
+  }
   const map = {
-    debit: "借记卡冲正",
     "credit-expense": "消费冲正",
     "credit-repay": "还款撤销",
+    transfer: "转账冲正",
   };
   return map[type] || "";
 };
@@ -393,6 +516,9 @@ const handleReverse = async () => {
         break;
       case "credit-expense":
         res = await reverseCreditExpense(detail.value.id);
+        break;
+      case "transfer":
+        res = await reverseTransfer(detail.value.id);
         break;
     }
     showToast(res.message || "冲正成功");
@@ -564,5 +690,54 @@ onMounted(() => {
 
 .repay-hint .van-icon {
   font-size: 16px;
+}
+
+.category-popup {
+  padding: 16px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.category-list {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.category-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 8px;
+  border: 1px solid #f0f0f0;
+  border-radius: 10px;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.2s;
+}
+
+.category-item:active {
+  background: #f7f8fa;
+}
+
+.category-item.active {
+  border-color: #07c160;
+  background: #f0fff5;
+}
+
+.category-item .van-icon-success {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  font-size: 14px;
+}
+
+.category-name {
+  font-size: 12px;
+  color: #323233;
+  text-align: center;
+  line-height: 1.3;
 }
 </style>

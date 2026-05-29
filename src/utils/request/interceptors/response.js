@@ -33,6 +33,10 @@ export function createResponseInterceptor() {
   return [
     // ✅ 成功响应
     (response) => {
+      if (response.config.responseType === 'blob' || response.config.responseType === 'arraybuffer') {
+        return response;
+      }
+
       const res = response.data || {};
 
       // 🔒 PIN 码拦截（8303 需要验证 / 8302 错误 / 8304 锁定）
@@ -48,12 +52,12 @@ export function createResponseInterceptor() {
 
       if (res.ismessage === true) return res;
 
-      if (res.status === 200 || res.success) {
+      if (res.status === 200 || res.status === 202 || res.success) {
         const isWrite = config.encryptedMethods.includes(
           response.config.method?.toLowerCase()
         );
 
-        if (isWrite) {
+        if (isWrite && res.status !== 202) {
           showSuccessToast(res.message || "成功");
         }
 
@@ -119,6 +123,10 @@ function handlePinResponse(resData, response) {
 
   // 8303 需要验证 → 拦截请求，弹出 PIN 输入框
   if (code === PIN_CODE.NEED_VERIFY) {
+    if (response.config.url?.includes("/security/pin/route-verify")) {
+      return Promise.reject(resData);
+    }
+
     // 保存原始请求配置用于重发
     const originalRequest = {
       method: response.config.method,
@@ -129,7 +137,7 @@ function handlePinResponse(resData, response) {
       params: response.config.params,
     };
 
-    return requestPinVerify(originalRequest);
+    return requestPinVerify(originalRequest, resData.data || {});
   }
 
   // 8302 PIN 错误（一般不会直接到达这里，由 submitPin 处理）

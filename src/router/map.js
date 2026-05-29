@@ -91,6 +91,12 @@ const RouterMap = [
         meta: { title: "收支详情", hideTabbar: true },
       },
       {
+        path: "finance/recurring",
+        name: "FinanceRecurring",
+        component: () => import("../views/Finance/recurring/List.vue"),
+        meta: { title: "固定支出", hideTabbar: true },
+      },
+      {
         path: "finance/fixed-asset",
         name: "FinanceFixedAsset",
         component: () => import("../views/Finance/fixedAsset/List.vue"),
@@ -113,6 +119,86 @@ const RouterMap = [
         name: "FinanceFixedAssetEdit",
         component: () => import("../views/Finance/fixedAsset/Edit.vue"),
         meta: { title: "编辑资产", hideTabbar: true },
+      },
+      // 财报页面
+      {
+        path: "finance/report",
+        name: "FinanceReport",
+        component: () => import("../views/Finance/report/Report.vue"),
+        meta: { title: "财务报表", hideTabbar: true },
+      },
+      {
+        path: "finance/report/flow-filter",
+        name: "FinanceReportFlowFilter",
+        component: () => import("../views/Finance/report/flow/FlowFilter.vue"),
+        meta: { title: "流水筛选", hideTabbar: true },
+      },
+      {
+        path: "finance/report/stats-overview",
+        name: "FinanceReportStatsOverview",
+        component: () => import("../views/Finance/report/stats/StatsOverview.vue"),
+        meta: { title: "收支总额与结余", hideTabbar: true },
+      },
+      {
+        path: "finance/report/category-ratio",
+        name: "FinanceReportCategoryRatio",
+        component: () => import("../views/Finance/report/stats/CategoryRatio.vue"),
+        meta: { title: "类目消费占比", hideTabbar: true },
+      },
+      {
+        path: "finance/report/monthly-trend",
+        name: "FinanceReportMonthlyTrend",
+        component: () => import("../views/Finance/report/stats/MonthlyTrend.vue"),
+        meta: { title: "月度收支趋势", hideTabbar: true },
+      },
+      {
+        path: "finance/report/card-flow",
+        name: "FinanceReportCardFlow",
+        component: () => import("../views/Finance/report/flow/CardFlow.vue"),
+        meta: { title: "银行卡收支明细", hideTabbar: true },
+      },
+      {
+        path: "finance/report/transfer-list",
+        name: "FinanceReportTransferList",
+        component: () => import("../views/Finance/report/flow/TransferList.vue"),
+        meta: { title: "转账明细查询", hideTabbar: true },
+      },
+      {
+        path: "finance/report/debt-overview",
+        name: "FinanceReportDebtOverview",
+        component: () => import("../views/Finance/report/debt/DebtOverview.vue"),
+        meta: { title: "负债统计", hideTabbar: true },
+      },
+      // 理财投资模块
+      {
+        path: "finance/report/fund",
+        name: "FinanceFund",
+        component: () => import("../views/Finance/report/fund/Fund.vue"),
+        meta: { title: "理财总览", hideTabbar: true },
+      },
+      {
+        path: "finance/report/fund/register",
+        name: "FinanceFundRegister",
+        component: () => import("../views/Finance/report/fund/FundRegister.vue"),
+        meta: { title: "理财登记", hideTabbar: true },
+      },
+      {
+        path: "finance/report/fund/trend",
+        name: "FinanceFundTrend",
+        component: () => import("../views/Finance/report/fund/FundTrend.vue"),
+        meta: { title: "变动走势图", hideTabbar: true },
+      },
+      {
+        path: "finance/report/fund/daily",
+        name: "FinanceFundDaily",
+        component: () => import("../views/Finance/report/fund/FundDaily.vue"),
+        meta: { title: "每日净值登记", hideTabbar: true },
+      },
+      {
+        path: "finance/report/fund/earnings",
+        name: "FinanceFundEarnings",
+        component: () => import("../views/Finance/report/fund/FundEarnings.vue"),
+        meta: { title: "收益明细", hideTabbar: true },
       },
       // 预算管理模块
       {
@@ -173,6 +259,43 @@ const RouterMap = [
         name: "FinanceBudgetDetail",
         component: () => import("../views/Finance/budget/Detail.vue"),
         meta: { title: "预算详情", hideTabbar: true },
+      },
+      // 数据管理模块
+      {
+        path: "finance/data",
+        name: "FinanceDataManage",
+        component: () => import("../views/Finance/data/DataManage.vue"),
+        meta: { title: "数据管理", hideTabbar: true },
+      },
+      {
+        path: "finance/data/check",
+        name: "FinanceDataCheck",
+        component: () => import("../views/Finance/data/DbCheck.vue"),
+        meta: { title: "数据库检查", hideTabbar: true },
+      },
+      {
+        path: "finance/data/export",
+        name: "FinanceDataExport",
+        component: () => import("../views/Finance/data/DbExport.vue"),
+        meta: { title: "导出数据库", hideTabbar: true },
+      },
+      {
+        path: "finance/data/import",
+        name: "FinanceDataImport",
+        component: () => import("../views/Finance/data/DbImport.vue"),
+        meta: { title: "数据导入", hideTabbar: true },
+      },
+      {
+        path: "finance/data/backup",
+        name: "FinanceDataBackup",
+        component: () => import("../views/Finance/data/DbBackup.vue"),
+        meta: { title: "数据库备份", hideTabbar: true },
+      },
+      {
+        path: "finance/data/login-log",
+        name: "FinanceDataLoginLog",
+        component: () => import("../views/Finance/data/LoginLog.vue"),
+        meta: { title: "登录日志", hideTabbar: true },
       },
       // 动态/日记模块
       {
@@ -315,6 +438,12 @@ const RouterMap = [
         name: "BillDetail",
         component: () => import("../views/BankCard/bill/Detail.vue"),
         meta: { title: "信用卡账单详情", hideTabbar: true },
+      },
+      {
+        path: "card/bill/ledger",
+        name: "BillLedger",
+        component: () => import("../views/BankCard/bill/Ledger.vue"),
+        meta: { title: "账单流水明细", hideTabbar: true },
       },
       {
         path: "card/bill/add",

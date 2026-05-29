@@ -66,80 +66,52 @@
       </div>
 
       <div class="detail-content">
-        <div v-if="dayDetail.income > 0" class="detail-section income-section">
-          <div class="section-title">
-            <van-icon name="arrow-up" class="income-icon" />
-            <span>收入</span>
-          </div>
-          <div
-            v-for="item in dayDetail.incomeList"
-            :key="item.id"
-            class="detail-item"
-            @click="goDetail(item)"
+        <div v-if="dayDetail.displayList.length > 0" class="flow-list">
+          <template
+            v-for="node in dayDetail.displayList"
+            :key="node.type === 'flow' ? node.data.id : 'tf-' + node.expense.id"
           >
-            <div class="item-left">
-              <div class="category-icon">
-                <van-icon :name="getCategoryIcon(item.category_name)" />
+            <div
+              v-if="node.type === 'flow'"
+              class="flow-item"
+              @click="goDetail(node.data)"
+            >
+              <div class="item-left">
+                <div class="item-cat">{{ getCategoryName(node.data) }}</div>
+                <div class="item-desc">{{ getFlowItemDesc(node.data) }}</div>
               </div>
-              <div class="item-info">
-                <div class="item-title">{{ getCategoryName(item) }}</div>
-                <div class="item-desc">
-                  {{ formatTime(item.create_time) }}
-                  <template v-if="item.card_id && item.card_id !== 'xxxx' && item.card_id !== 'yyyy'">
-                    · <img v-if="getCardBankIcon(item.card_id)" :src="getFullUrl(getCardBankIcon(item.card_id))" class="card-icon-mini" />
-                    {{ getCardText(item.card_id) }}
-                  </template>
-                  <template v-else>
-                    · {{ item.pay_method || '-' }}
-                  </template>
+              <div class="item-right">
+                <div
+                  class="item-amount"
+                  :class="isIncome(node.data) ? 'income' : 'expense'"
+                >
+                  {{ isIncome(node.data) ? '+' : '-' }}{{ formatAmount(node.data.amount) }}
+                </div>
+                <div class="item-date">{{ formatTime(node.data.create_time) }}</div>
+              </div>
+            </div>
+
+            <div v-else class="transfer-row">
+              <div class="transfer-header">{{ node.isExplicit ? '转账' : '疑似转账' }}</div>
+              <div class="transfer-body">
+                <div class="transfer-side">
+                  <div class="transfer-amount expense">-{{ formatAmount(node.expense.amount) }}</div>
+                  <div class="transfer-bank">{{ getBankCardLabel(node.expense) || '余额' }}</div>
+                  <div class="transfer-time">{{ formatTime(node.expense.create_time) }}</div>
+                </div>
+                <div class="transfer-arrow">→</div>
+                <div class="transfer-side">
+                  <div class="transfer-amount income">+{{ formatAmount(node.income.amount) }}</div>
+                  <div class="transfer-bank">{{ getBankCardLabel(node.income) || '银行卡' }}</div>
+                  <div class="transfer-time">{{ formatTime(node.income.create_time) }}</div>
                 </div>
               </div>
             </div>
-            <div class="item-right">
-              <span class="amount income">+{{ formatAmount(item.amount) }}</span>
-              <van-icon name="arrow" class="arrow-icon" />
-            </div>
-          </div>
+          </template>
         </div>
 
-        <div v-if="dayDetail.expense > 0" class="detail-section expense-section">
-          <div class="section-title">
-            <van-icon name="arrow-down" class="expense-icon" />
-            <span>支出</span>
-          </div>
-          <div
-            v-for="item in dayDetail.expenseList"
-            :key="item.id"
-            class="detail-item"
-            @click="goDetail(item)"
-          >
-            <div class="item-left">
-              <div class="category-icon">
-                <van-icon :name="getCategoryIcon(item.category_name)" />
-              </div>
-              <div class="item-info">
-                <div class="item-title">{{ getCategoryName(item) }}</div>
-                <div class="item-desc">
-                  {{ formatTime(item.create_time) }}
-                  <template v-if="item.card_id && item.card_id !== 'xxxx' && item.card_id !== 'yyyy'">
-                    · <img v-if="getCardBankIcon(item.card_id)" :src="getFullUrl(getCardBankIcon(item.card_id))" class="card-icon-mini" />
-                    {{ getCardText(item.card_id) }}
-                  </template>
-                  <template v-else>
-                    · {{ item.pay_method || '-' }}
-                  </template>
-                </div>
-              </div>
-            </div>
-            <div class="item-right">
-              <span class="amount expense">-{{ formatAmount(item.amount) }}</span>
-              <van-icon name="arrow" class="arrow-icon" />
-            </div>
-          </div>
-        </div>
-
-        <van-empty v-if="dayDetail.income === 0 && dayDetail.expense === 0" description="当日无收支记录" />
-        <div v-if="dayDetail.income === 0 && dayDetail.expense === 0" class="add-record-btn">
+        <van-empty v-else description="当日无收支记录" />
+        <div v-if="dayDetail.displayList.length === 0" class="add-record-btn">
           <van-button type="primary" size="small" round @click="goAddRecord">
             <van-icon name="plus" /> 立即记账
           </van-button>
@@ -251,10 +223,30 @@ const nextMonth = () => {
 };
 
 // 格式化金额
-const formatAmount = (amount) => {
-  if (!amount && amount !== 0) return "0.00";
-  const num = parseFloat(amount) || 0;
-  return Math.abs(num).toFixed(2);
+const formatAmount = (val) => {
+  if (!val && val !== 0) return '0.00'
+  const v = Number(val)
+  const abs = Math.abs(v)
+  let result
+  if (abs >= 100000000) {
+    const yi = abs / 100000000
+    const intPart = Math.floor(yi)
+    let decPart = Math.round((yi - intPart) * 1000)
+    if (decPart >= 1000) decPart = 999
+    result = intPart + '.' + String(decPart).padStart(3, '0') + '亿'
+  } else if (abs >= 10000) {
+    const wan = abs / 10000
+    const intPart = Math.floor(wan)
+    let decPart = Math.round((wan - intPart) * 1000)
+    if (decPart >= 1000) decPart = 999
+    result = intPart + '.' + String(decPart).padStart(3, '0') + '万'
+  } else {
+    const intPart = Math.floor(abs)
+    let decPart = Math.round((abs - intPart) * 100)
+    if (decPart >= 100) decPart = 99
+    result = intPart + '.' + String(decPart).padStart(2, '0')
+  }
+  return result
 };
 
 // 格式化时间
@@ -284,7 +276,72 @@ const getCategoryName = (item) => {
   if (item.category_id === "CATEGORY_REPAY") {
     return "信用卡还款";
   }
-  return item.category_name || "未知分类";
+  return item.category_name || item.categoryName || item.pay_type || item.payType || "未知分类";
+};
+
+const isIncome = (item) => item.direction === 1 || item.direction === "income";
+
+const isExpense = (item) =>
+  item.direction === 0 || item.direction === "expense" || item.direction === 2;
+
+const getItemDate = (item) => (item.trans_date || item.transDate || "").slice(0, 10);
+
+const processDailyDisplayList = (items) => {
+  const pairs = [];
+  const usedExpenseIds = new Set();
+  const usedIncomeIds = new Set();
+
+  const addPair = (expense, income, isExplicit) => {
+    pairs.push({ expense, income, isExplicit });
+    usedExpenseIds.add(expense.id);
+    usedIncomeIds.add(income.id);
+  };
+
+  const transferGroups = items.reduce((map, item) => {
+    if (item.category_id === "CATEGORY_REPAY" || !item.transfer_group_id) return map;
+    if (!map[item.transfer_group_id]) map[item.transfer_group_id] = [];
+    map[item.transfer_group_id].push(item);
+    return map;
+  }, {});
+
+  Object.values(transferGroups).forEach((group) => {
+    const expense = group.find((item) => isExpense(item));
+    const income = group.find((item) => isIncome(item));
+    if (expense && income) addPair(expense, income, true);
+  });
+
+  items.forEach((item) => {
+    if (usedExpenseIds.has(item.id)) return;
+    if (item.category_id === "CATEGORY_REPAY") return;
+    if (!isExpense(item)) return;
+    const date = getItemDate(item);
+    const match = items.find((inc) => {
+      if (inc.id === item.id || usedIncomeIds.has(inc.id)) return false;
+      if (inc.category_id === "CATEGORY_REPAY") return false;
+      if (!isIncome(inc)) return false;
+      return (
+        getItemDate(inc) === date &&
+        Math.abs(Number(item.amount || 0) - Number(inc.amount || 0)) < 0.01 &&
+        (item.card_id || item.cardId || "none") !== (inc.card_id || inc.cardId || "none2")
+      );
+    });
+    if (match) addPair(item, match, item.pay_type === "转账" && match.pay_type === "转账");
+  });
+
+  const expenseIds = new Set(pairs.map((pair) => pair.expense.id));
+  const incomeIds = new Set(pairs.map((pair) => pair.income.id));
+  const processed = [];
+
+  items.forEach((item) => {
+    if (expenseIds.has(item.id)) {
+      const pair = pairs.find((p) => p.expense.id === item.id);
+      if (pair) processed.push({ type: "transfer", ...pair });
+    } else if (!incomeIds.has(item.id)) {
+      processed.push({ type: "flow", data: item });
+    }
+  });
+
+  return processed;
 };
 
 // 日历天列表
@@ -356,7 +413,7 @@ const selectDate = (day) => {
 // 选中日期的流水详情
 const dayDetail = computed(() => {
   if (!selectedDate.value) {
-    return { income: 0, expense: 0, balance: 0, incomeList: [], expenseList: [] };
+    return { income: 0, expense: 0, balance: 0, items: [], displayList: [] };
   }
 
   const dayRecord = monthData.value.daily_list.find(
@@ -364,20 +421,23 @@ const dayDetail = computed(() => {
   );
 
   if (!dayRecord) {
-    return { income: 0, expense: 0, balance: 0, incomeList: [], expenseList: [] };
+    return { income: 0, expense: 0, balance: 0, items: [], displayList: [] };
   }
 
-  const incomeList = dayRecord.items.filter((item) => item.direction === 1);
-  const expenseList = dayRecord.items.filter((item) => item.direction === 0);
-  const income = incomeList.reduce((sum, item) => sum + parseFloat(item.amount) || 0, 0);
-  const expense = expenseList.reduce((sum, item) => sum + parseFloat(item.amount) || 0, 0);
+  const items = dayRecord.items || [];
+  const income = items
+    .filter((item) => isIncome(item))
+    .reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+  const expense = items
+    .filter((item) => isExpense(item))
+    .reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
 
   return {
     income,
     expense,
     balance: income - expense,
-    incomeList,
-    expenseList,
+    items,
+    displayList: processDailyDisplayList(items),
   };
 });
 
@@ -410,7 +470,7 @@ const loadMonthData = async () => {
     const res = await getAccountList({
       startDate,
       endDate,
-      limit: 1000, // 获取当月所有数据
+      limit: 10000, // 获取当月所有数据
     });
 
     const list = res.data?.list || res.data || [];
@@ -495,7 +555,7 @@ const getCardBankIcon = (cardId) => {
   const bankId = card.bank_id || card.bankId;
   if (!bankId) return "";
   const bank = getBankInfo(bankId);
-  return bank?.icon || bank?.image || "";
+  return bank?.icon_url || bank?.iconUrl || bank?.icon || bank?.image || "";
 };
 
 // 获取卡片显示信息（银行名称 + 卡尾号）
@@ -517,6 +577,22 @@ const getCardText = (cardId) => {
     return last4;
   }
   return "-";
+};
+
+const getBankCardLabel = (item) => {
+  const cardId = item.card_id || item.cardId;
+  if (cardId === "yyyy") return "余额";
+  if (cardId === "xxxx") return "现金";
+  if (!cardId) return item.card_last4 || item.cardLast4 || "";
+  const cardText = getCardText(cardId);
+  return cardText === "-" ? item.card_last4 || item.cardLast4 || "" : cardText;
+};
+
+const getFlowItemDesc = (item) => {
+  const cardLabel = getBankCardLabel(item);
+  const method = item.pay_method || item.payMethod || "";
+  if (cardLabel && method) return `${cardLabel} · ${method}`;
+  return cardLabel || method || "-";
 };
 </script>
 
@@ -735,96 +811,135 @@ const getCardText = (cardId) => {
 .detail-content {
   max-height: 400px;
   overflow-y: auto;
+  padding: 10px 12px 14px;
 }
 
-.detail-section {
-  padding: 12px 16px;
-}
-
-.detail-section.income-section {
-  border-bottom: 1px solid #f2f3f5;
-}
-
-.section-title {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  color: #969799;
-  margin-bottom: 8px;
-}
-
-.income-icon {
-  color: #ee0a24;
-}
-
-.expense-icon {
-  color: #07c160;
-}
-
-.detail-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 0;
-  cursor: pointer;
+.flow-list {
+  padding-bottom: 4px;
 }
 
 .item-left {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+  flex: 1;
+  min-width: 0;
 }
 
-.category-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: #f7f8fa;
+.flow-item {
   display: flex;
+  justify-content: space-between;
   align-items: center;
-  justify-content: center;
-  font-size: 18px;
-  color: #1989fa;
+  background: #fff;
+  padding: 10px 14px;
+  margin-top: 6px;
+  border-radius: 8px;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
 }
 
-.item-info .item-title {
+.item-cat {
   font-size: 14px;
   color: #323233;
+  font-weight: 500;
 }
 
-.item-info .item-desc {
-  font-size: 11px;
+.item-desc {
+  font-size: 12px;
   color: #969799;
   margin-top: 2px;
-  display: flex;
-  align-items: center;
-  gap: 2px;
-}
-
-.card-icon-mini {
-  width: 14px;
-  height: 14px;
-  border-radius: 2px;
-  object-fit: cover;
-  vertical-align: middle;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .item-right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-shrink: 0;
+  text-align: right;
+  margin-left: 10px;
 }
 
-.item-right .amount {
+.item-amount {
   font-size: 15px;
   font-weight: 600;
   font-family: "DIN Alternate", -apple-system, sans-serif;
+  white-space: nowrap;
 }
 
-.item-right .arrow-icon {
+.item-amount.income {
+  color: #07c160;
+}
+
+.item-amount.expense {
+  color: #ee0a24;
+}
+
+.item-date {
+  font-size: 11px;
   color: #969799;
-  font-size: 14px;
+  margin-top: 4px;
+}
+
+.transfer-row {
+  margin-top: 8px;
+  padding: 8px 12px;
+  border: 1px dashed #1989fa;
+  border-radius: 10px;
+  background: #f0f7ff;
+}
+
+.transfer-header {
+  font-size: 11px;
+  color: #1989fa;
+  font-weight: 600;
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+.transfer-body {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.transfer-side {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.transfer-amount {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.transfer-amount.income {
+  color: #07c160;
+}
+
+.transfer-amount.expense {
+  color: #ee0a24;
+}
+
+.transfer-bank {
+  max-width: 100%;
+  font-size: 12px;
+  color: #323233;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.transfer-time {
+  font-size: 11px;
+  color: #969799;
+}
+
+.transfer-arrow {
+  font-size: 18px;
+  color: #1989fa;
+  padding: 0 10px;
+  flex-shrink: 0;
 }
 
 /* 立即记账按钮 */

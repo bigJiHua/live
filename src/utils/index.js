@@ -18,3 +18,6 @@ export * as userApi from './api/user'
 
 // 待办事项 API
 export * as todoApi from './api/todo'
+
+// 固定周期支出提醒 API
+export * as recurringApi from './api/recurring'

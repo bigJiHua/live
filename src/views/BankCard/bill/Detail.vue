@@ -64,6 +64,9 @@
 
       <!-- 操作按钮 -->
       <div class="action-section">
+        <van-button plain block round type="primary" @click="goToLedger">
+          查看流水明细
+        </van-button>
         <van-button type="primary" block round @click="goToRepay">
           添加还款记录
         </van-button>
@@ -128,6 +131,11 @@ const formatDate = (date) => {
 // 返回
 const onClickLeft = () => {
   router.back();
+};
+
+// 查看流水明细
+const goToLedger = () => {
+  router.push(`/card/bill/ledger?id=${billData.value.id}`);
 };
 
 // 添加还款记录

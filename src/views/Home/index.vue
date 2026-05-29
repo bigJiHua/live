@@ -74,7 +74,7 @@
     </div>
 
     <!-- TODO 注释 -->
-    <div
+    <div v-if="showDemoInfo"
       style="
         padding: 12px 16px;
         font-size: 13px;
@@ -207,6 +207,7 @@ const recentItems = ref([]);
 const showAmount = ref(true);
 const topReminder = ref(null); // 最重要的1条提醒
 const todaySalaryData = ref(null); // 今日薪酬数据
+const showDemoInfo = import.meta.env.VITE_APP_DEMO === 'true'
 
 // 日期
 const now = new Date();
@@ -325,11 +326,31 @@ const goToAddFlow = () => {
   router.push("/finance/add");
 };
 
-const formatMoney = (val) =>
-  Number(val || 0).toLocaleString("zh-CN", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+const formatMoney = (val) => {
+  const v = Number(val || 0)
+  const isNegative = v < 0
+  const abs = Math.abs(v)
+  let result
+  if (abs >= 100000000) {
+    const yi = abs / 100000000
+    const intPart = Math.floor(yi)
+    let decPart = Math.round((yi - intPart) * 1000)
+    if (decPart >= 1000) decPart = 999
+    result = intPart + '.' + String(decPart).padStart(3, '0') + '亿'
+  } else if (abs >= 10000) {
+    const wan = abs / 10000
+    const intPart = Math.floor(wan)
+    let decPart = Math.round((wan - intPart) * 1000)
+    if (decPart >= 1000) decPart = 999
+    result = intPart + '.' + String(decPart).padStart(3, '0') + '万'
+  } else {
+    const intPart = Math.floor(abs)
+    let decPart = Math.round((abs - intPart) * 100)
+    if (decPart >= 100) decPart = 99
+    result = intPart + '.' + String(decPart).padStart(2, '0')
+  }
+  return (isNegative ? '-' : '') + result
+}
 
 // 流水类型文字
 const getTransText = (type) => {

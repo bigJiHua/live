@@ -48,54 +48,175 @@
         >
           <div class="date-header">{{ formatDateHeader(date) }}</div>
           <div class="date-items">
-            <div
-              v-for="item in group"
-              :key="item.id"
-              class="flow-item"
-              @click="goDetail(item)"
-            >
-              <div class="item-left">
-                <div class="category-icon">
-                  <van-icon :name="getCategoryIcon(item.category_name)" />
-                </div>
-                <div class="item-info">
-                  <div class="item-title">
-                    {{ getCategoryName(item) }}
+            <template v-for="item in group" :key="item.type === 'transfer' ? item.expense.id : item.data.id">
+              <!-- 转账合并展示 -->
+              <div v-if="item.type === 'transfer'" class="transfer-item">
+                <div class="flow-item transfer-flow" @click="toggleTransferExpand(item.expense.id)">
+                  <div class="item-left">
+                    <div class="category-icon transfer-icon-bg">
+                      <van-icon name="exchange" />
+                    </div>
+                    <div class="item-info">
+                      <div class="item-title">{{ item.isExplicit ? '转账' : '疑似转账' }}</div>
+                      <div class="item-desc">
+                        {{ getCardDisplay(item.expense) }} → {{ getCardDisplay(item.income) }}
+                      </div>
+                      <div class="transfer-times-inline">
+                        <span class="time-out">{{ formatTime(item.expense.create_time) }}</span>
+                        <span class="time-sep">/</span>
+                        <span class="time-in">{{ formatTime(item.income.create_time) }}</span>
+                      </div>
+                    </div>
                   </div>
-                  <div class="item-desc">
-                    {{ item.pay_method || "-" }} ·
-                    {{ formatTime(item.create_time) }}
+                  <div class="item-right">
+                    <div class="transfer-amounts">
+                      <span class="amount-tag expense">出 {{ formatAmount(item.expense.amount) }}</span>
+                      <span class="amount-tag income">进 {{ formatAmount(item.income.amount) }}</span>
+                      <van-icon :name="expandedTransferIds.has(item.expense.id) ? 'arrow-up' : 'arrow-down'" size="12" style="color:#969799;margin-left:4px" />
+                    </div>
                   </div>
-                  <div
-                    v-if="item.card_id && !['xxxx', 'yyyy'].includes(item.card_id)"
-                    class="card-tag-inline"
-                  >
-                    <van-image
-                      v-if="getCardBankIcon(item.card_id)"
-                      width="14"
-                      height="14"
-                      :src="getFullUrl(getCardBankIcon(item.card_id))"
-                      fit="contain"
-                      class="card-tag-icon"
-                    />
-                    <span>{{ getCardName(item.card_id) }}</span>
-                  </div>
-                </div>
-              </div>
-              <div class="item-right">
-                <div
-                  class="amount"
-                  :class="item.direction === 1 ? 'income' : 'expense'"
-                >
-                  <span v-if="isForeignCurrency(item)" class="currency-tag">
-                    {{ getCurrencySymbol(item.currency) }}
-                  </span>
-                  {{ item.direction === 1 ? "+" : "-"
-                  }}{{ formatAmount(item.amount) }}
                 </div>
 
+                <!-- 展开态：原始两笔明细（复用 flow-item 样式） -->
+                <div v-if="expandedTransferIds.has(item.expense.id)" class="transfer-detail">
+                  <div class="flow-item" @click.stop="goDetail(item.expense)">
+                    <div class="item-left">
+                      <div class="category-icon">
+                        <van-icon :name="getCategoryIcon(item.expense.category_name)" />
+                      </div>
+                      <div class="item-info">
+                        <div class="item-title">{{ getCategoryName(item.expense) }}</div>
+                        <div class="item-desc">
+                          {{ item.expense.pay_method || '-' }} ·
+                          {{ formatTime(item.expense.create_time) }}
+                        </div>
+                        <div v-if="item.expense.card_id && !['xxxx','yyyy'].includes(item.expense.card_id)" class="card-tag-inline">
+                          <van-image v-if="getCardBankIcon(item.expense.card_id)" width="14" height="14" :src="getFullUrl(getCardBankIcon(item.expense.card_id))" fit="contain" class="card-tag-icon" />
+                          <span>{{ getCardName(item.expense.card_id) }}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="item-right">
+                      <div class="amount expense">-{{ formatAmount(item.expense.amount) }}</div>
+                    </div>
+                  </div>
+                  <div class="flow-item" @click.stop="goDetail(item.income)">
+                    <div class="item-left">
+                      <div class="category-icon">
+                        <van-icon :name="getCategoryIcon(item.income.category_name)" />
+                      </div>
+                      <div class="item-info">
+                        <div class="item-title">{{ getCategoryName(item.income) }}</div>
+                        <div class="item-desc">
+                          {{ item.income.pay_method || '-' }} ·
+                          {{ formatTime(item.income.create_time) }}
+                        </div>
+                        <div v-if="item.income.card_id && !['xxxx','yyyy'].includes(item.income.card_id)" class="card-tag-inline">
+                          <van-image v-if="getCardBankIcon(item.income.card_id)" width="14" height="14" :src="getFullUrl(getCardBankIcon(item.income.card_id))" fit="contain" class="card-tag-icon" />
+                          <span>{{ getCardName(item.income.card_id) }}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="item-right">
+                      <div class="amount income">+{{ formatAmount(item.income.amount) }}</div>
+                    </div>
+                  </div>
+                </div>
               </div>
-            </div>
+
+              <!-- 对外转账单笔展示 -->
+              <div
+                v-else-if="item.type === 'external-transfer'"
+                class="flow-item external-transfer"
+                @click="goDetail(item.data)"
+              >
+                <div class="item-left">
+                  <div class="category-icon transfer-icon">
+                    <van-icon name="exchange" />
+                  </div>
+                  <div class="item-info">
+                    <div class="item-title">
+                      <van-tag type="warning" size="small" style="margin-right:4px">对外转账</van-tag>
+                      {{ getCategoryName(item.data) }}
+                    </div>
+                    <div class="item-desc">
+                      {{ item.data.pay_method || "-" }} ·
+                      {{ formatTime(item.data.create_time) }}
+                    </div>
+                    <div
+                      v-if="item.data.card_id && !['xxxx', 'yyyy'].includes(item.data.card_id)"
+                      class="card-tag-inline"
+                    >
+                      <van-image
+                        v-if="getCardBankIcon(item.data.card_id)"
+                        width="14"
+                        height="14"
+                        :src="getFullUrl(getCardBankIcon(item.data.card_id))"
+                        fit="contain"
+                        class="card-tag-icon"
+                      />
+                      <span>{{ getCardName(item.data.card_id) }}</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="item-right">
+                  <div class="amount expense">
+                    <span v-if="isForeignCurrency(item.data)" class="currency-tag">
+                      {{ getCurrencySymbol(item.data.currency) }}
+                    </span>
+                    -{{ formatAmount(item.data.amount) }}
+                  </div>
+                </div>
+              </div>
+
+              <!-- 普通流水 -->
+              <div
+                v-else
+                class="flow-item"
+                @click="goDetail(item.data)"
+              >
+                <div class="item-left">
+                  <div class="category-icon">
+                    <van-icon :name="getCategoryIcon(item.data.category_name)" />
+                  </div>
+                  <div class="item-info">
+                    <div class="item-title">
+                      {{ getCategoryName(item.data) }}
+                    </div>
+                    <div class="item-desc">
+                      {{ item.data.pay_method || "-" }} ·
+                      {{ formatTime(item.data.create_time) }}
+                    </div>
+                    <div
+                      v-if="item.data.card_id && !['xxxx', 'yyyy'].includes(item.data.card_id)"
+                      class="card-tag-inline"
+                    >
+                      <van-image
+                        v-if="getCardBankIcon(item.data.card_id)"
+                        width="14"
+                        height="14"
+                        :src="getFullUrl(getCardBankIcon(item.data.card_id))"
+                        fit="contain"
+                        class="card-tag-icon"
+                      />
+                      <span>{{ getCardName(item.data.card_id) }}</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="item-right">
+                  <div
+                    class="amount"
+                    :class="item.data.direction === 1 ? 'income' : 'expense'"
+                  >
+                    <span v-if="isForeignCurrency(item.data)" class="currency-tag">
+                      {{ getCurrencySymbol(item.data.currency) }}
+                    </span>
+                    {{ item.data.direction === 1 ? "+" : "-"
+                    }}{{ formatAmount(item.data.amount) }}
+                  </div>
+                </div>
+              </div>
+            </template>
           </div>
         </div>
 
@@ -119,7 +240,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, watch } from "vue";
 import { useRouter } from "vue-router";
 import { showToast } from "vant";
 import dayjs from "dayjs";
@@ -155,6 +276,16 @@ const limit = 20;
 const summaryData = ref(null);
 const cardList = ref([]);
 const bankList = ref([]);
+
+// 转账展开状态
+const expandedTransferIds = ref(new Set());
+
+const toggleTransferExpand = (expenseId) => {
+  const s = new Set(expandedTransferIds.value);
+  if (s.has(expenseId)) s.delete(expenseId);
+  else s.add(expenseId);
+  expandedTransferIds.value = s;
+};
 
 // 获取完整 URL
 const getFullUrl = (path) => {
@@ -249,6 +380,23 @@ const getCategoryName = (item) => {
   return item.category_name || "未知分类";
 };
 
+// 获取卡片简略显示名（转账概览用）
+const getCardDisplay = (item) => {
+  const cardId = item.card_id;
+  if (!cardId || cardId === 'xxxx') return '现金';
+  if (cardId === 'yyyy') return '余额';
+  const card = cardList.value.find((c) => c.id === cardId);
+  if (!card) return item.pay_method || '未知';
+  const bankId = card.bank_id || card.bankId;
+  const bank = bankId ? getBankInfo(bankId) : null;
+  const alias = bank?.name || card.alias || card.bank_name || '';
+  const last4 = card.card_last4 || card.last4_no || card.last4No || '';
+  if (alias && last4) return `${alias} ${last4}`;
+  if (alias) return alias;
+  if (last4) return last4;
+  return '未知';
+};
+
 const getCardName = (id) => {
   if (!id) return "";
   if (id === "xxxx") return "现金";
@@ -259,9 +407,9 @@ const getCardName = (id) => {
   const bank = bankId ? getBankInfo(bankId) : null;
   const bankName = bank?.name || card.alias || card.bank_name || "";
   const last4 = card.card_last4 || card.last4_no || card.last4No || "";
-  if (bankName && last4) return `${bankName} ****${last4}`;
+  if (bankName && last4) return `${bankName} ${last4}`;
   if (bankName) return bankName;
-  if (last4) return `****${last4}`;
+  if (last4) return last4;
   return card.alias || card.bank_name || id;
 };
 
@@ -275,17 +423,88 @@ const getCardBankIcon = (id) => {
   return bank?.icon_url || bank?.iconUrl || "";
 };
 
-const groupedList = computed(() => {
+// ── 转账检测 + 分组输出（watch list 每次全量重算）──
+const _processList = (items) => {
+  // 第一趟：找配对
+  const pairs = [];
+  const usedExpenseIds = new Set();
+  const usedIncomeIds = new Set();
+
+  const addPair = (expense, income, isExplicit) => {
+    pairs.push({ expense, income, isExplicit });
+    usedExpenseIds.add(expense.id);
+    usedIncomeIds.add(income.id);
+  };
+
+  const transferGroups = items.reduce((map, item) => {
+    if (item.category_id === 'CATEGORY_REPAY' || !item.transfer_group_id) return map;
+    if (!map[item.transfer_group_id]) map[item.transfer_group_id] = [];
+    map[item.transfer_group_id].push(item);
+    return map;
+  }, {});
+
+  Object.values(transferGroups).forEach((group) => {
+    const expense = group.find((item) => item.direction === 0 || item.direction === 'expense');
+    const income = group.find((item) => item.direction === 1 || item.direction === 'income');
+    if (expense && income) addPair(expense, income, true);
+  });
+
+  items.forEach((item) => {
+    if (usedExpenseIds.has(item.id)) return;
+    if (item.category_id === 'CATEGORY_REPAY') return;
+    const isExpense = item.direction === 0 || item.direction === 'expense'
+    if (!isExpense) return;
+    const date = (item.trans_date || '').slice(0, 10);
+    const match = items.find((inc) => {
+      if (inc.id === item.id || usedIncomeIds.has(inc.id)) return false;
+      if (inc.category_id === 'CATEGORY_REPAY') return false;
+      const isInc = inc.direction === 1 || inc.direction === 'income';
+      if (!isInc) return false;
+      const incDate = (inc.trans_date || '').slice(0, 10);
+      return incDate === date &&
+        Math.abs(Number(item.amount || 0) - Number(inc.amount || 0)) < 0.01 &&
+        (item.card_id || 'none') !== (inc.card_id || 'none2')
+    });
+    if (match) {
+      addPair(item, match, item.pay_type === '转账' && match.pay_type === '转账')
+    }
+  });
+
+  // 第二趟：构建展示项
+  const expenseIds = new Set(pairs.map(p => p.expense.id));
+  const incomeIds = new Set(pairs.map(p => p.income.id));
+  const processed = [];
+  items.forEach((item) => {
+    if (expenseIds.has(item.id)) {
+      const pair = pairs.find(p => p.expense.id === item.id);
+      if (pair) processed.push({ type: 'transfer', ...pair });
+    } else if (!incomeIds.has(item.id)) {
+      if (item.pay_type === '转账') {
+        processed.push({ type: 'external-transfer', data: item });
+      } else {
+        processed.push({ type: 'flow', data: item });
+      }
+    }
+  });
+
+  // 按日期分组
   const groups = {};
-  list.value.forEach((item) => {
-    const date = item.trans_date;
+  processed.forEach((item) => {
+    const date = item.type === 'transfer'
+      ? (item.expense.trans_date || '').slice(0, 10)
+      : (item.data.trans_date || '').slice(0, 10);
     if (date) {
       if (!groups[date]) groups[date] = [];
       groups[date].push(item);
     }
   });
   return groups;
-});
+};
+
+const groupedList = ref({});
+watch(list, (items) => {
+  groupedList.value = _processList(items);
+}, { immediate: true });
 
 const loadSummary = async () => {
   try {
@@ -328,8 +547,12 @@ const loadData = async () => {
     const data = res.data?.list || res.data || [];
     const pagination = res.data?.pagination || {};
 
-    if (page.value === 1) list.value = data;
-    else list.value.push(...data);
+    if (page.value === 1) {
+      list.value = data;
+    } else {
+      const seenIds = new Set(list.value.map((item) => item.id));
+      list.value = [...list.value, ...data.filter((item) => !seenIds.has(item.id))];
+    }
 
     finished.value =
       data.length < limit || page.value >= (pagination.totalPages || 1);
@@ -551,5 +774,67 @@ const goCalendar = () => router.push("/finance/flow/calendar");
 .card-tag-icon {
   border-radius: 2px;
   flex-shrink: 0;
+}
+
+/* ── 转账合并展示 ── */
+.transfer-item {
+  position: relative;
+}
+.transfer-item::before {
+  content: '';
+  position: absolute;
+  left: 16px;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: #1989fa;
+  border-radius: 2px;
+}
+.transfer-flow {
+  background: #f0f7ff;
+  margin: 12px 0 12px 16px;
+}
+.transfer-icon-bg {
+  background: #e6f2ff !important;
+  color: #1989fa !important;
+}
+.transfer-times-inline {
+  font-size: 11px;
+  color: #c8c9cc;
+  margin-top: 2px;
+}
+.transfer-times-inline .time-out { color: #969799; }
+.transfer-times-inline .time-sep { margin: 0 4px; color: #dcdee0; }
+.transfer-times-inline .time-in { color: #969799; }
+
+.transfer-amounts {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+.amount-tag {
+  font-size: 12px;
+  font-weight: 600;
+  font-family: "DIN Alternate", -apple-system, sans-serif;
+}
+.amount-tag.expense { color: #ee0a24; }
+.amount-tag.income { color: #07c160; }
+
+/* 展开后明细 */
+.transfer-detail {
+  margin: 0 16px 0 28px;
+}
+.transfer-detail .flow-item {
+  margin-left: 0 !important;
+  padding: 10px 14px;
+  background: #fff;
+  border-radius: 8px;
+  margin-top: 6px;
+}
+/* 对外转账 */
+.external-transfer .transfer-icon {
+  background: #fff7e6;
+  color: #ff976a;
 }
 </style>

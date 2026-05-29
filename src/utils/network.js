@@ -1,88 +1,108 @@
 /**
  * 网络信息获取工具
- * 使用 ip.sb 获取用户真实 IP 和网络信息
+ *
+ * 策略：浏览器 GPS 优先（仅一次）→ 回退 ip.sb（后端代理）
+ * 用于登录/API请求时的客户端上下文采集
  */
-
 import axios from "axios";
+import { getSecurityHeaders } from "./securityHeaders";
 
-// 缓存网络信息
+// 缓存
 let cachedNetworkInfo = null;
 let cacheTimestamp = null;
-const CACHE_DURATION = 30 * 60 * 1000; // 30分钟缓存，避免频繁请求
+const CACHE_DURATION = 30 * 60 * 1000; // 30分钟
+
+// GPS 一次性标记：被拒后本次会话不再尝试
+let gpsTried = false;
+let gpsDenied = false;
 
 /**
- * 从 ip.sb 获取网络信息
- * ip.sb 提供的信息包括：
- * - IP 地址
- * - 国家、城市、地区
- * - ISP、ASN
- * - 时区
- * - 经纬度
+ * 静默尝试 GPS（仅一次，被拒后不再重试）
  */
+async function tryGpsQuietly() {
+  if (gpsTried && gpsDenied) return null;
+  if (!navigator.geolocation) { gpsTried = true; gpsDenied = true; return null; }
+
+  // 先查权限，denied 直接跳过
+  let permissionState = "prompt";
+  if (navigator.permissions) {
+    try {
+      const r = await navigator.permissions.query({ name: "geolocation" });
+      permissionState = r.state;
+    } catch {}
+  }
+  if (permissionState === "denied") {
+    gpsTried = true;
+    gpsDenied = true;
+    return null;
+  }
+
+  gpsTried = true;
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => { gpsDenied = true; resolve(null); }, 3000);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        clearTimeout(timer);
+        resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+      },
+      () => {
+        clearTimeout(timer);
+        gpsDenied = true;
+        resolve(null);
+      },
+      { enableHighAccuracy: false, timeout: 3000, maximumAge: 600000 }
+    );
+  });
+}
+
 export async function getNetworkInfo() {
-  // 检查缓存
-  if (
-    cachedNetworkInfo &&
-    cacheTimestamp &&
-    Date.now() - cacheTimestamp < CACHE_DURATION
-  ) {
+  if (cachedNetworkInfo && cacheTimestamp && Date.now() - cacheTimestamp < CACHE_DURATION) {
     return cachedNetworkInfo;
   }
 
-  try {
-    // 使用 ip.sb 的 JSON 接口
-    const response = await axios.get("https://api.ip.sb/geoip", {
-      timeout: 5000,
-      headers: {
-        Accept: "application/json",
-      },
-    });
+  const gpsPromise = tryGpsQuietly();
+  const ipPromise = axios.get("/api/v1/geo/network", {
+    timeout: 5000,
+    headers: getSecurityHeaders(),
+  }).catch(() => ({ data: null }));
 
-    if (response.data) {
-      const networkInfo = {
-        ip: response.data.ip || "",
-        country: response.data.country || "",
-        countryCode: response.data.country_code || "",
-        region: response.data.region || "",
-        city: response.data.city || "",
-        isp: response.data.isp || "",
-        asn: response.data.asn || "",
-        timezone: response.data.timezone || "",
-        latitude: response.data.latitude || null,
-        longitude: response.data.longitude || null,
-        // 添加本地时间戳
-        timestamp: Date.now(),
-      };
+  const gps = await gpsPromise;
 
-      // 更新缓存
-      cachedNetworkInfo = networkInfo;
-      cacheTimestamp = Date.now();
-
-      return networkInfo;
-    }
-
-    throw new Error("无效的响应数据");
-  } catch (error) {
-    console.error("获取网络信息失败:", error);
-
-    // 返回基础信息（即使失败也返回本地可获取的信息）
-    return {
-      ip: "unknown",
-      error: error.message,
+  if (gps) {
+    const ipRes = await ipPromise;
+    const ipData = ipRes?.data?.status === 200 ? ipRes.data.data : {};
+    const info = {
+      ip: ipData.ip || "",
+      country: ipData.country || "",
+      countryCode: ipData.countryCode || "",
+      region: ipData.region || "",
+      city: ipData.city || "",
+      isp: ipData.isp || "",
+      asn: ipData.asn || "",
+      timezone: ipData.timezone || "",
+      latitude: gps.lat,
+      longitude: gps.lng,
+      source: "gps+ip",
       timestamp: Date.now(),
     };
+    cachedNetworkInfo = info;
+    cacheTimestamp = Date.now();
+    return info;
   }
+
+  const ipRes = await ipPromise;
+  if (ipRes?.data?.status === 200 && ipRes.data.data) {
+    const info = { ...ipRes.data.data, timestamp: Date.now() };
+    cachedNetworkInfo = info;
+    cacheTimestamp = Date.now();
+    return info;
+  }
+
+  return { ip: "unknown", timestamp: Date.now() };
 }
 
-/**
- * 获取本地网络信息（无需请求外部服务）
- */
 export function getLocalNetworkInfo() {
-  const connection =
-    navigator.connection ||
-    navigator.mozConnection ||
-    navigator.webkitConnection;
-
+  const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
   return {
     online: navigator.onLine,
     connectionType: connection ? connection.effectiveType : "unknown",
@@ -92,24 +112,14 @@ export function getLocalNetworkInfo() {
   };
 }
 
-/**
- * 获取完整的网络信息（外部 + 本地）
- */
 export async function getFullNetworkInfo() {
   const [externalInfo, localInfo] = await Promise.all([
     getNetworkInfo().catch(() => ({ ip: "unknown" })),
     Promise.resolve(getLocalNetworkInfo()),
   ]);
-
-  return {
-    external: externalInfo,
-    local: localInfo,
-  };
+  return { external: externalInfo, local: localInfo };
 }
 
-/**
- * 清除网络信息缓存
- */
 export function clearNetworkCache() {
   cachedNetworkInfo = null;
   cacheTimestamp = null;

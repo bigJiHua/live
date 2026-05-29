@@ -2,9 +2,7 @@
   <div class="page-finance">
     <div class="app-card finance-header">
       <div class="month-selector" @click="showMonthPicker = true">
-        <span class="num-font">{{ currentYear }}</span
-        >年<span class="num-font">{{ currentMonth }}</span
-        >月
+        <span class="num-font">{{ currentYear }}</span>年<span class="num-font">{{ currentMonth }}</span>月
         <van-icon name="arrow-down" />
       </div>
 
@@ -28,14 +26,8 @@
           <span class="label">结余：</span>
           <span class="val num-font">￥{{ formatAmount(stats.balance) }}</span>
         </div>
-        <van-button
-          plain
-          size="small"
-          type="primary"
-          class="quick-add-btn"
-          icon="plus"
-          @click="$router.push('/finance/add')"
-        >
+        <van-button plain size="small" type="primary" class="quick-add-btn" icon="plus"
+          @click="$router.push('/finance/add')">
           记一笔
         </van-button>
       </div>
@@ -45,51 +37,35 @@
       <div class="grid-section-title">财务把控中心</div>
       <van-grid :column-num="3" :border="false" clickable>
         <van-grid-item @click="goFunction('assets')">
-          <template #icon
-            ><van-icon name="gem" class="grid-icon purple"
-          /></template>
+          <template #icon><van-icon name="gem" class="grid-icon purple" /></template>
           <template #text><span class="grid-text">系统账户余额</span></template>
         </van-grid-item>
         <van-grid-item @click="goFunction('flow')">
-          <template #icon
-            ><van-icon name="orders-o" class="grid-icon blue"
-          /></template>
+          <template #icon><van-icon name="orders-o" class="grid-icon blue" /></template>
           <template #text><span class="grid-text">流水明细</span></template>
         </van-grid-item>
         <van-grid-item @click="goFunction('fixed-assets')">
-          <template #icon
-            ><van-icon name="shop-o" class="grid-icon teal"
-          /></template>
+          <template #icon><van-icon name="shop-o" class="grid-icon teal" /></template>
           <template #text><span class="grid-text">固定资产</span></template>
         </van-grid-item>
         <van-grid-item @click="goFunction('credit')">
-          <template #icon
-            ><van-icon name="credit-pay" class="grid-icon orange"
-          /></template>
+          <template #icon><van-icon name="credit-pay" class="grid-icon orange" /></template>
           <template #text><span class="grid-text">信用卡专项</span></template>
         </van-grid-item>
         <van-grid-item @click="goFunction('bill-list')">
-          <template #icon
-            ><van-icon name="todo-list-o" class="grid-icon red"
-          /></template>
+          <template #icon><van-icon name="todo-list-o" class="grid-icon red" /></template>
           <template #text><span class="grid-text">信用卡账单</span></template>
         </van-grid-item>
         <van-grid-item @click="goFunction('repay-list')">
-          <template #icon
-            ><van-icon name="paid" class="grid-icon green"
-          /></template>
+          <template #icon><van-icon name="paid" class="grid-icon green" /></template>
           <template #text><span class="grid-text">还款记录</span></template>
         </van-grid-item>
         <van-grid-item @click="goFunction('assets-reg')">
-          <template #icon
-            ><van-icon name="location-o" class="grid-icon teal"
-          /></template>
+          <template #icon><van-icon name="location-o" class="grid-icon teal" /></template>
           <template #text><span class="grid-text">资产结构登记</span></template>
         </van-grid-item>
         <van-grid-item @click="goFunction('assets-list')">
-          <template #icon
-            ><van-icon name="todo-list-o" class="grid-icon gray"
-          /></template>
+          <template #icon><van-icon name="todo-list-o" class="grid-icon gray" /></template>
           <template #text><span class="grid-text">登记记录</span></template>
         </van-grid-item>
         <!-- <van-grid-item @click="goFunction('super-calc')" class="special-item">
@@ -99,33 +75,30 @@
           <template #text><span class="grid-text">超级计算</span></template>
         </van-grid-item> -->
         <van-grid-item @click="goFunction('budget')">
-          <template #icon
-            ><van-icon name="balance-list" class="grid-icon cyan"
-          /></template>
+          <template #icon><van-icon name="balance-list" class="grid-icon cyan" /></template>
           <template #text><span class="grid-text">预算表</span></template>
         </van-grid-item>
-        <!-- <van-grid-item @click="goFunction('report')">
-          <template #icon
-            ><van-icon name="chart-trending-o" class="grid-icon blue"
-          /></template>
+        <van-grid-item @click="goFunction('recurring')">
+          <template #icon><van-icon name="clock-o" class="grid-icon pink" /></template>
+          <template #text><span class="grid-text">固定支出</span></template>
+        </van-grid-item>
+        <van-grid-item @click="goFunction('report')">
+          <template #icon><van-icon name="chart-trending-o" class="grid-icon blue" /></template>
           <template #text><span class="grid-text">报表</span></template>
         </van-grid-item>
         <van-grid-item @click="goFunction('invest')">
-          <template #icon
-            ><van-icon name="gold-coin-o" class="grid-icon gold"
-          /></template>
-          <template #text><span class="grid-text">理财预期</span></template>
-        </van-grid-item> -->
+          <template #icon><van-icon name="gold-coin-o" class="grid-icon gold" /></template>
+          <template #text><span class="grid-text">理财投资</span></template>
+        </van-grid-item>
+        <van-grid-item @click="goFunction('data-manage')">
+          <template #icon><van-icon name="notes-o" class="grid-icon gold" /></template>
+          <template #text><span class="grid-text">数据管理</span></template>
+        </van-grid-item>
       </van-grid>
     </div>
     <van-popup v-model:show="showMonthPicker" position="bottom" round>
-      <van-picker
-        title="选择月份"
-        v-model="selectedValues"
-        :columns="pickerColumns"
-        @confirm="onPickerConfirm"
-        @cancel="showMonthPicker = false"
-      />
+      <van-picker title="选择月份" v-model="selectedValues" :columns="pickerColumns" @confirm="onPickerConfirm"
+        @cancel="showMonthPicker = false" />
     </van-popup>
   </div>
 </template>
@@ -149,17 +122,31 @@ const selectedValues = ref([
 
 const stats = ref({ expense: 0, income: 0, balance: 0 });
 
-const formatAmount = (amount) => {
-  if (amount === null || amount === undefined) return "0.00";
-  const num = Number(amount);
-  // 超过1万显示为万
-  if (num >= 10000) {
-    return (num / 10000).toFixed(2) + "万";
+const formatAmount = (val) => {
+  if (val === null || val === undefined) return '0.00'
+  const v = Number(val)
+  const isNegative = v < 0
+  const abs = Math.abs(v)
+  let result
+  if (abs >= 100000000) {
+    const yi = abs / 100000000
+    const intPart = Math.floor(yi)
+    let decPart = Math.round((yi - intPart) * 1000)
+    if (decPart >= 1000) decPart = 999
+    result = intPart + '.' + String(decPart).padStart(3, '0') + '亿'
+  } else if (abs >= 10000) {
+    const wan = abs / 10000
+    const intPart = Math.floor(wan)
+    let decPart = Math.round((wan - intPart) * 1000)
+    if (decPart >= 1000) decPart = 999
+    result = intPart + '.' + String(decPart).padStart(3, '0') + '万'
+  } else {
+    const intPart = Math.floor(abs)
+    let decPart = Math.round((abs - intPart) * 100)
+    if (decPart >= 100) decPart = 99
+    result = intPart + '.' + String(decPart).padStart(2, '0')
   }
-  return num.toLocaleString("zh-CN", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+  return (isNegative ? '-' : '') + result
 };
 
 const pickerColumns = computed(() => {
@@ -216,8 +203,10 @@ const goFunction = (type) => {
     "assets-list": "/finance/assets/list",
     "fixed-assets": "/finance/fixed-asset",
     report: "/finance/report",
+    "data-manage": "/finance/data",
     budget: "/finance/budget",
-    invest: "/finance/invest",
+    recurring: "/finance/recurring",
+    invest: "/finance/report/fund",
   };
   if (routes[type]) router.push(routes[type]);
 };
@@ -227,8 +216,10 @@ onMounted(() => loadMonthStats());
 
 <style scoped>
 .page-finance {
+  height: 100vh;
   padding: 8px 16px;
 }
+
 .finance-header {
   background: white;
   padding: 20px;
@@ -236,6 +227,7 @@ onMounted(() => loadMonthStats());
   margin-bottom: 16px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
 }
+
 .month-selector {
   font-size: 14px;
   color: #646566;
@@ -244,15 +236,18 @@ onMounted(() => loadMonthStats());
   align-items: center;
   gap: 4px;
 }
+
 .info-item .label {
   font-size: 12px;
   color: #969799;
   margin-bottom: 4px;
 }
+
 .info-item .amount {
   font-size: 22px;
   font-weight: bold;
 }
+
 .header-footer {
   margin-top: 18px;
   padding-top: 15px;
@@ -261,26 +256,31 @@ onMounted(() => loadMonthStats());
   justify-content: space-between;
   align-items: center;
 }
+
 .net-assets .label {
   font-size: 12px;
   color: #969799;
 }
+
 .net-assets .val {
   font-size: 14px;
   color: #323233;
   font-weight: 500;
 }
+
 .quick-add-btn {
   padding: 0 15px;
   height: 32px;
   border-radius: 8px;
 }
+
 .menu-grid-wrapper {
   background: white;
   padding: 16px 8px;
   border-radius: 20px;
   margin-bottom: 16px;
 }
+
 .grid-section-title {
   font-size: 14px;
   font-weight: bold;
@@ -288,48 +288,62 @@ onMounted(() => loadMonthStats());
   margin-bottom: 15px;
   color: #323233;
 }
+
 .grid-icon {
   font-size: 26px;
   margin-bottom: 8px;
 }
+
 .grid-text {
   font-size: 13px;
   color: #646566;
 }
+
 .blue {
   color: #1989fa;
 }
+
 .green {
   color: #07c160;
 }
+
 .orange {
   color: #ff976a;
 }
+
 .red {
   color: #ee0a24;
 }
+
 .purple {
   color: #7232dd;
 }
+
 .cyan {
   color: #00bcd4;
 }
+
 .teal {
   color: #009688;
 }
+
 .pink {
   color: #e91e63;
 }
+
 .gold {
   color: #ffb300;
 }
+
 .special-item {
   background: #fff9e6;
   border-radius: 12px;
 }
+
 .text-income {
   color: #07c160;
 }
+
 .text-expense {
   color: #ee0a24;
 }

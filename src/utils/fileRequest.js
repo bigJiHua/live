@@ -27,6 +27,8 @@ async function getClientFullData() {
         login_ip: net.external?.ip || "unknown",
         login_location: `${net.external?.country || ""}-${net.external?.region || ""}-${net.external?.city || ""}`,
         login_isp: net.external?.isp || "",
+        login_lat: net.external?.latitude ?? null,
+        login_lng: net.external?.longitude ?? null,
         user_agent: ua.ua,
         os_info: `${ua.os.name} ${ua.os.version}`,
         browser_info: `${ua.browser.name} ${ua.browser.version}`,

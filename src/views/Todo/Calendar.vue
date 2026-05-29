@@ -99,12 +99,15 @@
             v-for="event in selectedEvents"
             :key="event.id"
             class="event-item"
-            :class="{ completed: event.status === '已完成' }"
+            :class="{ completed: event.status === '已完成', recurring: event.source === 'recurring' }"
             @click="showEventActions(event)"
           >
             <div class="event-content">
               <div class="event-title">{{ event.content }}</div>
               <div class="event-meta">
+                <van-tag v-if="event.source === 'recurring'" size="small" type="warning">
+                  固定支出
+                </van-tag>
                 <van-tag v-if="event.event_type" size="small" type="primary">
                   {{ getEventTypeName(event.event_type) }}
                 </van-tag>
@@ -114,12 +117,15 @@
                 <van-tag v-if="event.is_recurring" size="small" type="success"
                   >每年</van-tag
                 >
+                <span v-if="event.source === 'recurring'" class="event-amount">
+                  ￥{{ Number(event.amount || 0).toFixed(2) }}
+                </span>
               </div>
               <div class="event-remark" v-if="event.remark">
                 {{ event.remark }}
               </div>
             </div>
-            <van-icon name="arrow" class="arrow-icon" />
+            <van-icon :name="event.source === 'recurring' ? 'cash-back-record' : 'arrow'" class="arrow-icon" />
           </div>
         </div>
       </van-pull-refresh>
@@ -327,6 +333,7 @@
 <script setup>
 import { ref, computed, onMounted, watch } from "vue";
 import { showToast, showConfirmDialog, showSuccessToast } from "vant";
+import { useRouter } from "vue-router";
 import dayjs from "dayjs";
 import "dayjs/locale/zh-cn";
 
@@ -338,8 +345,10 @@ import {
   deleteTodo,
   getReminders,
 } from "@/utils/api/todo";
+import { updateRecurringMonthStatus } from "@/utils/api/recurring";
 
 dayjs.locale("zh-cn");
+const router = useRouter();
 
 const weekDays = ["日", "一", "二", "三", "四", "五", "六"];
 
@@ -529,8 +538,21 @@ const getEventTypeName = (type) => {
     birthday: "生日",
     anniversary: "纪念日",
     countdown: "倒数日",
+    fixed_expense: "固定支出",
   };
   return map[type] || type;
+};
+
+const getSelectedRecurringEvents = () => {
+  const dayData = (calendarData.value?.days || []).find(
+    (item) => item.date === selectedDate.value
+  );
+  return (dayData?.list || []).filter((item) => item.source === "recurring");
+};
+
+const syncSelectedRecurringEvents = () => {
+  const todos = selectedEvents.value.filter((item) => item.source !== "recurring");
+  selectedEvents.value = [...todos, ...getSelectedRecurringEvents()];
 };
 
 // 加载月数据
@@ -544,6 +566,7 @@ const loadCalendarMonth = async () => {
     console.log(res.data);
     
     calendarData.value = res.data || res;
+    syncSelectedRecurringEvents();
   } catch {
     showToast("加载日历失败");
   } finally {
@@ -567,9 +590,10 @@ const loadSelectedDateEvents = async () => {
       list = list.list;
     }
     // 确保是数组，并按 happen_date 过滤（前端二次过滤确保安全）
-    selectedEvents.value = (Array.isArray(list) ? list : []).filter(
+    const todoEvents = (Array.isArray(list) ? list : []).filter(
       (item) => item.happen_date === selectedDate.value
     );
+    selectedEvents.value = [...todoEvents, ...getSelectedRecurringEvents()];
   } catch {
     showToast("加载事件失败");
   } finally {
@@ -668,6 +692,21 @@ const handleAddEvent = async () => {
 // 显示事件操作菜单
 const showEventActions = (event) => {
   currentEvent.value = event;
+  if (event.source === "recurring") {
+    actionOptions.value = [
+      {
+        name: event.month_status === "done" ? "标记待处理" : "标记已处理",
+        callback: () => toggleRecurringComplete(event),
+      },
+      {
+        name: "管理固定支出",
+        callback: () => router.push("/finance/recurring"),
+      },
+    ];
+    showActions.value = true;
+    return;
+  }
+
   const isCompleted = event.status === "已完成";
   actionOptions.value = [
     {
@@ -685,6 +724,23 @@ const showEventActions = (event) => {
     },
   ];
   showActions.value = true;
+};
+
+const toggleRecurringComplete = async (event) => {
+  try {
+    const nextStatus = event.month_status === "done" ? "pending" : "done";
+    await updateRecurringMonthStatus(event.recurring_id, {
+      month: event.happen_date.substring(0, 7),
+      status: nextStatus,
+      amount: event.amount,
+    });
+    showSuccessToast("操作成功");
+    await loadCalendarMonth();
+    loadSelectedDateEvents();
+    loadReminders();
+  } catch (e) {
+    showToast(e.message || "操作失败");
+  }
 };
 
 // 操作选中

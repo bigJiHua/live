@@ -23,6 +23,9 @@ let isRetrying = false
 let pinDialogInstance = null
 let forceLoginFn = null // 由 response.js 注入
 let isPageLoad = false // 是否是页面首次加载时触发的验证
+let verifyContext = null
+
+const ROUTE_VERIFY_ACTION = 'route_verify'
 
 /**
  * 注册 PIN 弹窗实例
@@ -71,8 +74,39 @@ function checkAppOnlyHasPinOverlay() {
  * @param {object} originalRequest - 被拦截的原始请求配置
  * @returns {Promise} 验证成功 resolve，失败/锁定 reject
  */
-export function requestPinVerify(originalRequest) {
-  pendingRequests.push(originalRequest)
+export function requestPinVerify(originalRequest, verifyData = {}) {
+  const actionType = verifyData?.action_type || verifyData?.actionType
+  const isRouteVerify = actionType === ROUTE_VERIFY_ACTION
+  const currentIsRouteVerify = verifyContext?.action_type === ROUTE_VERIFY_ACTION
+
+  if (isVerifying && currentIsRouteVerify !== isRouteVerify) {
+    return Promise.reject(new Error('已有 PIN 验证正在进行'))
+  }
+
+  if (isRouteVerify && pendingRequests.length > 0) {
+    const hasSameChallenge = pendingRequests.some(req =>
+      req.__pinVerify?.action_type === ROUTE_VERIFY_ACTION &&
+      req.__pinVerify?.challengeId === verifyData.challengeId
+    )
+    if (!hasSameChallenge) {
+      return Promise.reject(new Error('已有风险操作正在验证'))
+    }
+
+    if (isVerifying) {
+      return new Promise((resolve, reject) => {
+        if (pinResolve) pinResolve.__extraResolvers.push({ resolve, reject })
+      })
+    }
+  }
+
+  pendingRequests.push({
+    ...originalRequest,
+    __pinVerify: verifyData,
+  })
+
+  if (isRouteVerify && !verifyContext) {
+    verifyContext = verifyData
+  }
 
   // 检测是否是页面首次加载时触发的验证
   // 通过检查 app 根元素下是否只有 PIN 弹窗来判断
@@ -114,17 +148,28 @@ export async function submitPin(pin) {
   const { securityApi } = await import('@/utils/api/security')
 
   try {
-    const res = await securityApi.verifyPin({ pin })
-    const data = res.data || res
+    const isRouteVerify = verifyContext?.action_type === ROUTE_VERIFY_ACTION
+    const payload = isRouteVerify
+      ? {
+          pin,
+          challengeId: verifyContext.challengeId,
+          requestUrl: verifyContext.requestUrl,
+          method: verifyContext.method,
+        }
+      : { pin }
 
-    if (data.code === PIN_CODE.SUCCESS || data.status === 200) {
-      onPinSuccess()
-    } else if (data.code === PIN_CODE.ERROR) {
-      pinDialogInstance.setError(data.message || 'PIN 码错误')
-    } else if (data.code === PIN_CODE.LOCKED) {
-      onPinLocked(data.message)
+    const res = isRouteVerify
+      ? await securityApi.verifyRoutePin(payload)
+      : await securityApi.verifyPin(payload)
+
+    if (res.code === PIN_CODE.SUCCESS || res.status === 200) {
+      onPinSuccess(res.data || res)
+    } else if (res.code === PIN_CODE.ERROR) {
+      pinDialogInstance.setError(res.message || 'PIN 码错误')
+    } else if (res.code === PIN_CODE.LOCKED) {
+      onPinLocked(res.message)
     } else {
-      pinDialogInstance.setError(data.message || '验证失败')
+      pinDialogInstance.setError(res.message || '验证失败')
     }
   } catch (err) {
     const resData = err.response?.data || err
@@ -141,7 +186,7 @@ export async function submitPin(pin) {
 /**
  * PIN 验证成功 → 关闭弹窗，重发所有被拦截的请求
  */
-async function onPinSuccess() {
+async function onPinSuccess(verifyResult = {}) {
   if (pinDialogInstance) pinDialogInstance.hide()
 
   if (isRetrying) return
@@ -150,6 +195,7 @@ async function onPinSuccess() {
   const requests = [...pendingRequests]
   pendingRequests = []
   isVerifying = false
+  verifyContext = null
 
   // resolve 所有等待的 Promise
   if (pinResolve) {
@@ -173,6 +219,16 @@ async function onPinSuccess() {
   // 依次重发请求（串行避免并发风暴）
   for (const req of requests) {
     try {
+      const pinVerify = req.__pinVerify
+      delete req.__pinVerify
+
+      if (pinVerify?.action_type === ROUTE_VERIFY_ACTION && verifyResult.token) {
+        req.headers = {
+          ...(req.headers || {}),
+          [verifyResult.headerName || 'x-route-verify-token']: verifyResult.token,
+        }
+      }
+
       await axios(req)
     } catch (e) {
       console.error('[PIN] Retry request failed:', e)
@@ -191,6 +247,7 @@ function onPinLocked(message) {
   isVerifying = false
   pendingRequests = []
   isRetrying = false
+  verifyContext = null
 
   if (pinReject) {
     pinReject(new Error(message || 'PIN 已锁定'))
@@ -216,6 +273,7 @@ export function cancelPinVerify() {
   isVerifying = false
   pendingRequests = []
   isRetrying = false
+  verifyContext = null
 
   if (pinReject) {
     pinReject(new Error('PIN 验证已取消'))

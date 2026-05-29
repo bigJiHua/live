@@ -159,3 +159,19 @@ export function reverseCreditExpense(id) {
 export function reverseCreditRepay(id) {
   return request.post(`/account/${id}/reverse/credit-repay`)
 }
+
+/**
+ * 转账冲正（自转/提现撤销）
+ * @param {string} id - 流水ID
+ */
+export function reverseTransfer(id) {
+  return request.post(`/account/${id}/reverse/transfer`)
+}
+
+/**
+ * 获取转账明细列表
+ * @param {object} params - { page, limit }
+ */
+export function getTransferList(params) {
+  return request.get('/account/transfer/list', { params })
+}

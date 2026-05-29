@@ -173,7 +173,7 @@
                 size="small"
                 type="primary"
                 native-type="button"
-                :disabled="passwordForm.countdown > 0"
+                :disabled="!canSendPasswordCode"
                 @click="handleSendPasswordCode"
               >
                 {{
@@ -242,6 +242,17 @@ const passwordForm = reactive({
   confirm: "",
   code: "",
   countdown: 0,
+});
+
+// 密码表单是否填完且两次新密码一致
+const canSendPasswordCode = computed(() => {
+  return (
+    passwordForm.old.trim() &&
+    passwordForm.new.trim() &&
+    passwordForm.confirm.trim() &&
+    passwordForm.new === passwordForm.confirm &&
+    passwordForm.countdown <= 0
+  );
 });
 
 // 头像菜单选项
@@ -369,6 +380,12 @@ const handleUpdatePassword = () => {
 };
 
 const handleSendPasswordCode = async () => {
+  if (!passwordForm.old.trim() || !passwordForm.new.trim() || !passwordForm.confirm.trim()) {
+    return showToast("请先填写完整信息");
+  }
+  if (passwordForm.new !== passwordForm.confirm) {
+    return showToast("两次输入的新密码不一致");
+  }
   try {
     await authApi.sendEmailCode({ email: userStore.email, type: "pwd" });
     showToast("验证码已发送");

@@ -94,7 +94,6 @@ body {
   background: var(--theme-bg-secondary);
   border-radius: var(--app-radius);
   padding: 16px;
-  margin: 12px;
   box-shadow: var(--app-shadow);
 }
 

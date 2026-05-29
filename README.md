@@ -747,6 +747,10 @@ export const useUserStore = defineStore('user', {
 
 ---
 
+## 更新日志
+
+详见 [CHANGELOG_2026-05-29.md](CHANGELOG_2026-05-29.md)
+
 ## 版本信息
 
 | 版本 | 日期 | 说明 |

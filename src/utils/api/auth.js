@@ -78,4 +78,9 @@ export const authApi = {
   lockSystem() {
     return request.post("/auth/lock-system");
   },
+
+  // 获取当前用户登录日志（最近30条）
+  getLoginLogs() {
+    return request.get("/auth/login-logs");
+  },
 };

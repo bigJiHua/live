@@ -142,7 +142,7 @@ onMounted(() => {
 .page-diary {
   padding: 8px;
   background-color: #f4f4f5;
-  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 .loading-center {

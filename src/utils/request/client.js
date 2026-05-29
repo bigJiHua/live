@@ -68,6 +68,9 @@ async function collectClientData() {
     ].filter(Boolean).join('-'),
     loginIsp: netInfo.external?.isp || '',
     connectionType: netInfo.local?.connectionType,
+    // GPS 坐标（静默采集，可能为空）
+    loginLat: netInfo.external?.latitude ?? null,
+    loginLng: netInfo.external?.longitude ?? null,
     
     // UA 信息
     ...uaInfo,

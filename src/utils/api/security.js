@@ -7,6 +7,7 @@ import request from "@/utils/request";
  * |------|------|------|--------|
  * | GET | `/api/v1/security/pin/check` | 检查 PIN 设置状态 | authGuard |
  * | POST | `/api/v1/security/pin/verify` | 验证 PIN 码 | authGuard |
+ * | POST | `/api/v1/security/pin/route-verify` | 风险路由 PIN 验证 | authGuard |
  * | POST | `/api/v1/security/pin/set` | 设置 PIN 码 | authGuard |
  * | POST | `/api/v1/security/pin/change` | 修改 PIN 码 | authGuard |
  * | POST | `/api/v1/security/pin/reset` | 重置 PIN 码 | authGuard |
@@ -20,6 +21,11 @@ export const securityApi = {
   // 验证 PIN 码
   verifyPin(data) {
     return request.post("/security/pin/verify", data);
+  },
+
+  // 验证风险路由 PIN
+  verifyRoutePin(data) {
+    return request.post("/security/pin/route-verify", data);
   },
 
   // 设置 PIN 码

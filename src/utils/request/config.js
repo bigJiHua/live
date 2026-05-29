@@ -25,7 +25,7 @@ export const config = {
   encryptedMethods: ['post', 'put', 'delete'],
 
   /** 跳过加密的接口 */
-  skipEncryptionUrls: ['/auth/lock-system'],
+  skipEncryptionUrls: ['/auth/lock-system', '/data-manager/import/sql'],
 }
 
 export default config

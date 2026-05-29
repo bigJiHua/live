@@ -52,6 +52,7 @@
               />
               <span class="bill-card-name">{{ getCardDisplayName(item) }}</span>
               <span class="bill-card-last4" v-if="item.card_last4">**** {{ item.card_last4 }}</span>
+              <van-button size="mini" plain type="primary" class="detail-btn" @click.stop="goToLedger(item)">明细</van-button>
             </div>
             <div class="bill-fee-info">
               <span>年费 ¥{{ formatMoney(item.annual_fee) }}</span>
@@ -420,6 +421,11 @@ const goToDetail = (item) => {
   router.push(`/card/bill/detail?id=${item.id}`);
 };
 
+// 跳转到流水明细
+const goToLedger = (item) => {
+  router.push(`/card/bill/ledger?id=${item.id}`);
+};
+
 // 跳转到还款
 const goToRepay = (item) => {
   // 携带账单ID、卡ID等信息
@@ -526,6 +532,11 @@ onMounted(() => {
 .bill-card-last4 {
   font-size: 12px;
   color: #999;
+}
+
+.detail-btn {
+  margin-left: 6px;
+  flex-shrink: 0;
 }
 
 .bill-fee-info {

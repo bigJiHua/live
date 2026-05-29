@@ -18,7 +18,10 @@ export function createRequestInterceptor(router) {
     const fp = deviceData.fingerprint
 
     // 1. 注入安全 Headers
-    requestConfig.headers['Content-Type'] = 'application/json'
+    const isFormData = requestConfig.data instanceof FormData
+    if (!isFormData) {
+      requestConfig.headers['Content-Type'] = 'application/json'
+    }
     requestConfig.headers['X-Requested-With'] = 'XMLHttpRequest'
     requestConfig.headers['x-client-timestamp'] = Date.now()
     requestConfig.headers['x-fingerprint-hash'] = fp
@@ -33,12 +36,17 @@ export function createRequestInterceptor(router) {
       requestConfig.headers['Authorization'] = `Bearer ${token}`
     }
 
-    // 3. 握手接口跳过加密
+    // 3. FormData 跳过所有加密逻辑
+    if (isFormData) {
+      return requestConfig
+    }
+
+    // 3.1 握手接口跳过加密
     if (requestConfig.url.includes(config.handshakeUrl)) {
       return requestConfig
     }
 
-    // 3.1 跳过加密的接口列表
+    // 3.2 跳过加密的接口列表
     if (config.skipEncryptionUrls?.some(url => requestConfig.url.includes(url))) {
       return requestConfig
     }

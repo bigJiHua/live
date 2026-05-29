@@ -62,6 +62,7 @@
           v-for="account in filteredBankCards"
           :key="account.card_id"
           class="account-item"
+          @click="goToCardFlow(account)"
         >
           <div class="account-left">
             <div class="account-icon bank-icon" v-if="!getCardBankInfo(account.card_id).bankIcon">
@@ -84,6 +85,7 @@
             <div class="account-balance" :class="{ 'is-zero': Number(account.balance) === 0, 'is-negative': Number(account.balance) < 0 }">
               {{ showAmount ? '¥' + formatMoney(account.balance) : '******' }}
             </div>
+            <van-icon name="arrow" color="#c8c9cc" class="arrow-icon" />
           </div>
         </div>
       </div>
@@ -242,6 +244,10 @@ const goToFinance = () => {
   router.push("/finance");
 };
 
+const goToCardFlow = (account) => {
+  router.push(`/finance/report/card-flow?cardId=${account.card_id}`);
+};
+
 const loadData = async () => {
   loading.value = true;
   try {
@@ -362,6 +368,11 @@ onMounted(async () => {
   align-items: center;
   padding: 16px;
   border-bottom: 1px solid #f2f2f2;
+  cursor: pointer;
+}
+
+.account-item:active {
+  background: #f7f8fa;
 }
 
 .account-item:last-child {
@@ -436,6 +447,10 @@ onMounted(async () => {
   margin-top: 24px;
   font-size: 12px;
   color: #c8c9cc;
+}
+
+.arrow-icon {
+  flex-shrink: 0;
 }
 
 .flex-center {

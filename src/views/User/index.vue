@@ -32,7 +32,7 @@
         <van-cell title="PIN 码管理" is-link center @click="goToPinManage" />
 
         <!-- TODO 注释 -->
-        <div
+        <div v-if="showDemoInfo"
           style="
             padding: 12px 16px;
             font-size: 13px;
@@ -81,6 +81,7 @@ const router = useRouter();
 const userStore = useUserStore();
 
 const security = reactive({ hasPinSet: false });
+const showDemoInfo = import.meta.env.VITE_APP_DEMO === 'true'
 
 // 检查 PIN 设置状态（后端 + 本地双校验，首次加载时调用）
 const checkPinStatus = async () => {
@@ -161,7 +162,7 @@ onMounted(() => {
 <style scoped>
 .page-user {
   background: #f7f8fa;
-  max-height: 100vh;
+  height: 100vh;
   overflow-y: auto;
   padding-bottom: 30px;
 }

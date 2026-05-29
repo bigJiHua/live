@@ -10,28 +10,11 @@
 
     <van-form @submit="onSubmit" class="login-form">
       <van-cell-group inset>
-        <van-field
-          v-model="username"
-          name="username"
-          label="账号"
-          placeholder="请输入用户名"
-          left-icon="user-o"
-          autocomplete="username"
-          :rules="[{ required: true, message: '请填写用户名' }]"
-        />
-        <van-field
-          v-model="password"
-          :type="passwordVisible ? 'text' : 'password'"
-          name="password"
-          label="密码"
-          placeholder="请输入密码"
-          left-icon="lock"
-          right-icon="eye-o"
-          autocomplete="current-password"
-          maxlength="15"
-          :rules="passwordRules"
-          @click-right-icon="togglePasswordVisibility"
-        />
+        <van-field v-model="username" name="username" label="账号" placeholder="请输入用户名" left-icon="user-o"
+          autocomplete="username" :rules="[{ required: true, message: '请填写用户名' }]" />
+        <van-field v-model="password" :type="passwordVisible ? 'text' : 'password'" name="password" label="密码"
+          placeholder="请输入密码" left-icon="lock" right-icon="eye-o" autocomplete="current-password" maxlength="15"
+          :rules="passwordRules" @click-right-icon="togglePasswordVisibility" />
       </van-cell-group>
       <!-- 
       <div class="password-requirements">
@@ -63,15 +46,8 @@
             </van-button>
           </van-col> -->
           <van-col span="24">
-            <van-button
-              round
-              block
-              type="primary"
-              native-type="submit"
-              :loading="loading"
-              loading-text="正在安全登录..."
-              :disabled="!passwordRulesComputed.validLength"
-            >
+            <van-button round block type="primary" native-type="submit" :loading="loading" loading-text="正在安全登录..."
+              :disabled="!passwordRulesComputed.validLength">
               立即登录
             </van-button>
           </van-col>
@@ -79,8 +55,28 @@
       </div>
     </van-form>
     <!-- TODO 注释 -->
-    <div style="text-align: center; padding: 20px; font-size: 12px; color: #999;">
-      本站点仅作演示效果，推荐使用手机Chrome浏览器打开预览。锁定PIN码为 123456
+    <template v-if="showDemoInfo">
+      <div style="text-align: center; padding: 20px; font-size: 12px; color: #999;">
+        本站点仅作演示效果，推荐使用手机Chrome浏览器打开预览。锁定PIN码为 123456
+      </div>
+    </template>
+    <div v-else class="login-footer">
+      <div class="footer-brand">
+        <img src="/logo.png" :alt="brandName" class="footer-logo" />
+        <span class="footer-name">{{ brandName }}</span>
+        <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer" style="color: #999;">{{ icpNumber }}</a>
+      </div>
+      <div class="footer-info">
+        <a href="http://www.beian.gov.cn/" target="_blank" rel="noopener noreferrer">
+          <img src="/icons/ga-beian.png" class="beian-icon" alt="公安备案" />
+          {{ psbNumber }}
+        </a>
+      </div>
+      <div class="footer-meta">
+        <span>Power By {{ poweredBy }}</span>
+        <span class="footer-sep">|</span>
+        <span>© {{ copyrightStart }}-{{ currentYear }}</span>
+      </div>
     </div>
   </div>
 </template>
@@ -91,10 +87,17 @@ import { useRouter } from "vue-router";
 import { authApi } from "@/utils/api/auth";
 
 const router = useRouter();
-const username = ref("");
-const password = ref("");
+const username = ref(import.meta.env.VITE_APP_DEMO === 'true' ? import.meta.env.VITE_LOGIN_USERNAME || "" : "");
+const password = ref(import.meta.env.VITE_APP_DEMO === 'true' ? import.meta.env.VITE_LOGIN_PASSWORD || "" : "");
 const loading = ref(false);
 const passwordVisible = ref(false);
+const currentYear = new Date().getFullYear();
+const showDemoInfo = import.meta.env.VITE_APP_DEMO === 'true'
+const brandName = import.meta.env.VITE_BRAND_NAME
+const icpNumber = import.meta.env.VITE_ICP_NUMBER
+const psbNumber = import.meta.env.VITE_PSB_NUMBER
+const poweredBy = import.meta.env.VITE_POWERED_BY
+const copyrightStart = import.meta.env.VITE_COPYRIGHT_START
 
 const togglePasswordVisibility = () => {
   passwordVisible.value = !passwordVisible.value;
@@ -209,7 +212,8 @@ const goToRegister = () => {
   width: 80px;
   height: 80px;
   margin: 0 auto 20px;
-  > img {
+
+  >img {
     width: 100%;
     height: 100%;
     object-fit: contain;
@@ -290,5 +294,65 @@ const goToRegister = () => {
   font-size: 12px;
   color: #646566;
   line-height: 1.8;
+}
+
+.login-footer {
+  text-align: center;
+  padding: 24px 16px 32px;
+  font-size: 11px;
+  color: #999;
+  line-height: 1.8;
+  margin-top: auto;
+}
+
+.footer-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.footer-logo {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+}
+
+.footer-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6666669d;
+}
+
+.footer-info a,
+.footer-links a {
+  color: #999;
+  text-decoration: none;
+}
+
+.footer-info a:hover,
+.footer-links a:hover {
+  color: #666;
+}
+
+.beian-icon {
+  width: 14px;
+  height: 14px;
+  vertical-align: middle;
+  margin-right: 2px;
+}
+
+.footer-sep {
+  margin: 0 6px;
+  color: #ddd;
+}
+
+.footer-meta {
+  color: #bbb;
+}
+
+.footer-links {
+  margin-top: 2px;
 }
 </style>

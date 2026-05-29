@@ -12,6 +12,9 @@ dist
 dist.zip
 dist-ssr
 *.local
+build-error.txt
+build-output.txt
+codex.agent.md
 
 # Editor directories and files
 .vscode

@@ -27,7 +27,7 @@
           </div>
         </div>
 
-        <div class="content-text">{{ detail.content }}</div>
+        <div class="content-text" v-html="detail.content"></div>
 
         <div
           v-if="detail.img_url?.length"
@@ -84,7 +84,7 @@
             </div>
 
             <div class="append-content-wrap">
-              <div class="append-content">{{ child.content }}</div>
+              <div class="append-content" v-html="child.content"></div>
 
               <div v-if="child.img_url?.length" class="append-image-list">
                 <div
@@ -379,7 +379,7 @@ onMounted(() => {
 <style scoped>
 .page-diary-detail {
   background: #fdfdfd;
-  min-height: 100vh;
+  min-height: 100dvh;
   padding-bottom: 20px;
 }
 
@@ -429,6 +429,27 @@ onMounted(() => {
   font-size: 17px;
   line-height: 1.6;
   color: #2c3e50;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+.content-text :deep(img) {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  margin: 8px 0;
+}
+
+.content-text :deep(p) {
+  margin: 0 0 8px;
+}
+
+.content-text :deep(blockquote) {
+  border-left: 3px solid #7232dd;
+  margin: 8px 0;
+  padding: 4px 12px;
+  color: #666;
+  background: #f8f9fb;
 }
 .image-grid {
   display: grid;
@@ -546,6 +567,27 @@ onMounted(() => {
   line-height: 1.6;
   color: #333;
   margin-bottom: 10px;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+.append-content :deep(img) {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+  margin: 6px 0;
+}
+
+.append-content :deep(p) {
+  margin: 0 0 6px;
+}
+
+.append-content :deep(blockquote) {
+  border-left: 3px solid #7232dd;
+  margin: 6px 0;
+  padding: 3px 10px;
+  color: #666;
+  background: #f8f9fb;
 }
 .append-image-list {
   display: grid;
