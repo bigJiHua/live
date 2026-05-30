@@ -296,6 +296,11 @@ const RouterMap = [
         name: "FinanceDataLoginLog",
         component: () => import("../views/Finance/data/LoginLog.vue"),
         meta: { title: "登录日志", hideTabbar: true },
+        beforeEnter: () => {
+          if (import.meta.env.VITE_APP_DEMO === "true") {
+            return { name: "FinanceData" };
+          }
+        },
       },
       // 动态/日记模块
       {

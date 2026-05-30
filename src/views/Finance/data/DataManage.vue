@@ -35,7 +35,7 @@
           </div>
           <van-icon name="arrow" color="#c8c9cc" />
         </div>
-        <div class="menu-item" @click="goToPage('login-log')">
+        <div v-if="!isDemo" class="menu-item" @click="goToPage('login-log')">
           <div class="menu-icon red"><van-icon name="manager-o" /></div>
           <div class="menu-info">
             <div class="menu-title">查看登录日志</div>
@@ -52,6 +52,8 @@
 import { useRouter } from "vue-router";
 
 const router = useRouter();
+
+const isDemo = import.meta.env.VITE_APP_DEMO === "true";
 
 const goToPage = (type) => {
   const routes = {
