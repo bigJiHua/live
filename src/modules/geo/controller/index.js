@@ -39,14 +39,15 @@ function getCenterFromRectangle(rectangle) {
  *  单源请求
  * ================================================================ */
 
-/** ip.sb */
-async function fetchIpSb() {
-  const { data } = await axios.get("https://api.ip.sb/geoip", {
+/** ip.sb（可传入指定 IP 查询） */
+async function fetchIpSb(ip) {
+  const url = ip ? `https://api.ip.sb/geoip/${ip}` : "https://api.ip.sb/geoip";
+  const { data } = await axios.get(url, {
     timeout: 5000,
     headers: { Accept: "application/json" },
   });
   return {
-    ip: data.ip || "",
+    ip: data.ip || ip || "",
     country: data.country || "",
     countryCode: data.country_code || "",
     region: data.region || "",
@@ -132,12 +133,20 @@ async function fetchAmapRegeo(lng, lat) {
 /**
  * GET /api/v1/geo/network
  * 获取网络信息（ip.sb 优先 → ipinfo.io 回退）
+ * 用客户端真实 IP 查询，而非服务器出口 IP
  */
 exports.getNetworkInfo = async (req, res) => {
+  const rawIp = req.security?.ip || req.ip || "";
+  const clientIp = rawIp.replace(/^::ffff:/, "");
+  const isLan = /^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|127\.|0\.)/.test(clientIp);
+  const queryIp = isLan ? null : clientIp; // 内网→不传，让 ip.sb 用出口 IP
+
   try {
     // 1. ip.sb
     try {
-      const info = await fetchIpSb();
+      const info = await fetchIpSb(queryIp);
+      // 用客户端 IP 覆盖 ip.sb 返回的 IP（ip.sb 可能返回服务端 IP）
+      if (clientIp && !isLan) info.ip = clientIp;
       return res.json({ status: 200, data: { ...info, source: "ip.sb" } });
     } catch (e1) {
       console.warn("[geo/network] ip.sb 失败:", e1.message);
@@ -146,6 +155,7 @@ exports.getNetworkInfo = async (req, res) => {
     // 2. ipinfo.io
     try {
       const info = await fetchIpInfo();
+      if (clientIp && !isLan) info.ip = clientIp;
       return res.json({ status: 200, data: { ...info, source: "ipinfo.io" } });
     } catch (e2) {
       console.error("[geo/network] ipinfo.io 也失败:", e2.message);
@@ -159,69 +169,28 @@ exports.getNetworkInfo = async (req, res) => {
 
 /**
  * GET /api/v1/geo/ip
- * IP 定位（高德 IP → ip.sb → ipinfo.io 逐级回退）
+ * 高德 IP 定位（需要客户端公网 IP，内网/失败则返回空）
  */
 exports.getIpLocation = async (req, res) => {
   const rawIp = req.security?.ip || req.ip || "";
-  // 剥离 IPv4-mapped 前缀，如 ::ffff:192.168.0.103 → 192.168.0.103
   const clientIp = rawIp.replace(/^::ffff:/, "");
-  // 只传公网 IP，内网 IP 不传（让高德用自己的出口 IP 定位）
   const isLan = /^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|127\.|0\.)/.test(clientIp);
-  const amapIp = isLan ? null : clientIp;
-  console.log("[geo/ip] clientIp:", clientIp, "isLan:", isLan, "passToAmap:", !!amapIp);
+
+  if (isLan) {
+    return res.json({ status: 200, data: { address: "", lat: null, lng: null, source: "none", reason: "内网IP" } });
+  }
 
   try {
-    // 1. 高德 IP 定位（国内精准）
-    try {
-      const loc = await fetchAmapIp(amapIp);
-      if (loc.province || loc.city) {
-        const address = [loc.province, loc.city].filter(Boolean).join(" ");
-        return res.json({
-          status: 200,
-          data: { address, lat: loc.lat, lng: loc.lng, source: "amap" },
-        });
-      }
-    } catch (e1) {
-      console.warn("[geo/ip] 高德失败:", e1.message);
+    const loc = await fetchAmapIp(clientIp);
+    if (loc.province || loc.city) {
+      const address = [loc.province, loc.city].filter(Boolean).join(" ");
+      return res.json({ status: 200, data: { address, lat: loc.lat, lng: loc.lng, source: "amap" } });
     }
-
-    // 2. ip.sb
-    try {
-      const data = await fetchIpSb();
-      if (data.country && data.region && data.city) {
-        return res.json({
-          status: 200,
-          data: {
-            address: `${data.region} ${data.city}`,
-            lat: data.latitude,
-            lng: data.longitude,
-            source: "ip.sb",
-          },
-        });
-      }
-    } catch (e2) {
-      console.warn("[geo/ip] ip.sb 失败:", e2.message);
-    }
-
-    // 3. ipinfo.io
-    try {
-      const data = await fetchIpInfo();
-      const address = [data.region, data.city].filter(Boolean).join(" ");
-      if (address) {
-        return res.json({
-          status: 200,
-          data: { address, lat: data.latitude, lng: data.longitude, source: "ipinfo.io" },
-        });
-      }
-    } catch (e3) {
-      console.warn("[geo/ip] ipinfo.io 失败:", e3.message);
-    }
-
-    return res.json({ status: 200, data: { address: "", lat: null, lng: null, source: "none" } });
-  } catch (err) {
-    console.error("[geo/ip]", err);
-    return res.json({ status: 500, message: err.message });
+  } catch (e) {
+    console.warn("[geo/ip] 高德失败:", e.message);
   }
+
+  return res.json({ status: 200, data: { address: "", lat: null, lng: null, source: "none" } });
 };
 
 /**

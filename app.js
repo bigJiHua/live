@@ -14,6 +14,9 @@ const path = require("path");
 // 创建 Express 实例
 const app = express();
 
+// 信任 nginx 反代，否则 req.ip 永远是 127.0.0.1
+app.set("trust proxy", true);
+
 /* ================== 小程序跳过设备验证 ================== */
 // 小程序请求携带 x-xcx-skip-key 头部，匹配则跳过设备级别的安全校验
 // app.use((req, res, next) => {
