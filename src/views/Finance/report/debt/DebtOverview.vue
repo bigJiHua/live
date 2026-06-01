@@ -129,7 +129,8 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onActivated, onDeactivated, nextTick } from 'vue'
+defineOptions({ name: 'FinanceReportDebtOverview' })
 import { Icon } from 'vant'
 import dayjs from 'dayjs'
 import zhCn from 'dayjs/locale/zh-cn'
@@ -140,6 +141,7 @@ import { categoryApi } from '@/utils/api/category'
 dayjs.locale(zhCn)
 
 const loading = ref(true)
+const savedScrollY = ref(0)
 const allCards = ref([])
 const bankList = ref([])
 const billList = ref([])
@@ -383,6 +385,16 @@ const loadData = async () => {
 }
 
 onMounted(loadData)
+
+onDeactivated(() => {
+  savedScrollY.value = window.scrollY || document.documentElement.scrollTop
+})
+
+onActivated(() => {
+  nextTick(() => {
+    if (savedScrollY.value > 0) window.scrollTo({ top: savedScrollY.value, behavior: 'instant' })
+  })
+})
 </script>
 
 <style scoped>

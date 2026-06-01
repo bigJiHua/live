@@ -105,6 +105,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from "vue";
+defineOptions({ name: 'Finance' })
 import { useRouter } from "vue-router";
 import { showToast } from "vant";
 import { getMonthStats } from "@/utils/api/account";

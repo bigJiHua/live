@@ -1,4 +1,4 @@
-﻿﻿<template>
+<template>
   <div class="page-finance-add" @click="showKeyboard = false">
     <!-- 顶部金额卡片 -->
     <div class="amount-card" @click.stop="showKeyboard = true">
@@ -46,16 +46,12 @@
           </van-cell>
 
           <!-- 支付方式 -->
-          <van-field
-            v-model="selectedPayMethod"
-            :label="isExpense ? '支出方式' : '收入方式'"
-            placeholder="请输入或选择支付方式"
-            @click-right-icon="showPayMethodPicker = true"
-          >
-            <template #right-icon>
-              <van-icon name="arrow-down" @click="showPayMethodPicker = true" />
-            </template>
-          </van-field>
+          <div class="method-row">
+            <span class="method-label">{{ isExpense ? '支出方式' : '收入方式' }}</span>
+            <div class="method-chips">
+              <span v-for="m in (isExpense ? expensePayMethods : incomePayMethods)" :key="m" class="method-chip" :class="{ active: selectedPayMethod === m }" @click="onPayMethodSelect(m)">{{ m }}</span>
+            </div>
+          </div>
 
           <!-- 关联卡片 -->
           <van-cell
@@ -127,20 +123,13 @@
 
           <!-- 对外模式 -->
           <template v-if="transferMode === 'external'">
-            <!-- 支出方式 -->
-            <van-field
-              v-model="selectedPayMethod"
-              label="支出方式"
-              placeholder="请输入或选择支付方式"
-              @click-right-icon="showPayMethodPicker = true"
-            >
-              <template #right-icon>
-                <van-icon
-                  name="arrow-down"
-                  @click="showPayMethodPicker = true"
-                />
-              </template>
-            </van-field>
+            <!-- 支出方式（仅支持借记卡） -->
+            <div class="method-row">
+              <span class="method-label">支出方式</span>
+              <div class="method-chips">
+                <span class="method-chip active">借记卡</span>
+              </div>
+            </div>
 
             <!-- 关联卡片 -->
             <van-cell
@@ -285,22 +274,18 @@
 
     <!-- 分类选择弹框 -->
     <van-popup v-model:show="showCategoryPicker" position="bottom" round>
-      <van-picker
-        title="选择分类"
-        :columns="categoryColumns"
-        @confirm="onCategoryConfirm"
-        @cancel="showCategoryPicker = false"
-      />
-    </van-popup>
-
-    <!-- 支付方式选择弹框 -->
-    <van-popup v-model:show="showPayMethodPicker" position="bottom" round>
-      <van-picker
-        title="选择支付方式"
-        :columns="payMethodColumns"
-        @confirm="onPayMethodConfirm"
-        @cancel="showPayMethodPicker = false"
-      />
+      <div class="category-popup">
+        <div class="popup-header">
+          <span>选择分类</span>
+          <van-icon name="cross" @click="showCategoryPicker = false" />
+        </div>
+        <div class="category-grid">
+          <div v-for="cat in categories" :key="cat.id" class="category-tile" :class="{ active: selectedCategory?.id === cat.id }" @click="onCategorySelect(cat)">
+            <span class="cat-name">{{ cat.name }}</span>
+            <van-icon v-if="selectedCategory?.id === cat.id" name="success" color="#07c160" />
+          </div>
+        </div>
+      </div>
     </van-popup>
 
     <!-- 卡片选择弹框 -->
@@ -335,16 +320,6 @@
           </div>
         </div>
       </div>
-    </van-popup>
-
-    <!-- 收入方式选择弹框 -->
-    <van-popup v-model:show="showIncomePayMethodPicker" position="bottom" round>
-      <van-picker
-        title="选择收入方式"
-        :columns="incomePayMethodColumns"
-        @confirm="onIncomePayMethodConfirm"
-        @cancel="showIncomePayMethodPicker = false"
-      />
     </van-popup>
 
     <!-- 转入卡片选择弹框 -->
@@ -420,14 +395,12 @@ import ENV from "@/utils/env";
 const expensePayMethods = [
   "现金",
   "余额",
-  "微信支付",
-  "支付宝",
   "借记卡",
   "信用卡",
 ];
 
 // 收入支付方式选项（不含信用卡）
-const incomePayMethods = ["现金", "余额", "微信支付", "支付宝", "借记卡"];
+const incomePayMethods = ["现金", "余额", "借记卡"];
 
 // 自转支付方式选项（仅借记卡和余额）
 const selfTransferPayMethods = ["借记卡", "余额"];
@@ -457,7 +430,7 @@ const showCategoryPicker = ref(false);
 
 // 支付方式状态
 const selectedPayMethod = ref("");
-const showPayMethodPicker = ref(false);
+
 
 // 卡片状态
 const cardList = ref([]);
@@ -481,7 +454,6 @@ const transferMode = ref("external");
 
 // 收入方式状态（自转模式下使用）
 const incomePayMethod = ref("");
-const showIncomePayMethodPicker = ref(false);
 
 // 转入卡片状态
 const selectedIncomeCard = ref(null);
@@ -555,37 +527,6 @@ const getBankName = (bankId) => {
 };
 
 // 计算属性
-const categoryColumns = computed(() =>
-  categories.value.map((c) => ({
-    text: c.name,
-    value: c.id,
-    iconUrl: c.icon_url || "",
-    ...c,
-  }))
-);
-
-// 支付方式选项（根据类型动态过滤）
-const payMethodColumns = computed(() => {
-  let options;
-  if (isTransfer.value && transferMode.value === "self") {
-    options = selfTransferPayMethods;
-  } else if (isTransfer.value && transferMode.value === "withdraw") {
-    // 提现模式不需要选支付方式，返回空列表
-    return [];
-  } else {
-    options = isExpense.value ? expensePayMethods : incomePayMethods;
-  }
-  return options.map((m) => ({ text: m, value: m }));
-});
-
-const incomePayMethodColumns = computed(() => {
-  const options =
-    isTransfer.value && transferMode.value === "self"
-      ? selfTransferPayMethods
-      : incomePayMethods;
-  return options.map((m) => ({ text: m, value: m }));
-});
-
 const currencyColumns = currencyOptions.map((c) => ({
   text: `${c.label} ${c.symbol}`,
   value: c.code,
@@ -609,19 +550,6 @@ const cardColumns = computed(() => {
   if (method === "信用卡") {
     return cardList.value
       .filter((c) => c.card_type === "credit")
-      .map((c) => ({
-        text: getCardDisplayText(c),
-        value: c.id,
-        ...c,
-      }));
-  }
-
-  // 微信/支付宝：显示借记卡 + 余额
-  if (method === "微信支付" || method === "支付宝") {
-    return cardList.value
-      .filter(
-        (c) => c.card_type === "debit" || c.card_type === "virtual_balance"
-      )
       .map((c) => ({
         text: getCardDisplayText(c),
         value: c.id,
@@ -667,17 +595,6 @@ const incomeCardColumns = computed(() => {
         ...c,
       }));
   }
-  if (method === "微信支付" || method === "支付宝") {
-    return filterCards(
-      cardList.value.filter(
-        (c) => c.card_type === "debit" || c.card_type === "virtual_balance"
-      )
-    ).map((c) => ({
-      text: getCardDisplayText(c),
-      value: c.id,
-      ...c,
-    }));
-  }
   return [];
 });
 
@@ -692,7 +609,7 @@ const filteredIncomeCardColumns = computed(() => {
   );
 });
 
-// 是否显示关联卡片（借记卡/信用卡/微信支付/支付宝时显示）
+// 是否显示关联卡片（借记卡/信用卡时需要）
 const showCardCell = computed(() => {
   const method = selectedPayMethod.value;
   return method && !["现金", "余额"].includes(method);
@@ -817,9 +734,14 @@ const onTypeChange = () => {
   loadCategories();
 };
 
-// 自转/对外切换时，自转固定为借记卡
+// 自转/对外切换时
 watch(transferMode, (mode) => {
-  if (mode === "self") {
+  if (mode === "external") {
+    selectedPayMethod.value = "借记卡";
+    incomePayMethod.value = "借记卡";
+    selectedCard.value = null;
+    selectedIncomeCard.value = null;
+  } else if (mode === "self") {
     selectedPayMethod.value = "借记卡";
     incomePayMethod.value = "借记卡";
     selectedCard.value = null;
@@ -834,18 +756,15 @@ watch(transferMode, (mode) => {
 });
 
 // 分类选择
-const onCategoryConfirm = ({ selectedOptions }) => {
-  selectedCategory.value = selectedOptions[0];
+const onCategorySelect = (cat) => {
+  selectedCategory.value = cat;
   showCategoryPicker.value = false;
 };
 
 // 支付方式选择
-const onPayMethodConfirm = ({ selectedOptions }) => {
-  const method = selectedOptions[0].value;
+const onPayMethodSelect = (method) => {
   selectedPayMethod.value = method;
-  // 现金/余额不需要卡片，清空选择；其他方式也清空，等待用户选择
   selectedCard.value = null;
-  showPayMethodPicker.value = false;
 };
 
 // 卡片选择
@@ -862,11 +781,9 @@ const onCardSelect = (card) => {
 };
 
 // 收入方式选择
-const onIncomePayMethodConfirm = ({ selectedOptions }) => {
-  const method = selectedOptions[0].value;
+const onIncomePayMethodSelect = (method) => {
   incomePayMethod.value = method;
   selectedIncomeCard.value = null;
-  showIncomePayMethodPicker.value = false;
 };
 
 // 转入卡片选择
@@ -1107,9 +1024,8 @@ onMounted(async () => {
 
 <style scoped>
 .page-finance-add {
-  min-height: 100vh;
+  max-height: 95vh;
   background: #f7f8fa;
-  padding-bottom: 100px;
 }
 
 .amount-card {
@@ -1271,5 +1187,92 @@ onMounted(async () => {
   color: #969799;
   padding: 10px 16px 4px;
   background: #f7f8fa;
+}
+
+/* ── 支付方式平铺标签 ── */
+.method-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: #fff;
+  gap: 10px;
+}
+
+.method-label {
+  font-size: 14px;
+  color: #323233;
+  white-space: nowrap;
+}
+
+.method-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.method-chip {
+  font-size: 0.65rem;
+  padding: 8px 15px;
+  border-radius: 5px;
+  border: 1px solid #e0e0e0;
+  color: #000000;
+  background: #fff;
+}
+
+.method-chip.active {
+  border-color: #07c160;
+  background: #f0fff5;
+  color: #07c160;
+}
+
+/* ── 分类平铺弹窗 ── */
+.category-popup {
+  padding: 16px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.category-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.category-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 8px;
+  border: 1px solid #f0f0f0;
+  border-radius: 10px;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.2s;
+}
+
+.category-tile:active {
+  background: #f7f8fa;
+}
+
+.category-tile.active {
+  border-color: #07c160;
+  background: #f0fff5;
+}
+
+.category-tile .van-icon-success {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  font-size: 14px;
+}
+
+.cat-name {
+  font-size: 12px;
+  color: #323233;
+  text-align: center;
+  line-height: 1.3;
 }
 </style>

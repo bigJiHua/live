@@ -20,7 +20,9 @@
     <div class="main-body">
       <router-view v-slot="{ Component }">
         <transition name="fade" mode="out-in">
-          <component :is="Component" />
+          <keep-alive :include="cachedPages">
+            <component :is="Component" />
+          </keep-alive>
         </transition>
       </router-view>
     </div>
@@ -63,6 +65,20 @@ import PinVerifyDialog from "@/components/PinVerifyDialog.vue";
 
 const route = useRoute();
 const router = useRouter();
+
+// keep-alive 缓存列表：这些页面跳转到明细后返回不会重新加载
+const cachedPages = [
+  'Home',
+  'Finance',
+  'FinanceFlowList',
+  'FinanceFlowCalendar',
+  'FinanceReportFlowFilter',
+  'FinanceReportCardFlow',
+  'FinanceReportMonthlyTrend',
+  'FinanceReportDebtOverview',
+  'CardFlowList',
+  'BillLedger',
+]
 
 // PIN 验证引用
 const pinVerifyRef = ref(null);
@@ -256,5 +272,15 @@ const goHome = () => {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+/* 扩大导航栏左侧按钮点击区域 */
+:deep(.van-nav-bar__left) {
+  padding: 10px 16px;
+  margin-left: -8px;
+}
+
+:deep(.van-nav-bar__left .van-icon) {
+  padding: 8px;
 }
 </style>

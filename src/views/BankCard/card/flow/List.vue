@@ -88,21 +88,25 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onActivated, onDeactivated, nextTick } from 'vue'
+defineOptions({ name: 'CardFlowList' })
 import { useRouter, useRoute } from 'vue-router'
 import { showToast } from 'vant'
 import { getAccountListByCard } from '@/utils/api/account'
+import { useFlowSyncStore } from '@/stores/flowSync'
 
 const router = useRouter()
 const route = useRoute()
+const flowSync = useFlowSyncStore()
 
 // 从路由或 URL 获取 cardId
 const cardId = computed(() => route.query.cardId || '')
 const cardAlias = computed(() => route.query.alias || '卡片流水')
 
-// 月份选择
+// 月份选择（URL 参数记忆，无参数默认当月）
 const currentDate = new Date()
-const currentMonth = ref(`${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`)
+const defaultMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`
+const currentMonth = ref(route.query.month || defaultMonth)
 const showMonthPicker = ref(false)
 
 // 生成月份列
@@ -126,6 +130,7 @@ const list = ref([])
 const page = ref(1)
 const limit = ref(20)
 const hasMore = ref(false)
+const savedScrollY = ref(0)
 
 // 统计数据
 const stats = reactive({
@@ -216,6 +221,7 @@ const loadMore = () => {
 const onMonthConfirm = ({ selectedOptions }) => {
   currentMonth.value = selectedOptions[0].value
   showMonthPicker.value = false
+  router.replace({ query: { ...route.query, month: currentMonth.value } })
   loadList(true)
 }
 
@@ -235,6 +241,42 @@ onMounted(() => {
   } else {
     showToast('缺少卡片ID')
   }
+})
+
+// keep-alive 激活时：URL 有参数就恢复，无参数就重置为当前月
+onActivated(() => {
+  if (route.query.month) {
+    if (route.query.month !== currentMonth.value) {
+      currentMonth.value = route.query.month
+      loadList(true)
+    }
+  } else {
+    const d = new Date()
+    const def = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    if (def !== currentMonth.value) {
+      currentMonth.value = def
+      loadList(true)
+    }
+  }
+
+  // 同步 Detail 变更（原地 patch）
+  const changes = flowSync.consumeChanges();
+  const ids = Object.keys(changes);
+  if (ids.length > 0) {
+    list.value.forEach(item => {
+      const patch = changes[item.id];
+      if (patch) Object.assign(item, patch);
+    });
+  }
+
+  // 恢复滚动位置
+  nextTick(() => {
+    if (savedScrollY.value > 0) window.scrollTo({ top: savedScrollY.value, behavior: 'instant' })
+  })
+})
+
+onDeactivated(() => {
+  savedScrollY.value = window.scrollY || document.documentElement.scrollTop
 })
 </script>
 

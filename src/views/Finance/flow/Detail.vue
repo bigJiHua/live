@@ -8,25 +8,21 @@
     <!-- 详情内容 -->
     <div v-else-if="detail" class="detail-content">
       <!-- 金额卡片 -->
-      <div class="amount-card">
+      <div class="amount-card" :class="{ 'is-expense': detail.direction !== 1 }">
         <div class="amount-label">
           {{ detail.direction === 1 ? "收入" : "支出" }}
-          <span v-if="showExchange" class="currency-tag">
-            {{ getCurrencySymbol(detail.currency) }} {{ detail.amount }}
-          </span>
+          <span class="currency-tag">{{ detail.currency || "CNY" }}</span>
         </div>
         <div
           class="amount-value"
           :class="detail.direction === 1 ? 'income' : 'expense'"
         >
-          {{ detail.direction === 1 ? "+" : "-" }}¥{{
-            formatAmount(detail.amount)
+          {{ detail.direction === 1 ? "+" : "-" }}{{ getCurrencySymbol(detail.currency) }}{{
+            formatOriginalAmount(detail.amount)
           }}
         </div>
         <div class="exchange-info" v-if="showExchange">
-          约 {{ getCurrencySymbol(detail.currency) }}{{ detail.amount }} = ¥{{
-            formatAmount(detail.amount)
-          }}
+          ≈ ¥{{ formatCnyAmount(detail.amount) }}（汇率 {{ detail.exchange_rate }}）
         </div>
       </div>
 
@@ -86,7 +82,19 @@
       <van-cell-group inset class="info-group">
         <van-cell title="备注">
           <template #value>
-            <span class="remark-text">{{ detail.remark || "暂无备注" }}</span>
+            <div class="remark-cell">
+              <span
+                class="remark-text"
+                :class="{ collapsed: !remarkExpanded && shouldTruncateRemark }"
+                >{{ detail.remark || "暂无备注" }}</span
+              >
+              <span
+                v-if="shouldTruncateRemark"
+                class="remark-toggle"
+                @click="remarkExpanded = !remarkExpanded"
+                >{{ remarkExpanded ? "收起" : "展开" }}</span
+              >
+            </div>
           </template>
         </van-cell>
       </van-cell-group>
@@ -95,7 +103,7 @@
       <div class="action-btns">
         <van-button
           v-if="getReverseType(detail) && getReverseType(detail) !== 'credit-repay' && getReverseType(detail) !== 'transfer-legacy'"
-          type="warning"
+          :style="{ borderRadius: '5px', border: '2px dashed #f97316', background: 'transparent', color: '#f97316' }"
           round
           @click="handleReverse"
         >
@@ -103,7 +111,7 @@
         </van-button>
         <van-button
           v-if="getReverseType(detail) !== 'credit-repay'"
-          type="primary"
+          :style="{ borderRadius: '5px', border: '2px dashed #3b82f6', background: 'transparent', color: '#3b82f6' }"
           block
           round
           @click="openRemarkPopup"
@@ -159,10 +167,10 @@
       <van-popup v-model:show="showCategoryPopup" position="bottom" round>
         <div class="category-popup">
           <div class="popup-header">
-            <span>选择支出分类</span>
+            <span>{{ categoryPopupTitle }}</span>
             <van-icon name="cross" @click="showCategoryPopup = false" />
           </div>
-          <div class="popup-tip">请选择新的支出分类</div>
+          <div class="popup-tip">请选择新的{{ categoryDirectionText }}</div>
           <div class="category-list">
             <div
               v-for="cat in categoryList"
@@ -171,13 +179,6 @@
               :class="{ active: selectedCategoryId === cat.id }"
               @click="selectCategory(cat)"
             >
-              <van-image
-                v-if="cat.icon_url || cat.iconUrl"
-                width="28"
-                height="28"
-                :src="getFullUrl(cat.icon_url || cat.iconUrl)"
-                fit="contain"
-              />
               <span class="category-name">{{ cat.name }}</span>
               <van-icon v-if="selectedCategoryId === cat.id" name="success" color="#07c160" />
             </div>
@@ -201,7 +202,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, watch } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import { showToast, showConfirmDialog } from "vant";
 import dayjs from "dayjs";
@@ -217,6 +218,8 @@ import {
 import { getCardList } from "@/utils/api/card";
 import { categoryApi } from "@/utils/api/category";
 import ENV from "@/utils/env";
+import { useFlowSyncStore } from "@/stores/flowSync";
+defineOptions({ name: "FinanceFlowDetail" });
 
 dayjs.locale(zhCn);
 
@@ -237,9 +240,22 @@ const showCategoryPopup = ref(false);
 const categoryList = ref([]);
 const selectedCategoryId = ref(null);
 const categoryLoading = ref(false);
+const remarkExpanded = ref(false);
 
-// 格式化金额（根据币种和汇率计算）
-const formatAmount = (amount) => {
+const shouldTruncateRemark = computed(
+  () => (detail.value?.remark || "").length > 30
+);
+
+const flowSync = useFlowSyncStore()
+
+// 格式化原币金额（不做换算）
+const formatOriginalAmount = (amount) => {
+  if (amount === null || amount === undefined) return "0.00";
+  return Number(amount).toFixed(2);
+};
+
+// 格式化 CNY 换算金额（外币时使用）
+const formatCnyAmount = (amount) => {
   if (amount === null || amount === undefined) return "0.00";
   const num = Number(amount);
   if (!detail.value?.currency || detail.value.currency === "CNY") {
@@ -376,6 +392,7 @@ const handleSaveRemark = async () => {
     remarkLoading.value = true;
     await updateAccountRemark(route.params.id, editRemark.value);
     detail.value.remark = editRemark.value;
+    flowSync.recordChange(route.params.id, { remark: editRemark.value })
     showRemarkPopup.value = false;
     showToast("保存成功");
   } catch (e) {
@@ -385,20 +402,29 @@ const handleSaveRemark = async () => {
   }
 };
 
-// 加载支出分类列表
-const loadCategoryList = async () => {
+// 加载分类列表
+const loadCategoryList = async (direction) => {
   try {
-    const res = await categoryApi.list("expense");
+    const type = direction === 1 ? 'income' : 'expense'
+    const res = await categoryApi.list(type);
     categoryList.value = res.data || res || [];
   } catch (e) {
     categoryList.value = [];
   }
 };
 
+const categoryDirectionText = computed(() => {
+  return detail.value?.direction === 1 ? '收入分类' : '支出分类'
+})
+
+const categoryPopupTitle = computed(() => {
+  return `选择${categoryDirectionText.value}`
+})
+
 // 打开分类编辑弹窗
 const openCategoryPopup = () => {
   selectedCategoryId.value = detail.value.category_id;
-  loadCategoryList();
+  loadCategoryList(detail.value.direction);
   showCategoryPopup.value = true;
 };
 
@@ -418,11 +444,20 @@ const handleSaveCategory = async () => {
     return;
   }
   try {
+    await showConfirmDialog({
+      title: '确认修改',
+      message: `确定将分类从「${getCategoryText(detail.value)}」改为「${categoryList.value.find(c => c.id === selectedCategoryId.value)?.name || ''}」吗？`,
+    });
+  } catch {
+    return;
+  }
+  try {
     categoryLoading.value = true;
-    await updateAccount(route.params.id, { data: { categoryId: selectedCategoryId.value } });
+    await updateAccount(route.params.id, { categoryId: selectedCategoryId.value });
     const selected = categoryList.value.find(c => c.id === selectedCategoryId.value);
     detail.value.category_id = selectedCategoryId.value;
     detail.value.category_name = selected?.name || "未知分类";
+    flowSync.recordChange(route.params.id, { category_name: selected?.name || '未知分类', category_id: selectedCategoryId.value })
     showCategoryPopup.value = false;
     showToast("分类已更新");
   } catch (e) {
@@ -530,6 +565,13 @@ const handleReverse = async () => {
   }
 };
 
+// 路由 id 变化时重新加载（处理同组件复用场景）
+watch(() => route.params.id, (newId, oldId) => {
+  if (newId && newId !== oldId) {
+    loadDetail();
+  }
+});
+
 // 初始化
 onMounted(() => {
   loadCardList();
@@ -539,7 +581,6 @@ onMounted(() => {
 
 <style scoped>
 .page-flow-detail {
-  min-height: 100vh;
   background: #f7f8fa;
 }
 
@@ -551,10 +592,14 @@ onMounted(() => {
 }
 
 .amount-card {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #79818f 0%, #052356 100%);
   padding: 40px 20px;
   text-align: center;
   color: #fff;
+}
+
+.amount-card.is-expense {
+  background: linear-gradient(135deg, #79818f 0%, #052356 100%);
 }
 
 .amount-label {
@@ -566,7 +611,7 @@ onMounted(() => {
 .currency-tag {
   margin-left: 8px;
   padding: 2px 8px;
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.25);
   border-radius: 10px;
   font-size: 12px;
 }
@@ -574,20 +619,13 @@ onMounted(() => {
 .exchange-info {
   margin-top: 8px;
   font-size: 12px;
-  opacity: 0.7;
+  opacity: 0.85;
 }
 
 .amount-value {
   font-size: 36px;
   font-weight: bold;
   font-family: "DIN Alternate", -apple-system, sans-serif;
-}
-
-.amount-value.income {
-  color: #07c160;
-}
-
-.amount-value.expense {
   color: #fff;
 }
 
@@ -600,6 +638,29 @@ onMounted(() => {
 .remark-text {
   color: #646566;
   word-break: break-all;
+  white-space: pre-wrap;
+  text-align: right;
+}
+
+.remark-text.collapsed {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.remark-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  max-width: 70%;
+}
+
+.remark-toggle {
+  color: #1989fa;
+  font-size: 12px;
+  margin-top: 4px;
+  cursor: pointer;
 }
 
 .card-cell {
@@ -638,10 +699,13 @@ onMounted(() => {
   padding: 20px 16px;
   display: flex;
   gap: 12px;
+  justify-content: center;
 }
 
 .action-btns .van-button {
-  flex: 1;
+  flex: 0 0 auto;
+  width: 150px;
+  padding: 0 10px;
 }
 
 .remark-popup {

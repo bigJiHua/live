@@ -1,14 +1,9 @@
 <template>
   <div class="page-structure">
-    <div class="page-header">
-      <div class="header-title">账户余额</div>
-      <div class="header-sub">查看各账户余额</div>
-    </div>
-
     <div class="balance-content">
       <!-- 总资产卡片 -->
       <div class="total-card" :class="{ 'no-balance': totalBalance === 0 }">
-        <div class="total-label">总资产</div>
+        <div class="total-label">系统内计总资产</div>
         <div class="total-amount">
           <span class="currency">¥</span>
           <span class="amount-num" @click="toggleBalance">
@@ -95,9 +90,11 @@
       <!-- 查看提示 -->
       <div class="view-tip" v-if="accountList.length > 0">
         <van-icon name="eye-o" />
-        <span>余额由收支计划自动计算，仅供查看</span>
+        <span>余额由收支计划自动计算，仅供参考</span>
       </div>
     </div>
+
+    <van-icon v-show="showBackTop" name="back-top" class="back-top" @click="scrollToTop" />
 
     <van-overlay :show="loading">
       <div class="flex-center">
@@ -108,7 +105,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useRouter } from "vue-router";
 import { showToast } from "vant";
 import { getBalanceList } from "@/utils/api/account";
@@ -121,6 +118,10 @@ const BASE_URL = ENV.FILE_BASE_URL;
 const router = useRouter();
 const showAmount = ref(true);
 const loading = ref(false);
+const showBackTop = ref(false);
+
+const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' })
+const onWindowScroll = () => { showBackTop.value = window.scrollY > 400 }
 const accountList = ref([]);
 const bankList = ref([]);
 const cardList = ref([]);
@@ -262,8 +263,12 @@ const loadData = async () => {
 };
 
 onMounted(async () => {
+  window.addEventListener('scroll', onWindowScroll, { passive: true });
   await Promise.all([loadBankList(), loadCardList()]);
   loadData();
+});
+onUnmounted(() => {
+  window.removeEventListener('scroll', onWindowScroll);
 });
 </script>
 
@@ -272,23 +277,6 @@ onMounted(async () => {
   min-height: 100vh;
   background: #f7f8fa;
   padding-bottom: 20px;
-}
-
-.page-header {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  padding: 24px 20px;
-  color: #fff;
-}
-
-.header-title {
-  font-size: 18px;
-  font-weight: 600;
-  margin-bottom: 4px;
-}
-
-.header-sub {
-  font-size: 13px;
-  opacity: 0.8;
 }
 
 .balance-content {
@@ -463,5 +451,23 @@ onMounted(async () => {
 .bank-search {
   padding: 0 16px;
   background: #fff;
+}
+
+/* 返回顶部 */
+.back-top {
+  position: fixed;
+  right: 16px;
+  bottom: 60px;
+  width: 40px;
+  height: 40px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  color: #1989fa;
+  z-index: 999;
 }
 </style>

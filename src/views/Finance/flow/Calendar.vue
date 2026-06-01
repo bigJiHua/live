@@ -36,13 +36,8 @@
 
     <!-- 日历主体 -->
     <div class="calendar-grid" v-if="!loading">
-      <div
-        v-for="(day, index) in calendarDays"
-        :key="index"
-        class="day-cell"
-        :class="getDayCellClass(day)"
-        @click="selectDate(day)"
-      >
+      <div v-for="(day, index) in calendarDays" :key="index" class="day-cell" :class="getDayCellClass(day)"
+        @click="selectDate(day)">
         <span class="day-number">{{ day.day }}</span>
         <!-- 有收支记录 -->
         <div v-if="day.hasRecord" class="day-amounts">
@@ -66,51 +61,117 @@
       </div>
 
       <div class="detail-content">
-        <div v-if="dayDetail.displayList.length > 0" class="flow-list">
-          <template
-            v-for="node in dayDetail.displayList"
-            :key="node.type === 'flow' ? node.data.id : 'tf-' + node.expense.id"
-          >
-            <div
-              v-if="node.type === 'flow'"
-              class="flow-item"
-              @click="goDetail(node.data)"
-            >
-              <div class="item-left">
-                <div class="item-cat">{{ getCategoryName(node.data) }}</div>
-                <div class="item-desc">{{ getFlowItemDesc(node.data) }}</div>
-              </div>
-              <div class="item-right">
-                <div
-                  class="item-amount"
-                  :class="isIncome(node.data) ? 'income' : 'expense'"
-                >
-                  {{ isIncome(node.data) ? '+' : '-' }}{{ formatAmount(node.data.amount) }}
+        <!-- 支出 | 收入 双列 -->
+        <div v-if="dayDetail.hasItems" class="flow-columns">
+          <div class="flow-col flow-col-expense">
+            <div class="col-header expense-header">支出</div>
+            <div v-if="dayDetail.expenseItems.length > 0" class="col-items">
+              <div v-for="node in dayDetail.expenseItems" :key="node.data.id" class="flow-item flow-item-col"
+                @click="goDetail(node.data)">
+                <div class="fi-line fi-line1">
+                  <span>
+                    {{ getCategoryName(node.data) }}
+                    <span class="fi-card-type">{{ getCardTypeLabel(node.data) }}</span>
+                  </span>
+                  <span class="fi-time">{{ formatTime(node.data.create_time) }}</span>
                 </div>
-                <div class="item-date">{{ formatTime(node.data.create_time) }}</div>
-              </div>
-            </div>
-
-            <div v-else class="transfer-row">
-              <div class="transfer-header">{{ node.isExplicit ? '转账' : '疑似转账' }}</div>
-              <div class="transfer-body">
-                <div class="transfer-side">
-                  <div class="transfer-amount expense">-{{ formatAmount(node.expense.amount) }}</div>
-                  <div class="transfer-bank">{{ getBankCardLabel(node.expense) || '余额' }}</div>
-                  <div class="transfer-time">{{ formatTime(node.expense.create_time) }}</div>
-                </div>
-                <div class="transfer-arrow">→</div>
-                <div class="transfer-side">
-                  <div class="transfer-amount income">+{{ formatAmount(node.income.amount) }}</div>
-                  <div class="transfer-bank">{{ getBankCardLabel(node.income) || '银行卡' }}</div>
-                  <div class="transfer-time">{{ formatTime(node.income.create_time) }}</div>
+                <div class="fi-line fi-line2" :class="{ 'fi-line2-wrap': node.data.amount > 999.99 }">
+                  <span class="item-amount expense">-{{ formatAmount(node.data.amount) }}</span>
+                  <span class="fi-bank">{{ getCompactBankLabel(node.data) }}</span>
                 </div>
               </div>
             </div>
-          </template>
+            <div v-else class="col-empty">-</div>
+          </div>
+          <div class="col-divider"></div>
+          <div class="flow-col flow-col-income">
+            <div class="col-header income-header">收入</div>
+            <div v-if="dayDetail.incomeItems.length > 0" class="col-items">
+              <div v-for="node in dayDetail.incomeItems" :key="node.data.id" class="flow-item flow-item-col"
+                @click="goDetail(node.data)">
+                <div class="fi-line fi-line1">
+                  <span>
+                    {{ getCategoryName(node.data) }}
+                    <span class="fi-card-type">{{ getCardTypeLabel(node.data) }}</span>
+                  </span>
+                  <span class="fi-time">{{ formatTime(node.data.create_time) }}</span>
+                </div>
+                <div class="fi-line fi-line2" :class="{ 'fi-line2-wrap': node.data.amount > 999.99 }">
+                  <span class="item-amount income">+{{ formatAmount(node.data.amount) }}</span>
+                  <span class="fi-bank">{{ getCompactBankLabel(node.data) }}</span>
+                </div>
+              </div>
+            </div>
+            <div v-else class="col-empty">-</div>
+          </div>
         </div>
 
-        <van-empty v-else description="当日无收支记录" />
+        <!-- 转账区域 -->
+        <div v-if="dayDetail.transferItems.length > 0" class="transfer-section">
+          <div class="transfer-divider">---- 转账 ----</div>
+          <div v-for="node in dayDetail.transferItems" :key="'tf-' + node.expense.id" class="transfer-row">
+            <div class="tf-line1">
+              <span class="tf-time">{{ formatTime(node.expense.create_time) }}</span>
+              <span class="tf-label">{{ node.isExplicit ? '转账' : '疑似转账' }}</span>
+              <span class="tf-time">{{ formatTime(node.income.create_time) }}</span>
+            </div>
+            <div class="tf-line2">
+              <span class="tf-amount expense" @click="goDetail(node.expense)">-{{ formatAmount(node.expense.amount)
+                }}</span>
+              <span class="tf-arrow">→</span>
+              <span class="tf-amount income" @click="goDetail(node.income)">+{{ formatAmount(node.income.amount)
+                }}</span>
+            </div>
+            <div class="tf-line3">
+              <span class="tf-bank">{{ getCompactBankLabel(node.expense) }}</span>
+              <span class="tf-bank">{{ getCompactBankLabel(node.income) }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 提现区域 -->
+        <div v-if="dayDetail.withdrawalItems.length > 0" class="withdrawal-section">
+          <div class="withdrawal-divider">---- 提现 ----</div>
+          <div v-for="node in dayDetail.withdrawalItems" :key="'wd-' + node.expense.id" class="withdrawal-row">
+            <div class="wd-line1">
+              <span class="wd-time">{{ formatTime(node.expense.create_time) }}</span>
+              <span class="wd-label">提现</span>
+              <span class="wd-time">{{ formatTime(node.income.create_time) }}</span>
+            </div>
+            <div class="wd-line2">
+              <span class="wd-amount expense" @click="goDetail(node.expense)">-{{ formatAmount(node.expense.amount) }}</span>
+              <span class="wd-arrow">→</span>
+              <span class="wd-amount income" @click="goDetail(node.income)">+{{ formatAmount(node.income.amount) }}</span>
+            </div>
+            <div class="wd-line3">
+              <span class="wd-bank">{{ getCompactBankLabel(node.expense) }}</span>
+              <span class="wd-bank">{{ getCompactBankLabel(node.income) }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 冲正区域 -->
+        <div v-if="dayDetail.reversalItems.length > 0" class="reversal-section">
+          <div class="reversal-divider">---- 冲正 ----</div>
+          <div v-for="node in dayDetail.reversalItems" :key="'rv-' + node.expense.id" class="reversal-row">
+            <div class="rv-line1">
+              <span class="rv-time">{{ formatTime(node.expense.create_time) }}</span>
+              <span class="rv-label">冲正</span>
+              <span class="rv-time">{{ formatTime(node.income.create_time) }}</span>
+            </div>
+            <div class="rv-line2">
+              <span class="rv-amount expense" @click="goDetail(node.expense)">-{{ formatAmount(node.expense.amount) }}</span>
+              <span class="rv-arrow">→</span>
+              <span class="rv-amount income" @click="goDetail(node.income)">+{{ formatAmount(node.income.amount) }}</span>
+            </div>
+            <div class="rv-line3">
+              <span class="rv-bank">{{ getCompactBankLabel(node.expense) }}</span>
+              <span class="rv-bank">{{ getCompactBankLabel(node.income) }}</span>
+            </div>
+          </div>
+        </div>
+
+        <van-empty v-if="dayDetail.displayList.length === 0" description="当日无收支记录" />
         <div v-if="dayDetail.displayList.length === 0" class="add-record-btn">
           <van-button type="primary" size="small" round @click="goAddRecord">
             <van-icon name="plus" /> 立即记账
@@ -121,19 +182,15 @@
 
     <!-- 月份选择器 -->
     <van-popup v-model:show="showMonthPicker" position="bottom" round>
-      <van-picker
-        title="选择月份"
-        v-model="pickerSelectedValues"
-        :columns="pickerColumns"
-        @confirm="onPickerConfirm"
-        @cancel="showMonthPicker = false"
-      />
+      <van-picker title="选择月份" v-model="pickerSelectedValues" :columns="pickerColumns" @confirm="onPickerConfirm"
+        @cancel="showMonthPicker = false" />
     </van-popup>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, onActivated, onDeactivated, nextTick } from "vue";
+defineOptions({ name: 'FinanceFlowCalendar' })
 import { useRouter } from "vue-router";
 import dayjs from "dayjs";
 import { getAccountList } from "@/utils/api/account";
@@ -291,12 +348,44 @@ const processDailyDisplayList = (items) => {
   const usedExpenseIds = new Set();
   const usedIncomeIds = new Set();
 
-  const addPair = (expense, income, isExplicit) => {
-    pairs.push({ expense, income, isExplicit });
+  const addPair = (expense, income, isExplicit, isWithdrawal = false, isReversal = false) => {
+    pairs.push({ expense, income, isExplicit, isWithdrawal, isReversal });
     usedExpenseIds.add(expense.id);
     usedIncomeIds.add(income.id);
   };
 
+  // 辅助函数
+  const getDate = (item) => (item.trans_date || item.transDate || "").slice(0, 10);
+  const getCard = (item) => item.card_id || item.cardId || '';
+  const isVirtual = (cardId) => cardId === 'yyyy' || cardId === 'xxxx';
+
+  // 判断是否为信用卡
+  const isCreditCard = (item) => {
+    const acctType = item.account_type || item.accountType;
+    if (acctType === 'credit') return true;
+    const cardId = item.card_id || item.cardId;
+    if (!cardId) return false;
+    const card = cardList.value.find(c => c.id === cardId);
+    return card?.card_type === 'credit' || card?.cardType === 'credit';
+  };
+
+  // 获取时间戳（用于时间接近判断）
+  const getTimestamp = (item) => {
+    if (item.create_time) return Number(item.create_time);
+    if (item.createdAt) return Number(item.createdAt);
+    const transTime = item.trans_date || item.transDate;
+    if (transTime && transTime.includes(' ')) return dayjs(transTime).valueOf();
+    return null;
+  };
+
+  // 基础匹配：日期相同、金额相等、币种一致、卡片不同
+  const baseMatch = (exp, inc) =>
+    getDate(exp) === getDate(inc) &&
+    Number(exp.amount || 0) === Number(inc.amount || 0) &&
+    (exp.currency || 'CNY') === (inc.currency || 'CNY') &&
+    getCard(exp) !== getCard(inc);
+
+  // 第1趟：transfer_group_id 匹配（后端明确分组）
   const transferGroups = items.reduce((map, item) => {
     if (item.category_id === "CATEGORY_REPAY" || !item.transfer_group_id) return map;
     if (!map[item.transfer_group_id]) map[item.transfer_group_id] = [];
@@ -310,22 +399,107 @@ const processDailyDisplayList = (items) => {
     if (expense && income) addPair(expense, income, true);
   });
 
+  // 第1.5趟：信用卡支出 + 现金/余额收入 + 收入类别为"冲正" → 冲正
   items.forEach((item) => {
-    if (usedExpenseIds.has(item.id)) return;
+    if (usedExpenseIds.has(item.id) || usedIncomeIds.has(item.id)) return;
     if (item.category_id === "CATEGORY_REPAY") return;
     if (!isExpense(item)) return;
-    const date = getItemDate(item);
+    if (!isCreditCard(item)) return;  // 支出方必须是信用卡
     const match = items.find((inc) => {
       if (inc.id === item.id || usedIncomeIds.has(inc.id)) return false;
       if (inc.category_id === "CATEGORY_REPAY") return false;
       if (!isIncome(inc)) return false;
-      return (
-        getItemDate(inc) === date &&
-        Math.abs(Number(item.amount || 0) - Number(inc.amount || 0)) < 0.01 &&
-        (item.card_id || item.cardId || "none") !== (inc.card_id || inc.cardId || "none2")
-      );
+      if (!baseMatch(item, inc)) return false;
+      // 收入方为现金或余额
+      if (!isVirtual(getCard(inc))) return false;
+      // 收入类别为冲正
+      const incCat = inc.pay_type || inc.payType || inc.category_name || inc.categoryName || '';
+      return incCat === '冲正';
     });
-    if (match) addPair(item, match, item.pay_type === "转账" && match.pay_type === "转账");
+    if (match) addPair(item, match, true, false, true);
+  });
+
+  // 第2趟：双方分类均为"转账" → 确诊转账（支出方不能为信用卡）
+  items.forEach((item) => {
+    if (usedExpenseIds.has(item.id) || usedIncomeIds.has(item.id)) return;
+    if (item.category_id === "CATEGORY_REPAY") return;
+    if (!isExpense(item)) return;
+    if (isCreditCard(item)) return;  // 信用卡不归入转账
+    const match = items.find((inc) => {
+      if (inc.id === item.id || usedIncomeIds.has(inc.id)) return false;
+      if (inc.category_id === "CATEGORY_REPAY") return false;
+      if (!isIncome(inc)) return false;
+      if (!baseMatch(item, inc)) return false;
+      const expCat = item.pay_type || item.payType || item.category_name || item.categoryName || '';
+      const incCat = inc.pay_type || inc.payType || inc.category_name || inc.categoryName || '';
+      return expCat === '转账' && incCat === '转账';
+    });
+    if (match) addPair(item, match, true);
+  });
+
+  // 第3趟：支出"其他支出" + 收入"其他收入" → 疑似转账（支出方不能为信用卡）
+  items.forEach((item) => {
+    if (usedExpenseIds.has(item.id) || usedIncomeIds.has(item.id)) return;
+    if (item.category_id === "CATEGORY_REPAY") return;
+    if (!isExpense(item)) return;
+    if (isCreditCard(item)) return;  // 信用卡不归入转账
+    const match = items.find((inc) => {
+      if (inc.id === item.id || usedIncomeIds.has(inc.id)) return false;
+      if (inc.category_id === "CATEGORY_REPAY") return false;
+      if (!isIncome(inc)) return false;
+      if (!baseMatch(item, inc)) return false;
+      const expCat = item.pay_type || item.payType || item.category_name || item.categoryName || '';
+      const incCat = inc.pay_type || inc.payType || inc.category_name || inc.categoryName || '';
+      return expCat === '其他支出' && incCat === '其他收入';
+    });
+    if (match) addPair(item, match, false);
+  });
+
+  // 第4趟：其余满足基础条件的 → 疑似转账（排除余额→银行卡方向 和 信用卡支出方）
+  items.forEach((item) => {
+    if (usedExpenseIds.has(item.id) || usedIncomeIds.has(item.id)) return;
+    if (item.category_id === "CATEGORY_REPAY") return;
+    if (!isExpense(item)) return;
+    const expenseCard = getCard(item);
+    const isExpenseVirtual = isVirtual(expenseCard);
+    if (isCreditCard(item)) return;  // 信用卡不归入转账
+    const match = items.find((inc) => {
+      if (inc.id === item.id || usedIncomeIds.has(inc.id)) return false;
+      if (inc.category_id === "CATEGORY_REPAY") return false;
+      if (!isIncome(inc)) return false;
+      if (!baseMatch(item, inc)) return false;
+      // 余额→银行卡方向排除（归入提现）
+      if (isExpenseVirtual && !isVirtual(getCard(inc))) return false;
+      return true;
+    });
+    if (match) {
+      const bothTransfer = (item.pay_type === "转账" || item.payType === "转账") &&
+                           (match.pay_type === "转账" || match.payType === "转账");
+      addPair(item, match, bothTransfer);
+    }
+  });
+
+  // 第5趟：余额→银行卡（同天同金额，时间接近）→ 提现
+  items.forEach((item) => {
+    if (usedExpenseIds.has(item.id) || usedIncomeIds.has(item.id)) return;
+    if (item.category_id === "CATEGORY_REPAY") return;
+    if (!isExpense(item)) return;
+    const expenseCard = getCard(item);
+    if (expenseCard !== 'yyyy') return;  // 仅限余额卡片
+    const match = items.find((inc) => {
+      if (inc.id === item.id || usedIncomeIds.has(inc.id)) return false;
+      if (inc.category_id === "CATEGORY_REPAY") return false;
+      if (!isIncome(inc)) return false;
+      if (!baseMatch(item, inc)) return false;
+      if (isVirtual(getCard(inc))) return false;  // 收入方不能是虚拟卡
+      // 时间接近判断（5分钟内）
+      const t1 = getTimestamp(item);
+      const t2 = getTimestamp(inc);
+      if (t1 && t2) return Math.abs(t1 - t2) <= 300000;
+      // 没有时间信息时，默认认为是提现（降级处理）
+      return true;
+    });
+    if (match) addPair(item, match, false, true);
   });
 
   const expenseIds = new Set(pairs.map((pair) => pair.expense.id));
@@ -335,7 +509,12 @@ const processDailyDisplayList = (items) => {
   items.forEach((item) => {
     if (expenseIds.has(item.id)) {
       const pair = pairs.find((p) => p.expense.id === item.id);
-      if (pair) processed.push({ type: "transfer", ...pair });
+      if (pair) {
+        processed.push({
+          type: pair.isReversal ? "reversal" : (pair.isWithdrawal ? "withdrawal" : "transfer"),
+          ...pair
+        });
+      }
     } else if (!incomeIds.has(item.id)) {
       processed.push({ type: "flow", data: item });
     }
@@ -413,7 +592,7 @@ const selectDate = (day) => {
 // 选中日期的流水详情
 const dayDetail = computed(() => {
   if (!selectedDate.value) {
-    return { income: 0, expense: 0, balance: 0, items: [], displayList: [] };
+    return { income: 0, expense: 0, balance: 0, items: [], displayList: [], expenseItems: [], incomeItems: [], transferItems: [], withdrawalItems: [], reversalItems: [], hasItems: false };
   }
 
   const dayRecord = monthData.value.daily_list.find(
@@ -421,7 +600,7 @@ const dayDetail = computed(() => {
   );
 
   if (!dayRecord) {
-    return { income: 0, expense: 0, balance: 0, items: [], displayList: [] };
+    return { income: 0, expense: 0, balance: 0, items: [], displayList: [], expenseItems: [], incomeItems: [], transferItems: [], withdrawalItems: [], reversalItems: [], hasItems: false };
   }
 
   const items = dayRecord.items || [];
@@ -432,12 +611,25 @@ const dayDetail = computed(() => {
     .filter((item) => isExpense(item))
     .reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
 
+  const displayList = processDailyDisplayList(items)
+  const expenseItems = displayList.filter(n => n.type === 'flow' && isExpense(n.data))
+  const incomeItems = displayList.filter(n => n.type === 'flow' && isIncome(n.data))
+  const transferItems = displayList.filter(n => n.type === 'transfer')
+  const withdrawalItems = displayList.filter(n => n.type === 'withdrawal')
+  const reversalItems = displayList.filter(n => n.type === 'reversal')
+
   return {
     income,
     expense,
     balance: income - expense,
     items,
-    displayList: processDailyDisplayList(items),
+    displayList,
+    expenseItems,
+    incomeItems,
+    transferItems,
+    withdrawalItems,
+    reversalItems,
+    hasItems: expenseItems.length > 0 || incomeItems.length > 0,
   };
 });
 
@@ -512,12 +704,24 @@ const loadMonthData = async () => {
   }
 };
 
+const savedScrollY = ref(0)
+
 onMounted(() => {
   loadCardAndBankData();
   loadMonthData();
   // 默认选中今天
   selectedDate.value = dayjs().format("YYYY-MM-DD");
 });
+
+onDeactivated(() => {
+  savedScrollY.value = window.scrollY || document.documentElement.scrollTop
+})
+
+onActivated(() => {
+  nextTick(() => {
+    if (savedScrollY.value > 0) window.scrollTo({ top: savedScrollY.value, behavior: 'instant' })
+  })
+})
 
 // 加载卡片和银行数据
 const loadCardAndBankData = async () => {
@@ -588,11 +792,28 @@ const getBankCardLabel = (item) => {
   return cardText === "-" ? item.card_last4 || item.cardLast4 || "" : cardText;
 };
 
-const getFlowItemDesc = (item) => {
-  const cardLabel = getBankCardLabel(item);
-  const method = item.pay_method || item.payMethod || "";
-  if (cardLabel && method) return `${cardLabel} · ${method}`;
-  return cardLabel || method || "-";
+// 获取卡类型标签
+const getCardTypeLabel = (item) => {
+  const at = item.account_type || item.accountType || "";
+  const map = { debit: "借记卡", credit: "信用卡", virtual_balance: "", virtual_cash: "现金" };
+  return map[at] || "";
+};
+
+// 获取紧凑版银行标签（长银行名缩写，确保尾号可见）
+const getCompactBankLabel = (item) => {
+  const cardId = item.card_id || item.cardId;
+  if (cardId === "yyyy") return "余额";
+  if (cardId === "xxxx") return "现金";
+  if (!cardId) return item.card_last4 || item.cardLast4 || "";
+  const card = cardList.value.find((c) => c.id === cardId);
+  if (!card) return item.card_last4 || item.cardLast4 || "";
+  const bankId = card.bank_id || card.bankId;
+  const bank = getBankInfo(bankId);
+  const bankName = bank?.name || card.alias || card.bank_name || "";
+  const last4 = card.last4_no || card.last4No || card.card_last4 || "";
+  const shortName = bankName.length > 6 ? bankName.slice(0, 6) : bankName;
+  if (shortName && last4) return `${shortName} ${last4}`;
+  return shortName || last4 || "-";
 };
 </script>
 
@@ -809,137 +1030,392 @@ const getFlowItemDesc = (item) => {
 }
 
 .detail-content {
-  max-height: 400px;
-  overflow-y: auto;
   padding: 10px 12px 14px;
+  overflow-y: auto;
 }
 
-.flow-list {
-  padding-bottom: 4px;
+/* ── 双列布局 ── */
+.flow-columns {
+  display: flex;
+  gap: 0;
+  align-items: flex-start;
+  max-height: 50vh;
 }
 
-.item-left {
+.flow-col {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 50vh;
 }
 
-.flow-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background: #fff;
-  padding: 10px 14px;
-  margin-top: 6px;
+.col-items {
+  height: 100%;
+  overflow-y: scroll;
+}
+
+.col-header {
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  padding: 6px 0;
+  border-radius: 6px;
+}
+
+.expense-header {
+  background: #fff2f0;
+  color: #ee0a24;
+}
+
+.income-header {
+  background: #f0fff5;
+  color: #07c160;
+}
+
+.col-divider {
+  width: 1px;
+  align-self: stretch;
+  background: #ebedf0;
+  margin: 0 8px;
+}
+
+.col-empty {
+  text-align: center;
+  color: #c8c9cc;
+  padding: 16px 0;
+  font-size: 13px;
+}
+
+/* 列内流水项 */
+.flow-item-col {
+  background: #f7f8fa;
+  padding: 6px 10px;
   border-radius: 8px;
   cursor: pointer;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
+  margin-bottom: 5px;
 }
 
-.item-cat {
-  font-size: 14px;
-  color: #323233;
-  font-weight: 500;
+.fi-line {
+  display: flex;
+  align-items: center;
 }
 
-.item-desc {
+.fi-line1 {
   font-size: 12px;
-  color: #969799;
-  margin-top: 2px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  color: #323233;
+  justify-content: space-between;
+  margin-bottom: 2px;
 }
 
-.item-right {
+.fi-time {
+  color: #969799;
+}
+
+.fi-line2 {
+  justify-content: space-between;
+  align-items: baseline;
+  overflow: hidden;
+}
+
+.fi-bank {
+  font-size: 10px;
+  color: #646566;
   flex-shrink: 0;
   text-align: right;
-  margin-left: 10px;
 }
 
-.item-amount {
-  font-size: 15px;
+.fi-card-type {
+  font-size: 9px;
+  color: #969799;
+  margin-left: 2px;
+}
+
+.flow-item-col .item-amount {
+  font-size: 17px;
   font-weight: 600;
   font-family: "DIN Alternate", -apple-system, sans-serif;
   white-space: nowrap;
 }
 
-.item-amount.income {
+.fi-line2-wrap {
+  flex-wrap: wrap;
+}
+
+.fi-line2-wrap .fi-bank {
+  width: 100%;
+  text-align: right;
+}
+
+.flow-item-col .item-amount.income {
   color: #07c160;
 }
 
-.item-amount.expense {
+.flow-item-col .item-amount.expense {
   color: #ee0a24;
 }
 
-.item-date {
-  font-size: 11px;
-  color: #969799;
-  margin-top: 4px;
+/* ── 转账区域 ── */
+.transfer-section {
+  margin-top: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.transfer-divider {
+  width: 100%;
+  text-align: center;
+  font-size: 12px;
+  color: #1989fa;
+  font-weight: 500;
+  margin-bottom: 6px;
+  letter-spacing: 2px;
 }
 
 .transfer-row {
-  margin-top: 8px;
-  padding: 8px 12px;
+  width: calc(50% - 3px);
+  margin-top: 0;
+  padding: 6px 8px;
   border: 1px dashed #1989fa;
   border-radius: 10px;
   background: #f0f7ff;
+  box-sizing: border-box;
 }
 
-.transfer-header {
+.tf-line1 {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.tf-label {
   font-size: 11px;
   color: #1989fa;
   font-weight: 600;
-  text-align: center;
-  margin-bottom: 8px;
 }
 
-.transfer-body {
+.tf-time {
+  font-size: 10px;
+  color: #969799;
+}
+
+.tf-line2 {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-}
-
-.transfer-side {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 3px;
+  margin-bottom: 2px;
 }
 
-.transfer-amount {
+.tf-amount {
   font-size: 16px;
   font-weight: 700;
+  cursor: pointer;
 }
 
-.transfer-amount.income {
-  color: #07c160;
-}
-
-.transfer-amount.expense {
+.tf-amount.expense {
   color: #ee0a24;
 }
 
-.transfer-bank {
-  max-width: 100%;
-  font-size: 12px;
-  color: #323233;
+.tf-amount.income {
+  color: #07c160;
+}
+
+.tf-arrow {
+  font-size: 16px;
+  color: #1989fa;
+  flex-shrink: 0;
+}
+
+.tf-line3 {
+  display: flex;
+  justify-content: space-between;
+}
+
+.tf-bank {
+  font-size: 10px;
+  color: #646566;
+  max-width: 45%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.transfer-time {
+/* ── 提现区域 ── */
+.withdrawal-section {
+  margin-top: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.withdrawal-divider {
+  width: 100%;
+  text-align: center;
+  font-size: 12px;
+  color: #2e7d32;
+  font-weight: 500;
+  margin-bottom: 6px;
+  letter-spacing: 2px;
+}
+
+.withdrawal-row {
+  width: calc(50% - 3px);
+  margin-top: 0;
+  padding: 6px 8px;
+  border: 1px solid #c8e6c9;
+  border-radius: 10px;
+  background: #e8f5e9;
+  box-sizing: border-box;
+}
+
+.wd-line1 {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.wd-label {
   font-size: 11px;
+  color: #2e7d32;
+  font-weight: 600;
+}
+
+.wd-time {
+  font-size: 10px;
   color: #969799;
 }
 
-.transfer-arrow {
-  font-size: 18px;
-  color: #1989fa;
-  padding: 0 10px;
+.wd-line2 {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2px;
+}
+
+.wd-amount {
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.wd-amount.expense {
+  color: #2e7d32;
+}
+
+.wd-amount.income {
+  color: #2e7d32;
+}
+
+.wd-arrow {
+  font-size: 16px;
+  color: #2e7d32;
   flex-shrink: 0;
+}
+
+.wd-line3 {
+  display: flex;
+  justify-content: space-between;
+}
+
+.wd-bank {
+  font-size: 10px;
+  color: #388e3c;
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── 冲正区域（灰色，表示已撤销/无效）── */
+.reversal-section {
+  margin-top: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.reversal-divider {
+  width: 100%;
+  text-align: center;
+  font-size: 12px;
+  color: #969799;
+  font-weight: 500;
+  margin-bottom: 6px;
+  letter-spacing: 2px;
+}
+
+.reversal-row {
+  width: calc(50% - 3px);
+  margin-top: 0;
+  padding: 6px 8px;
+  border: 1px dashed #c8c9cc;
+  border-radius: 10px;
+  background: #f5f5f5;
+  box-sizing: border-box;
+  opacity: 0.72;
+}
+
+.rv-line1 {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.rv-label {
+  font-size: 11px;
+  color: #969799;
+  font-weight: 600;
+}
+
+.rv-time {
+  font-size: 10px;
+  color: #c8c9cc;
+}
+
+.rv-line2 {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2px;
+}
+
+.rv-amount {
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.rv-amount.expense {
+  color: #969799;
+}
+
+.rv-amount.income {
+  color: #969799;
+}
+
+.rv-arrow {
+  font-size: 16px;
+  color: #c8c9cc;
+  flex-shrink: 0;
+}
+
+.rv-line3 {
+  display: flex;
+  justify-content: space-between;
+}
+
+.rv-bank {
+  font-size: 10px;
+  color: #c8c9cc;
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* 立即记账按钮 */

@@ -28,7 +28,7 @@
         <span v-else @click="loadMore">加载更多</span>
       </div>
 
-      <van-back-top bottom="100px" />
+      <van-icon v-show="showBackTop" name="back-top" class="back-top" @click="scrollToTop" />
       <div style="height: 100px"></div>
     </van-pull-refresh>
 
@@ -39,13 +39,16 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { showToast } from 'vant'
 import DiaryCard from '@/components/Diary/DiaryCard.vue'
 import { momentApi } from '@/utils/api/moment'
 
 const refreshing = ref(false)
 const loading = ref(false)
+const showBackTop = ref(false)
+const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' })
+const onWindowScroll = () => { showBackTop.value = window.scrollY > 400 }
 const diaryList = ref([])
 
 // 分页
@@ -134,7 +137,11 @@ const onRefresh = async () => {
 };
 
 onMounted(() => {
+  window.addEventListener('scroll', onWindowScroll, { passive: true })
   loadList(false)
+});
+onUnmounted(() => {
+  window.removeEventListener('scroll', onWindowScroll)
 });
 </script>
 
@@ -189,5 +196,22 @@ onMounted(() => {
   font-size: 24px;
   box-shadow: 0 4px 12px rgba(0,0,0,0.15);
   z-index: 100;
+}
+
+.back-top {
+  position: fixed;
+  right: 16px;
+  bottom: 80px;
+  width: 40px;
+  height: 40px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  color: #1989fa;
+  z-index: 999;
 }
 </style>

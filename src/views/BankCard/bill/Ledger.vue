@@ -81,7 +81,8 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onActivated, onDeactivated, nextTick } from 'vue'
+defineOptions({ name: 'BillLedger' })
 import { useRouter, useRoute } from 'vue-router'
 import { showToast } from 'vant'
 import dayjs from 'dayjs'
@@ -106,6 +107,7 @@ const refreshing = ref(false)
 const page = ref(1)
 const limit = 50
 const summaryData = ref(null)
+const savedScrollY = ref(0)
 
 const fullUrl = (path) => {
   if (!path) return ''
@@ -262,6 +264,16 @@ onMounted(async () => {
     await Promise.all([loadSummary(), loadData()])
   }
   pageLoading.value = false
+})
+
+onDeactivated(() => {
+  savedScrollY.value = window.scrollY || document.documentElement.scrollTop
+})
+
+onActivated(() => {
+  nextTick(() => {
+    if (savedScrollY.value > 0) window.scrollTo({ top: savedScrollY.value, behavior: 'instant' })
+  })
 })
 </script>
 

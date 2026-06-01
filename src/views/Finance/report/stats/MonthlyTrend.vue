@@ -86,7 +86,8 @@
 </template>
 
 <script setup>
-import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, nextTick, onMounted, onActivated, onDeactivated, onUnmounted, watch } from 'vue'
+defineOptions({ name: 'FinanceReportMonthlyTrend' })
 import { useRouter } from 'vue-router'
 import dayjs from 'dayjs'
 import zhCn from 'dayjs/locale/zh-cn'
@@ -453,11 +454,23 @@ const onCalendarConfirm = (date) => {
 
 watch([dailyTrend, activeType, chartMode], renderDailyChart, { flush: 'post' })
 
+const savedScrollY = ref(0)
+
 onMounted(async () => {
   window.addEventListener('resize', resizeDailyChart)
   categoryApi.list('bank').then((res) => (bankList.value = res.data || res || [])).catch(() => {})
   getCardList().then((res) => (cardList.value = res.data || []))
   await loadData()
+})
+
+onDeactivated(() => {
+  savedScrollY.value = window.scrollY || document.documentElement.scrollTop
+})
+
+onActivated(() => {
+  nextTick(() => {
+    if (savedScrollY.value > 0) window.scrollTo({ top: savedScrollY.value, behavior: 'instant' })
+  })
 })
 
 onUnmounted(() => {

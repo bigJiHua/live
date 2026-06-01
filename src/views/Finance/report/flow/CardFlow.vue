@@ -106,7 +106,8 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onActivated, onDeactivated, nextTick } from 'vue'
+defineOptions({ name: 'FinanceReportCardFlow' })
 import { useRouter, useRoute } from 'vue-router'
 import { showToast } from 'vant'
 import dayjs from 'dayjs'
@@ -115,10 +116,12 @@ import { getAccountListByCard } from '@/utils/api/account'
 import { getCardList } from '@/utils/api/card'
 import { categoryApi } from '@/utils/api/category'
 import ENV from '@/utils/env'
+import { useFlowSyncStore } from '@/stores/flowSync'
 
 dayjs.locale(zhCn)
 const router = useRouter()
 const route = useRoute()
+const flowSync = useFlowSyncStore()
 const BASE_URL = ENV.FILE_BASE_URL
 
 const allCards = ref([])
@@ -166,13 +169,14 @@ const getFullUrl = (path) => {
 const filterType = ref('all')
 const showDatePicker = ref(false)
 const now = dayjs()
-const currentYear = ref(now.year())
-const currentMonth = ref(now.month() + 1)
-const selectedValues = ref([`${now.year()}年`, `${now.month() + 1}月`])
+const currentYear = ref(Number(route.query.year) || now.year())
+const currentMonth = ref(Number(route.query.month) || now.month() + 1)
+const selectedValues = ref([`${currentYear.value}年`, `${currentMonth.value}月`])
 const list = ref([])
 const loading = ref(false)
 const finished = ref(false)
 const refreshing = ref(false)
+const savedScrollY = ref(0)
 const page = ref(1)
 const limit = 20
 const summaryData = ref(null)
@@ -232,7 +236,14 @@ const loadData = async () => {
 
 const onRefresh = () => { page.value = 1; finished.value = false; loading.value = true; Promise.all([loadSummary(), loadData()]).finally(() => { loading.value = false; refreshing.value = false }) }
 const onFilterChange = () => onRefresh()
-const onPickerConfirm = ({ selectedOptions }) => { currentYear.value = parseInt(selectedOptions[0].text); currentMonth.value = parseInt(selectedOptions[1].text); selectedValues.value = [selectedOptions[0].text, selectedOptions[1].text]; showDatePicker.value = false; onRefresh() }
+const onPickerConfirm = ({ selectedOptions }) => {
+  currentYear.value = parseInt(selectedOptions[0].text)
+  currentMonth.value = parseInt(selectedOptions[1].text)
+  selectedValues.value = [selectedOptions[0].text, selectedOptions[1].text]
+  showDatePicker.value = false
+  router.replace({ query: { ...route.query, year: currentYear.value, month: currentMonth.value } })
+  onRefresh()
+}
 const goDetail = (item) => router.push(`/finance/flow/${item.id}`)
 
 onMounted(async () => {
@@ -246,6 +257,47 @@ onMounted(async () => {
       if (card) onCardSelect(card)
     }
   } catch (e) { allCards.value = []; bankList.value = [] }
+})
+
+// keep-alive 激活时：URL 有参数就恢复，无参数就重置为当前月
+onActivated(() => {
+  if (route.query.year && route.query.month) {
+    const y = Number(route.query.year)
+    const m = Number(route.query.month)
+    if (y !== currentYear.value || m !== currentMonth.value) {
+      currentYear.value = y
+      currentMonth.value = m
+      selectedValues.value = [`${y}年`, `${m}月`]
+      onRefresh()
+    }
+  } else {
+    const now = dayjs()
+    if (now.year() !== currentYear.value || now.month() + 1 !== currentMonth.value) {
+      currentYear.value = now.year()
+      currentMonth.value = now.month() + 1
+      selectedValues.value = [`${now.year()}年`, `${now.month() + 1}月`]
+      onRefresh()
+    }
+  }
+
+  // 同步 Detail 变更（原地 patch）
+  const changes = flowSync.consumeChanges();
+  const ids = Object.keys(changes);
+  if (ids.length > 0) {
+    list.value.forEach(item => {
+      const patch = changes[item.id];
+      if (patch) Object.assign(item, patch);
+    });
+  }
+
+  // 恢复滚动位置
+  nextTick(() => {
+    if (savedScrollY.value > 0) window.scrollTo({ top: savedScrollY.value, behavior: 'instant' })
+  })
+})
+
+onDeactivated(() => {
+  savedScrollY.value = window.scrollY || document.documentElement.scrollTop
 })
 </script>
 

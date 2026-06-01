@@ -181,7 +181,8 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed } from "vue";
+import { ref, reactive, onMounted, onActivated, onDeactivated, computed, nextTick } from "vue";
+defineOptions({ name: 'Home' })
 import { useRouter } from "vue-router";
 import { getAssetHome } from "@/utils/api/asset";
 import { getReminders } from "@/utils/api/todo";
@@ -376,11 +377,23 @@ const goToDetail = (item) => {
   router.push(`/finance/flow/${item.id}`);
 };
 
+const savedScrollY = ref(0)
+
 onMounted(() => {
   loadHomeData();
   loadReminder();
   loadTodaySalary();
 });
+
+onDeactivated(() => {
+  savedScrollY.value = window.scrollY || document.documentElement.scrollTop
+})
+
+onActivated(() => {
+  nextTick(() => {
+    if (savedScrollY.value > 0) window.scrollTo({ top: savedScrollY.value, behavior: 'instant' })
+  })
+})
 </script>
 
 <style scoped>
