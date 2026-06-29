@@ -181,9 +181,9 @@ class AuthController {
       const userId = req.userId;
       const db = require("../../../common/config/db");
 
-      // 检查是否已有待验证记录
+      // 检查是否已有未解锁的锁定记录（仅匹配 action_type='lock' 且 pin_status=0 的记录）
       const [existing] = await db.execute(
-        `SELECT id FROM security_verify_log WHERE user_id = ? AND pin_status = 0 LIMIT 1`,
+        `SELECT id FROM security_verify_log WHERE user_id = ? AND action_type = 'lock' AND pin_status = 0 LIMIT 1`,
         [userId]
       );
 

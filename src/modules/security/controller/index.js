@@ -242,6 +242,14 @@ class SecurityController {
         ]
       );
 
+      // 风险路由验证成功时，同步解除系统软锁定（避免后续普通请求被分支1.5 死循环拦截）
+      await db.execute(
+        `UPDATE security_verify_log
+         SET pin_status = 1, remark = '系统已解锁'
+         WHERE user_id = ? AND action_type = 'lock' AND pin_status = 0`,
+        [req.userId]
+      );
+
       return res.status(200).json({
         code: 8301,
         status: 200,

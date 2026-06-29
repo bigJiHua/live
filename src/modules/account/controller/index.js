@@ -145,10 +145,12 @@ class AccountController {
    */
   async update(req, res) {
     try {
+      // 兼容加密和非加密两种请求格式
+      const data = req.body.data || req.body
       const transaction = await Account.update(
         req.params.id,
         req.userId,
-        req.body.data
+        data
       );
 
       if (!transaction) return res.say("记录不存在", 404);
@@ -367,7 +369,10 @@ class AccountController {
    */
   async getAllStats(req, res) {
     try {
-      const stats = await Account.getAllStats(req.userId);
+      const now = new Date();
+      const year = parseInt(req.query.year) || now.getFullYear();
+      const month = parseInt(req.query.month) || now.getMonth() + 1;
+      const stats = await Account.getAllStats(req.userId, year, month);
       return res.json({
         status: 200,
         message: "获取成功",

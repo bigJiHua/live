@@ -8,7 +8,7 @@ const AccountSettlement = require('../../account/service/settlement');
  * 业务规则：
  * 1. 账单按月生成，每卡每月一条
  * 2. 账单周期：账单日(bill_day)次日 ~ 次月账单日前一天
- * 3. 消费日期 < 账单日 归属当月账单，消费日期 >= 账单日 归属下月账单（新周期）
+ * 3. 消费日期 <= 账单日 归属当月账单，消费日期 > 账单日 归属下月账单（新周期）
  * 4. 还款日：账单月的下一月repayDay
  * 5. 逾期状态：当前日期 > repay_date 且 need_repay > 0
  *
@@ -30,7 +30,7 @@ class CardBill {
   /**
    * 获取账单月 YYYY-MM
    * 账单周期：账单日(bill_day)次日 ~ 次月账单日前一天
-   * 消费日期 < 账单日 属于当月账单，消费日期 >= 账单日 属于下月账单（开启新周期）
+   * 消费日期 <= 账单日 属于当月账单，消费日期 > 账单日 属于下月账单（开启新周期）
    * @param {string|Date|number} transDate - 交易日期
    * @param {number} billDay - 账单日（几号），如果不传则默认为15保持兼容
    */
@@ -82,18 +82,22 @@ class CardBill {
 
   /**
    * 根据账单月和账单日计算账单周期
-   * 账单周期：N-1月billDay ～ N月billDay-1
+   * 账单周期：N-1月billDay+1 ～ N月billDay
+   * 注意：账单结束日是 billDay 当天（包含），开始日是上月 billDay 的次日
    */
   static calculateBillPeriod(billMonth, billDay) {
     const [year, month] = billMonth.split('-').map(Number);
-    
-    // 账单结束日期：账单月当天
+
+    // 账单结束日期：账单月的 billDay
     const billEndDate = new Date(year, month - 1, billDay);
-    
-    // 账单开始日期：上月上一天
+
+    // 账单开始日期：上月 billDay 的次日
+    // 用 Date 自动处理溢出：先定位到上月 billDay，再加一天
     let lastMonth = month === 1 ? 12 : month - 1;
     let lastYear = month === 1 ? year - 1 : year;
-    const billStartDate = new Date(lastYear, lastMonth - 1, billDay + 1);
+    const lastBillDate = new Date(lastYear, lastMonth - 1, billDay);
+    const billStartDate = new Date(lastBillDate);
+    billStartDate.setDate(lastBillDate.getDate() + 1);
 
     return {
       billStartDate: this.formatDate(billStartDate),
@@ -117,8 +121,8 @@ class CardBill {
   /**
    * 获取卡片信息（包含额度）
    */
-  static async getCardInfo(cardId) {
-    const [rows] = await db.execute(
+  static async getCardInfo(cardId, executor = db) {
+    const [rows] = await executor.execute(
       `SELECT id, user_id, card_type, bill_day, repay_day, credit_limit, 
               temp_limit, points_rate, currency 
        FROM card_base WHERE id = ? AND is_deleted = 0`,
@@ -184,58 +188,58 @@ class CardBill {
   /**
    * 根据ID查找账单
    */
-  static async findById(id, userId) {
+  static async findById(id, userId, executor = db) {
     const query = `
       SELECT cb.*, c.alias as card_alias, c.last4_no as card_last4, c.currency
       FROM ${this.tableName} cb
       LEFT JOIN card_base c ON cb.card_id = c.id
       WHERE cb.id = ? AND cb.user_id = ? AND cb.is_deleted = 0
     `;
-    const [rows] = await db.execute(query, [id, userId]);
+    const [rows] = await executor.execute(query, [id, userId]);
     return rows[0] || null;
   }
 
   /**
    * 根据卡片和月份查找账单
    */
-  static async findByCardAndMonth(cardId, billMonth) {
+  static async findByCardAndMonth(cardId, billMonth, executor = db) {
     const query = `
       SELECT * FROM ${this.tableName}
       WHERE card_id = ? AND bill_month = ? AND is_deleted = 0
     `;
-    const [rows] = await db.execute(query, [cardId, billMonth]);
+    const [rows] = await executor.execute(query, [cardId, billMonth]);
     return rows[0] || null;
   }
 
   /**
    * 获取或创建账单（按需创建）
    */
-  static async getOrCreateBill(cardId, userId, billMonth) {
-    const card = await this.getCardInfo(cardId);
+  static async getOrCreateBill(cardId, userId, billMonth, executor = db) {
+    const card = await this.getCardInfo(cardId, executor);
     if (!card) throw new Error('卡片不存在');
     if (card.card_type !== 'credit') throw new Error('只有信用卡才需要账单');
 
     const month = billMonth || this.getCurrentBillMonth();
 
-    let bill = await this.findByCardAndMonth(cardId, month);
+    let bill = await this.findByCardAndMonth(cardId, month, executor);
     if (bill) return bill;
 
-    bill = await this.create({ userId, cardId, billMonth: month });
+    bill = await this.create({ userId, cardId, billMonth: month }, executor);
     return bill;
   }
 
   /**
    * 创建账单（幂等：如果存在则更新额度）
    */
-  static async create({ userId, cardId, billMonth, creditLimit, tempLimit, pointsRate, remindSwitch, remindDays }) {
+  static async create({ userId, cardId, billMonth, creditLimit, tempLimit, pointsRate, remindSwitch, remindDays }, executor = db) {
     const id = idUtils.billId();
     const now = String(Date.now());
 
-    const card = await this.getCardInfo(cardId);
+    const card = await this.getCardInfo(cardId, executor);
     if (!card) throw new Error('卡片不存在');
 
     const month = billMonth || this.getCurrentBillMonth();
-    const existing = await this.findByCardAndMonth(cardId, month);
+    const existing = await this.findByCardAndMonth(cardId, month, executor);
 
     // 确定最终额度：优先使用传入值，其次 card_base 值
     const finalCreditLimit = (creditLimit !== undefined && creditLimit !== null) 
@@ -249,19 +253,15 @@ class CardBill {
       // 账单已存在：更新额度，同时重新计算 avail_limit
       const currentUsedLimit = parseFloat(existing.used_limit) || 0;
       const newAvailLimit = finalCreditLimit + finalTempLimit - currentUsedLimit;
-      await db.execute(
-        `UPDATE ${this.tableName} SET 
+      await executor.execute(
+        `UPDATE ${this.tableName} SET
            credit_limit = ?, temp_limit = ?, avail_limit = ?,
            update_time = ?
          WHERE id = ? AND is_deleted = 0`,
         [finalCreditLimit, finalTempLimit, newAvailLimit, now, existing.id]
       );
-      // 同时更新 card_base 的额度
-      await db.execute(
-        `UPDATE card_base SET credit_limit = ?, temp_limit = ?, update_time = ? WHERE id = ? AND is_deleted = 0`,
-        [finalCreditLimit, finalTempLimit, now, cardId]
-      );
-      return this.findById(existing.id, userId);
+      // 注意：不再反向更新 card_base，账单应该从 card_base 读取额度，而不是反向写入
+      return this.findById(existing.id, userId, executor);
     }
 
     // 新建账单（幂等处理，防止并发重复插入）
@@ -287,7 +287,7 @@ class CardBill {
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
       `;
 
-      await db.execute(query, [
+      await executor.execute(query, [
         id, cardId, month, userId,
         finalCreditLimit, finalCreditLimit + finalTempLimit, 0,
         finalTempLimit, billStartDate, billEndDate, 0,
@@ -298,42 +298,37 @@ class CardBill {
       // 如果是重复键错误，说明有被软删除的旧账单，先恢复它
       if (error.code === 'ER_DUP_ENTRY') {
         // 先检查是否有被软删除的账单
-        const [deletedRows] = await db.execute(
+        const [deletedRows] = await executor.execute(
           'SELECT id FROM card_bill WHERE card_id = ? AND bill_month = ? AND is_deleted = 1',
           [cardId, month]
         );
         if (deletedRows.length > 0) {
           // 恢复被软删除的账单
-          await db.execute(
+          await executor.execute(
             'UPDATE card_bill SET is_deleted = 0, update_time = ? WHERE id = ?',
             [now, deletedRows[0].id]
           );
-          return this.findById(deletedRows[0].id, userId);
+          return this.findById(deletedRows[0].id, userId, executor);
         }
         // 如果没有软删除记录，查询现有记录
-        return this.findByCardAndMonth(cardId, month);
+        return this.findByCardAndMonth(cardId, month, executor);
       }
       throw error;
     }
 
-    // 同步更新 card_base 的额度
-    await db.execute(
-      `UPDATE card_base SET credit_limit = ?, temp_limit = ?, update_time = ? WHERE id = ? AND is_deleted = 0`,
-      [finalCreditLimit, finalTempLimit, now, cardId]
-    );
-
-    return this.findById(id, userId);
+    // 注意：不再反向更新 card_base，账单应该从 card_base 读取额度，而不是反向写入
+    return this.findById(id, userId, executor);
   }
 
   /**
    * 消费实时更新账单
    */
-  static async syncFromExpense(cardId, userId, amount, transDate) {
-    const card = await this.getCardInfo(cardId);
+  static async syncFromExpense(cardId, userId, amount, transDate, executor = db) {
+    const card = await this.getCardInfo(cardId, executor);
     if (!card || card.card_type !== 'credit') return;
 
     const billMonth = this.getBillMonthByDate(transDate, card.bill_day);
-    const bill = await this.getOrCreateBill(cardId, userId, billMonth);
+    const bill = await this.getOrCreateBill(cardId, userId, billMonth, executor);
     if (!bill) return;
 
     const now = String(Date.now());
@@ -347,7 +342,7 @@ class CardBill {
     const newNeedRepay = newBillAmount - (parseFloat(bill.repaid) || 0);
     const newPoints = Math.round(newUsedLimit * (card.points_rate || 1));
 
-    await db.execute(
+    await executor.execute(
       `UPDATE ${this.tableName} SET
          bill_amount = ?, used_limit = ?, avail_limit = ?,
          need_repay = ?, min_repay = ?, points = ?,
@@ -359,18 +354,18 @@ class CardBill {
        newNeedRepay, now, bill.id]
     );
 
-    return this.findById(bill.id, userId);
+    return this.findById(bill.id, userId, executor);
   }
 
   /**
    * 回滚消费：删除流水时恢复账单额度
    */
-  static async rollbackExpense(cardId, userId, amount, transDate) {
-    const card = await this.getCardInfo(cardId);
+  static async rollbackExpense(cardId, userId, amount, transDate, executor = db) {
+    const card = await this.getCardInfo(cardId, executor);
     if (!card || card.card_type !== 'credit') return;
 
     const billMonth = this.getBillMonthByDate(transDate, card.bill_day);
-    const bill = await this.findByCardAndMonth(cardId, billMonth);
+    const bill = await this.findByCardAndMonth(cardId, billMonth, executor);
     if (!bill) return;
 
     const now = String(Date.now());
@@ -385,7 +380,7 @@ class CardBill {
     const newAvailLimit = creditLimit + tempLimit - newUsedLimit;
     const newPoints = Math.round(newUsedLimit * (card.points_rate || 1));
 
-    await db.execute(
+    await executor.execute(
       `UPDATE ${this.tableName} SET
          bill_amount = ?, used_limit = ?, avail_limit = ?,
          need_repay = ?, min_repay = ?, points = ?,
@@ -399,19 +394,19 @@ class CardBill {
 
     console.log(`[撤销消费] billMonth=${billMonth}, 撤销=${amountNum}, 新账单=${newBillAmount}`);
 
-    return this.findById(bill.id, userId);
+    return this.findById(bill.id, userId, executor);
   }
 
   /**
    * 回滚还款：删除还款流水时恢复账单已用额度
    * 效果：增加已用额度，减少已还金额
    */
-  static async rollbackRepay(cardId, userId, repayAmount, transDate) {
-    const card = await this.getCardInfo(cardId);
+  static async rollbackRepay(cardId, userId, repayAmount, transDate, executor = db) {
+    const card = await this.getCardInfo(cardId, executor);
     if (!card || card.card_type !== 'credit') return;
 
     const billMonth = this.getBillMonthByDate(transDate, card.bill_day);
-    const bill = await this.findByCardAndMonth(cardId, billMonth);
+    const bill = await this.findByCardAndMonth(cardId, billMonth, executor);
     if (!bill) return;
 
     const now = String(Date.now());
@@ -423,14 +418,14 @@ class CardBill {
     const newUsedLimit = (parseFloat(bill.used_limit) || 0) + amountNum;
     const newAvailLimit = creditLimit + tempLimit - newUsedLimit;
     const newRepaid = Math.max(0, (parseFloat(bill.repaid) || 0) - amountNum);
-    const newNeedRepay = (parseFloat(bill.bill_amount) || 0) - newRepaid;
+    const newNeedRepay = Math.max(0, (parseFloat(bill.bill_amount) || 0) - newRepaid);
     const newPoints = Math.round(newUsedLimit * (card.points_rate || 1));
 
     let repayStatus = '未还款';
     if (newNeedRepay <= 0) repayStatus = '已还清';
     else if (newRepaid > 0) repayStatus = '部分还款';
 
-    await db.execute(
+    await executor.execute(
       `UPDATE ${this.tableName} SET
          used_limit = ?, avail_limit = ?,
          repaid = ?, need_repay = ?, points = ?,
@@ -441,7 +436,7 @@ class CardBill {
        repayStatus, now, bill.id]
     );
 
-    return this.findById(bill.id, userId);
+    return this.findById(bill.id, userId, executor);
   }
 
   /**

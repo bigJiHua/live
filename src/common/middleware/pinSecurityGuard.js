@@ -214,13 +214,23 @@ async function insertRecord(userId, url, action, remark = "待验证") {
 /**
  * 将最新的待验证/失败记录标记为验证成功
  * 只更新状态为 0（待验证）或 2（失败）的记录
+ * 同时把 action_type='lock' 的系统锁定记录也标记为已解锁，避免后续请求死循环
  */
 async function markSuccess(userId) {
+  // 1. 标记最近一条普通待验证/失败记录为成功
   await db.execute(
     `UPDATE security_verify_log
      SET pin_status = 1, remark = '验证成功'
-     WHERE user_id = ? AND pin_status IN (0,2)
+     WHERE user_id = ? AND pin_status IN (0,2) AND action_type <> 'lock'
      ORDER BY id DESC LIMIT 1`,
+    [userId]
+  );
+
+  // 2. 同时清除系统软锁定记录（lock-system 产生的），让用户进入解锁状态
+  await db.execute(
+    `UPDATE security_verify_log
+     SET pin_status = 1, remark = '系统已解锁'
+     WHERE user_id = ? AND action_type = 'lock' AND pin_status = 0`,
     [userId]
   );
 }
@@ -313,6 +323,8 @@ const pinSecurityGuard = async (req, res, next) => {
 
     // 握手接口跳过验证（用于前端检测服务器状态）
     if (url.includes("/handshake")) return next();
+    // lock-system 接口跳过 PIN 验证（锁定操作本身无需 PIN，见 lockSystem 控制器）
+    if (url.includes("/lock-system")) return next();
 
     // 从 JWT Token 中提取 userId
     let userId = null;
@@ -362,6 +374,10 @@ const pinSecurityGuard = async (req, res, next) => {
 
     // ── 分支 1.5：检查路由验证触发的软锁定（无时间限制，验证 PIN 后自动解除）──
     if (latest?.action_type === 'lock' && latest?.pin_status === 0) {
+      // 风险路由验证目标交给 pinLockGuard 处理，避免通用 8303 覆盖 route_verify 的 challengeId
+      if (routeVerifyTarget) {
+        return next();
+      }
       const pin = req.body?.data?.pin;
       if (!pin) {
         return respond(res, CODE.NEED_VERIFY, "操作受限，请验证 PIN");
@@ -439,6 +455,12 @@ const pinSecurityGuard = async (req, res, next) => {
       if (!session) {
         verifiedMap.set(userId, { verifiedAt: now, count: 1 });
         return next();
+      }
+
+      // 已超过 30 秒放行窗口 → 重置计数（防止旧会话污染）
+      if (now - session.verifiedAt >= 30 * 1000) {
+        session.count = 0;
+        session.verifiedAt = now;
       }
 
       const diff = now - session.verifiedAt;

@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const mysqldump = require('mysqldump');
+const archiver = require('archiver');
 const db = require('../../../common/config/db');
 const dayjs = require('dayjs');
 
@@ -12,10 +13,15 @@ const TASK_STATUS = {
   CANCELLED: 'cancelled'
 };
 
-const LARGE_TABLE_THRESHOLD = 5000;
-
+/**
+ * 备份/导出异步任务管理器
+ * - 所有备份导出操作均为异步，立即返回 taskId
+ * - 同一类型任务同时只允许一个执行（并发保护）
+ */
 class ExportTaskManager {
   static tasks = new Map();
+
+  // ==================== 基础工具 ====================
 
   static getDbConfig() {
     return {
@@ -28,7 +34,7 @@ class ExportTaskManager {
   }
 
   static generateTaskId() {
-    return `export_${dayjs().format('YYYYMMDDHHmmss')}_${Math.random().toString(36).substring(2, 9)}`;
+    return `task_${dayjs().format('YYYYMMDDHHmmss')}_${Math.random().toString(36).substring(2, 9)}`;
   }
 
   static async analyzeTableSize(tableName) {
@@ -47,38 +53,77 @@ class ExportTaskManager {
         database: config.database,
       },
       dump: {
-        schema: {
-          table: {
-            dropIfExists: true,
-          },
-        },
+        schema: { table: { dropIfExists: true } },
         data: includeData !== false ? {} : false,
         trigger: false,
       },
     };
-
-    if (tableName) {
-      opts.dump.tables = [tableName];
-    }
-
-    if (dumpToFile) {
-      opts.dumpToFile = dumpToFile;
-    }
-
+    if (tableName) opts.dump.tables = [tableName];
+    if (dumpToFile) opts.dumpToFile = dumpToFile;
     return opts;
   }
+
+  static getBackupDir() {
+    const dir = path.join(process.cwd(), 'data', 'sql', 'table');
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    return dir;
+  }
+
+  static getSystemBackupDir() {
+    const dir = path.join(process.cwd(), 'data', 'sql', 'backup');
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    return dir;
+  }
+
+  static getDateBackupDir(dateStr) {
+    const dir = path.join(this.getSystemBackupDir(), dateStr);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    return dir;
+  }
+
+  static cleanupFile(filepath) {
+    try { if (fs.existsSync(filepath)) fs.unlinkSync(filepath); }
+    catch (e) { console.error(`[TaskManager] Cleanup failed for ${filepath}:`, e); }
+  }
+
+  // ==================== 并发保护 ====================
+
+  /**
+   * 检查是否有指定类型的任务正在运行或等待中
+   * @param {'export_table'|'export_full_database'|'system_backup'} type
+   */
+  static hasRunningTask(type) {
+    for (const task of this.tasks.values()) {
+      if (task.type === type && (task.status === TASK_STATUS.PENDING || task.status === TASK_STATUS.RUNNING)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * 获取指定类型正在执行中的任务（用于前端轮询复用）
+   */
+  static getRunningTask(type) {
+    for (const task of this.tasks.values()) {
+      if (task.type === type && (task.status === TASK_STATUS.PENDING || task.status === TASK_STATUS.RUNNING)) {
+        return task;
+      }
+    }
+    return null;
+  }
+
+  // ==================== 单表导出 ====================
 
   static async createExportTask(tableName, options = {}) {
     const taskId = this.generateTaskId();
     const tableSize = await this.analyzeTableSize(tableName);
-    const isLargeTable = tableSize > LARGE_TABLE_THRESHOLD;
 
     const task = {
       id: taskId,
       type: 'export_table',
       tableName,
       tableSize,
-      isLargeTable,
       status: TASK_STATUS.PENDING,
       progress: 0,
       options,
@@ -87,19 +132,15 @@ class ExportTaskManager {
       completedAt: null,
       error: null,
       result: null,
-      _abortController: null,
     };
 
     this.tasks.set(taskId, task);
-
-    if (isLargeTable) {
-      setImmediate(() => this.executeLargeExportTask(taskId));
-    }
-
+    // 始终异步执行
+    setImmediate(() => this.executeExportTableTask(taskId));
     return task;
   }
 
-  static async executeLargeExportTask(taskId) {
+  static async executeExportTableTask(taskId) {
     const task = this.tasks.get(taskId);
     if (!task) return;
 
@@ -110,88 +151,31 @@ class ExportTaskManager {
 
     const includeData = task.options.includeData !== false;
     const filename = `${dayjs().format('YYYYMMDD-HHmmss')}-${task.tableName}.sql`;
-    const backupDir = path.join(process.cwd(), 'data', 'sql', 'table');
-    if (!fs.existsSync(backupDir)) {
-      fs.mkdirSync(backupDir, { recursive: true });
-    }
-    const filepath = path.join(backupDir, filename);
+    const filepath = path.join(this.getBackupDir(), filename);
 
     try {
+      task.progress = 15; this.tasks.set(taskId, task);
       const opts = this.buildDumpOptions(task.tableName, includeData, filepath);
-
-      task.progress = 15;
-      this.tasks.set(taskId, task);
-
       await mysqldump(opts);
 
-      if (task.status === TASK_STATUS.CANCELLED) {
-        this.cleanupFile(filepath);
-        return;
-      }
+      if (task.status === TASK_STATUS.CANCELLED) { this.cleanupFile(filepath); return; }
 
       const stats = fs.statSync(filepath);
-
       task.status = TASK_STATUS.COMPLETED;
       task.progress = 100;
       task.completedAt = new Date();
-      task.result = {
-        filename,
-        filepath,
-        size: stats.size,
-        rowCount: task.tableSize
-      };
-
+      task.result = { filename, filepath, size: stats.size, rowCount: task.tableSize };
     } catch (error) {
-      console.error(`[ExportTaskManager] Task ${taskId} failed:`, error);
+      console.error(`[TaskManager] Export table task ${taskId} failed:`, error);
       this.cleanupFile(filepath);
       task.status = TASK_STATUS.FAILED;
       task.error = error.message;
       task.completedAt = new Date();
     }
-
     this.tasks.set(taskId, task);
   }
 
-  static cleanupFile(filepath) {
-    try {
-      if (fs.existsSync(filepath)) {
-        fs.unlinkSync(filepath);
-      }
-    } catch (e) {
-      console.error(`[ExportTaskManager] Cleanup failed for ${filepath}:`, e);
-    }
-  }
-
-  static getTaskStatus(taskId) {
-    return this.tasks.get(taskId) || null;
-  }
-
-  static async cancelTask(taskId) {
-    const task = this.tasks.get(taskId);
-    if (!task) return false;
-
-    if (task.status === TASK_STATUS.PENDING || task.status === TASK_STATUS.RUNNING) {
-      task.status = TASK_STATUS.CANCELLED;
-      this.tasks.set(taskId, task);
-      return true;
-    }
-
-    return false;
-  }
-
-  static getAllTasks() {
-    return Array.from(this.tasks.values()).sort((a, b) => b.createdAt - a.createdAt);
-  }
-
-  static cleanupOldTasks(maxAgeMs = 24 * 60 * 60 * 1000) {
-    const now = Date.now();
-    for (const [taskId, task] of this.tasks.entries()) {
-      const age = now - task.createdAt.getTime();
-      if (age > maxAgeMs && task.status !== TASK_STATUS.RUNNING) {
-        this.tasks.delete(taskId);
-      }
-    }
-  }
+  // ==================== 全库导出 ====================
 
   static async createFullExportTask(options = {}) {
     const taskId = this.generateTaskId();
@@ -200,20 +184,16 @@ class ExportTaskManager {
 
     const tableSizes = [];
     let totalSize = 0;
-
     for (const tableName of tableNames) {
       const count = await this.analyzeTableSize(tableName);
       tableSizes.push({ name: tableName, rows: count });
       totalSize += count;
     }
 
-    const isLargeDatabase = totalSize > LARGE_TABLE_THRESHOLD;
-
     const task = {
       id: taskId,
       type: 'export_full_database',
       tableSize: totalSize,
-      isLargeTable: isLargeDatabase,
       status: TASK_STATUS.PENDING,
       progress: 0,
       options,
@@ -223,15 +203,11 @@ class ExportTaskManager {
       completedAt: null,
       error: null,
       result: null,
-      _abortController: null,
     };
 
     this.tasks.set(taskId, task);
-
-    if (isLargeDatabase) {
-      setImmediate(() => this.executeFullExportTask(taskId));
-    }
-
+    // 始终异步执行
+    setImmediate(() => this.executeFullExportTask(taskId));
     return task;
   }
 
@@ -245,48 +221,215 @@ class ExportTaskManager {
     this.tasks.set(taskId, task);
 
     const includeData = task.options.includeData !== false;
+    const format = task.options.format || 'sql';
     const timestamp = dayjs().format('YYYYMMDD-HHmmss');
-    const filename = `${timestamp}-full-backup.sql`;
-    const backupDir = path.join(process.cwd(), 'data', 'sql', 'table');
-    if (!fs.existsSync(backupDir)) {
-      fs.mkdirSync(backupDir, { recursive: true });
+
+    if (format === 'zip') {
+      await this.executeFullExportToZip(taskId, task, includeData, timestamp);
+    } else {
+      await this.executeFullExportToSql(taskId, task, includeData, timestamp);
     }
-    const filepath = path.join(backupDir, filename);
+  }
+
+  static async executeFullExportToSql(taskId, task, includeData, timestamp) {
+    const filename = `${timestamp}-full-backup.sql`;
+    const filepath = path.join(this.getBackupDir(), filename);
 
     try {
+      task.progress = 10; this.tasks.set(taskId, task);
       const opts = this.buildDumpOptions(null, includeData, filepath);
-
-      task.progress = 10;
-      this.tasks.set(taskId, task);
-
       await mysqldump(opts);
 
+      if (task.status === TASK_STATUS.CANCELLED) { this.cleanupFile(filepath); return; }
+
+      const stats = fs.statSync(filepath);
+      task.status = TASK_STATUS.COMPLETED;
+      task.progress = 100;
+      task.completedAt = new Date();
+      task.result = { filename, filepath, size: stats.size, rowCount: task.tableSize };
+    } catch (error) {
+      console.error(`[TaskManager] Full export task ${taskId} failed:`, error);
+      this.cleanupFile(filepath);
+      task.status = TASK_STATUS.FAILED;
+      task.error = error.message;
+      task.completedAt = new Date();
+    }
+    this.tasks.set(taskId, task);
+  }
+
+  static async executeFullExportToZip(taskId, task, includeData, timestamp) {
+    const sqlFilename = `${timestamp}-full-backup.sql`;
+    const sqlFilepath = path.join(this.getBackupDir(), sqlFilename);
+    const zipFilename = `${timestamp}-full-backup.sql.zip`;
+    const zipFilepath = path.join(this.getBackupDir(), zipFilename);
+
+    try {
+      task.progress = 10; this.tasks.set(taskId, task);
+      const opts = this.buildDumpOptions(null, includeData, sqlFilepath);
+      await mysqldump(opts);
+
+      if (task.status === TASK_STATUS.CANCELLED) { this.cleanupFile(sqlFilepath); return; }
+
+      task.progress = 70; this.tasks.set(taskId, task);
+
+      await new Promise((resolve, reject) => {
+        const output = fs.createWriteStream(zipFilepath);
+        const archive = new archiver('zip', { zlib: { level: 6 } });
+        output.on('close', resolve);
+        archive.on('error', reject);
+        archive.pipe(output);
+        archive.file(sqlFilepath, { name: sqlFilename });
+        archive.finalize();
+      });
+
+      if (fs.existsSync(sqlFilepath)) fs.unlinkSync(sqlFilepath);
+
+      const stats = fs.statSync(zipFilepath);
+      task.status = TASK_STATUS.COMPLETED;
+      task.progress = 100;
+      task.completedAt = new Date();
+      task.result = { filename: zipFilename, filepath: zipFilepath, size: stats.size, rowCount: task.tableSize };
+    } catch (error) {
+      console.error(`[TaskManager] Full export ZIP task ${taskId} failed:`, error);
+      this.cleanupFile(sqlFilepath);
+      this.cleanupFile(zipFilepath);
+      task.status = TASK_STATUS.FAILED;
+      task.error = error.message;
+      task.completedAt = new Date();
+    }
+    this.tasks.set(taskId, task);
+  }
+
+  // ==================== 系统备份 ====================
+
+  static async createSystemBackupTask(options = {}) {
+    const taskId = this.generateTaskId();
+
+    const task = {
+      id: taskId,
+      type: 'system_backup',
+      status: TASK_STATUS.PENDING,
+      progress: 0,
+      options,
+      createdAt: new Date(),
+      startedAt: null,
+      completedAt: null,
+      error: null,
+      result: null,
+    };
+
+    this.tasks.set(taskId, task);
+    setImmediate(() => this.executeSystemBackupTask(taskId));
+    return task;
+  }
+
+  static async executeSystemBackupTask(taskId) {
+    const task = this.tasks.get(taskId);
+    if (!task) return;
+
+    task.status = TASK_STATUS.RUNNING;
+    task.startedAt = new Date();
+    task.progress = 5;
+    this.tasks.set(taskId, task);
+
+    const dateStr = dayjs().format('YYYY-MM-DD');
+    const backupDir = this.getDateBackupDir(dateStr);
+
+    // 检查当日备份上限
+    const existingFiles = fs.readdirSync(backupDir).filter(f => f.endsWith('.sql'));
+    const backupCount = existingFiles.length / 2;
+    if (backupCount >= 3) {
+      task.status = TASK_STATUS.FAILED;
+      task.error = '今日备份已达上限（3次）';
+      task.completedAt = new Date();
+      this.tasks.set(taskId, task);
+      return;
+    }
+
+    const includeData = task.options.includeData !== false;
+    const timestamp = dayjs().format('YYYYMMDD-HHmmss');
+    let fullResult = null;
+    let schemaResult = null;
+
+    try {
+      // 完整备份
+      task.progress = 10; this.tasks.set(taskId, task);
+      const fullFilename = `${timestamp}-system-backup-full.sql`;
+      const fullFilepath = path.join(backupDir, fullFilename);
+      const fullOpts = this.buildDumpOptions(null, true, fullFilepath);
+      await mysqldump(fullOpts);
+
       if (task.status === TASK_STATUS.CANCELLED) {
-        this.cleanupFile(filepath);
+        this.cleanupFile(fullFilepath);
         return;
       }
 
-      const stats = fs.statSync(filepath);
+      const fullStats = fs.statSync(fullFilepath);
+      fullResult = { filename: fullFilename, filepath: fullFilepath, size: fullStats.size, date: dateStr, type: 'full' };
+
+      // 仅结构备份
+      task.progress = 55; this.tasks.set(taskId, task);
+      const schemaFilename = `${timestamp}-system-backup-schema-only.sql`;
+      const schemaFilepath = path.join(backupDir, schemaFilename);
+      const schemaOpts = this.buildDumpOptions(null, false, schemaFilepath);
+      await mysqldump(schemaOpts);
+
+      if (task.status === TASK_STATUS.CANCELLED) {
+        this.cleanupFile(schemaFilepath);
+        return;
+      }
+
+      const schemaStats = fs.statSync(schemaFilepath);
+      schemaResult = { filename: schemaFilename, filepath: schemaFilepath, size: schemaStats.size, date: dateStr, type: 'schema-only' };
 
       task.status = TASK_STATUS.COMPLETED;
       task.progress = 100;
       task.completedAt = new Date();
       task.result = {
-        filename,
-        filepath,
-        size: stats.size,
-        rowCount: task.tableSize
+        full: fullResult,
+        schemaOnly: schemaResult,
+        date: dateStr,
       };
-
     } catch (error) {
-      console.error(`[ExportTaskManager] Full export task ${taskId} failed:`, error);
-      this.cleanupFile(filepath);
+      console.error(`[TaskManager] System backup task ${taskId} failed:`, error);
+      if (fullResult) this.cleanupFile(fullResult.filepath);
+      if (schemaResult) this.cleanupFile(schemaResult.filepath);
       task.status = TASK_STATUS.FAILED;
       task.error = error.message;
       task.completedAt = new Date();
     }
 
     this.tasks.set(taskId, task);
+  }
+
+  // ==================== 任务查询与控制 ====================
+
+  static getTaskStatus(taskId) {
+    return this.tasks.get(taskId) || null;
+  }
+
+  static async cancelTask(taskId) {
+    const task = this.tasks.get(taskId);
+    if (!task) return false;
+    if (task.status === TASK_STATUS.PENDING || task.status === TASK_STATUS.RUNNING) {
+      task.status = TASK_STATUS.CANCELLED;
+      this.tasks.set(taskId, task);
+      return true;
+    }
+    return false;
+  }
+
+  static getAllTasks() {
+    return Array.from(this.tasks.values()).sort((a, b) => b.createdAt - a.createdAt);
+  }
+
+  static cleanupOldTasks(maxAgeMs = 24 * 60 * 60 * 1000) {
+    const now = Date.now();
+    for (const [taskId, task] of this.tasks.entries()) {
+      if (now - task.createdAt.getTime() > maxAgeMs && task.status !== TASK_STATUS.RUNNING) {
+        this.tasks.delete(taskId);
+      }
+    }
   }
 }
 

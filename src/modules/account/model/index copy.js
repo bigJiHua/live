@@ -212,61 +212,34 @@ class Account {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
     `;
 
-    if (finalAccountType === 'credit' && direction === 0) {
-      const conn = await db.getPool().getConnection();
-      try {
-        await conn.beginTransaction();
-        await conn.execute(query, [
-          id,
-          userId,
-          direction,
-          categoryId,
-          payType,
-          payMethod,
-          finalAccountType,
-          amount,
-          currency || 'CNY',
-          exchangeRate || 1,
-          transDate || now.substring(0, 10),
-          remark || '',
-          cardId,
-          now,
-          now,
-          transferGroupId || null
-        ]);
-        await CardBill.syncFromExpense(cardId, userId, amount, transDate, conn);
-        await conn.commit();
-      } catch (e) {
-        await conn.rollback();
-        throw e;
-      } finally {
-        conn.release();
-      }
-    } else {
-      await db.execute(query, [
-        id,
-        userId,
-        direction,
-        categoryId,
-        payType,
-        payMethod,
-        finalAccountType,
-        amount,
-        currency || 'CNY',
-        exchangeRate || 1,
-        transDate || now.substring(0, 10),
-        remark || '',
-        cardId,
-        now,
-        now,
-        transferGroupId || null
-      ]);
-    }
+    await db.execute(query, [
+      id,
+      userId,
+      direction,
+      categoryId,
+      payType,
+      payMethod,
+      finalAccountType,
+      amount,
+      currency || 'CNY',
+      exchangeRate || 1,
+      transDate || now.substring(0, 10),
+      remark || '',
+      cardId,
+      now,
+      now,
+      transferGroupId || null
+    ]);
 
     // ===== 清算中心同步余额（从收支表实时计算）=====
     if (cardId) {
       await AccountSettlement.syncBalanceSnapshot(cardId, userId);
 
+      // ===== 信用卡消费实时更新账单 =====
+      // 只有信用卡 + 支出 才更新账单
+      if (finalAccountType === 'credit' && direction === 0) {
+        await CardBill.syncFromExpense(cardId, userId, amount, transDate);
+      }
     }
 
     // ===== 转账关联：收入方向时写入 account_transfer =====
@@ -369,70 +342,6 @@ class Account {
       SET ${fields.join(', ')}
       WHERE id = ? AND user_id = ? AND is_deleted = 0
     `;
-
-    // ===== 信用卡消费：金额或日期变更时，同步回滚旧账单 + 写入新账单 =====
-    const isAmountChanged = amount !== undefined;
-    const isDateChanged = transDate !== undefined;
-    const needsBillSync = isAmountChanged || isDateChanged;
-
-    if (needsBillSync) {
-      const oldRecord = await this.findById(id, userId);
-      if (oldRecord && oldRecord.account_type === 'credit' && oldRecord.direction === 0) {
-        // 信用卡消费 → 事务内：回滚旧账单 + 更新流水 + 同步新账单
-        const conn = await db.getPool().getConnection();
-        try {
-          await conn.beginTransaction();
-
-          // 1. 回滚旧的消费金额（账单不存在则回滚整个事务）
-          const rollbackResult = await CardBill.rollbackExpense(
-            oldRecord.card_id, userId,
-            oldRecord.amount,
-            oldRecord.trans_date,
-            conn
-          );
-          if (!rollbackResult) {
-            throw new Error(
-              `旧账单回滚失败，原消费日期 ${oldRecord.trans_date} 对应账单周期不存在`
-            );
-          }
-
-          // 2. 更新流水
-          await conn.execute(query, params);
-
-          // 3. 重新同步新金额/新日期到账单
-          const [updatedRows] = await conn.execute(
-            `SELECT amount, trans_date, card_id FROM ${this.tableName}
-             WHERE id = ? AND user_id = ? AND is_deleted = 0`,
-            [id, userId]
-          );
-          const updated = updatedRows[0];
-          if (updated) {
-            await CardBill.syncFromExpense(
-              updated.card_id, userId,
-              updated.amount,
-              updated.trans_date,
-              conn
-            );
-          }
-
-          await conn.commit();
-        } catch (e) {
-          await conn.rollback();
-          throw e;
-        } finally {
-          conn.release();
-        }
-
-        // 事务外：同步余额快照
-        if (oldRecord.card_id) {
-          await AccountSettlement.syncBalanceSnapshot(oldRecord.card_id, userId);
-        }
-
-        return this.findById(id, userId);
-      }
-    }
-
-    // ===== 非信用卡 / 非金额日期变更 → 原逻辑（借记卡不受影响）=====
     await db.execute(query, params);
     
     // 同步余额（如果修改了金额、方向或卡片）
@@ -493,71 +402,29 @@ class Account {
 
     const reverseDirection = original.direction === 0 ? 1 : 0;
 
-    // 余额校验：冲正收入(direction=1)会创建支出冲正流水，相当于从账户扣回这笔钱，
-    // 若后续已被消费导致余额不足，应拒绝冲正；冲正支出(direction=0)相当于退款，总是允许。
-    const validation = await AccountSettlement.validate({
-      card_id: original.card_id,
-      user_id: userId,
-      direction: reverseDirection,
-      amount: original.amount,
-      exchange_rate: original.exchange_rate,
-      currency: original.currency,
-    });
-    if (!validation.valid) {
-      throw new Error(`冲正失败：${validation.message}`);
-    }
+    // 1. 创建冲正流水
+    await db.execute(`
+      INSERT INTO ${this.tableName} 
+      (id, user_id, direction, category_id, pay_type, pay_method, amount, currency, 
+       exchange_rate, trans_date, remark, card_id, create_time, update_time, is_deleted, reversed_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+    `, [
+      idUtils.billId(), userId, reverseDirection, original.category_id,
+      original.pay_type, original.pay_method, original.amount, original.currency,
+      original.exchange_rate, now.substring(0, 10),
+      reverseRemark || `冲正：${original.remark || '交易撤销'}`,
+      original.card_id, now, now, original.id
+    ]);
 
-    // 事务执行核心操作：创建冲正流水 + 软删原流水，保证原子性
-    const reverseId = idUtils.billId();
-    const conn = await db.getPool().getConnection();
-    try {
-      await conn.beginTransaction();
+    // 2. 标记原流水为已删除
+    await db.execute(
+      `UPDATE ${this.tableName} SET is_deleted = 1, update_time = ? WHERE id = ?`,
+      [now, id]
+    );
 
-      // 行级锁：重新获取原流水并校验，防止并发重复冲正
-      const [lockedRows] = await conn.execute(
-        `SELECT id, reversed_id FROM ${this.tableName}
-         WHERE id = ? AND user_id = ? AND is_deleted = 0
-         FOR UPDATE`,
-        [id, userId]
-      );
-      if (lockedRows.length === 0) {
-        throw new Error('原流水已被删除或冲正');
-      }
-      if (lockedRows[0].reversed_id) {
-        throw new Error('该流水已被冲正，无法重复冲正');
-      }
-
-      // 创建冲正流水
-      await conn.execute(`
-        INSERT INTO ${this.tableName} 
-        (id, user_id, direction, category_id, pay_type, pay_method, amount, currency, 
-         exchange_rate, trans_date, remark, card_id, create_time, update_time, is_deleted, reversed_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
-      `, [
-        reverseId, userId, reverseDirection, original.category_id,
-        original.pay_type, original.pay_method, original.amount, original.currency,
-        original.exchange_rate, now.substring(0, 10),
-        reverseRemark || `冲正：${original.remark || '交易撤销'}`,
-        original.card_id, now, now, original.id
-      ]);
-
-      // 标记原流水为已删除
-      await conn.execute(
-        `UPDATE ${this.tableName} SET is_deleted = 1, update_time = ? WHERE id = ?`,
-        [now, id]
-      );
-
-      await conn.commit();
-    } catch (e) {
-      await conn.rollback();
-      throw new Error(`借记卡冲正失败：${e.message}`);
-    } finally {
-      conn.release();
-    }
-
-    // 事务外操作（快照同步，失败不回滚核心数据）
     await AccountSettlement.syncBalanceSnapshot(original.card_id, userId);
 
+    // 系统自动检查并记录资产快照
     setImmediate(() => {
       AssetSnapshot.autoSaveSnapshot(userId).catch(err => {
         console.error(`[资产快照] 自动快照失败:`, err.message);
@@ -576,14 +443,8 @@ class Account {
   static async reverseCreditExpenseById(id, userId, reverseRemark) {
     const now = String(Date.now());
 
-    // ===== 1. 查询原流水 =====
     const [rows] = await db.execute(
-      `SELECT 
-          a.*,
-          cb.card_type,
-          cb.alias as card_alias,
-          cb.last4_no,
-          cb.bill_day
+      `SELECT a.*, cb.card_type, cb.alias as card_alias, cb.last4_no
        FROM ${this.tableName} a
        LEFT JOIN card_base cb ON a.card_id = cb.id
        WHERE a.id = ? AND a.user_id = ? AND a.is_deleted = 0`,
@@ -591,135 +452,58 @@ class Account {
     );
     const original = rows[0];
 
-    // ===== 2. 基础校验 =====
     if (!original) throw new Error('原流水不存在或已被删除');
     if (original.reversed_id) throw new Error('该流水已被冲正，无法重复冲正');
-
-    // 仅限信用卡
-    if (original.card_type !== 'credit') {
-      throw new Error('该接口仅支持信用卡消费冲正');
-    }
-    if (original.direction !== 0) {
-      throw new Error('该接口仅支持信用卡支出流水冲正');
-    }
-
-    // 旧版转账记录拦截
+    // 旧版转账记录（无 transfer_group_id）拦截
     if (original.pay_type === '转账' && !original.transfer_group_id) {
       throw new Error('该转账流水为早期旧数据，缺少转账关联信息，无法自动冲正。如需撤销请手动创建相反方向的收支记录');
     }
 
-    // ===== 3. 账单周期校验 =====
-
-    // 校验账单日配置
-    const billDay = Number(original.bill_day);
-    if (!Number.isInteger(billDay) || billDay < 1 || billDay > 31) {
-      throw new Error(
-        `卡片 [${original.card_alias || original.card_id}] 账单日配置异常`
-      );
-    }
-
-    // 计算原消费所属账单周期
-    const billMonth = CardBill.getBillMonthByDate(original.trans_date, billDay);
-
-    // 检查对应账单是否存在
-    const bill = await CardBill.findByCardAndMonth(original.card_id, billMonth);
-    if (!bill) {
-      throw new Error(
-        `该消费属于 ${billMonth} 账单周期，但该周期账单不存在，无法冲正`
-      );
-    }
-
-    // 检查该账单周期内是否已有还款
+    // 检查该卡是否有未撤销的还款记录
+    // TODO 暂时拦截
     const [repayRows] = await db.execute(
-      `SELECT id, repay_amount, repay_time
-       FROM card_repay
-       WHERE card_id = ?
-         AND user_id = ?
-         AND (bill_month = ? OR bill_id = ?)
-         AND is_deleted = 0
-       LIMIT 1`,
-      [original.card_id, userId, billMonth, bill.id]
+      `SELECT id FROM card_repay WHERE card_id = ? AND is_deleted = 0 LIMIT 1`,
+      [original.card_id]
+    );
+    if (repayRows.length > 0) {
+      throw new Error('该卡有还款记录，请先撤销还款后再冲正此笔交易');
+    }
+
+    // 1. 创建冲正流水
+    await db.execute(`
+      INSERT INTO ${this.tableName} 
+      (id, user_id, direction, category_id, pay_type, pay_method, amount, currency, 
+       exchange_rate, trans_date, remark, card_id, create_time, update_time, is_deleted, reversed_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+    `, [
+      idUtils.billId(), userId, 1, original.category_id,
+      original.pay_type, original.pay_method, original.amount, original.currency,
+      original.exchange_rate, now.substring(0, 10),
+      reverseRemark || `冲正：${original.remark || '交易撤销'}`,
+      original.card_id, now, now, original.id
+    ]);
+
+    // 2. 标记原流水为已删除
+    await db.execute(
+      `UPDATE ${this.tableName} SET is_deleted = 1, update_time = ? WHERE id = ?`,
+      [now, id]
     );
 
-    if (repayRows.length > 0) {
-      const repay = repayRows[0];
-      throw new Error(
-        `该消费属于 ${billMonth} 账单周期，该周期已有还款记录（${repay.repay_amount}元），请先撤销还款后再冲正此笔交易`
-      );
-    }
-
-    // ===== 4. 事务执行核心操作 =====
-    const reverseId = idUtils.billId();
-    const conn = await db.getPool().getConnection();
-    try {
-      await conn.beginTransaction();
-
-      // 4a. 行级锁：重新获取原流水并校验，防止并发重复冲正
-      const [lockedRows] = await conn.execute(
-        `SELECT id, reversed_id FROM ${this.tableName}
-         WHERE id = ? AND user_id = ? AND is_deleted = 0
-         FOR UPDATE`,
-        [id, userId]
-      );
-      if (lockedRows.length === 0) {
-        throw new Error('原流水已被删除或冲正');
-      }
-      if (lockedRows[0].reversed_id) {
-        throw new Error('该流水已被冲正，无法重复冲正');
-      }
-
-      // 4b. 创建冲正流水
-      await conn.execute(`
-        INSERT INTO ${this.tableName} 
-        (id, user_id, direction, category_id, pay_type, pay_method, amount, currency, 
-         exchange_rate, trans_date, remark, card_id, create_time, update_time, is_deleted, reversed_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
-      `, [
-        reverseId, userId, 1, original.category_id,
-        original.pay_type, original.pay_method, original.amount, original.currency,
-        original.exchange_rate, now.substring(0, 10),
-        reverseRemark || `冲正：${original.remark || '交易撤销'}`,
-        original.card_id, now, now, original.id
-      ]);
-
-      // 4c. 标记原流水为已删除
-      await conn.execute(
-        `UPDATE ${this.tableName} SET is_deleted = 1, update_time = ? WHERE id = ?`,
-        [now, id]
-      );
-
-      // 4c. 恢复账单额度（使用事务连接保证一致性）
-      const rolledBackBill = await CardBill.rollbackExpense(
-        original.card_id, userId, original.amount, original.trans_date, conn
-      );
-      if (!rolledBackBill) {
-        throw new Error(`该消费属于 ${billMonth} 账单周期，但账单回滚失败`);
-      }
-
-      await conn.commit();
-    } catch (e) {
-      await conn.rollback();
-      throw new Error(`信用卡消费冲正失败：${e.message}`);
-    } finally {
-      conn.release();
-    }
-
-    // ===== 5. 事务外操作（快照同步，失败不回滚核心数据）=====
+    // 恢复账单额度
+    await CardBill.rollbackExpense(original.card_id, userId, original.amount, original.trans_date);
+    
     await AccountSettlement.syncBalanceSnapshot(original.card_id, userId);
 
+    // 系统自动检查并记录资产快照
     setImmediate(() => {
       AssetSnapshot.autoSaveSnapshot(userId).catch(err => {
         console.error(`[资产快照] 自动快照失败:`, err.message);
       });
     });
 
-    console.log(
-      `[信用卡消费冲正] ${original.card_alias || original.card_id} ` +
-      `支出${original.amount} -> 冲正收入 + 恢复账单额度，` +
-      `账单周期=${billMonth}，原流水已标记删除`
-    );
+    console.log(`[信用卡消费冲正] ${original.card_alias || original.card_id} 支出${original.amount} -> 冲正收入 + 恢复账单额度，原流水已标记删除`);
 
-    return this.findById(reverseId, userId);
+    return this.findById(id, userId);
   }
 
   /**
@@ -744,87 +528,50 @@ class Account {
       throw new Error('该接口仅支持信用卡还款流水');
     }
 
-    // ===== 1. 事务内：行锁校验 + 创建冲正流水 + 软删原流水 + 软删 card_repay =====
-    const reverseId = idUtils.billId();
-    const conn = await db.getPool().getConnection();
-    let creditCardId;
-    try {
-      await conn.beginTransaction();
+    // 1. 创建冲正流水（收入方向，恢复余额）
+    await db.execute(`
+      INSERT INTO ${this.tableName} 
+      (id, user_id, direction, category_id, pay_type, pay_method, amount, currency, 
+       exchange_rate, trans_date, remark, card_id, create_time, update_time, is_deleted, reversed_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+    `, [
+      idUtils.billId(), userId, 1, original.category_id,  // direction=1 收入，恢复余额
+      original.pay_type, original.pay_method, original.amount, original.currency,
+      original.exchange_rate, now.substring(0, 10),
+      reverseRemark || `还款撤销：${original.remark || '交易撤销'}`,
+      original.card_id, now, now, original.id
+    ]);
 
-      // 1a. 行级锁：重新校验原流水，防并发重复冲正
-      const [lockedRows] = await conn.execute(
-        `SELECT id, reversed_id, category_id FROM ${this.tableName}
-         WHERE id = ? AND user_id = ? AND is_deleted = 0
-         FOR UPDATE`,
-        [id, userId]
-      );
-      if (lockedRows.length === 0) {
-        throw new Error('原流水已被删除或冲正');
-      }
-      if (lockedRows[0].reversed_id) {
-        throw new Error('该流水已被冲正，无法重复冲正');
-      }
-      if (lockedRows[0].category_id !== 'CATEGORY_REPAY') {
-        throw new Error('该接口仅支持信用卡还款流水');
-      }
+    // 2. 标记原流水为已删除
+    await db.execute(
+      `UPDATE ${this.tableName} SET is_deleted = 1, update_time = ? WHERE id = ?`,
+      [now, id]
+    );
 
-      // 1b. 创建冲正流水（收入方向，恢复余额）
-      await conn.execute(`
-        INSERT INTO ${this.tableName} 
-        (id, user_id, direction, category_id, pay_type, pay_method, amount, currency, 
-         exchange_rate, trans_date, remark, card_id, create_time, update_time, is_deleted, reversed_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
-      `, [
-        reverseId, userId, 1, original.category_id,
-        original.pay_type, original.pay_method, original.amount, original.currency,
-        original.exchange_rate, now.substring(0, 10),
-        reverseRemark || `还款撤销：${original.remark || '交易撤销'}`,
-        original.card_id, now, now, original.id
-      ]);
+    // 3. 查询并软删除 card_repay 记录
+    const [repayRows] = await db.execute(
+      'SELECT * FROM card_repay WHERE account_id = ? AND is_deleted = 0 LIMIT 1',
+      [id]
+    );
 
-      // 1c. 标记原流水为已删除
-      await conn.execute(
-        `UPDATE ${this.tableName} SET is_deleted = 1, update_time = ? WHERE id = ?`,
-        [now, id]
-      );
-
-      // 1d. 查询并软删除 card_repay 记录
-      const [repayRows] = await conn.execute(
-        'SELECT * FROM card_repay WHERE account_id = ? AND is_deleted = 0 LIMIT 1',
-        [id]
-      );
-
-      if (repayRows.length === 0) {
-        throw new Error('未找到关联的还款记录');
-      }
-
-      const repayRecord = repayRows[0];
-      creditCardId = repayRecord.card_id;
-
-      await conn.execute(
-        'UPDATE card_repay SET is_deleted = 1, update_time = ? WHERE id = ?',
-        [now, repayRecord.id]
-      );
-
-      await conn.commit();
-
-      console.log(`[信用卡还款撤销] card_repay ${repayRecord.id} 已软删除，卡片=${creditCardId}`);
-    } catch (e) {
-      await conn.rollback();
-      throw e;
-    } finally {
-      conn.release();
+    if (repayRows.length === 0) {
+      throw new Error('未找到关联的还款记录');
     }
 
-    // ===== 2. 事务外：重建账单 + 同步快照 =====
-    // 重建信用卡账单（全量从流水聚合，内含信用卡余额快照同步但信用卡会被跳过）
+    const repayRecord = repayRows[0];
+    const creditCardId = repayRecord.card_id; // 真正的信用卡ID
+
+    await db.execute(
+      'UPDATE card_repay SET is_deleted = 1, update_time = ? WHERE id = ?',
+      [now, repayRecord.id]
+    );
+
+    console.log(`[信用卡还款撤销] card_repay ${repayRecord.id} 已软删除，卡片=${creditCardId}`);
+
+    // 4. 重建账单（确保账单数据一致性）
     await CardBill.rebuildBillFromAccount(creditCardId, userId);
 
-    // 同步来源卡余额快照：还款流水挂在来源卡(original.card_id)上，
-    // 冲正后来源卡余额已恢复，必须更新 account_balance 快照，否则前端读快照会显示旧余额。
-    // 注意：信用卡本身的 syncBalanceSnapshot 会被跳过（信用卡用 card_bill 而非 account_balance），
-    // 真正需要更新的是来源卡（借记卡/余额/现金）的快照。
-    await AccountSettlement.syncBalanceSnapshot(original.card_id, userId);
+    await AccountSettlement.syncBalanceSnapshot(creditCardId, userId);
 
     // 系统自动检查并记录资产快照
     setImmediate(() => {
@@ -1028,19 +775,9 @@ class Account {
 
     for (const key of Object.keys(pairMap)) {
       const rows = pairMap[key];
-      const expenses = rows.filter((r) => r.direction === 0);
-      const incomes = rows.filter((r) => r.direction === 1);
-      if (expenses.length !== 1 || incomes.length !== 1) {
-        console.warn(`[转账同步] 跳过歧义配对 key=${key}，支出=${expenses.length}，收入=${incomes.length}`);
-        continue;
-      }
-
-      const expense = expenses[0];
-      const income = incomes[0];
-      if (expense.card_id === income.card_id) {
-        console.warn(`[转账同步] 跳过同卡配对 key=${key}，card=${expense.card_id}`);
-        continue;
-      }
+      const expense = rows.find((r) => r.direction === 0);
+      const income = rows.find((r) => r.direction === 1);
+      if (!expense || !income) continue;
 
       const groupId = expense.id;
       await db.execute(
@@ -1209,15 +946,15 @@ class Account {
   /**
    * 获取全量统计（总资产、卡片数量、信用卡欠款等）
    */
-  static async getAllStats(userId, year, month) {
+  static async getAllStats(userId) {
     const now = new Date();
-    const targetYear = parseInt(year) || now.getFullYear();
-    const targetMonth = parseInt(month) || now.getMonth() + 1;
+    const year = parseInt(req?.query?.year) || now.getFullYear();
+    const month = parseInt(req?.query?.month) || now.getMonth() + 1;
 
     // 计算本月日期范围
-    const startDate = `${targetYear}-${String(targetMonth).padStart(2, '0')}-01`;
-    const nextMonth = targetMonth === 12 ? 1 : targetMonth + 1;
-    const nextYear = targetMonth === 12 ? targetYear + 1 : targetYear;
+    const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+    const nextMonth = month === 12 ? 1 : month + 1;
+    const nextYear = month === 12 ? year + 1 : year;
     const endDate = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`;
 
     // 1. 计算总资产 = 所有借记卡/余额账户余额总和 + 信用卡溢缴款
