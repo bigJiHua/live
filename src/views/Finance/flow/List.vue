@@ -51,7 +51,7 @@
         <span class="sticky-date-dot" :class="isToday(stickyDate) ? 'today' : ''"></span>
         <span class="sticky-date-text">{{ formatDateHeader(stickyDate) }}</span>
       </div>
-      <van-pull-refresh v-model="refreshing" @refresh="onRefresh">
+      <van-pull-refresh v-model="refreshing" :disabled="!isCurrentMonth" @refresh="onRefresh">
         <van-list v-model:loading="loading" :finished="finished" finished-text="— 已经看到底了 —" @load="loadData">
 
           <div v-for="(group, date) in groupedList" :key="date" class="day-block">
@@ -115,9 +115,9 @@
                   </div>
                 </div>
 
-                <!-- === 提现 - 三层布局（同转账）=== -->
+                <!-- === 提现 - 三层布局 + 展开/折叠（复用 transfer 展开逻辑）=== -->
                 <div v-else-if="item.type === 'withdrawal'" class="paired-block">
-                  <div class="pd-main pd-withdrawal" @click="goDetail(item.expense)">
+                  <div class="pd-main pd-withdrawal" @click="toggleTransferExpand(item.expense.id)">
                     <div class="tf-row tf-time-row">
                       <span class="tf-t">{{ formatTime(item.expense.create_time) }}</span>
                       <span class="pd-label">提现</span>
@@ -133,11 +133,30 @@
                       <span class="tf-bank-name">{{ getCardName(item.income.card_id) || getCompactCardLabel(item.income) }}</span>
                     </div>
                   </div>
+                  <!-- 展开明细（与 transfer 块相同的子列表结构） -->
+                  <div v-if="expandedTransferIds.has(item.expense.id)" class="tf-detail">
+                    <div class="tf-detail-item" @click.stop="goDetail(item.expense)">
+                      <span class="tfd-dot out"></span>
+                      <div class="tfd-body">
+                        <div class="tfd-cat">{{ getCategoryName(item.expense) }}</div>
+                        <div class="tfd-meta">{{ item.expense.pay_method || '-' }} · {{ formatTime(item.expense.create_time) }}</div>
+                      </div>
+                      <span class="tfd-amt out">-{{ formatAmount(item.expense.amount) }}</span>
+                    </div>
+                    <div class="tf-detail-item" @click.stop="goDetail(item.income)">
+                      <span class="tfd-dot in"></span>
+                      <div class="tfd-body">
+                        <div class="tfd-cat">{{ getCategoryName(item.income) }}</div>
+                        <div class="tfd-meta">{{ item.income.pay_method || '-' }} · {{ formatTime(item.income.create_time) }}</div>
+                      </div>
+                      <span class="tfd-amt in">+{{ formatAmount(item.income.amount) }}</span>
+                    </div>
+                  </div>
                 </div>
 
-                <!-- === 冲正 === -->
+                <!-- === 冲正 - 三层布局 + 展开/折叠（复用 transfer 展开逻辑）=== -->
                 <div v-else-if="item.type === 'reversal'" class="paired-block">
-                  <div class="pd-main pd-reversal" @click="goDetail(item.expense)">
+                  <div class="pd-main pd-reversal" @click="toggleTransferExpand(item.expense.id)">
                     <div class="tf-row tf-time-row">
                       <span class="tf-t">{{ formatTime(item.expense.create_time) }}</span>
                       <span class="tf-label" style="text-decoration:line-through;color:#8e8e93">冲正</span>
@@ -153,11 +172,35 @@
                       <span class="tf-bank-name" style="color:#a0a0a4">{{ getCardName(item.income.card_id) || getCompactCardLabel(item.income) }}</span>
                     </div>
                   </div>
+                  <!-- 展开明细（与 transfer 块相同的子列表结构） -->
+                  <div v-if="expandedTransferIds.has(item.expense.id)" class="tf-detail">
+                    <div class="tf-detail-item" @click.stop="goDetail(item.expense)">
+                      <span class="tfd-dot out"></span>
+                      <div class="tfd-body">
+                        <div class="tfd-cat">{{ getCategoryName(item.expense) }}</div>
+                        <div class="tfd-meta">{{ item.expense.pay_method || '-' }} · {{ formatTime(item.expense.create_time) }}</div>
+                      </div>
+                      <span class="tfd-amt out">-{{ formatAmount(item.expense.amount) }}</span>
+                    </div>
+                    <div class="tf-detail-item" @click.stop="goDetail(item.income)">
+                      <span class="tfd-dot in"></span>
+                      <div class="tfd-body">
+                        <div class="tfd-cat">{{ getCategoryName(item.income) }}</div>
+                        <div class="tfd-meta">{{ item.income.pay_method || '-' }} · {{ formatTime(item.income.create_time) }}</div>
+                      </div>
+                      <span class="tfd-amt in">+{{ formatAmount(item.income.amount) }}</span>
+                    </div>
+                  </div>
                 </div>
 
-                <!-- === 对外转账 === -->
-                <div v-else-if="item.type === 'external-transfer'" class="flow-card" @click="goDetail(item.data)">
-                  <div class="fc-badge fc-badge-warn">对外转账</div>
+                <!-- === 对外转账 / 给我转账（单边 pay_type='转账' 流水） -->
+                <!--    视觉：普通 flow-card + 右上角徽标（不用虚线框 / 三层布局） -->
+                <!--    对外转账：支出方向，pay_type='转账' 无配对 → 支出视角 -->
+                <!--    给我转账：收入方向，pay_type='转账' 无配对 → 收入视角 -->
+                <div v-else-if="item.type === 'external-transfer' || item.type === 'incoming-transfer'" class="flow-card" @click="goDetail(item.data)">
+                  <div :class="item.type === 'incoming-transfer' ? 'fc-badge fc-badge-income' : 'fc-badge fc-badge-warn'">
+                    {{ item.type === 'incoming-transfer' ? '给我转账' : '对外转账' }}
+                  </div>
                   <div class="fc-body">
                     <div class="fc-cat">{{ getCategoryName(item.data) }}</div>
                     <div class="fc-meta">
@@ -168,9 +211,9 @@
                       </span>
                     </div>
                   </div>
-                  <div class="fc-amount out">
+                  <div :class="item.data.direction === 1 ? 'fc-amount in' : 'fc-amount out'">
                     <span v-if="isForeignCurrency(item.data)" class="fc-currency">{{ getCurrencySymbol(item.data.currency) }}</span>
-                    {{ formatAmount(item.data.amount) }}
+                    {{ item.data.direction === 1 ? '+' : '-' }}{{ formatAmount(item.data.amount) }}
                   </div>
                 </div>
 
@@ -246,6 +289,12 @@ const currentYear = ref(Number(route.query.year) || now.year());
 const currentMonth = ref(Number(route.query.month) || now.month() + 1);
 const selectedValues = ref([`${currentYear.value}年`, `${currentMonth.value}月`]);
 
+// 是否当月：仅当月才提供下拉刷新（其他月份下拉刷新没意义——下拉只拉今天，历史月份无"今天"）
+const isCurrentMonth = computed(() => {
+  const today = dayjs();
+  return currentYear.value === today.year() && currentMonth.value === today.month() + 1;
+});
+
 // 列表状态
 const list = ref([]);
 const loading = ref(false);
@@ -308,8 +357,20 @@ onDeactivated(() => {
   savedScrollY.value = listScrollRef.value?.scrollTop || window.scrollY || 0
 })
 
-// keep-alive 激活时：URL 有参数就恢复，无参数就重置为当前月
+// keep-alive 激活时：URL 有参数就恢复，无参数就整月重置为当前月
 onActivated(() => {
+  // 0. 优先级最高：Add 提交/删除成功 → 整月重载
+  if (flowSync.consumeListRefresh()) {
+    reloadAll()
+    // 整页刷新后，Detail 变更即便有也无意义（数据是新的），清掉避免脏数据
+    flowSync.consumeChanges()
+    nextTick(() => {
+      // 整页刷新后不恢复滚动位置，回到顶部
+      listScrollRef.value?.scrollTo({ top: 0, behavior: 'instant' })
+    })
+    return
+  }
+
   if (route.query.year && route.query.month) {
     const y = Number(route.query.year)
     const m = Number(route.query.month)
@@ -317,7 +378,7 @@ onActivated(() => {
       currentYear.value = y
       currentMonth.value = m
       selectedValues.value = [`${y}年`, `${m}月`]
-      onRefresh()
+      reloadAll()
     }
   } else {
     const now = dayjs()
@@ -325,7 +386,7 @@ onActivated(() => {
       currentYear.value = now.year()
       currentMonth.value = now.month() + 1
       selectedValues.value = [`${now.year()}年`, `${now.month() + 1}月`]
-      onRefresh()
+      reloadAll()
     }
   }
 
@@ -383,7 +444,7 @@ const onPickerConfirm = ({ selectedOptions }) => {
   selectedValues.value = [yearText, monthText];
   showDatePicker.value = false;
   router.replace({ query: { ...route.query, year: currentYear.value, month: currentMonth.value } });
-  onRefresh();
+  reloadAll();
 };
 
 const formatAmount = (amount) => (amount ? Number(amount).toFixed(2) : "0.00");
@@ -532,10 +593,26 @@ const _processList = (items) => {
   Object.values(transferGroups).forEach((group) => {
     const expense = group.find((item) => item.direction === 0 || item.direction === 'expense');
     const income = group.find((item) => item.direction === 1 || item.direction === 'income');
-    if (expense && income) addPair(expense, income, true);
+    if (expense && income) {
+      // 识别"提现"：支出方是余额卡(yyyy) + 收入方是实体卡 → 走 withdrawal 绿色虚线
+      // 识别"冲正"：后端冲正会同时写 transfer_group_id + reversed_id，需要识别
+      const isWithdrawal = getCard(expense) === 'yyyy' && !isVirtual(getCard(income));
+      const isReversal = !!(expense.reversed_id || income.reversed_id);
+      if (isReversal) {
+        addPair(expense, income, true, false, true);
+      } else if (isWithdrawal) {
+        addPair(expense, income, true, true, false);
+      } else {
+        addPair(expense, income, true);
+      }
+    }
   });
 
-  // 第1.5趟：信用卡支出 + 现金/余额收入 + 收入类别为"冲正" → 冲正
+  // 第1.5趟：冲正 - 信用卡支出 + 现金/余额收入 + 同额度 + 时间接近 → 冲正
+  // 业务背景：当前没有冲正页面/接口触发，所以"冲正"通常是手工记账
+  // 模式：信用卡支出 (-N) + 现金/余额收入 (+N) 视为冲正
+  // 强信号：收入方 pay_type === '冲正' → 直接锁定为冲正（不受其他条件限制）
+  // 兜底：未指定 pay_type='冲正' 时，依赖 时间接近（5分钟内） + 同额度配对
   items.forEach((item) => {
     if (usedExpenseIds.has(item.id) || usedIncomeIds.has(item.id)) return;
     if (item.category_id === 'CATEGORY_REPAY') return;
@@ -546,11 +623,16 @@ const _processList = (items) => {
       if (inc.category_id === 'CATEGORY_REPAY') return false;
       if (!(inc.direction === 1 || inc.direction === 'income')) return false;
       if (!baseMatch(item, inc)) return false;
-      // 收入方为现金或余额
+      // 收入方为现金或余额（xxxx=现金，yyyy=余额）
       if (!isVirtual(getCard(inc))) return false;
-      // 收入类别为冲正
+      // 强信号：收入方分类为"冲正" → 直接锁定（即使时间不接近也认）
       const incCat = inc.pay_type || inc.category_name || '';
-      return incCat === '冲正';
+      if (incCat === '冲正') return true;
+      // 否则要求时间接近（5 分钟内）— 避免"工资到账"等定期入账被误判为冲正
+      const t1 = getTimestamp(item);
+      const t2 = getTimestamp(inc);
+      if (t1 && t2 && Math.abs(t1 - t2) > 300000) return false;
+      return true;
     });
     if (match) addPair(item, match, true, false, true);
   });
@@ -651,8 +733,17 @@ const _processList = (items) => {
         });
       }
     } else if (!incomeIds.has(item.id)) {
+      // 单边未被配对的：按方向 + pay_type 分类
       if (item.pay_type === '转账') {
-        processed.push({ type: 'external-transfer', data: item });
+        // 收入方向 + pay_type='转账' → 给我转账（单边收到转账，无对应支出方）
+        //   case A: 余额转账（交易方式=余额 + 卡片=余额）
+        //   case B: 银行卡转账（找不到同额度支出方）
+        if (item.direction === 1 || item.direction === 'income') {
+          processed.push({ type: 'incoming-transfer', data: item, income: item });
+        } else {
+          // 支出方向 + pay_type='转账' → 对外转账
+          processed.push({ type: 'external-transfer', data: item });
+        }
       } else {
         processed.push({ type: 'flow', data: item });
       }
@@ -695,6 +786,8 @@ const loadSummary = async () => {
   }
 };
 
+// 整月分页加载：用于首屏 onMounted、van-list 触底分页、reloadAll
+// 守卫：若正在下拉刷新（refreshing=true）则跳过，避免与下拉刷新产生请求竞态
 const loadData = async () => {
   if (refreshing.value) return;
   loading.value = true;
@@ -737,17 +830,88 @@ const loadData = async () => {
   }
 };
 
-const onRefresh = () => {
-  page.value = 1;
-  finished.value = false;
-  loading.value = true;
-  Promise.all([loadSummary(), loadData()]).finally(() => {
-    loading.value = false;
-    refreshing.value = false;
+// 下拉刷新：只拉"今天"的流水 + 顶部月度统计
+// 设计：用户从顶层下拉时，最关心的是"今天有没有新增"，不要把整月都重拉一遍
+//   - 整月数据已经分页加载过了，重拉会浪费请求 + 可能让用户丢滚动位置
+//   - 拉回来的"今天"数据按 id 原地 patch/insert 到 list.value（裸流水数组，由 watch 转 groupedList）
+//   - 不重置 page/finished 分页状态
+const loadTodayOnly = async () => {
+  const today = dayjs().format("YYYY-MM-DD");
+  const params = {
+    page: 1,
+    limit: 100,           // 当天一般不会超过 100 条，够用
+    startDate: today,
+    endDate: today,
+  };
+  if (filterType.value !== "all") {
+    params.direction = filterType.value === "income" ? 1 : 0;
+  }
+
+  const res = await getAccountList(params);
+  const todayList = res.data?.list || res.data || [];
+
+  if (todayList.length === 0) {
+    // 今天没有流水：把本地 list 中"今天"的旧条目清掉（可能用户在别处删除了）
+    list.value = list.value.filter(
+      (item) => (item.trans_date || "").slice(0, 10) !== today
+    );
+    return;
+  }
+
+  // 按 id 建索引，便于 patch / 判重
+  const todayMap = new Map(todayList.map((it) => [it.id, it]));
+  const todayIds = new Set(todayMap.keys());
+
+  // 1) 已存在但被修改的"今天"条目：原地 patch（保留响应式引用，不触发 watch 重排）
+  list.value.forEach((item) => {
+    const d = (item.trans_date || "").slice(0, 10);
+    if (d !== today) return;
+    const fresh = todayMap.get(item.id);
+    if (fresh) Object.assign(item, fresh);
+  });
+
+  // 2) 服务端有但本地没有的：插到 list 头部（按时间倒序，新的在前面）
+  const existingIds = new Set(list.value.map((it) => it.id));
+  const newOnes = todayList.filter((it) => !existingIds.has(it.id));
+  if (newOnes.length > 0) {
+    list.value = [...newOnes, ...list.value];
+  }
+
+  // 3) 本地有但服务端没有的"今天"条目：用户在别处删除了，从 list 移除
+  list.value = list.value.filter((item) => {
+    const d = (item.trans_date || "").slice(0, 10);
+    if (d !== today) return true;
+    return todayIds.has(item.id);
   });
 };
 
-const onFilterChange = () => onRefresh();
+// 整月重载：用于月份切换 / 筛选 tab 切换 / Add 提交后回列表 / 进入页面时月份变化
+// 与 onRefresh（下拉刷新）语义不同：这里必须重置分页状态、丢滚动位置
+const reloadAll = async () => {
+  page.value = 1;
+  finished.value = false;
+  await Promise.all([loadSummary(), loadData()]);
+};
+
+// 下拉刷新：用户从顶部下拉触发
+// 注意：van-pull-refresh 会把 refreshing 置 true 并显示顶部 loading，
+// 我们拉完数据后再置回 false，否则动画不会结束
+const onRefresh = async () => {
+  // 顶部 loading 动画由 van-pull-refresh 通过 v-model="refreshing" 控制，
+  // 不要再去动 loading（loading 是 van-list 底部分页 loading 的状态）
+  try {
+    // 只刷新：1) 顶部月度统计；2) 今天这天的流水
+    // 不重置 page/finished，不影响分页状态，避免把用户已经看到的整月历史全清掉
+    await Promise.all([loadSummary(), loadTodayOnly()]);
+  } finally {
+    // 等 DOM 更新完再关闭下拉动画，避免指示器瞬闪
+    nextTick(() => {
+      refreshing.value = false;
+    });
+  }
+};
+
+const onFilterChange = () => reloadAll();
 
 const goDetail = (item) => router.push(`/finance/flow/${item.id}`);
 
@@ -1052,6 +1216,7 @@ const goCalendar = () => router.push("/finance/flow/calendar");
   border-radius: 0 5px 0 5px;
 }
 .fc-badge-warn { background: #fff7e6; color: #ff976a; }
+.fc-badge-income { background: #e8f9ee; color: #07c160; }
 
 /* ── 配对区块（转账 / 提现 / 冲正）── */
 .paired-block, .transfer-block {

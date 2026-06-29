@@ -184,10 +184,22 @@
             :stroke-width="12"
             color="#07c160"
           />
+          <van-cell>
+            <van-button
+              type="default"
+              size="small"
+              block
+              round
+              icon="replay"
+              @click="manualRefreshStatus"
+            >
+              手动刷新状态
+            </van-button>
+          </van-cell>
         </van-cell-group>
       </div>
 
-      <div class="export-result" v-if="exportCompleted && !isAsyncTask">
+      <div class="export-result" v-if="exportCompleted">
         <div class="section-title">导出结果</div>
         <van-cell-group inset class="app-card">
           <van-cell title="状态">
@@ -212,7 +224,7 @@
               <span class="time-text">{{ exportTime }}</span>
             </template>
           </van-cell>
-          <van-cell title="下载" v-if="exportStatus.type === 'success'">
+          <van-cell title="操作" v-if="exportStatus.type === 'success'">
             <template #value>
               <a class="download-link" @click.prevent="handleDownload">点击下载</a>
             </template>
@@ -338,40 +350,51 @@ const handleExport = async () => {
     }
 
     const data = res?.data;
-    if (!data) throw new Error("导出失败");
 
-    if (res?.status === 202 && data.isLargeTable) {
+    // 后端统一返回 202 + taskId（异步模式）
+    if (res?.status === 202 && data?.taskId) {
       isAsyncTask.value = true;
       currentTaskId.value = data.taskId;
-      exportStatus.value = { type: "warning", text: "大表导出中..." };
+
+      if (data.reuseExisting) {
+        showToast({ message: "已有导出任务正在执行，自动加入监控", type: "warning" });
+      } else {
+        showToast({ message: "导出任务已提交，后台处理中...", type: "success" });
+      }
+
+      exportStatus.value = { type: "warning", text: "后台导出中..." };
       startPolling(data.taskId);
       return;
     }
 
-    exportTime.value = new Date().toLocaleString();
-    resultFilename.value = data.filename || data.sqlFilename;
-    resultSize.value = data.size || data.sqlSize;
-    downloadUrl.value = data.downloadPath;
-
-    exportStatus.value = { type: "success", text: "导出成功" };
-    exportCompleted.value = true;
-
-    showToast({ message: "导出成功", type: "success" });
-
-    if (resultFilename.value) {
-      setTimeout(() => handleDownload(), 500);
+    // 兜底：如果后端意外返回了同步结果（兼容旧版）
+    if (data?.filename) {
+      exportTime.value = new Date().toLocaleString();
+      resultFilename.value = data.filename || data.sqlFilename;
+      resultSize.value = data.size || data.sqlSize;
+      downloadUrl.value = data.downloadPath;
+      exportStatus.value = { type: "success", text: "导出成功" };
+      exportCompleted.value = true;
+      showToast({ message: "导出成功，请点击下载", type: "success" });
+    } else {
+      throw new Error(data?.message || "导出失败");
     }
   } catch (e) {
     console.error("[DbExport] export error:", e);
     exportStatus.value = { type: "danger", text: "导出失败" };
     exportCompleted.value = true;
-    showToast({ message: e?.message || "导出失败", type: "fail" });
+    showToast({ message: e?.response?.data?.message || e?.message || "导出失败", type: "fail" });
   } finally {
     loading.value = false;
   }
 };
 
-const startPolling = async (taskId) => {
+const startPolling = (taskId) => {
+  stopPolling(); // 先清掉旧定时器
+  isAsyncTask.value = true;
+  currentTaskId.value = taskId;
+  asyncProgress.value = 0;
+
   pollingTimer.value = setInterval(async () => {
     try {
       const res = await getExportTaskStatus(taskId);
@@ -379,6 +402,8 @@ const startPolling = async (taskId) => {
 
       if (!task) {
         stopPolling();
+        exportStatus.value = { type: "danger", text: "任务丢失" };
+        exportCompleted.value = true;
         return;
       }
 
@@ -386,34 +411,79 @@ const startPolling = async (taskId) => {
 
       if (task.status === "completed") {
         stopPolling();
+        isAsyncTask.value = false; // 切到结果区显示
         exportTime.value = new Date().toLocaleString();
-        resultFilename.value = task.result?.filename;
-        resultSize.value = task.result?.size;
-        downloadUrl.value = task.result?.downloadPath;
-        exportStatus.value = { type: "success", text: "导出成功" };
+        // 系统备份任务返回 full / schemaOnly，导出任务返回 filename
+        const resultData = task.result || {};
+        resultFilename.value = resultData.filename
+          || resultData.full?.filename
+          || "";
+        resultSize.value = resultData.size || resultData.full?.size || 0;
+        exportStatus.value = { type: "success", text: "导出完成" };
         exportCompleted.value = true;
-        isAsyncTask.value = false;
-        showToast({ message: "大表导出完成", type: "success" });
+        showToast({ message: "导出完成，请点击下载", type: "success" });
+        // 不再自动触发下载
+        return;
+      }
 
-        if (resultFilename.value) {
-          setTimeout(() => handleDownload(), 500);
-        }
-      } else if (task.status === "failed") {
+      if (task.status === "failed") {
         stopPolling();
         exportStatus.value = { type: "danger", text: "导出失败" };
         exportCompleted.value = true;
-        isAsyncTask.value = false;
         showToast({ message: task.error || "导出失败", type: "fail" });
-      } else if (task.status === "cancelled") {
+        return;
+      }
+
+      if (task.status === "cancelled") {
         stopPolling();
         exportStatus.value = { type: "warning", text: "已取消" };
         exportCompleted.value = true;
-        isAsyncTask.value = false;
+        showToast({ message: "任务已取消", type: "warning" });
+        return;
       }
     } catch (e) {
       console.error("[DbExport] polling error:", e);
     }
-  }, 1000);
+  }, 5000); // 5秒轮询，平衡性能与体验
+};
+
+const manualRefreshStatus = async () => {
+  if (!currentTaskId.value) return;
+  try {
+    const res = await getExportTaskStatus(currentTaskId.value);
+    const task = res?.data;
+    if (!task) return;
+    asyncProgress.value = task.progress || 0;
+    if (task.status === "completed" || task.status === "failed" || task.status === "cancelled") {
+      // 手动刷新触发的结果处理
+      if (task.status === "completed") {
+        stopPolling();
+        isAsyncTask.value = false;
+        exportTime.value = new Date().toLocaleString();
+        const rd = task.result || {};
+        resultFilename.value = rd.filename || rd.full?.filename || "";
+        resultSize.value = rd.size || rd.full?.size || 0;
+        exportStatus.value = { type: "success", text: "导出完成" };
+        exportCompleted.value = true;
+        showToast({ message: "导出完成，请点击下载", type: "success" });
+      } else if (task.status === "failed") {
+        stopPolling();
+        isAsyncTask.value = false;
+        exportStatus.value = { type: "danger", text: "导出失败" };
+        exportCompleted.value = true;
+        showToast({ message: task.error || "导出失败", type: "fail" });
+      } else {
+        stopPolling();
+        isAsyncTask.value = false;
+        exportStatus.value = { type: "warning", text: "已取消" };
+        exportCompleted.value = true;
+      }
+    } else {
+      showToast({ message: `当前进度: ${task.progress || 0}%`, type: "success" });
+    }
+  } catch (e) {
+    console.error("[DbExport] manual refresh error:", e);
+  }
 };
 
 const stopPolling = () => {
@@ -438,23 +508,33 @@ const handleCancelTask = async () => {
 };
 
 const handleDownload = async () => {
-  if (!resultFilename.value) return;
+  if (!resultFilename.value) {
+    showToast({ message: "没有可下载的文件", type: "fail" });
+    return;
+  }
 
   try {
+    console.log("[DbExport] Downloading:", resultFilename.value);
     const res = await downloadBackup(resultFilename.value);
-    const blob = new Blob([res.data]);
+
+    // 拿到的是 blob，转为可下载的 URL
+    const blob = res.data instanceof Blob
+      ? res.data
+      : new Blob([res.data]);
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
     a.download = resultFilename.value;
+    a.style.display = "none";
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
-    showToast({ message: "下载开始", type: "success" });
+    // 延迟 revoke，给浏览器一点时间真正发起下载
+    setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+    showToast({ message: "下载已开始", type: "success" });
   } catch (e) {
     console.error("[DbExport] download error:", e);
-    showToast({ message: "下载失败", type: "fail" });
+    showToast({ message: "下载失败：" + (e?.message || "未知错误"), type: "fail" });
   }
 };
 

@@ -386,6 +386,7 @@ import { categoryApi } from "@/utils/api/category";
 import { getCardList } from "@/utils/api/card";
 import { createAccount } from "@/utils/api/account";
 import ENV from "@/utils/env";
+import { useFlowSyncStore } from "@/stores/flowSync";
 
 // ============================================
 // 常量配置
@@ -1006,6 +1007,8 @@ const handleSubmit = async () => {
     }
 
     showSuccessToast("提交成功");
+    // 标记流水列表需要刷新（从 Add 返回时整页拉取最新数据）
+    useFlowSyncStore().markListRefresh();
     router.back();
   } catch (e) {
     showFailToast(e.message || "提交失败");

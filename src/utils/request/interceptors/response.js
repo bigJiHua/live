@@ -8,6 +8,7 @@ let isRedirecting = false;
  * 强制跳登录（移动端专用）
  */
 function forceLogin(message) {
+  
   if (isRedirecting) return;
   isRedirecting = true;
 

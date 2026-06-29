@@ -67,10 +67,11 @@ const route = useRoute();
 const router = useRouter();
 
 // keep-alive 缓存列表：这些页面跳转到明细后返回不会重新加载
+// 注意：include 匹配的是"组件 name"（来自 defineOptions 或组件 name 选项），
+// 而不是路由的 name。例如 FinanceFlowList 实际是组件 name，对应路由 name 是 FinanceFlow。
+// Home / Finance 不参与缓存：返回时强制重载，避免显示过期数据。
 const cachedPages = [
-  'Home',
-  'Finance',
-  'FinanceFlowList',
+  'FinanceFlowList',     // 组件 name；路由 name = FinanceFlow
   'FinanceFlowCalendar',
   'FinanceReportFlowFilter',
   'FinanceReportCardFlow',

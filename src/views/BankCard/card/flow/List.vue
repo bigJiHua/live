@@ -245,6 +245,18 @@ onMounted(() => {
 
 // keep-alive 激活时：URL 有参数就恢复，无参数就重置为当前月
 onActivated(() => {
+  // 0. 优先级最高：Add 提交成功 → 整页刷新
+  if (flowSync.consumeListRefresh()) {
+    loadList(true)
+    // 整页刷新后，Detail 变更即便有也无意义，清掉避免脏数据
+    flowSync.consumeChanges()
+    nextTick(() => {
+      // 整页刷新后不恢复滚动位置，回到顶部
+      window.scrollTo({ top: 0, behavior: 'instant' })
+    })
+    return
+  }
+
   if (route.query.month) {
     if (route.query.month !== currentMonth.value) {
       currentMonth.value = route.query.month

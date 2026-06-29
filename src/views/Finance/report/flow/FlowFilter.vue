@@ -290,22 +290,62 @@ const displayList = computed(() => {
     (exp.currency || 'CNY') === (inc.currency || 'CNY') &&
     getCard(exp) !== getCard(inc)
 
-  // 第0趟：信用卡支出 + 现金/余额收入 + 收入类别为"冲正" → 冲正
-  // （冲正优先于转账检测，避免被误配对为转账）
+  // 第0趟：transfer_group_id 匹配（后端明确分组）
+  // 与 Finance/flow/List.vue 同步：第 0 趟按 group_id 配对并识别 isWithdrawal/isReversal
+  const transferGroups = items.reduce((map, item) => {
+    if (item.category_id === 'CATEGORY_REPAY' || !item.transfer_group_id) return map
+    if (!map[item.transfer_group_id]) map[item.transfer_group_id] = []
+    map[item.transfer_group_id].push(item)
+    return map
+  }, {})
+
+  Object.values(transferGroups).forEach((group) => {
+    const expense = group.find((item) => item.direction === 0 || item.direction === 'expense' || item.direction === 2)
+    const income = group.find((item) => item.direction === 1 || item.direction === 'income')
+    if (expense && income) {
+      // 识别"提现"：支出方是余额卡(yyyy) + 收入方是实体卡 → withdrawal 绿色
+      // 识别"冲正"：后端冲正会同时写 transfer_group_id + reversed_id
+      const isWithdrawal = getCard(expense) === 'yyyy' && !isVirtual(getCard(income))
+      const isReversal = !!(expense.reversed_id || income.reversed_id)
+      if (isReversal) {
+        pairs.push({ expense, income, isExplicit: true, isWithdrawal: false, isReversal: true })
+        usedExpenseIds.add(expense.id)
+        usedIncomeIds.add(income.id)
+      } else if (isWithdrawal) {
+        pairs.push({ expense, income, isExplicit: true, isWithdrawal: true, isReversal: false })
+        usedExpenseIds.add(expense.id)
+        usedIncomeIds.add(income.id)
+      } else {
+        pairs.push({ expense, income, isExplicit: true, isWithdrawal: false, isReversal: false })
+        usedExpenseIds.add(expense.id)
+        usedIncomeIds.add(income.id)
+      }
+    }
+  })
+
+  // 第1趟：冲正 - 信用卡支出 + 现金/余额收入 + 同额度 + 时间接近（5分钟）
+  // 双层判断：pay_type='冲正' 为强信号（直接锁定）；否则依赖时间接近（避免工资到账误判）
   items.forEach((item) => {
     if (usedExpenseIds.has(item.id) || usedIncomeIds.has(item.id)) return
+    if (item.category_id === 'CATEGORY_REPAY') return
     if (!(item.direction === 0 || item.direction === 'expense' || item.direction === 2)) return
     if (!isCreditCard(item)) return  // 支出方必须是信用卡
     const match = items.find((inc) => {
       if (inc.id === item.id || usedIncomeIds.has(inc.id)) return false
+      if (inc.category_id === 'CATEGORY_REPAY') return false
       if (!(inc.direction === 1 || inc.direction === 'income')) return false
       if (!baseMatch(item, inc)) return false
       // 收入方为现金或余额
       const incomeCard = getCard(inc)
       if (!isVirtual(incomeCard)) return false
-      // 收入类别为冲正
+      // 强信号：收入方分类为"冲正" → 直接锁定
       const incCat = inc.pay_type || inc.payType || inc.category_name || inc.categoryName || ''
-      return incCat === '冲正'
+      if (incCat === '冲正') return true
+      // 兜底：时间接近（5 分钟内）
+      const t1 = getTimestamp(item)
+      const t2 = getTimestamp(inc)
+      if (t1 && t2 && Math.abs(t1 - t2) > 300000) return false
+      return true
     })
     if (match) {
       pairs.push({ expense: item, income: match, isExplicit: true, isWithdrawal: false, isReversal: true })
@@ -317,10 +357,12 @@ const displayList = computed(() => {
   // 第一趟：双方分类均为"转账" → 确诊转账（支出方不能为信用卡）
   items.forEach((item) => {
     if (usedExpenseIds.has(item.id) || usedIncomeIds.has(item.id)) return
+    if (item.category_id === 'CATEGORY_REPAY') return
     if (!(item.direction === 0 || item.direction === 'expense' || item.direction === 2)) return
     if (isCreditCard(item)) return  // 信用卡不归入转账
     const match = items.find((inc) => {
       if (inc.id === item.id || usedIncomeIds.has(inc.id)) return false
+      if (inc.category_id === 'CATEGORY_REPAY') return false
       if (!(inc.direction === 1 || inc.direction === 'income')) return false
       if (!baseMatch(item, inc)) return false
       return getCategory(item) === '转账' && getCategory(inc) === '转账'
@@ -335,10 +377,12 @@ const displayList = computed(() => {
   // 第二趟：支出"其他支出" + 收入"其他收入" → 疑似转账（支出方不能为信用卡）
   items.forEach((item) => {
     if (usedExpenseIds.has(item.id) || usedIncomeIds.has(item.id)) return
+    if (item.category_id === 'CATEGORY_REPAY') return
     if (!(item.direction === 0 || item.direction === 'expense' || item.direction === 2)) return
     if (isCreditCard(item)) return  // 信用卡不归入转账
     const match = items.find((inc) => {
       if (inc.id === item.id || usedIncomeIds.has(inc.id)) return false
+      if (inc.category_id === 'CATEGORY_REPAY') return false
       if (!(inc.direction === 1 || inc.direction === 'income')) return false
       if (!baseMatch(item, inc)) return false
       return getCategory(item) === '其他支出' && getCategory(inc) === '其他收入'
@@ -353,12 +397,14 @@ const displayList = computed(() => {
   // 第三趟：其余满足基础条件的 → 疑似转账（排除余额→银行卡 和 信用卡支出方）
   items.forEach((item) => {
     if (usedExpenseIds.has(item.id) || usedIncomeIds.has(item.id)) return
+    if (item.category_id === 'CATEGORY_REPAY') return
     if (!(item.direction === 0 || item.direction === 'expense' || item.direction === 2)) return
     const expenseCard = getCard(item)
     const isExpenseVirtual = isVirtual(expenseCard)
     if (isCreditCard(item)) return  // 信用卡不归入转账
     const match = items.find((inc) => {
       if (inc.id === item.id || usedIncomeIds.has(inc.id)) return false
+      if (inc.category_id === 'CATEGORY_REPAY') return false
       if (!(inc.direction === 1 || inc.direction === 'income')) return false
       if (!baseMatch(item, inc)) return false
       const incomeCard = getCard(inc)
@@ -376,16 +422,18 @@ const displayList = computed(() => {
   // 第四趟：余额→银行卡（同一天同金额，时间接近）→ 提现
   items.forEach((item) => {
     if (usedExpenseIds.has(item.id) || usedIncomeIds.has(item.id)) return
+    if (item.category_id === 'CATEGORY_REPAY') return
     if (!(item.direction === 0 || item.direction === 'expense' || item.direction === 2)) return
     const expenseCard = getCard(item)
     if (expenseCard !== 'yyyy') return  // 仅限余额卡片
     const match = items.find((inc) => {
       if (inc.id === item.id || usedIncomeIds.has(inc.id)) return false
+      if (inc.category_id === 'CATEGORY_REPAY') return false
       if (!(inc.direction === 1 || inc.direction === 'income')) return false
       if (!baseMatch(item, inc)) return false
       const incomeCard = getCard(inc)
       if (isVirtual(incomeCard)) return false  // 收入方不能是虚拟卡
-      
+
       // 时间接近判断（5分钟内）
       const t1 = getTimestamp(item)
       const t2 = getTimestamp(inc)

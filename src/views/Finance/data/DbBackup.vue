@@ -18,9 +18,10 @@
                 block
                 round
                 :loading="sysLoading"
+                :disabled="isBackupRunning"
                 @click="handleSystemBackup"
               >
-                系统性备份数据库
+                {{ isBackupRunning ? '备份中...' : '系统性备份数据库' }}
               </van-button>
             </template>
             <template #label>
@@ -28,6 +29,41 @@
             </template>
           </van-cell>
         </van-cell-group>
+
+        <!-- 备份进度 -->
+        <div class="sys-backup-progress" v-if="isBackupRunning">
+          <div class="section-title">备份进度</div>
+          <van-cell-group inset class="app-card">
+            <van-cell title="状态">
+              <template #value>
+                <van-tag type="warning" size="large">后台备份中</van-tag>
+              </template>
+            </van-cell>
+            <van-cell title="进度">
+              <template #value>
+                <span class="num-font">{{ backupProgress }}%</span>
+              </template>
+            </van-cell>
+            <van-progress
+              :percentage="backupProgress"
+              :show-pivot="true"
+              :stroke-width="12"
+              color="#07c160"
+            />
+            <van-cell>
+              <van-button
+                type="default"
+                size="small"
+                block
+                round
+                icon="replay"
+                @click="loadSystemBackups"
+              >
+                刷新备份列表
+              </van-button>
+            </van-cell>
+          </van-cell-group>
+        </div>
 
         <div class="section-title" v-if="sysBackupGroups.length > 0">已完整备份列表</div>
 
@@ -142,10 +178,10 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from "vue";
+import { ref, onMounted, onUnmounted } from "vue";
 import { showToast } from "vant";
 import dayjs from "dayjs";
-import { getBackupList, downloadBackup, deleteBackup, createSystemBackup, getSystemBackups } from "@/utils/api/dataManager";
+import { getBackupList, downloadBackup, deleteBackup, createSystemBackup, getSystemBackups, getExportTaskStatus } from "@/utils/api/dataManager";
 
 const loading = ref(false);
 const backupList = ref([]);
@@ -154,6 +190,12 @@ const sysLoading = ref(false);
 const sysLoadingList = ref(false);
 const sysBackupGroups = ref([]);
 const sysActiveNames = ref([]);
+
+// 异步任务状态
+const isBackupRunning = ref(false);
+const backupTaskId = ref("");
+const backupProgress = ref(0);
+const pollingTimer = ref(null);
 
 const formatFileSize = (bytes) => {
   if (!bytes) return "0 B";
@@ -195,10 +237,63 @@ const loadSystemBackups = async () => {
   }
 };
 
+const stopPolling = () => {
+  if (pollingTimer.value) {
+    clearInterval(pollingTimer.value);
+    pollingTimer.value = null;
+  }
+};
+
 const handleSystemBackup = async () => {
   sysLoading.value = true;
   try {
-    await createSystemBackup();
+    const res = await createSystemBackup();
+    const data = res?.data;
+
+    if (res?.status === 202 && data?.taskId) {
+      isBackupRunning.value = true;
+      backupTaskId.value = data.taskId;
+      backupProgress.value = 0;
+
+      if (data.reuseExisting) {
+        showToast({ message: "已有备份任务执行中，自动加入监控", type: "warning" });
+      } else {
+        showToast({ message: "系统备份任务已提交，后台处理中...", type: "success" });
+      }
+
+      // 开始轮询
+      stopPolling();
+      pollingTimer.value = setInterval(async () => {
+        try {
+          const statusRes = await getExportTaskStatus(backupTaskId.value);
+          const task = statusRes?.data;
+          if (!task) { stopPolling(); return; }
+
+          backupProgress.value = task.progress || 0;
+
+          if (task.status === "completed") {
+            stopPolling();
+            isBackupRunning.value = false;
+            backupProgress.value = 100;
+            showToast({ message: "系统备份完成！", type: "success" });
+            await loadSystemBackups();
+          } else if (task.status === "failed") {
+            stopPolling();
+            isBackupRunning.value = false;
+            showToast({ message: task.error || "系统备份失败", type: "fail" });
+          } else if (task.status === "cancelled") {
+            stopPolling();
+            isBackupRunning.value = false;
+            showToast({ message: "备份任务已取消", type: "warning" });
+          }
+        } catch (e) {
+          console.error("[DbBackup] polling error:", e);
+        }
+      }, 5000);
+      return;
+    }
+
+    // 兼容旧版同步返回
     showToast({ message: "系统备份成功", type: "success" });
     await loadSystemBackups();
   } catch (e) {
@@ -243,6 +338,10 @@ const handleDelete = async (filename) => {
 onMounted(() => {
   loadManualBackups();
   loadSystemBackups();
+});
+
+onUnmounted(() => {
+  stopPolling();
 });
 </script>
 
@@ -303,6 +402,15 @@ onMounted(() => {
 }
 .sys-backup-section {
   margin-bottom: 4px;
+}
+.sys-backup-progress {
+  margin-top: 12px;
+  margin-bottom: 4px;
+}
+.sys-backup-progress :deep(.van-progress) {
+  margin-top: 8px;
+  margin-left: 16px;
+  margin-right: 16px;
 }
 .collapse-title {
   display: flex;

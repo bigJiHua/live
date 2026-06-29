@@ -49,6 +49,12 @@ const RouterMap = [
         meta: { title: "新增收支明细", hideTabbar: true },
       },
       {
+        path: "finance/quick-add",
+        name: "FinanceQuickAdd",
+        component: () => import("../views/Finance/account/QuickAdd.vue"),
+        meta: { title: "快速登记", hideTabbar: true },
+      },
+      {
         path: "finance/structure",
         name: "FinanceStructure",
         component: () => import("../views/Finance/account/Structure.vue"),

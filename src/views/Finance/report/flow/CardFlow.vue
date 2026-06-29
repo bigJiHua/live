@@ -261,6 +261,19 @@ onMounted(async () => {
 
 // keep-alive 激活时：URL 有参数就恢复，无参数就重置为当前月
 onActivated(() => {
+  // 0. 优先级最高：检测路由 cardId 是否变化（不同卡需要重新加载）
+  // 场景：从"系统账户余额"选 B 卡跳过来时 selectedCard 仍是 A
+  const routeCardId = route.query.cardId
+  if (routeCardId && (!selectedCard.value || selectedCard.value.id !== routeCardId)) {
+    const card = allCards.value.find((c) => c.id === routeCardId)
+    if (card) {
+      onCardSelect(card)  // 内部会调 onRefresh() 重置分页 + 拉新数据
+    } else {
+      // allCards 还没加载完（理论上 onMounted 已先于 onActivated 触发）
+      // 等下一轮：保留 onActivated 后续逻辑，等 allCards 加载完成后 onCardSelect 会触发
+    }
+  }
+
   if (route.query.year && route.query.month) {
     const y = Number(route.query.year)
     const m = Number(route.query.month)

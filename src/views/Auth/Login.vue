@@ -89,6 +89,7 @@ import { authApi } from "@/utils/api/auth";
 const router = useRouter();
 const username = ref(import.meta.env.VITE_APP_DEMO === 'true' ? import.meta.env.VITE_LOGIN_USERNAME || "" : "");
 const password = ref(import.meta.env.VITE_APP_DEMO === 'true' ? import.meta.env.VITE_LOGIN_PASSWORD || "" : "");
+
 const loading = ref(false);
 const passwordVisible = ref(false);
 const currentYear = new Date().getFullYear();
