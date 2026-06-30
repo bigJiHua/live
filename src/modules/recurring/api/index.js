@@ -7,6 +7,7 @@ const pinLockGuard = require("../../../common/middleware/pinLockGuard");
 router.use(authGuard);
 
 router.get("/list", recurringController.list);
+router.get("/installments", recurringController.installments);
 router.get("/summary", recurringController.summary);
 router.get("/:id", recurringController.detail);
 router.post("/", recurringController.create);

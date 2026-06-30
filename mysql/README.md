@@ -11,106 +11,77 @@
 ### live_V1.0.0.sql
 **完整的V1.0.0版本数据库表结构，只适配V1.0.0版本！**
 
-包含以下表：
+`live.sql` 共 **24 张表**：
 
 | 表名 | 说明 |
 |------|------|
 | `user_info` | 用户信息表 |
+| `user_log` | 用户登录日志表 |
+| `account` | 记账明细表 |
+| `account_balance` | 账户余额表 |
+| `account_transfer` | 转账记录表 |
+| `asset_register` | 资产登记表 |
+| `asset_snapshot` | 资产快照表 |
+| `budget` | 预算控制表 |
+| `bus_category` | 分类字典表 |
+| `bus_fund_history` | 理财净值历史表 |
+| `bus_recurring` | 周期性计划任务表 |
 | `card_base` | 卡片基础信息表 |
 | `card_bill` | 卡片额度账单表 |
 | `card_log` | 卡片操作日志表 |
 | `card_repay` | 信用卡还款记录表 |
-| `fund` | 理财基金表 |
-| `todo` | 待办事项表 |
-| `account` | 记账明细表 |
-| `asset` | 资产结构表 |
-| `budget` | 预算控制表 |
+| `device_crypto` | 设备密钥表 |
 | `fixed_asset` | 固定资产表 |
-| `work_salary` | 工作薪酬核算表 |
-| `moment` | 动态发布表 |
-| `app_config` | 全局配置表 |
-| `bus_category` | 分类字典表 |
-| `bus_fund_history` | 理财净值历史表 |
-| `bus_recurring` | 周期性计划任务表 |
+| `fund` | 理财产品表 |
+| `moment` | 动态/日记表 |
+| `security_verify_log` | 安全验证日志表 |
 | `sys_attachment` | 文件附件索引表 |
+| `todo` | 待办事项表 |
+| `work_job` | 工作信息表 |
+| `work_salary` | 工作薪酬核算表 |
+
+> `_migrations` 表由 `migrationRunner` 运行时自动创建，不在 `live.sql` 中。
 
 ---
 
-## 核心表结构
+## 表结构约定
 
-### user_info (用户信息表)
-```sql
-CREATE TABLE user_info (
-  id INT NOT NULL COMMENT '用户ID',
-  nickname VARCHAR(50) COMMENT '昵称',
-  avatar VARCHAR(255) COMMENT '头像URL',
-  login_pwd VARCHAR(100) COMMENT '登录密码(加密)',
-  salt VARCHAR(50) COMMENT '加密盐值',
-  pin_code VARCHAR(50) COMMENT 'PIN码(加密)',
-  pin_error INT DEFAULT 0 COMMENT 'PIN错误次数',
-  status TINYINT DEFAULT 1 COMMENT '状态 1正常 0锁定',
-  last_login_time VARCHAR(20) COMMENT '最后登录时间',
-  last_login_ip VARCHAR(50) COMMENT '最后登录IP',
-  create_time VARCHAR(20) COMMENT '创建时间',
-  update_time VARCHAR(20) COMMENT '修改时间',
-  is_deleted TINYINT DEFAULT 0 COMMENT '是否删除 0否1是',
-  PRIMARY KEY (id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户信息表';
-```
+所有表结构以 `live.sql` 为准，统一规范：
 
-### moment (动态发布表)
-```sql
-CREATE TABLE moment (
-  id VARCHAR(32) NOT NULL COMMENT '动态ID(nanoid)',
-  user_id VARCHAR(255) NOT NULL COMMENT '用户ID',
-  content TEXT COMMENT '内容',
-  img_url TEXT COMMENT '图片(JSON数组)',
-  mood VARCHAR(50) COMMENT '心情',
-  location VARCHAR(255) COMMENT '位置(JSON)',
-  visible_type TINYINT DEFAULT 0 COMMENT '0仅自己可见',
-  parent_id VARCHAR(32) DEFAULT 0 COMMENT '父ID 单日聚合(parent_id=id为主动态)',
-  create_time VARCHAR(20) NOT NULL COMMENT '发布时间',
-  update_time VARCHAR(20) NOT NULL COMMENT '修改时间',
-  is_deleted TINYINT DEFAULT 0 COMMENT '是否删除',
-  PRIMARY KEY (id),
-  INDEX idx_user_id (user_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='动态发布表';
-```
+- 主键 `id`：`varchar(50)`，通过 `nanoid` 生成业务 ID
+- 外键/关联字段：`varchar(50)`
+- 时间字段：`varchar(20)` 存储时间戳字符串
+- 软删除：`is_deleted` tinyint(4) DEFAULT 0
+- 字符集：`utf8mb4`，排序规则 `utf8mb4_unicode_ci`
+- 行格式：`ROW_FORMAT=DYNAMIC`（避免 utf8mb4 索引超限）
 
-### sys_attachment (文件附件索引表)
-```sql
-CREATE TABLE sys_attachment (
-  id VARCHAR(32) NOT NULL COMMENT 'id主键(nanoid)',
-  user_id VARCHAR(255) NOT NULL COMMENT '谁的图片',
-  bus_id VARCHAR(50) COMMENT '关联业务ID',
-  bus_type VARCHAR(50) NOT NULL COMMENT '业务类型: post/product/bank/other',
-  remark VARCHAR(255) DEFAULT '用户上传的图片' COMMENT '图片说明',
-  tags VARCHAR(255) DEFAULT '默认' COMMENT '标签(JSON数组)',
-  file_name VARCHAR(255) COMMENT '文件名',
-  file_path VARCHAR(255) NOT NULL COMMENT '存储路径',
-  file_size VARCHAR(50) COMMENT '大小(byte)',
-  file_ext VARCHAR(10) COMMENT '后缀名',
-  create_time VARCHAR(20) NOT NULL,
-  is_deleted TINYINT DEFAULT 0,
-  PRIMARY KEY (id),
-  KEY idx_bus_ref (bus_type, bus_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='文件附件索引表';
-```
+详细建表语句请直接查看 `live.sql` 文件。
 
 ---
 
-## 使用说明
+## 迁移脚本
 
-1. 执行 `live.sql` 创建所有表
-2. 表名统一使用下划线命名法
-3. 主键使用 varchar(50) 存储业务 ID
-4. 时间字段使用 varchar(20) 存储时间戳字符串
-5. is_deleted = 0 表示未删除
+`migrations/` 目录下存放增量迁移脚本，按编号顺序执行：
+
+| 脚本 | 说明 |
+|------|------|
+| `001_alter_account.sql` | account 表新增 `transfer_group_id`、`reversed_id` 字段及索引 |
+| `002_alter_bus_fund_history.sql` | bus_fund_history 表 `fund_id`/`id` 改为 varchar(50) |
+| `003_alter_fund.sql` | fund 表 `user_id`/`id` 改为 varchar(50)，新增 `invest` 投入本金字段 |
+| `004_alter_bus_recurring.sql` | bus_recurring 表补齐 `remind_days`/`remark`/`month_records`/`update_time`/`is_deleted` |
+| `005_alter_id_varchar50.sql` | 18 张表 id 字段统一从 varchar(32) 加长为 varchar(50) |
+| `006_alter_moment_visible_type.sql` | moment 表 `visible_type` tinyint(4)→varchar(255) JSON + `_migrations` 表补齐 ROW_FORMAT=DYNAMIC |
+
+> 以上迁移变更均已合入 `live.sql`，新环境直接导入 `live.sql` 即可。迁移脚本对已升级环境为幂等（重复执行自动跳过）。
 
 ---
 
 ## 更新日志
 
+### 2026-06-30
+- 修正表列表，移除不存在的 `asset`/`app_config`/`login_log`，补充 `asset_register`/`asset_snapshot`/`account_balance`/`work_job`/`user_log`
+- 移除过时的 SQL 示例（旧 INT/VARCHAR(32) 格式），改用以 `live.sql` 为准的结构约定
+
 ### 5月28日
 - 更新 `live.sql` 核心表结构，统一主键和外键 `varchar` 字段长度为 50。
-- 新增多张业务表（`fund`、`bus_fund_history`、`bus_recurring`、`account_transfer`、`device_crypto`、`security_verify_log`、`_migrations` 等），共计 24 张表。
+- 新增多张业务表（`fund`、`bus_fund_history`、`bus_recurring`、`account_transfer`、`device_crypto`、`security_verify_log` 等），共计 24 张表。

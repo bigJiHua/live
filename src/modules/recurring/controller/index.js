@@ -4,10 +4,11 @@ class RecurringExpenseController {
   async list(req, res) {
     try {
       const userId = req.userId;
-      const { month, includeInactive } = req.query;
+      const { month, includeInactive, excludeInstallment } = req.query;
       const rows = await RecurringExpense.findAll(userId, {
         month,
         includeInactive: includeInactive === "1" || includeInactive === "true",
+        excludeInstallment: excludeInstallment === "1" || excludeInstallment === "true",
       });
       return res.json({ status: 200, message: "查询成功", data: rows });
     } catch (error) {
@@ -41,14 +42,32 @@ class RecurringExpenseController {
         accountId: data.account_id,
         cycle: data.cycle,
         dayOfCycle: data.day_of_cycle,
+        monthOfCycle: data.month_of_cycle,
         remindDays: data.remind_days,
         remark: data.remark,
         isActive: data.is_active,
+        endDate: data.end_date,
+        repeatCount: data.repeat_count,
+        notifyChannel: data.notify_channel,
+        monthRecords: data.month_records,
       });
       return res.json({ status: 200, message: "创建成功", data: row });
     } catch (error) {
       console.error("创建固定支出错误:", error);
       return res.status(500).json({ status: 500, message: error.message || "创建失败" });
+    }
+  }
+
+  async installments(req, res) {
+    try {
+      const userId = req.userId;
+      const rows = await RecurringExpense.findAll(userId, {
+        includeInactive: true, installmentOnly: true, excludeInstallment: false,
+      });
+      return res.json({ status: 200, message: "查询成功", data: rows });
+    } catch (error) {
+      console.error("获取分期列表错误:", error);
+      return res.status(500).json({ status: 500, message: error.message || "查询失败" });
     }
   }
 
@@ -73,9 +92,13 @@ class RecurringExpenseController {
         accountId: data.account_id,
         cycle: data.cycle,
         dayOfCycle: data.day_of_cycle,
+        monthOfCycle: data.month_of_cycle,
         remindDays: data.remind_days,
         remark: data.remark,
         isActive: data.is_active,
+        endDate: data.end_date,
+        repeatCount: data.repeat_count,
+        notifyChannel: data.notify_channel,
       });
       return res.json({ status: 200, message: "更新成功", data: row });
     } catch (error) {

@@ -47,7 +47,7 @@
 | `img_url` | string | ❌ | 图片URL |
 | `mood` | string | ❌ | 心情 |
 | `location` | string | ❌ | 位置 |
-| `visible_type` | number | ❌ | 可见性：0仅自己/1公开 |
+| `visible_type` | object | ❌ | 可见性对象：`{vt: 0仅自己/1公开, vs: 批次号, pw: 密码熵}` |
 
 ---
 
@@ -79,7 +79,7 @@
 | `img_url` | varchar(255) | 图片URL |
 | `mood` | varchar(50) | 心情 |
 | `location` | varchar(255) | 位置 |
-| `visible_type` | tinyint | 可见性：0仅自己/1公开 |
+| `visible_type` | varchar(255) | 可见性(JSON): `{vt:0,vs:0,pw:0}` vt=可见类型/vs=批次号/pw=密码熵 |
 | `parent_id` | varchar(50) | 父ID |
 | `create_time` | varchar(20) | 发布时间 |
 | `update_time` | varchar(20) | 修改时间 |

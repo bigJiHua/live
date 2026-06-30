@@ -3,8 +3,12 @@ const net = require("net");
 
 const securityCheck = (req, res, next) => {
   try {
-    // 跳过静态文件请求（图片、字体等）
-    if (req.path.includes("/uploads/") || req.path.includes("/temp/")) {
+    // 跳过静态文件请求（图片、字体等）+ 公开分享接口
+    if (
+      req.path.includes("/uploads/") ||
+      req.path.includes("/temp/") ||
+      req.path.includes("/share/")
+    ) {
       return next();
     }
 

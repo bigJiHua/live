@@ -2,6 +2,7 @@ const db = require('../../../common/config/db');
 const idUtils = require('../../../common/utils/idUtils');
 const CardBill = require('./bill');
 const Account = require('../../account/model');
+const DebitAccount = require('../../account/model/debit');
 const AccountBalance = require('../../account/model/balance');
 const AccountSettlement = require('../../account/service/settlement');
 const AssetSnapshot = require('../../asset/model/snapshot');
@@ -169,8 +170,8 @@ class CardRepay {
     let repayAccountId = null; // 保存还款流水ID，用于关联 card_repay
     
     if (repayMethod !== 'card') {
-      // 1. 从还款来源扣款（生成支出流水）
-      const repayAccount = await Account.create({
+      // 1. 从还款来源扣款（生成支出流水，归属来源卡=借记卡）
+      const repayAccount = await DebitAccount.create({
         userId,
         direction: 0, // 支出
         categoryId: 'CATEGORY_REPAY', // 还款分类（需确保存在）

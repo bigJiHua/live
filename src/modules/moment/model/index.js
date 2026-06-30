@@ -15,7 +15,7 @@ class Moment {
     imgUrl,
     mood,
     location,
-    visibleType = 0,
+    visibleType = '{"vt":0,"vs":0,"pw":0}',
   }) {
     const id = nanoid();
     const now = Date.now().toString();

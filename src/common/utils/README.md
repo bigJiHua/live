@@ -66,6 +66,13 @@ EMAIL_PASS=your-email-app-password
 
 ---
 
+### shareToken.js
+**分享 Token 工具类**
+
+生成和验证公开分享链接的 Token。
+
+---
+
 ## 设计原则
 
 1. **纯函数**: 尽量使用纯函数，相同的输入产生相同的输出

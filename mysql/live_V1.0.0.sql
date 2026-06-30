@@ -489,7 +489,7 @@ CREATE TABLE IF NOT EXISTS `moment` (
   `img_url` varchar(10000) CHARACTER SET utf8 DEFAULT NULL COMMENT '图片',
   `mood` varchar(50) CHARACTER SET utf8 DEFAULT NULL COMMENT '心情',
   `location` varchar(255) CHARACTER SET utf8 DEFAULT NULL COMMENT '位置',
-  `visible_type` tinyint(4) DEFAULT '0' COMMENT '0仅自己可见',
+  `visible_type` varchar(255) CHARACTER SET utf8 DEFAULT '{\"vt\":0,\"vs\":0,\"pw\":0}' COMMENT '可见性(JSON): vt可见类型/vs批次号/pw密码',
   `parent_id` varchar(50) CHARACTER SET utf8 DEFAULT NULL COMMENT '父ID 单日聚合',
   `create_time` varchar(20) CHARACTER SET utf8 DEFAULT NULL COMMENT '发布时间',
   `update_time` varchar(20) CHARACTER SET utf8 DEFAULT NULL COMMENT '修改时间',

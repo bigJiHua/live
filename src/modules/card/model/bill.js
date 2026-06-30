@@ -190,7 +190,18 @@ class CardBill {
    */
   static async findById(id, userId, executor = db) {
     const query = `
-      SELECT cb.*, c.alias as card_alias, c.last4_no as card_last4, c.currency
+      SELECT cb.*, c.alias as card_alias, c.last4_no as card_last4, c.currency,
+             c.repay_day,
+             STR_TO_DATE(CONCAT(cb.bill_month, '-', LPAD(c.repay_day, 2, '0')), '%Y-%m-%d') as repay_date_calc,
+             CASE 
+               WHEN cb.need_repay > 0 AND STR_TO_DATE(CONCAT(cb.bill_month, '-', LPAD(c.repay_day, 2, '0')), '%Y-%m-%d') < CURDATE()
+               THEN 1 ELSE 0 
+             END as is_overdue_calc,
+             CASE 
+               WHEN cb.need_repay > 0 AND STR_TO_DATE(CONCAT(cb.bill_month, '-', LPAD(c.repay_day, 2, '0')), '%Y-%m-%d') < CURDATE()
+               THEN DATEDIFF(CURDATE(), STR_TO_DATE(CONCAT(cb.bill_month, '-', LPAD(c.repay_day, 2, '0')), '%Y-%m-%d'))
+               ELSE 0 
+             END as overdue_days_calc
       FROM ${this.tableName} cb
       LEFT JOIN card_base c ON cb.card_id = c.id
       WHERE cb.id = ? AND cb.user_id = ? AND cb.is_deleted = 0

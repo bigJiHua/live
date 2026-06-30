@@ -35,6 +35,8 @@
 | `/api/v1/data-manager` | dataManager | 数据管理模块 | 备份/导出/导入 |
 | `/api/v1/fund` | fund | 理财模块 | 基金投资管理 |
 | `/api/v1/recurring` | recurring | 周期支出模块 | 固定周期支出提醒 |
+| `/api/v1/geo` | geo | 地理位置模块 | IP 定位、逆地理编码代理 |
+| `/api/v1/share` | share | 公开分享模块 | 动态公开分享（免登录访问） |
 
 ## 认证机制
 

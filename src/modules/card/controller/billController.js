@@ -57,6 +57,12 @@ class CardBillController {
       const bill = await CardBill.findById(req.params.id, req.userId);
 
       if (!bill) return res.say("账单不存在", 200);
+
+      // 实时计算逾期状态（已还清/待还为0时不应显示逾期）
+      if (bill.is_overdue_calc !== undefined) {
+        bill.is_overdue = bill.is_overdue_calc;
+        bill.overdue_days = bill.overdue_days_calc;
+      }
       return res.json({ status: 200, message: "获取成功", data: bill });
     } catch (error) {
       console.error("获取账单详情错误:", error);

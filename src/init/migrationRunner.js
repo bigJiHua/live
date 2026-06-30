@@ -18,7 +18,7 @@ async function ensureTrackTable(conn) {
       \`filename\`    varchar(255) NOT NULL,
       \`applied_at\`  datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (\`filename\`)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='迁移记录表'
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8 ROW_FORMAT=DYNAMIC COMMENT='迁移记录表'
   `);
 }
 

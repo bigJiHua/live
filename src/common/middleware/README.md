@@ -10,7 +10,6 @@
 | `pinLockGuard.js` | PIN 锁定检查中间件 |
 | `pinSecurityGuard.js` | PIN 码安全验证中间件 |
 | `accountLockCheck.js` | 账户锁定检查中间件 |
-| `permissionGuard.js` | 权限检查中间件 |
 | `authSecurityData.js` | 数据安全解密中间件 |
 | `emailCodeRateLimit.js` | 邮箱验证码频率限制中间件 |
 | `validate.js` | 参数验证中间件 |
@@ -74,13 +73,6 @@ Headers:
 - 记录请求频率
 - 检测异常请求
 - 锁定账户或 IP
-
----
-
-### permissionGuard.js
-**权限检查中间件**
-
-检查用户权限。
 
 ---
 

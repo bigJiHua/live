@@ -1,4 +1,7 @@
 const Moment = require("../model");
+const { generateShareToken } = require("../../../common/utils/shareToken");
+
+const genPw = () => String(Math.floor(100000 + Math.random() * 900000)); // 6位数字
 
 class MomentController {
   /**
@@ -20,6 +23,17 @@ class MomentController {
       img_url: item.img_url ? JSON.parse(item.img_url) : [],
       mood: item.mood ? JSON.parse(item.mood) : null,
       location: item.location ? JSON.parse(item.location) : null,
+      visible_type: (() => {
+        if (!item.visible_type) return { vt: 0, vs: 0, pw: 0 };
+        try {
+          const parsed = JSON.parse(item.visible_type);
+          // 兼容旧 tinyint 值：解析出数字 0 → 转为对象
+          if (typeof parsed === 'number') return { vt: parsed, vs: 0, pw: 0 };
+          return parsed;
+        } catch {
+          return { vt: 0, vs: 0, pw: 0 };
+        }
+      })(),
       children: childIds,
     };
   };
@@ -37,7 +51,9 @@ class MomentController {
         imgUrl: images ? JSON.stringify(images) : null,
         mood: mood ? JSON.stringify(mood) : null,
         location: location ? JSON.stringify(location) : null,
-        visibleType: visibleType || 0,
+        visibleType: visibleType
+          ? JSON.stringify(visibleType)
+          : '{"vt":0,"vs":0,"pw":0}',
       });
       res.status(200).json({ status: 200, message: "发布成功", id: result.id });
     } catch (error) {
@@ -110,12 +126,24 @@ class MomentController {
     }
   };
 
-  // --- 找回你原本的更新方法 ---
+  // --- 通用更新 ---
   update = async (req, res) => {
     try {
       const { id } = req.params;
-      const { content, images, mood, location, visibleType } =
-        req.body.data || req.body;
+      const {
+        content, images, mood, location, visibleType,
+        shareAction, shareDuration,
+      } = req.body.data || req.body;
+
+      // 分享相关 → 独立方法
+      if (["open", "close", "token"].includes(shareAction)) {
+        return handleShareAction(req, res, {
+          id,
+          userId: req.userId,
+          action: shareAction,
+          duration: shareDuration,
+        });
+      }
 
       const updates = {};
       if (content !== undefined) updates.content = content;
@@ -124,7 +152,8 @@ class MomentController {
       if (mood !== undefined) updates.mood = mood ? JSON.stringify(mood) : null;
       if (location !== undefined)
         updates.location = location ? JSON.stringify(location) : null;
-      if (visibleType !== undefined) updates.visibleType = visibleType;
+      if (visibleType !== undefined)
+        updates.visibleType = JSON.stringify(visibleType);
 
       const result = await Moment.update(id, req.userId, updates);
       return res.status(result.status || 200).json(result);
@@ -145,6 +174,105 @@ class MomentController {
       res.status(500).json({ status: 500, message: "删除失败" });
     }
   };
+}
+
+// ──────────────────────────────────────────
+// 分享开关（独立函数，与更新/删除同级）
+// ──────────────────────────────────────────
+/**
+ * @param {object} req   Express request
+ * @param {object} res   Express response
+ * @param {object} opts
+ * @param {string} opts.id       日记 ID
+ * @param {string} opts.userId   用户 ID
+ * @param {"open"|"close"} opts.action  操作类型
+ * @param {number} [opts.duration=1]    有效小时数（仅 open）
+ */
+async function handleShareAction(_req, res, { id, userId, action, duration }) {
+  try {
+    // 权限校验
+    const current = await Moment.findById(id);
+    if (!current || current.user_id !== userId) {
+      return res.status(404).json({ status: 404, message: "未找到" });
+    }
+
+    // 解析当前 visible_type
+    let curVis = { vt: 0, vs: 0, pw: 0 };
+    try {
+      curVis = typeof current.visible_type === "string"
+        ? JSON.parse(current.visible_type)
+        : current.visible_type || curVis;
+    } catch { /* fallback */ }
+
+    // ── 开启分享 ──
+    if (action === "open") {
+      const newVs = curVis.vs === 0 ? 1 : curVis.vs + 1;
+      const newPw = genPw();
+      const expireHours = Number(duration) || 1;
+
+      const newVis = { vt: 1, vs: newVs, pw: newPw };
+      const token = generateShareToken({
+        diaryId: id,
+        vs: newVs,
+        pw: newPw,
+        expireHours,
+      });
+
+      await Moment.update(id, userId, {
+        visibleType: JSON.stringify(newVis),
+      });
+
+      const shareUrl = `${process.env.FRONTEND_URL || ""}/share/diary/detail`;
+      return res.json({
+        status: 200,
+        message: "分享已开启",
+        share: {
+          token,
+          password: newPw,
+          tokenUrl: `${shareUrl}?token=${encodeURIComponent(token)}`,
+          pwUrl: `${shareUrl}?id=${id}`,
+          expireHours,
+        },
+      });
+    }
+
+    // ── 刷新 token（不改变密码/版本号） ──
+    if (action === "token") {
+      if (curVis.vt !== 1) {
+        return res.json({ status: 403, message: "分享未开启" });
+      }
+      const expireHours = Number(duration) || 1;
+      const token = generateShareToken({
+        diaryId: id,
+        vs: curVis.vs,
+        pw: curVis.pw,
+        expireHours,
+      });
+
+      const shareUrl = `${process.env.FRONTEND_URL || ""}/share/diary/detail`;
+      return res.json({
+        status: 200,
+        message: "Token 已生成",
+        share: {
+          token,
+          tokenUrl: `${shareUrl}?token=${encodeURIComponent(token)}`,
+          expireHours,
+        },
+      });
+    }
+
+    // ── 关闭分享 ──
+    if (action === "close") {
+      const newVis = { vt: 0, vs: curVis.vs, pw: 0 };
+      await Moment.update(id, userId, {
+        visibleType: JSON.stringify(newVis),
+      });
+      return res.json({ status: 200, message: "分享已关闭" });
+    }
+  } catch (error) {
+    console.error("[ShareAction] 失败:", error);
+    res.status(500).json({ status: 500, message: "分享操作失败" });
+  }
 }
 
 module.exports = new MomentController();

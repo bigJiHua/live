@@ -1,7 +1,11 @@
 const Account = require("../model");
 
 /**
- * 账务记录控制器
+ * 账务记录控制器（通用层）
+ * 仅处理只读查询、备注修改、统计。
+ * 写入操作（创建/更新/冲正）已拆分：
+ *   - 借记卡 → controller/debit.js
+ *   - 信用卡 → controller/credit.js
  */
 class AccountController {
   /**
@@ -66,7 +70,7 @@ class AccountController {
   async getByCard(req, res) {
     try {
       const { cardId, page = 1, limit = 20, direction, startDate, endDate } = req.query;
-      
+
       if (!cardId) return res.say("卡片ID不能为空", 400);
 
       const filters = {};
@@ -119,51 +123,7 @@ class AccountController {
   }
 
   /**
-   * 创建收支记录
-   */
-  async create(req, res) {
-    
-    try {
-      const transaction = await Account.create({
-        userId: req.userId,
-        ...req.body.data,
-      });
-
-      return res.status(200).json({
-        status: 200,
-        message: "创建成功",
-        data: transaction,
-      });
-    } catch (error) {
-      console.error("创建收支记录错误:", error);
-      return res.say(error, 400);
-    }
-  }
-
-  /**
-   * 更新收支记录
-   */
-  async update(req, res) {
-    try {
-      // 兼容加密和非加密两种请求格式
-      const data = req.body.data || req.body
-      const transaction = await Account.update(
-        req.params.id,
-        req.userId,
-        data
-      );
-
-      if (!transaction) return res.say("记录不存在", 404);
-
-      return res.json({ status: 200, message: "更新成功", data: transaction });
-    } catch (error) {
-      console.error("更新收支记录错误:", error);
-      return res.say("更新失败", 500);
-    }
-  }
-
-  /**
-   * 修改收支备注（仅修改备注，不涉及其他字段）
+   * 修改收支备注（仅备注，通用）
    */
   async updateRemark(req, res) {
     try {
@@ -200,88 +160,6 @@ class AccountController {
   }
 
   /**
-   * 冲正流水 - 借记卡
-   * 原支出(direction=0) -> 冲正收入(direction=1)
-   * 原收入(direction=1) -> 冲正支出(direction=0)
-   */
-  async reverseDebit(req, res) {
-    try {
-      const { remark } = req.body || {};
-
-      const result = await Account.reverseDebitById(req.params.id, req.userId, remark);
-
-      return res.json({
-        status: 200,
-        message: "借记卡冲正成功",
-        data: {
-          reversed: result,
-          originalId: req.params.id
-        }
-      });
-    } catch (error) {
-      console.error("借记卡冲正流水错误:", error);
-      return res.status(400).json({
-        status: 400,
-        message: error.message || "冲正失败"
-      });
-    }
-  }
-
-  /**
-   * 冲正流水 - 信用卡消费
-   * 原支出(direction=0) -> 冲正收入(direction=1) + 恢复账单额度
-   */
-  async reverseCreditExpense(req, res) {
-    try {
-      const { remark } = req.body || {};
-
-      const result = await Account.reverseCreditExpenseById(req.params.id, req.userId, remark);
-
-      return res.json({
-        status: 200,
-        message: "信用卡消费冲正成功",
-        data: {
-          reversed: result,
-          originalId: req.params.id
-        }
-      });
-    } catch (error) {
-      console.error("信用卡消费冲正错误:", error);
-      return res.status(400).json({
-        status: 400,
-        message: error.message || "冲正失败"
-      });
-    }
-  }
-
-  /**
-   * 冲正流水 - 信用卡还款撤销
-   * 原还款流水 -> 冲正支出 + 软删除card_repay + 恢复账单额度
-   */
-  async reverseCreditRepay(req, res) {
-    try {
-      const { remark } = req.body || {};
-
-      const result = await Account.reverseCreditRepayById(req.params.id, req.userId, remark);
-
-      return res.json({
-        status: 200,
-        message: "信用卡还款撤销成功",
-        data: {
-          reversed: result,
-          originalId: req.params.id
-        }
-      });
-    } catch (error) {
-      console.error("信用卡还款撤销错误:", error);
-      return res.status(400).json({
-        status: 400,
-        message: error.message || "冲正失败"
-      });
-    }
-  }
-
-  /**
    * 获取转账明细列表（含自动同步）
    */
   async getTransferList(req, res) {
@@ -292,33 +170,6 @@ class AccountController {
     } catch (error) {
       console.error("获取转账明细错误:", error);
       return res.status(400).json({ status: 400, message: error.message || "获取失败" });
-    }
-  }
-
-  /**
-   * 转账冲正
-   * 自转/提现的完整撤销：反转支出方 + 反转收入方
-   */
-  async reverseTransfer(req, res) {
-    try {
-      const { remark } = req.body || {};
-
-      const result = await Account.reverseTransferById(req.params.id, req.userId, remark);
-
-      return res.json({
-        status: 200,
-        message: "转账冲正成功",
-        data: {
-          reversed: result,
-          originalId: req.params.id
-        }
-      });
-    } catch (error) {
-      console.error("转账冲正错误:", error);
-      return res.status(400).json({
-        status: 400,
-        message: error.message || "冲正失败"
-      });
     }
   }
 

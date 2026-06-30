@@ -70,24 +70,40 @@ class RecurringExpense {
   }
 
   static toCalendarEvent(row, month) {
+    // 分期：仅 repeat_count 范围内生成事件
+    if (row.repeat_count) {
+      const records = this.parseMonthRecords(row.month_records);
+      const sortedMonths = Object.keys(records).sort();
+      const idx = sortedMonths.indexOf(month);
+      if (idx === -1 || idx >= row.repeat_count) return null;
+    }
+
     const item = this.attachMonthInfo(row, month);
-    const statusMap = {
-      done: "已完成",
-      skipped: "已取消",
-      pending: "待完成",
-    };
+    const statusMap = { done: "已完成", skipped: "已取消", pending: "待完成" };
+
+    // 分期：追加第N/M期
+    let content = item.name;
+    if (row.repeat_count) {
+      const records = this.parseMonthRecords(row.month_records);
+      const sortedMonths = Object.keys(records).sort();
+      const periodIdx = sortedMonths.indexOf(month);
+      if (periodIdx >= 0) {
+        content = `${item.name} 第${periodIdx + 1}/${row.repeat_count}期`;
+      }
+    }
 
     return {
       id: `recurring_${item.id}_${month}`,
       source: "recurring",
       recurring_id: item.id,
-      content: item.name,
+      content,
       event_type: "fixed_expense",
       happen_date: item.happen_date,
       status: statusMap[item.month_status] || "待完成",
       priority: 2,
       need_remind: 1,
-      is_recurring: 1,
+      is_recurring: item.cycle === "year" ? 1 : 0,
+      cycle: item.cycle || "month",
       amount: item.month_amount,
       category_id: item.category_id,
       category_name: item.category_name || "",
@@ -97,15 +113,20 @@ class RecurringExpense {
     };
   }
 
-  static async findAll(userId, { month, includeInactive = false } = {}) {
+  static async findAll(userId, { month, includeInactive = false, installmentOnly = false, excludeInstallment = false } = {}) {
     const params = [userId];
     let where = "WHERE r.user_id = ? AND r.is_deleted = 0";
     if (!includeInactive) {
       where += " AND r.is_active = 1";
     }
+    if (installmentOnly) {
+      where += " AND (c.name = '分期' OR r.account_id LIKE '%\"type\":\"installment\"%')";
+    } else if (excludeInstallment) {
+      where += " AND (c.name IS NULL OR (c.name != '分期' AND (r.account_id NOT LIKE '%\"type\":\"installment\"%' OR r.account_id IS NULL)))";
+    }
 
     const [rows] = await db.execute(
-      `SELECT r.*, c.name AS category_name, cb.alias AS account_name, cb.last4_no AS account_last4
+      `SELECT r.*, c.name AS category_name, cb.alias AS account_name, cb.last4_no AS account_last4, cb.card_type
        FROM ${this.tableName} r
        LEFT JOIN bus_category c ON r.category_id = c.id AND c.is_deleted = 0
        LEFT JOIN card_base cb ON r.account_id = cb.id AND cb.is_deleted = 0
@@ -114,14 +135,29 @@ class RecurringExpense {
       params
     );
 
-    if (!month) return rows.map(row => ({ ...row, month_records: this.parseMonthRecords(row.month_records) }));
-    const safeMonth = this.normalizeMonth(month);
-    return rows.map(row => this.attachMonthInfo(row, safeMonth));
+    // 按年周期过滤：只返回匹配月份的项
+    let filtered = rows;
+    if (month) {
+      const safeMonth = this.normalizeMonth(month);
+      const [, monthNum] = safeMonth.split("-").map(Number);
+      filtered = rows.filter(row => {
+        if (row.end_date && row.end_date < this.today()) {
+          return false; // 到期自动隐藏（优先判断，覆盖所有周期类型）
+        }
+        if (row.cycle === "year" && row.month_of_cycle) {
+          return Number(row.month_of_cycle) === monthNum;
+        }
+        return true;
+      });
+    }
+
+    if (!month) return filtered.map(row => ({ ...row, month_records: this.parseMonthRecords(row.month_records) }));
+    return filtered.map(row => this.attachMonthInfo(row, month));
   }
 
   static async findById(id, userId) {
     const [rows] = await db.execute(
-      `SELECT r.*, c.name AS category_name, cb.alias AS account_name, cb.last4_no AS account_last4
+      `SELECT r.*, c.name AS category_name, cb.alias AS account_name, cb.last4_no AS account_last4, cb.card_type
        FROM ${this.tableName} r
        LEFT JOIN bus_category c ON r.category_id = c.id AND c.is_deleted = 0
        LEFT JOIN card_base cb ON r.account_id = cb.id AND cb.is_deleted = 0
@@ -133,38 +169,52 @@ class RecurringExpense {
     return { ...row, month_records: this.parseMonthRecords(row.month_records) };
   }
 
-  static async create({ userId, name, amount, categoryId, accountId, cycle, dayOfCycle, remindDays, remark, isActive }) {
+  static async create({ userId, name, amount, categoryId, accountId, cycle, dayOfCycle, monthOfCycle, remindDays, remark, isActive, endDate, repeatCount, notifyChannel, monthRecords }) {
     if (!name || !String(name).trim()) throw new Error("固定支出名称不能为空");
-    if (!amount || Number(amount) <= 0) throw new Error("金额必须大于0");
+    const numAmount = Number(amount);
+    if (isNaN(numAmount) || numAmount < 0) throw new Error("金额不能为负数");
 
     const finalCycle = cycle || "month";
-    if (!["month"].includes(finalCycle)) {
-      throw new Error("当前仅支持按月固定支出");
+    if (!["month", "year"].includes(finalCycle)) {
+      throw new Error("周期仅支持 month / year");
+    }
+    if (finalCycle === "year" && (!monthOfCycle || Number(monthOfCycle) < 1 || Number(monthOfCycle) > 12)) {
+      throw new Error("年度周期需指定 month_of_cycle (1-12)");
     }
 
     const day = Math.max(1, Math.min(31, Number(dayOfCycle || 1)));
+    const monthVal = monthOfCycle ? Math.max(1, Math.min(12, Number(monthOfCycle))) : null;
     const id = idUtils.billId();
     const now = this.now();
-    const nextDate = this.getNextDate(day);
+    const nextDate = finalCycle === "year"
+      ? this.getNextDateYear(day, monthVal)
+      : this.getNextDate(day);
+
+    const initialRecords = (monthRecords && typeof monthRecords === 'object') ? JSON.stringify(monthRecords) : "{}";
 
     await db.execute(
       `INSERT INTO ${this.tableName}
-       (id, user_id, name, amount, category_id, account_id, cycle, day_of_cycle,
-        next_date, remind_days, remark, month_records, is_active, create_time, update_time, is_deleted)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+       (id, user_id, name, amount, category_id, account_id, cycle, day_of_cycle, month_of_cycle,
+        next_date, remind_days, remark, month_records, end_date, repeat_count, notify_channel,
+        is_active, create_time, update_time, is_deleted)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
       [
         id,
         userId,
         String(name).trim(),
-        amount,
+        numAmount,
         categoryId || null,
         accountId || null,
         finalCycle,
         day,
+        monthVal,
         nextDate,
         Number(remindDays || 0),
         remark || null,
-        "{}",
+        initialRecords,
+        endDate || null,
+        repeatCount ? Number(repeatCount) : null,
+        notifyChannel || "app",
         isActive === false || isActive === 0 ? 0 : 1,
         now,
         now,
@@ -186,6 +236,18 @@ class RecurringExpense {
     return date;
   }
 
+  static getNextDateYear(dayOfCycle, monthOfCycle) {
+    const now = new Date();
+    const year = now.getFullYear();
+    const day = Math.max(1, Math.min(31, Number(dayOfCycle || 1)));
+    const month = Number(monthOfCycle || 1);
+    const thisYearDate = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    if (thisYearDate >= this.today()) {
+      return thisYearDate;
+    }
+    return `${year + 1}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  }
+
   static async update(id, userId, updates) {
     const existing = await this.findById(id, userId);
     if (!existing) throw new Error("固定支出不存在");
@@ -197,19 +259,31 @@ class RecurringExpense {
       accountId: "account_id",
       cycle: "cycle",
       dayOfCycle: "day_of_cycle",
+      monthOfCycle: "month_of_cycle",
       remindDays: "remind_days",
       remark: "remark",
       isActive: "is_active",
+      endDate: "end_date",
+      repeatCount: "repeat_count",
+      notifyChannel: "notify_channel",
     };
 
     if (updates.name !== undefined && !String(updates.name).trim()) {
       throw new Error("固定支出名称不能为空");
     }
-    if (updates.amount !== undefined && Number(updates.amount) <= 0) {
-      throw new Error("金额必须大于0");
+    if (updates.amount !== undefined && Number(updates.amount) < 0) {
+      throw new Error("金额不能为负数");
     }
-    if (updates.cycle !== undefined && updates.cycle !== "month") {
-      throw new Error("当前仅支持按月固定支出");
+
+    // 合并 cycle：优先用传入值，否则用现有值
+    const resolvedCycle = updates.cycle !== undefined ? updates.cycle : existing.cycle;
+    if (!["month", "year"].includes(resolvedCycle)) {
+      throw new Error("周期仅支持 month / year");
+    }
+
+    const resolvedMonthOfCycle = updates.monthOfCycle !== undefined ? updates.monthOfCycle : existing.month_of_cycle;
+    if (resolvedCycle === "year" && (!resolvedMonthOfCycle || Number(resolvedMonthOfCycle) < 1 || Number(resolvedMonthOfCycle) > 12)) {
+      throw new Error("年度周期需指定 month_of_cycle (1-12)");
     }
 
     const fields = [];
@@ -219,11 +293,15 @@ class RecurringExpense {
         fields.push(`${column} = ?`);
         if (key === "dayOfCycle") {
           params.push(Math.max(1, Math.min(31, Number(updates[key] || 1))));
+        } else if (key === "monthOfCycle") {
+          params.push(Math.max(1, Math.min(12, Number(updates[key] || 1))));
         } else if (key === "remindDays") {
           params.push(Number(updates[key] || 0));
+        } else if (key === "repeatCount") {
+          params.push(updates[key] ? Number(updates[key]) : null);
         } else if (key === "isActive") {
           params.push(updates[key] ? 1 : 0);
-        } else if (key === "categoryId" || key === "accountId") {
+        } else if (key === "categoryId" || key === "accountId" || key === "endDate" || key === "notifyChannel") {
           params.push(updates[key] || null);
         } else {
           params.push(updates[key]);
@@ -231,9 +309,19 @@ class RecurringExpense {
       }
     });
 
-    if (updates.dayOfCycle !== undefined) {
-      fields.push("next_date = ?");
-      params.push(this.getNextDate(Math.max(1, Math.min(31, Number(updates.dayOfCycle || 1)))));
+    // 当 day_of_cycle 或 month_of_cycle 或 cycle 变更时，重算 next_date
+    if (updates.dayOfCycle !== undefined || updates.monthOfCycle !== undefined || updates.cycle !== undefined) {
+      const dayVal = updates.dayOfCycle !== undefined ? Math.max(1, Math.min(31, Number(updates.dayOfCycle || 1))) : Number(existing.day_of_cycle || 1);
+      const monthVal = updates.monthOfCycle !== undefined
+        ? Math.max(1, Math.min(12, Number(updates.monthOfCycle || 1)))
+        : Number(existing.month_of_cycle || 0);
+      if (resolvedCycle === "year") {
+        fields.push("next_date = ?");
+        params.push(this.getNextDateYear(dayVal, monthVal || undefined));
+      } else {
+        fields.push("next_date = ?");
+        params.push(this.getNextDate(dayVal));
+      }
     }
 
     if (fields.length === 0) return existing;
@@ -265,6 +353,15 @@ class RecurringExpense {
     const existing = await this.findById(id, userId);
     if (!existing) throw new Error("固定支出不存在");
 
+    // 分期限定：只能操作 month_records 中已有月份，防止超范围插入
+    if (existing.repeat_count) {
+      const existingRecords = this.parseMonthRecords(existing.month_records);
+      const validMonths = Object.keys(existingRecords);
+      if (!validMonths.includes(safeMonth)) {
+        throw new Error(`分期仅限已登记月份操作，${safeMonth} 不在范围内`);
+      }
+    }
+
     const records = this.parseMonthRecords(existing.month_records);
     const current = records[safeMonth] || {};
     records[safeMonth] = {
@@ -276,13 +373,24 @@ class RecurringExpense {
       done_time: status === "done" ? this.now() : null,
     };
 
+    // 检查是否已满 repeat_count（分期完成）
+    let shouldDeactivate = false;
+    if (status === "done" && existing.repeat_count) {
+      const doneCount = Object.values(records).filter(r => r.status === "done").length;
+      if (doneCount >= Number(existing.repeat_count)) {
+        shouldDeactivate = true;
+      }
+    }
+
     await db.execute(
-      `UPDATE ${this.tableName} SET month_records = ?, update_time = ? WHERE id = ? AND user_id = ? AND is_deleted = 0`,
-      [JSON.stringify(records), this.now(), id, userId]
+      `UPDATE ${this.tableName} SET month_records = ?, is_active = ?, update_time = ? WHERE id = ? AND user_id = ? AND is_deleted = 0`,
+      [JSON.stringify(records), shouldDeactivate ? 0 : (existing.is_active || 1), this.now(), id, userId]
     );
 
     const row = await this.findById(id, userId);
-    return this.attachMonthInfo(row, safeMonth);
+    const result = this.attachMonthInfo(row, safeMonth);
+    result.auto_deactivated = shouldDeactivate;
+    return result;
   }
 
   static async getMonthSummary(userId, month) {
@@ -306,14 +414,16 @@ class RecurringExpense {
   static getCategoryStats(rows) {
     const map = new Map();
     rows.forEach(item => {
-      const key = item.category_id || "uncategorized";
+      const amountVal = Number(item.month_amount || 0);
+      const isEvent = !item.category_id && amountVal === 0;
+      const key = isEvent ? "event_reminder" : (item.category_id || "uncategorized");
       const current = map.get(key) || {
-        category_id: item.category_id || "",
-        category_name: item.category_name || "未分类",
+        category_id: isEvent ? "" : (item.category_id || ""),
+        category_name: isEvent ? "事件提醒" : (item.category_name || "未分类"),
         amount: 0,
         count: 0,
       };
-      current.amount += Number(item.month_amount || 0);
+      current.amount += amountVal;
       current.count += 1;
       map.set(key, current);
     });
@@ -323,7 +433,7 @@ class RecurringExpense {
   static async getCalendarEvents(userId, year, monthNo) {
     const month = `${year}-${String(monthNo).padStart(2, "0")}`;
     const rows = await this.findAll(userId, { month, includeInactive: false });
-    return rows.map(row => this.toCalendarEvent(row, month));
+    return rows.map(row => this.toCalendarEvent(row, month)).filter(Boolean);
   }
 
   static async getUpcomingReminders(userId, scope = "default") {
@@ -339,6 +449,7 @@ class RecurringExpense {
       const rows = await this.findAll(userId, { month, includeInactive: false });
       rows.forEach(row => {
         const event = this.toCalendarEvent(row, month);
+        if (!event) return;
         if (event.happen_date >= start && event.happen_date <= end && event.month_status !== "done" && event.month_status !== "skipped") {
           result.push(event);
         }
