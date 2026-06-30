@@ -28,3 +28,7 @@ export function deleteRecurring(id) {
 export function updateRecurringMonthStatus(id, data) {
   return request.put(`/recurring/${id}/month-status`, data)
 }
+
+export function getInstallments() {
+  return request.get('/recurring/installments')
+}

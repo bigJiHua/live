@@ -536,7 +536,7 @@ import { showToast, showSuccessToast, showFailToast } from "vant";
 import dayjs from "dayjs";
 import { categoryApi } from "@/utils/api/category";
 import { getCardList } from "@/utils/api/card";
-import { createAccount } from "@/utils/api/account";
+import { createDebitAccount, createCreditAccount } from "@/utils/api/account";
 import { useFlowSyncStore } from "@/stores/flowSync";
 import ENV from "@/utils/env";
 
@@ -646,6 +646,15 @@ const formatMoney = (val) => {
 const allCategories = ref({ expense: [], income: [] });
 const allCards = ref([]);
 const bankList = ref([]);
+
+// 根据卡片类型选择借记卡/信用卡接口
+// cardId 为 xxxx(现金)/yyyy(余额) 走 debit；其余查 allCards 判断 card_type
+const createAccount = async (data) => {
+  const cardId = data.cardId;
+  const card = cardId ? allCards.value.find(c => c.id === cardId) : null;
+  const isCredit = card && card.card_type === 'credit';
+  return isCredit ? createCreditAccount(data) : createDebitAccount(data);
+};
 
 onMounted(async () => {
   try {

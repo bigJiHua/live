@@ -27,10 +27,10 @@
                 </span>
                 <van-tag
                   v-if="log._suspicious"
-                  :type="log._suspicious === 'cross-border' ? 'danger' : 'warning'"
+                  :type="suspiciousType(log._suspicious)"
                   size="small"
                   class="suspicious-tag"
-                >{{ log._suspicious === 'cross-border' ? '跨境登录' : '疑似异地登录' }}</van-tag>
+                >{{ suspiciousLabel(log._suspicious) }}</van-tag>
               </div>
               <span class="log-time">{{ formatTime(log.login_time || log.create_time) }}</span>
             </div>
@@ -114,55 +114,102 @@ const loadLogs = async () => {
   }
 };
 
-const extractRegion = (location) => {
-  if (!location || location === "未知") return { country: "", province: "" };
-  const parts = location.split("-").map(s => s.trim());
-  return {
-    country: parts[0] || "",
-    province: parts[1] || "",
-  };
+const extractRegion = (location, ip) => {
+  // 优先用 login_location，其次用 IP 属地反查（IP 首个段做粗略判断）
+  if (location && location !== "未知") {
+    const parts = location.split("-").map(s => s.trim());
+    return { country: parts[0] || "", province: parts[1] || "" };
+  }
+  // 用 IP 前缀做粗略属地（无法精确到省份，仅做国家区分）
+  if (ip) {
+    // 常见中国 IP 段
+    if (/^(10\.|172\.(1[6-9]|2\d|3[01])|192\.168|127\.|0\.)/.test(ip)) {
+      return { country: "中国（内网）", province: "" };
+    }
+    // 非内网 IP 且无位置信息 → 未知
+    return { country: "未知", province: "" };
+  }
+  return { country: "", province: "" };
+};
+
+const suspiciousType = (s) => {
+  const map = { "cross-border": "danger", "new-device": "danger", "rapid": "danger", "abnormal": "warning" };
+  return map[s?.level || s] || "warning";
+};
+
+const suspiciousLabel = (s) => {
+  if (typeof s === "object") {
+    const map = { "cross-border": `跨境登录(${s.detail})`, "new-device": "新设备登录", "rapid": `频切异地(${s.detail})`, "abnormal": `异地登录(${s.detail})` };
+    return map[s.level] || s.level;
+  }
+  const map = { "cross-border": "跨境登录", "abnormal": "疑似异地登录" };
+  return map[s] || s;
 };
 
 const markSuspicious = (list) => {
-  const countryCount = {};
-  const provinceCount = {};
-  for (const log of list) {
-    if (log.status !== 0) {
-      const { country, province } = extractRegion(log.login_location);
-      if (country) countryCount[country] = (countryCount[country] || 0) + 1;
-      if (country && province) {
-        const key = country + "|" + province;
-        provinceCount[key] = (provinceCount[key] || 0) + 1;
-      }
+  if (list.length < 2) return;
+  const successLogs = list.filter(l => l.status !== 0);
+
+  // 1. 设备指纹统计 — 识别「常住设备」
+  const fpCount = {};
+  successLogs.forEach(l => { if (l.fingerprint) fpCount[l.fingerprint] = (fpCount[l.fingerprint] || 0) + 1; });
+  let mainFP = "", maxFP = 0;
+  for (const [fp, n] of Object.entries(fpCount)) { if (n > maxFP) { maxFP = n; mainFP = fp; } }
+
+  // 2. 国家/省份频率统计
+  const logRegion = {};
+  const countryCount = {}, provinceByCountry = {};
+  successLogs.forEach(l => {
+    const r = extractRegion(l.login_location, l.login_ip);
+    logRegion[l.id] = r;
+    if (r.country) { countryCount[r.country] = (countryCount[r.country] || 0) + 1; }
+    if (r.country && r.province) {
+      const key = `${r.country}|${r.province}`;
+      provinceByCountry[key] = (provinceByCountry[key] || 0) + 1;
     }
-  }
-  let mainCountry = "";
-  let maxCountry = 0;
-  for (const [c, count] of Object.entries(countryCount)) {
-    if (count > maxCountry) {
-      maxCountry = count;
-      mainCountry = c;
-    }
-  }
-  if (!mainCountry) return;
+  });
+  let mainCountry = "", maxCountry = 0;
+  for (const [c, n] of Object.entries(countryCount)) { if (n > maxCountry) { maxCountry = n; mainCountry = c; } }
   let mainProvince = "";
-  let maxProvince = 0;
-  for (const [key, count] of Object.entries(provinceCount)) {
-    const [c] = key.split("|");
-    if (c === mainCountry && count > maxProvince) {
-      maxProvince = count;
-      mainProvince = key.split("|")[1];
+  if (mainCountry) {
+    let maxProv = 0;
+    for (const [key, n] of Object.entries(provinceByCountry)) {
+      const [c, p] = key.split("|");
+      if (c === mainCountry && n > maxProv) { maxProv = n; mainProvince = p; }
     }
   }
-  for (const log of list) {
-    if (log.status !== 0) {
-      const { country, province } = extractRegion(log.login_location);
-      if (!country) continue;
-      if (country !== mainCountry) {
-        log._suspicious = "cross-border";
-      } else if (mainProvince && province && province !== mainProvince) {
-        log._suspicious = "abnormal";
+
+  // 3. 时间窗口检测 — 2h 内两省切换 → 异常
+  const timeThreshold = 2 * 60 * 60 * 1000;
+  const sorted = [...successLogs].sort((a, b) => Number(a.login_time) - Number(b.login_time));
+  for (let i = 1; i < sorted.length; i++) {
+    const prev = sorted[i - 1], curr = sorted[i];
+    const diff = Number(curr.login_time) - Number(prev.login_time);
+    if (diff > 0 && diff <= timeThreshold) {
+      const p1 = logRegion[prev.id]?.province || extractRegion(prev.login_location, prev.login_ip).province;
+      const p2 = logRegion[curr.id]?.province || extractRegion(curr.login_location, curr.login_ip).province;
+      if (p1 && p2 && p1 !== p2) {
+        if (!prev._suspicious) prev._suspicious = { level: "rapid", detail: `${p1}⇢${p2}` };
+        if (!curr._suspicious) curr._suspicious = { level: "rapid", detail: `${p1}⇢${p2}` };
       }
+    }
+  }
+
+  // 4. 逐条标记
+  for (const log of list) {
+    if (log.status === 0) continue;
+    // 新设备
+    if (mainFP && log.fingerprint && log.fingerprint !== mainFP) {
+      if (!log._suspicious) log._suspicious = { level: "new-device", detail: "新设备" };
+      continue;
+    }
+    if (log._suspicious) continue; // 已由时间窗口标记
+    const r = logRegion[log.id];
+    if (!r || !r.country) continue;
+    if (r.country !== mainCountry) {
+      log._suspicious = { level: "cross-border", detail: r.country };
+    } else if (mainProvince && r.province && r.province !== mainProvince) {
+      log._suspicious = { level: "abnormal", detail: r.province };
     }
   }
 };

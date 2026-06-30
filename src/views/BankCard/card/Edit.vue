@@ -274,7 +274,11 @@
             is-link
             :value="formData.cardImg ? '已选择' : '未选择'"
             @click="showImagePicker = true"
-          />
+          >
+            <template #right-icon v-if="formData.cardImg">
+              <van-icon name="clear" color="#ee0a24" @click.stop="clearCardImg" />
+            </template>
+          </van-cell>
         </van-cell-group>
       </div>
 
@@ -288,21 +292,28 @@
         <div class="image-picker">
           <div class="picker-header">
             <span class="picker-title">选择卡面</span>
-            <van-button size="small" type="primary" @click="confirmCardImg">
-              确认
-            </van-button>
+            <div class="picker-actions">
+              <van-button size="small" plain type="danger" @click="clearCardImg">
+                清空
+              </van-button>
+              <van-button size="small" type="primary" @click="confirmCardImg">
+                确认
+              </van-button>
+            </div>
           </div>
           <van-loading v-if="imageLoading" class="loading" />
-          <div v-else class="image-grid">
-            <div
-              v-for="item in imageList"
-              :key="item.id"
-              class="image-item"
-              :class="{ selected: selectedImageId === item.id }"
-              @click="selectImage(item)"
-            >
-              <van-image fit="cover" :src="getFullUrl(item.file_path)" />
-              <van-icon v-if="selectedImageId === item.id" name="success" class="select-icon" />
+          <div v-else class="image-list">
+            <div class="image-grid">
+              <div
+                v-for="item in imageList"
+                :key="item.id"
+                class="image-item"
+                :class="{ selected: selectedImageId === item.id }"
+                @click="selectImage(item)"
+              >
+                <van-image fit="cover" :src="getFullUrl(item.file_path)" />
+                <van-icon v-if="selectedImageId === item.id" name="success" class="select-icon" />
+              </div>
             </div>
           </div>
           <van-empty v-if="!imageLoading && imageList.length === 0" description="暂无图片" image="search" />
@@ -849,10 +860,25 @@ const getFullUrl = (path) => {
   return BASE_URL + path
 }
 
-// 选择图片
+// 选择图片（支持再次点击取消选择）
 const selectImage = (item) => {
-  selectedImageId.value = item.id
-  selectedImageItem.value = item
+  if (selectedImageId.value === item.id) {
+    // 再次点击已选中的图片，取消选择
+    selectedImageId.value = ''
+    selectedImageItem.value = null
+  } else {
+    selectedImageId.value = item.id
+    selectedImageItem.value = item
+  }
+}
+
+// 清空卡面选择
+const clearCardImg = () => {
+  selectedImageId.value = ''
+  selectedImageItem.value = null
+  formData.cardImg = ''
+  showImagePicker.value = false
+  showToast('已清空卡面')
 }
 
 // 确认选择
@@ -1271,6 +1297,7 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   padding: 16px;
+  overflow: hidden;
 }
 
 .picker-header {
@@ -1280,6 +1307,12 @@ onMounted(() => {
   padding-bottom: 12px;
   border-bottom: 1px solid #ebedf0;
   margin-bottom: 12px;
+  flex-shrink: 0;
+}
+
+.picker-actions {
+  display: flex;
+  gap: 8px;
 }
 
 .picker-title {
@@ -1287,17 +1320,43 @@ onMounted(() => {
   font-weight: 600;
 }
 
+.image-list {
+  flex:1;
+  overflow-y: auto;
+  padding-right: 4px;
+  min-height: 0;
+}
+
 .image-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
+  grid-auto-rows: 100px;
   gap: 8px;
-  overflow-y: auto;
-  flex: 1;
+  padding-bottom: 16px;
+}
+
+/* 自定义滚动条 */
+.image-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.image-list::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 2px;
+}
+
+.image-list::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 2px;
+}
+
+.image-list::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
 }
 
 .image-item {
   position: relative;
-  aspect-ratio: 1;
+  height: 100px;
   border-radius: 8px;
   overflow: hidden;
   border: 2px solid transparent;

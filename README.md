@@ -2,11 +2,13 @@
   <img src="public/logo.png" width="120" alt="Logo" />
 </p>
 
-# 智慧个人财务管理系统
+# Golden Finance — 智慧个人财务管理系统
 
 ## 项目简介
 
-智慧个人财务管理系统是一款基于 Vue 3 + Vite + Vant 4 构建的移动端 Web 应用，旨在帮助用户高效管理个人财务。本系统提供全面的收支记录、资产管理、预算控制、银行卡管理、工资核算等功能，并支持日记记录和待办日程管理，是您贴心的个人财务助手。
+Golden Finance 是一款基于 **Vue 3 + Vite + Vant 4** 构建的移动端 PWA 应用，旨在帮助用户高效管理个人财务。本系统提供全面的收支记录、资产管理、预算控制、银行卡管理、工资核算、理财投资追踪、财务报表分析、数据备份恢复等功能，并支持日记记录和待办日程管理。
+
+> **更新日期**: 2026-06-30
 
 ## 技术栈
 
@@ -24,6 +26,10 @@
 | 设备识别 | ua-parser-js 2.0.9 |
 | 图片压缩 | browser-image-compression 2.0.2 |
 | RSA 加密 | jsencrypt 3.5.4 |
+| 图表可视化 | ECharts 6.0.0 |
+| Excel 导出 | xlsx / xlsx-js-style |
+| 富文本编辑 | @wangeditor/editor |
+| PWA 支持 | vite-plugin-pwa |
 
 ## 功能架构
 
@@ -50,7 +56,12 @@
 │ • 快捷功能    │    │ • 流水明细    │    │ • 安全设置    │
 │ • 待办提醒    │    │ • 资产管理    │    │ • 应用设置    │
 │ • 近期消费    │    │ • 预算管理    │    │ • 资源管理    │
-└───────────────┘    │ • 固定资产    │    └───────────────┘
+│ • 今日薪酬    │    │ • 固定资产    │    └───────────────┘
+└───────────────┘    │ • 财报分析    │
+                     │ • 数据管理    │
+                     │ • 理财投资    │
+                     │ • 固定事件    │
+                     │ • 固定支出    │
                      └───────────────┘
                               │
         ┌─────────────────────┼─────────────────────┐
@@ -223,6 +234,45 @@
 
 【图片插槽】：流水冲正界面截图
 
+#### 2.7 财务报表
+
+| 功能项 | 说明 |
+|--------|------|
+| **流水筛选** | 按日期、分类、支付方式进行流水筛选查询 |
+| **收支总额与结余** | 按时间段统计收支总额与净结余 |
+| **类目消费占比** | 饼图展示各消费类目占比分析 |
+| **月度收支趋势** | 折线图展示月度收支变化趋势 |
+| **银行卡收支明细** | 按卡统计收支明细 |
+| **转账明细查询** | 查看账户间转账记录 |
+| **负债统计** | 查看信用卡等负债汇总 |
+
+#### 2.8 理财投资
+
+| 功能项 | 说明 |
+|--------|------|
+| **理财总览** | 汇总展示所有理财产品市值与收益 |
+| **理财登记** | 登记新的理财产品（基金/股票/定期等） |
+| **变动走势图** | 可视化展示理财产品净值变化趋势 |
+| **每日净值登记** | 记录理财产品每日净值 |
+| **收益明细** | 查看每笔理财产品的收益明细 |
+
+#### 2.9 数据管理
+
+| 功能项 | 说明 |
+|--------|------|
+| **数据库检查** | 检查数据库连接状态与表结构健康度 |
+| **导出数据库** | 将数据库导出为 SQL 文件下载 |
+| **数据导入** | 支持从 SQL 文件或 JSON 导入数据 |
+| **数据库备份** | 创建数据库完整备份 |
+| **登录日志** | 查看登录历史记录（非 Demo 模式） |
+
+#### 2.10 固定事件与支出
+
+| 功能项 | 说明 |
+|--------|------|
+| **固定事件** | 管理周期性固定事件（账单日、还款日等提醒） |
+| **固定支出** | 管理周期性固定支出（房租、水电、订阅等） |
+
 ---
 
 ### 三、银行卡模块 (BankCard)
@@ -253,6 +303,8 @@
 |--------|------|
 | **信用卡中心** | 集中管理所有信用卡 |
 | **全功能录入** | 支持完整的信用卡信息录入 |
+| **分期管理** | 创建和管理信用卡分期付款计划 |
+| **分期列表** | 查看所有分期记录与还款进度 |
 
 #### 3.4 账单管理
 
@@ -260,6 +312,7 @@
 |--------|------|
 | **账单列表** | 查看所有信用卡账单 |
 | **账单详情** | 查看账单具体内容 |
+| **账单流水明细** | 查看账单关联的消费流水详情 |
 | **添加账单** | 新增账单记录 |
 | **编辑账单** | 修改账单信息 |
 
@@ -408,15 +461,21 @@
 | 路径 | 组件 | 说明 |
 |------|------|------|
 | `/login` | Login.vue | 登录页面 |
+| `/429` | error/429.vue | 请求频繁错误页面 |
+| `/share/diary/detail` | Diary/ShareDetail.vue | 公开分享页（无需登录） |
 | `/` | MainLayout.vue | 主布局容器（含底部导航） |
 | `/home` | Home/index.vue | 首页 |
 | `/finance` | Finance/index.vue | 账本主页 |
 | `/finance/add` | Finance/account/Add.vue | 新增收支 |
+| `/finance/quick-add` | Finance/account/QuickAdd.vue | 快速登记 |
 | `/finance/structure` | Finance/account/Structure.vue | 系统账户余额 |
 | `/finance/flow` | Finance/flow/List.vue | 流水明细 |
 | `/finance/flow/calendar` | Finance/flow/Calendar.vue | 每日流水日历 |
 | `/finance/flow/:id` | Finance/flow/Detail.vue | 流水详情 |
+| `/finance/events` | Finance/events/Index.vue | 固定事件 |
+| `/finance/recurring` | Finance/recurring/List.vue | 固定支出 |
 | `/finance/assets/register` | Finance/assets/Register.vue | 资产登记 |
+| `/finance/assets/edit` | Finance/assets/Edit.vue | 编辑资产登记 |
 | `/finance/assets/list` | Finance/assets/List.vue | 资产列表 |
 | `/finance/fixed-asset` | Finance/fixedAsset/List.vue | 固定资产 |
 | `/finance/fixed-asset/recycle` | Finance/fixedAsset/RecycleBin.vue | 回收站 |
@@ -428,12 +487,31 @@
 | `/finance/budget/travel` | Finance/budget/Travel.vue | 出行预算 |
 | `/finance/budget/eat` | Finance/budget/Eat.vue | 餐饮预算 |
 | `/finance/budget/detail/:id` | Finance/budget/Detail.vue | 预算详情 |
+| `/finance/report` | Finance/report/Report.vue | 财务报表 |
+| `/finance/report/flow-filter` | Finance/report/flow/FlowFilter.vue | 流水筛选 |
+| `/finance/report/stats-overview` | Finance/report/stats/StatsOverview.vue | 收支总额与结余 |
+| `/finance/report/category-ratio` | Finance/report/stats/CategoryRatio.vue | 类目消费占比 |
+| `/finance/report/monthly-trend` | Finance/report/stats/MonthlyTrend.vue | 月度收支趋势 |
+| `/finance/report/card-flow` | Finance/report/flow/CardFlow.vue | 银行卡收支明细 |
+| `/finance/report/transfer-list` | Finance/report/flow/TransferList.vue | 转账明细查询 |
+| `/finance/report/debt-overview` | Finance/report/debt/DebtOverview.vue | 负债统计 |
+| `/finance/report/fund` | Finance/report/fund/Fund.vue | 理财总览 |
+| `/finance/report/fund/register` | Finance/report/fund/FundRegister.vue | 理财登记 |
+| `/finance/report/fund/trend` | Finance/report/fund/FundTrend.vue | 变动走势图 |
+| `/finance/report/fund/daily` | Finance/report/fund/FundDaily.vue | 每日净值登记 |
+| `/finance/report/fund/earnings` | Finance/report/fund/FundEarnings.vue | 收益明细 |
+| `/finance/data` | Finance/data/DataManage.vue | 数据管理 |
+| `/finance/data/check` | Finance/data/DbCheck.vue | 数据库检查 |
+| `/finance/data/export` | Finance/data/DbExport.vue | 导出数据库 |
+| `/finance/data/import` | Finance/data/DbImport.vue | 数据导入 |
+| `/finance/data/backup` | Finance/data/DbBackup.vue | 数据库备份 |
+| `/finance/data/login-log` | Finance/data/LoginLog.vue | 登录日志 |
 | `/diary` | Diary/index.vue | 动态列表 |
 | `/diary/add` | Diary/Add.vue | 发布动态 |
 | `/diary/detail` | Diary/Detail.vue | 动态详情 |
 | `/todo/calendar` | Todo/Calendar.vue | 日历日程 |
 | `/user` | User/index.vue | 个人中心 |
-| `/user/profile-edit` | User/ProfileEdit.vue | 编辑资料 |
+| `/user/profile-edit` | User/ProfileEdit.vue | 编辑资料（独立路径） |
 | `/user/pin-setup` | User/security/PinSetup.vue | 设置 PIN 码 |
 | `/user/pin-manage` | User/security/PinManage.vue | PIN 码管理 |
 | `/user/category-manage` | User/category/CategoryManage.vue | 分类管理 |
@@ -441,16 +519,19 @@
 | `/user/app-settings` | User/settings/AppSettings.vue | 应用设置 |
 | `/user/resource-manage` | User/resource/ResourceManage.vue | 资源管理 |
 | `/user/resource-list` | User/resource/ResourceList.vue | 资源列表 |
-| `/card` | BankCard/index.vue | 银行卡管理 |
+| `/card` | BankCard/index.vue | 银行卡管理（Tab 切换） |
 | `/card/debit` | BankCard/debit.vue | 借记卡列表 |
 | `/card/credit` | BankCard/credit.vue | 信用卡列表 |
 | `/card/add` | BankCard/card/Add.vue | 添加卡片 |
 | `/card/edit` | BankCard/card/Edit.vue | 编辑卡片 |
 | `/card/flow` | BankCard/card/flow/List.vue | 卡片流水 |
 | `/credit-center` | BankCard/CreditCenter.vue | 信用卡专项 |
+| `/credit-center/installment` | BankCard/Installment.vue | 创建分期 |
+| `/credit-center/installment/list` | BankCard/InstallmentList.vue | 分期列表 |
 | `/credit-full` | BankCard/credit/AddFull.vue | 信用卡全功能录入 |
 | `/card/bill/list` | BankCard/bill/List.vue | 账单列表 |
 | `/card/bill/detail` | BankCard/bill/Detail.vue | 账单详情 |
+| `/card/bill/ledger` | BankCard/bill/Ledger.vue | 账单流水明细 |
 | `/card/bill/add` | BankCard/bill/Add.vue | 添加账单 |
 | `/card/bill/edit` | BankCard/bill/Edit.vue | 编辑账单 |
 | `/card/repay/list` | BankCard/repay/List.vue | 还款列表 |
@@ -461,29 +542,31 @@
 | `/work/salary-calendar` | Work/SalaryCalendar.vue | 工资日历 |
 | `/work/salary-day` | Work/SalaryDay.vue | 每日工资 |
 | `/work/salary-stat` | Work/SalaryStat.vue | 月度统计 |
-| `/429` | error/429.vue | 请求频繁错误页面 |
 
 ---
 
 ## API 模块结构
 
-系统 API 封装在 `src/utils/api/` 目录下，采用统一的请求封装：
+系统 API 封装在 `src/utils/api/` 目录下，采用统一的加密请求封装：
 
 | 模块 | 文件 | 功能 |
 |------|------|------|
-| 认证 | auth.js | 登录、注册、身份验证 |
-| 安全 | security.js | PIN 码设置和验证 |
+| 认证 | auth.js | 登录、注册、身份验证、Token 刷新、系统锁定 |
+| 安全 | security.js | PIN 码设置、验证和修改 |
 | 用户 | user.js | 用户资料管理 |
-| 账户 | account.js | 收支记录、余额管理 |
-| 资产 | asset.js | 资产管理 |
-| 分类 | category.js | 分类管理 |
+| 账户 | account.js | 收支记录、余额管理、流水冲正 |
+| 资产 | asset.js | 资产快照与登记管理 |
+| 分类 | category.js | 收支分类与银行分类管理 |
 | 上传 | upload.js | 文件上传 |
 | 预算 | budget.js | 预算管理 |
 | 银行卡 | card.js | 银行卡管理 |
-| 固定资 | fixedAsset.js | 固定资产管理 |
+| 固定资产 | fixedAsset.js | 固定资产管理 |
 | 待办 | todo.js | 待办事项管理 |
 | 日记 | moment.js | 日记动态 |
-| 工资 | work.js | 工资核算 |
+| 工资 | work.js | 工作信息与工资核算 |
+| 理财 | fund.js | 理财产品管理 |
+| 数据管理 | dataManager.js | 数据库备份/导出/导入 |
+| 周期支出 | recurring.js | 固定周期支出提醒 |
 
 ---
 
@@ -493,7 +576,9 @@
 web/
 ├── public/                     # 静态资源
 │   ├── favicon.ico             # 网站图标
-│   └── logo.svg                # Logo 图片
+│   ├── logo.png                # Logo 图片
+│   ├── manifest.json           # PWA 清单
+│   └── icons/                  # PWA 图标（192/512）
 ├── src/                        # 源代码目录
 │   ├── assets/                 # 资源文件
 │   │   ├── css/                # 样式文件
@@ -502,56 +587,64 @@ web/
 │   ├── components/             # 公共组件
 │   │   ├── Diary/              # 日记组件
 │   │   │   └── DiaryCard.vue   # 日记卡片组件
-│   │   ├── KeyBoard/           # 键盘组件
-│   │   │   └── index.vue       # 键盘组件
-│   │   └── PinVerifyDialog.vue # PIN 验证弹窗
+│   │   ├── KeyBoard/           # 自定义数字键盘
+│   │   │   └── index.vue
+│   │   └── PinVerifyDialog.vue # PIN 验证弹窗（全局挂载）
 │   ├── layout/                 # 布局组件
-│   │   └── MainLayout.vue      # 主布局（底部导航）
+│   │   └── MainLayout.vue      # 主布局（顶部导航+底部悬浮岛）
 │   ├── router/                 # 路由配置
-│   │   ├── index.js            # 路由入口
-│   │   ├── map.js              # 路由映射表
-│   │   └── middleware.js      # 路由中间件
+│   │   ├── index.js            # 路由入口 + beforeEach 守卫
+│   │   ├── map.js              # 路由映射表（80+ 路由）
+│   │   └── middleware.js       # 路由中间件（用户信息预加载）
 │   ├── stores/                 # Pinia 状态管理
-│   │   └── user.js            # 用户状态
+│   │   ├── user.js             # 用户状态（信息/Token/PIN）
+│   │   └── flowSync.js         # 流水数据同步（详情→列表无感更新）
 │   ├── utils/                  # 工具函数
-│   │   ├── api/                # API 接口封装
-│   │   ├── request/           # 请求封装
-│   │   │   ├── interceptors/   # 拦截器
-│   │   │   ├── client.js       # 客户端
-│   │   │   ├── config.js       # 配置
-│   │   │   ├── core.js         # 核心
-│   │   │   ├── crypto.js       # 加密工具
-│   │   │   ├── handshake.js    # 握手
+│   │   ├── api/                # API 接口封装（17 个模块）
+│   │   ├── request/            # 加密请求封装
+│   │   │   ├── interceptors/   # 请求/响应拦截器
+│   │   │   ├── client.js       # 客户端上下文
+│   │   │   ├── config.js       # 基础配置（baseURL/timeout/加密控制）
+│   │   │   ├── core.js         # Axios 核心实例
+│   │   │   ├── crypto.js       # AES 加密工具
+│   │   │   ├── handshake.js    # 预握手 & AES Key 交换
 │   │   │   ├── helpers.js      # 辅助函数
-│   │   │   ├── index.js        # 入口
-│   │   │   └── pin.js         # PIN 相关
-│   │   ├── aes.js             # AES 加密
-│   │   ├── device-hash.js     # 设备指纹
-│   │   ├── env.js             # 环境变量
-│   │   ├── fileRequest.js     # 文件请求
-│   │   ├── geolocation.js     # 地理位置
-│   │   ├── index.js           # 统一导出
-│   │   └── network.js         # 网络工具
+│   │   │   ├── index.js        # 模块入口
+│   │   │   └── pin.js          # PIN 对话框管理
+│   │   ├── geo/                # 地理位置工具（模块化）
+│   │   │   ├── index.js        # 统一入口
+│   │   │   ├── amap.js         # 高德地图 API
+│   │   │   ├── browser.js      # 浏览器原生定位
+│   │   │   ├── ip.js           # IP 定位
+│   │   │   └── permission.js   # 定位权限管理
+│   │   ├── aes.js              # AES 加密
+│   │   ├── device-hash.js      # 设备指纹生成
+│   │   ├── env.js              # 环境变量辅助
+│   │   ├── fileRequest.js      # 文件上传请求封装
+│   │   ├── geolocation.js      # 地理位置（旧版兼容）
+│   │   ├── index.js            # 统一导出
+│   │   ├── network.js          # 网络工具
+│   │   └── securityHeaders.js  # 安全请求头构建
 │   ├── views/                  # 页面视图
-│   │   ├── Auth/              # 认证页面
-│   │   ├── BankCard/          # 银行卡页面
-│   │   ├── Diary/             # 日记页面
-│   │   ├── Finance/           # 账本页面
-│   │   ├── Home/              # 首页
-│   │   ├── Todo/              # 待办页面
-│   │   ├── User/              # 用户页面
-│   │   ├── Work/              # 工资页面
-│   │   └── error/             # 错误页面
-│   ├── App.vue                # 根组件
-│   └── main.js                # 入口文件
-├── .env.example               # 环境变量示例
-├── .gitignore                  # Git 忽略配置
-├── API_HEADERS_INFO.md         # API 请求头说明
+│   │   ├── Auth/               # 认证（Login, register）
+│   │   ├── BankCard/           # 银行卡（debit/credit/card/bill/repay/Installment）
+│   │   ├── Diary/              # 日记（列表/发布/详情/分享）
+│   │   ├── Finance/            # 账本（account/flow/assets/fixedAsset/budget/report/data/events/recurring）
+│   │   ├── Home/               # 首页
+│   │   ├── Todo/               # 待办日历
+│   │   ├── User/               # 用户（个人中心/安全/分类/资源/设置）
+│   │   ├── Work/               # 工资（JobSetting/SalaryCalendar/SalaryDay/SalaryStat）
+│   │   └── error/              # 错误页面（429）
+│   ├── App.vue                 # 根组件（PIN 对话框全局挂载）
+│   └── main.js                 # 入口（Vant/Pinia/Router/PWA/路由守卫）
+├── .env                        # 环境变量（VITE_API_BASE_URL, VITE_PORT 等）
+├── .env.example                # 环境变量示例
+├── .gitignore
 ├── index.html                  # HTML 入口
-├── jsconfig.json               # JS 配置
+├── jsconfig.json               # JS 路径别名（@ → src/）
 ├── package.json                # 依赖配置
-├── vite.config.js              # Vite 配置
-└── yarn.lock                   # 依赖锁定
+├── vite.config.js              # Vite 构建配置（PWA/代理/别名）
+└── yarn.lock                   # 依赖锁定文件
 ```
 
 ---
@@ -600,6 +693,8 @@ web/
 | 工资 | 工资核算 | 首页 | 今日薪酬展示 |
 | 待办 | 待办管理 | 首页 | 待办提醒展示 |
 | 动态 | 日记发布 | 日记列表 | 动态浏览 |
+| 理财 | 理财登记 | 理财总览、首页 | 投资资产估值 |
+| 数据备份 | 数据管理 | 本地存储 | 数据安全保障 |
 
 ### 7.3 业务逻辑关联
 
@@ -622,22 +717,27 @@ web/
 
 ## 安全特性
 
-### 8.1 身份验证
+### 请求层安全
 
-- 支持用户名密码登录
-- 支持 PIN 码二次验证
-- 设备指纹识别
+- **预握手（Handshake）**：首次请求前与后端交换 AES 密钥，实现端到端加密
+- **AES 加密传输**：POST/PUT/DELETE 请求体自动 AES 加密
+- **RSA 加密**：敏感信息（密码等）使用 RSA 非对称加密
+- **JWT Token**：登录后使用 JWT 进行身份认证
+- **安全请求头**：自动附加 X-Requested-With, X-Client-Timestamp, X-Fingerprint-Hash 等安全头
+- **重放攻击防护**：请求附带时间戳，服务端校验 2 分钟时效
+- **请求签名**：MD5 盐签名防篡改
 
-### 8.2 数据安全
+### 用户层安全
 
-- 请求数据 AES 加密传输
-- RSA 加密敏感信息
-- JWT Token 身份认证
+- **PIN 码二次验证**：敏感操作需要 6 位数字 PIN 码验证
+- **设备指纹识别**：基于设备特征生成唯一指纹，绑定会话
+- **会话锁定**：支持手动锁定系统，需要 PIN 验证解锁
 
-### 8.3 隐私保护
+### 隐私保护
 
 - 首页金额显示/隐藏切换
 - 密码输入安全保护
+- 敏感操作确认弹窗
 
 ---
 
@@ -656,9 +756,11 @@ npm install
 ### 开发模式
 
 ```bash
-# 启动开发服务器
+# 启动开发服务器（默认端口 5173，可在 .env 中通过 VITE_PORT 修改）
 yarn dev
 ```
+
+开发服务器会自动代理 `/api/v1` 请求到后端（配置在 `.env` 的 `VITE_API_BASE_URL`）。
 
 ### 构建生产版本
 
@@ -670,18 +772,26 @@ yarn build
 yarn preview
 ```
 
+构建产物输出到 `dist/` 目录，包含 PWA Service Worker。
+
 ### 环境配置
 
-项目根目录下的 `.env.example` 文件提供了环境变量配置模板：
+复制 `.env.example` 为 `.env` 并配置：
 
 ```env
-# API 地址配置
-VITE_API_BASE_URL=http://your-api-server.com
+# API 后端地址
+VITE_API_BASE_URL=http://localhost:3001
 
-# 其他配置项...
+# 开发服务器端口
+VITE_PORT=5173
+
+# 应用标题和描述
+VITE_APP_TITLE=Golden Finance
+VITE_APP_DESCRIPTION=个人财务管理工具
+
+# Demo 模式开关（true=隐藏登录日志等敏感页面）
+VITE_APP_DEMO=false
 ```
-
-请复制 `.env.example` 为 `.env` 并根据实际情况修改配置。
 
 ---
 
@@ -700,34 +810,50 @@ VITE_API_BASE_URL=http://your-api-server.com
 ```javascript
 import request from '@/utils/request'
 
-export function getSomeData(params) {
-  return request.get('/some endpoint', { params })
+// GET 请求
+export function fetchData(params) {
+  return request.get('/some-endpoint', { params })
 }
 
-export function postSomeData(data) {
-  return request.post('/some endpoint', data)
+// POST/PUT/DELETE 请求体会自动 AES 加密
+export function createData(data) {
+  return request.post('/some-endpoint', data)
 }
 ```
 
 ### 状态管理
 
-使用 Pinia 在 `src/stores/` 目录下管理全局状态：
+使用 Pinia（Options API 风格）在 `src/stores/` 目录下管理状态：
 
 ```javascript
 import { defineStore } from 'pinia'
 
-export const useUserStore = defineStore('user', {
+export const useExampleStore = defineStore('example', {
   state: () => ({
-    userInfo: null,
-    token: ''
+    items: [],
+    loading: false,
   }),
+  getters: {
+    itemCount: (state) => state.items.length,
+  },
   actions: {
-    setUserInfo(info) {
-      this.userInfo = info
-    }
-  }
+    async fetchItems() {
+      this.loading = true
+      try {
+        // ...
+      } finally {
+        this.loading = false
+      }
+    },
+  },
 })
 ```
+
+### 添加新路由
+
+1. 在 `src/views/` 目录下创建页面组件（使用 `defineOptions({ name: 'YourPage' })` 设置组件名）
+2. 在 `src/router/map.js` 中配置路由，设置 `meta.title` 和 `meta.hideTabbar`
+3. 如需缓存，将组件 name 添加到 `MainLayout.vue` 的 `cachedPages` 数组
 
 ---
 
@@ -749,13 +875,13 @@ export const useUserStore = defineStore('user', {
 
 ## 更新日志
 
-详见 [CHANGELOG_2026-05-29.md](CHANGELOG_2026-05-29.md)
+详见 `logs/` 目录下的 CHANGELOG 文件及 API 项目日志。
 
 ## 版本信息
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
-| 0.0.1 | - | 初始版本 |
+| 0.0.1 | 2026-06 | 当前开发版本，含 80+ 路由、17 个 API 模块、完整安全体系 |
 
 ---
 

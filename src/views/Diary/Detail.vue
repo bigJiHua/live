@@ -49,7 +49,8 @@
         <div class="main-footer">
           <div class="action-btns">
             <div class="share-btn" @click="handleShare">
-              <van-icon name="share-o" /> 分享给好友
+              <van-icon :name="isShared ? 'share-o' : 'share-o'" />
+              {{ isShared ? '关闭分享' : '分享给好友' }}
             </div>
             <div class="delete-btn" @click="openDeleteDialog('main', null, '确定要删除这条动态吗？')">
               <van-icon name="delete-o" /> 删除
@@ -139,6 +140,143 @@
       :confirm-button-text="confirmCountdown > 0 ? `${confirmCountdown}秒后确认` : '确认'"
       @confirm="executeDelete"
     />
+
+    <!-- 分享弹窗 -->
+    <van-popup
+      v-model:show="showSharePopup"
+      position="bottom"
+      round
+      :style="{ padding: '20px 16px' }"
+    >
+      <div class="share-popup">
+        <h3 class="share-title">{{ isShared ? '管理分享' : '开启分享' }}</h3>
+
+        <!-- 开关 -->
+        <div class="share-row">
+          <span>分享状态</span>
+          <van-switch
+            v-model="shareOn"
+            active-color="#07c160"
+            size="22px"
+          />
+        </div>
+
+        <!-- 时效选择（仅开启时显示） -->
+        <div v-if="shareOn && !isShared" class="share-row">
+          <span>有效时间</span>
+          <van-action-sheet
+            v-model:show="showDurationPicker"
+            :actions="durationOptions"
+            @select="onDurationSelect"
+          />
+          <span class="duration-value" @click="showDurationPicker = true">
+            {{ durationText }}
+            <van-icon name="arrow" size="12" />
+          </span>
+        </div>
+        <p v-if="shareOn && !isShared" class="share-hint">不选择默认 1 小时后过期</p>
+
+        <!-- 当已分享时显示当前密码 + 复制按钮 -->
+        <template v-if="isShared && shareOn">
+          <div class="share-row">
+            <span>当前密码</span>
+            <span class="pw-display">{{ detail?.visible_type?.pw || '***' }}</span>
+          </div>
+          <div class="result-btns" style="margin-top:12px">
+            <van-button
+              round
+              block
+              plain
+              type="primary"
+              size="small"
+              @click="copyExistingLink('password')"
+            >
+              密码访问（复制链接）
+            </van-button>
+            <van-button
+              round
+              block
+              type="primary"
+              size="small"
+              @click="copyExistingLink('token')"
+            >
+              公共访问（复制链接）
+            </van-button>
+          </div>
+        </template>
+
+        <!-- 按钮 -->
+        <div class="share-btns">
+          <van-button round block plain type="default" @click="showSharePopup = false">
+            取消
+          </van-button>
+          <van-button
+            v-if="shareOn && !isShared"
+            round
+            block
+            type="primary"
+            :loading="shareLoading"
+            @click="doOpenShare"
+          >
+            确认并开启分享
+          </van-button>
+          <van-button
+            v-if="isShared && !shareOn"
+            round
+            block
+            type="danger"
+            :loading="shareLoading"
+            @click="doCloseShare"
+          >
+            确认关闭分享
+          </van-button>
+        </div>
+      </div>
+    </van-popup>
+
+    <!-- 分享结果弹窗 -->
+    <van-popup
+      v-model:show="showShareResult"
+      position="bottom"
+      round
+      :style="{ padding: '24px 16px' }"
+    >
+      <div class="share-result">
+        <van-icon name="success" size="40" color="#07c160" style="display:block;margin:0 auto 8px" />
+        <h3 class="share-title">分享已开启</h3>
+        <p v-if="shareResult.password" class="result-pw">
+          密码：<strong>{{ shareResult.password }}</strong>
+        </p>
+        <div class="result-btns">
+          <van-button
+            round
+            block
+            plain
+            type="primary"
+            @click="copyShareLink('password')"
+          >
+            密码访问（复制链接）
+          </van-button>
+          <van-button
+            round
+            block
+            type="primary"
+            @click="copyShareLink('token')"
+          >
+            公共访问（复制链接）
+          </van-button>
+        </div>
+        <van-button
+          size="small"
+          plain
+          type="default"
+          style="margin-top:12px"
+          @click="showShareResult = false"
+        >
+          关闭
+        </van-button>
+      </div>
+    </van-popup>
   </div>
 </template>
 
@@ -366,9 +504,125 @@ const previewChildImage = (child, index) => {
   showPreview.value = true;
 };
 
-// 分享
+// ── 分享功能 ──
+const showSharePopup = ref(false);
+const showShareResult = ref(false);
+const shareOn = ref(false);
+const shareLoading = ref(false);
+const shareDuration = ref(1);
+const showDurationPicker = ref(false);
+const shareResult = ref({ token: '', password: '', tokenUrl: '', pwUrl: '' });
+
+const isShared = computed(() => detail.value?.visible_type?.vt === 1);
+
+const durationOptions = [
+  { name: '1 小时', value: 1 },
+  { name: '6 小时', value: 6 },
+  { name: '12 小时', value: 12 },
+  { name: '24 小时', value: 24 },
+  { name: '48 小时', value: 48 },
+  { name: '72 小时', value: 72 },
+];
+
+const durationText = computed(() => {
+  const opt = durationOptions.find((o) => o.value === shareDuration.value);
+  return opt ? opt.name : '1 小时';
+});
+
+const onDurationSelect = (item) => {
+  shareDuration.value = item.value;
+  showDurationPicker.value = false;
+};
+
 const handleShare = () => {
-  showToast("分享功能开发中");
+  shareOn.value = isShared.value;
+  shareDuration.value = 1;
+  showSharePopup.value = true;
+};
+
+const doOpenShare = async () => {
+  shareLoading.value = true;
+  try {
+    const res = await momentApi.update(detail.value.id, {
+      shareAction: 'open',
+      shareDuration: shareDuration.value,
+    });
+    // 响应拦截器已解包 response.data → res 就是 body
+    if (res.share) {
+      shareResult.value = res.share;
+      detail.value.visible_type = { vt: 1, vs: detail.value.visible_type?.vs || 1, pw: res.share.password };
+      showSharePopup.value = false;
+      showShareResult.value = true;
+    }
+  } catch {
+    showToast('开启分享失败');
+  } finally {
+    shareLoading.value = false;
+  }
+};
+
+const doCloseShare = async () => {
+  shareLoading.value = true;
+  try {
+    await momentApi.update(detail.value.id, {
+      shareAction: 'close',
+    });
+    detail.value.visible_type = { vt: 0, vs: detail.value.visible_type?.vs || 0, pw: 0 };
+    showSharePopup.value = false;
+    showToast('分享已关闭');
+  } catch (err) {
+    showToast('关闭分享失败');
+  } finally {
+    shareLoading.value = false;
+  }
+};
+
+// 已分享状态下重新复制
+const copyExistingLink = async (type) => {
+  if (type === 'token') {
+    // 每次请求后端生成新 token（不改变密码），前端自行拼接域名
+    try {
+      showToast('正在生成链接...');
+      const res = await momentApi.update(detail.value.id, {
+        shareAction: 'token',
+        shareDuration: 1,
+      });
+      if (res.share?.token) {
+        const url = `${ENV.SITE_URL}/share/diary/detail?token=${encodeURIComponent(res.share.token)}`;
+        copyToClipboard(url, '公共链接已复制');
+      } else {
+        showToast(res.message || '生成失败');
+      }
+    } catch {
+      showToast('生成链接失败');
+    }
+  } else {
+    const url = `${ENV.SITE_URL}/share/diary/detail?id=${detail.value.id}`;
+    const pw = detail.value?.visible_type?.pw || '***';
+    copyToClipboard(`链接：${url}\n密码：${pw}`, '密码链接+密码已复制');
+  }
+};
+
+const copyToClipboard = async (text, msg) => {
+  try {
+    await navigator.clipboard.writeText(text);
+    showToast(msg);
+  } catch {
+    const el = document.createElement('textarea');
+    el.value = text;
+    document.body.appendChild(el);
+    el.select();
+    document.execCommand('copy');
+    document.body.removeChild(el);
+    showToast('已复制');
+  }
+};
+
+const copyShareLink = (type) => {
+  const text = type === 'token'
+    ? `${ENV.SITE_URL}/share/diary/detail?token=${encodeURIComponent(shareResult.value.token)}`
+    : `链接：${ENV.SITE_URL}/share/diary/detail?id=${detail.value.id}\n密码：${shareResult.value.password}`;
+  copyToClipboard(text, type === 'token' ? '公共链接已复制' : '密码链接+密码已复制');
 };
 
 onMounted(() => {
@@ -639,6 +893,85 @@ onMounted(() => {
 }
 .tag.location {
   color: #07c160;
+}
+
+/* ── 分享弹窗 ── */
+.share-popup {
+  text-align: center;
+}
+
+.share-title {
+  font-size: 17px;
+  font-weight: 600;
+  margin-bottom: 20px;
+  color: #333;
+}
+
+.share-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 0;
+  border-bottom: 1px solid #f5f5f5;
+  font-size: 15px;
+  color: #333;
+}
+
+.duration-value {
+  color: #7232dd;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pw-display {
+  color: #07c160;
+  font-weight: 600;
+  font-size: 18px;
+  letter-spacing: 4px;
+}
+
+.share-hint {
+  font-size: 12px;
+  color: #ff976a;
+  text-align: left;
+  padding: 8px 0 0;
+  margin: 0;
+}
+
+.share-btns {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.share-btns .van-button {
+  flex: 1;
+}
+
+/* 分享结果弹窗 */
+.share-result {
+  text-align: center;
+}
+
+.result-pw {
+  font-size: 15px;
+  color: #666;
+  margin: 12px 0 20px;
+}
+
+.result-pw strong {
+  color: #07c160;
+  font-size: 24px;
+  letter-spacing: 6px;
+}
+
+.result-btns {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 /* 悬浮按钮 */

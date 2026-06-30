@@ -264,13 +264,7 @@ const goToDetail = (item) => {
 
 // 跳转到再次还款
 const goToRepay = (item) => {
-  const params = new URLSearchParams({
-    cardId: item.card_id,
-    billId: item.bill_id || '',
-    last4: item.card_last4 || '',
-    alias: item.card_alias || '',
-  });
-  router.push(`/card/repay/add?${params.toString()}`);
+  router.push(`/card/repay/add?billId=${item.bill_id || ''}`);
 };
 
 // 跳转到添加

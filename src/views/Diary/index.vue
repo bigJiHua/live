@@ -12,21 +12,16 @@
       />
 
       <!-- 瀑布流列表 -->
-      <div v-else class="waterfall-container">
-        <div class="waterfall-column">
-          <DiaryCard v-for="item in leftList" :key="item.id" :data="item" />
+      <van-list v-else v-model:loading="loadingMore" :finished="noMore" finished-text="没有更多了" @load="onLoad">
+        <div class="waterfall-container">
+          <div class="waterfall-column">
+            <DiaryCard v-for="item in leftList" :key="item.id" :data="item" />
+          </div>
+          <div class="waterfall-column">
+            <DiaryCard v-for="item in rightList" :key="item.id" :data="item" />
+          </div>
         </div>
-        <div class="waterfall-column">
-          <DiaryCard v-for="item in rightList" :key="item.id" :data="item" />
-        </div>
-      </div>
-
-      <!-- 加载更多 -->
-      <div class="load-more">
-        <van-loading v-if="loadingMore">加载中...</van-loading>
-        <span v-else-if="noMore">没有更多了</span>
-        <span v-else @click="loadMore">加载更多</span>
-      </div>
+      </van-list>
 
       <van-icon v-show="showBackTop" name="back-top" class="back-top" @click="scrollToTop" />
       <div style="height: 100px"></div>
@@ -116,9 +111,9 @@ const loadList = async (append = false) => {
   }
 };
 
-// 加载更多
-const loadMore = () => {
-  if (noMore.value || loadingMore.value) return;
+// van-list 触底加载
+const onLoad = () => {
+  if (noMore.value) return;
   currentPage.value++;
   loadList(true);
 };
@@ -169,14 +164,6 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 8px;
-}
-
-/* 加载更多 */
-.load-more {
-  text-align: center;
-  padding: 16px;
-  color: #969799;
-  font-size: 13px;
 }
 
 /* 悬浮按钮 - 底部居中固定 */

@@ -37,20 +37,37 @@ export function getAccountDetail(id) {
 }
 
 /**
- * 创建收支记录
+ * 创建借记卡收支记录（普通收支/转账/提现/还款支出流水）
  * @param {object} data - { direction, categoryId, payType, payMethod, amount, transDate, cardId, ... }
  */
-export function createAccount(data) {
-  return request.post('/account', data)
+export function createDebitAccount(data) {
+  return request.post('/account/debit', data)
 }
 
 /**
- * 更新收支记录
+ * 创建信用卡消费记录
+ * @param {object} data - { direction, categoryId, payType, payMethod, amount, transDate, cardId, ... }
+ */
+export function createCreditAccount(data) {
+  return request.post('/account/credit', data)
+}
+
+/**
+ * 更新借记卡收支记录
  * @param {string} id - 记录ID
  * @param {object} data - 更新的字段
  */
-export function updateAccount(id, data) {
-  return request.put(`/account/${id}`, data)
+export function updateDebitAccount(id, data) {
+  return request.put(`/account/debit/${id}`, data)
+}
+
+/**
+ * 更新信用卡消费记录
+ * @param {string} id - 记录ID
+ * @param {object} data - 更新的字段
+ */
+export function updateCreditAccount(id, data) {
+  return request.put(`/account/credit/${id}`, data)
 }
 
 /**
@@ -141,23 +158,7 @@ export function updateVirtualAccounts(data) {
  * @param {string} id - 流水ID
  */
 export function reverseDebit(id) {
-  return request.post(`/account/${id}/reverse/debit`)
-}
-
-/**
- * 信用卡消费支出冲正
- * @param {string} id - 流水ID
- */
-export function reverseCreditExpense(id) {
-  return request.post(`/account/${id}/reverse/credit-expense`)
-}
-
-/**
- * 信用卡还款流水撤销
- * @param {string} id - 流水ID
- */
-export function reverseCreditRepay(id) {
-  return request.post(`/account/${id}/reverse/credit-repay`)
+  return request.post(`/account/debit/${id}/reverse`)
 }
 
 /**
@@ -165,7 +166,23 @@ export function reverseCreditRepay(id) {
  * @param {string} id - 流水ID
  */
 export function reverseTransfer(id) {
-  return request.post(`/account/${id}/reverse/transfer`)
+  return request.post(`/account/debit/${id}/reverse/transfer`)
+}
+
+/**
+ * 信用卡消费支出冲正
+ * @param {string} id - 流水ID
+ */
+export function reverseCreditExpense(id) {
+  return request.post(`/account/credit/${id}/reverse/expense`)
+}
+
+/**
+ * 信用卡还款流水撤销
+ * @param {string} id - 流水ID
+ */
+export function reverseCreditRepay(id) {
+  return request.post(`/account/credit/${id}/reverse/repay`)
 }
 
 /**

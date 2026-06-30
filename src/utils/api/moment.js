@@ -25,7 +25,7 @@ export const momentApi = {
    * @param {Array<{url: string}>} data.images - 图片列表
    * @param {string} data.mood - 心情
    * @param {{name: string, lat: number, lng: number}} data.location - 位置信息
-   * @param {number} data.visibleType - 可见类型 (0: 公开, 1: 私密等)
+   * @param {{vt:number,vs:number,pw:string|number}} data.visibleType - 可见性对象 {vt:0仅自己/vt:1公开, vs:批次号, pw:密码熵}
    */
   create(data) {
     return request.post("/moment", data);
@@ -94,7 +94,6 @@ export const MoodType = {
 
 // 可见类型枚举
 export const VisibleType = {
-  PUBLIC: 0,   // 公开
-  FRIENDS: 1,  // 好友可见
-  PRIVATE: 2, // 仅自己可见
+  SELF: 0,    // 仅自己可见
+  PUBLIC: 1,  // 公开分享
 };

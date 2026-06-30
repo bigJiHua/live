@@ -14,8 +14,11 @@ src/utils/
 │   ├── budget.js          # 预算接口
 │   ├── card.js            # 卡类接口
 │   ├── category.js        # 分类接口
+│   ├── dataManager.js     # 数据管理接口
 │   ├── fixedAsset.js      # 固定资产接口
-│   ├── moment.js          # 流水接口
+│   ├── fund.js            # 理财投资接口
+│   ├── moment.js          # 日记动态接口
+│   ├── recurring.js       # 周期支出接口
 │   ├── todo.js            # 待办接口
 │   ├── upload.js          # 上传接口
 │   ├── user.js            # 用户接口
@@ -37,8 +40,15 @@ src/utils/
 ├── env.js                 # 环境变量工具
 ├── fileRequest.js         # 文件上传请求
 ├── geolocation.js         # 地理位置工具
+├── securityHeaders.js     # 安全请求头构建
 ├── index.js               # 统一导出
-└── network.js             # 网络信息获取
+├── network.js             # 网络信息获取
+└── geo/                   # 地理位置工具（模块化）
+    ├── index.js           # 统一入口
+    ├── amap.js            # 高德地图 API
+    ├── browser.js         # 浏览器原生定位
+    ├── ip.js              # IP 定位
+    └── permission.js      # 定位权限管理
 ```
 
 ## 模块说明
@@ -70,7 +80,10 @@ import { verifyPin } from '@/utils/api/security'
 | todo.js | 待办事项接口 |
 | upload.js | 文件上传接口 |
 | work.js | 工资管理接口 |
-| moment.js | 流水记录接口 |
+| moment.js | 日记动态接口 |
+| fund.js | 理财投资接口 |
+| dataManager.js | 数据管理接口 |
+| recurring.js | 周期支出接口 |
 
 ### 请求模块 (request/)
 
@@ -98,8 +111,10 @@ const res = await request.post('/api/v1/user/profile', data)
 | device-hash.js | 浏览器指纹生成 |
 | env.js | 环境变量读取 |
 | fileRequest.js | 文件上传请求封装 |
-| geolocation.js | 地理位置获取 |
+| geolocation.js | 地理位置获取（旧版兼容） |
+| securityHeaders.js | 安全请求头构建 |
 | network.js | 网络信息获取（IP、运营商等） |
+| geo/ | 地理位置工具模块（高德地图、浏览器定位、IP 定位） |
 
 ---
 

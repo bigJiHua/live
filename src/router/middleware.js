@@ -31,7 +31,7 @@ export const getUserInfo = async (forceRefresh = false) => {
  */
 export const setupRouterGuard = () => {
   // 白名单：不需要登录的路由
-  const whiteList = ["/login", "/register", "/429"]
+  const whiteList = ["/login", "/register", "/429", "/share/diary/detail"]
 
   router.beforeEach(async (to, from) => {
     const userStore = useUserStore();

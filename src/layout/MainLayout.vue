@@ -5,7 +5,6 @@
       fixed
       placeholder
       :left-arrow="showBackButton"
-      @click-left="onBack"
     >
       <template #left>
         <van-icon name="arrow-left" v-if="showBackButton" @click.stop="onBack" />

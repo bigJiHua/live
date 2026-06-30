@@ -60,6 +60,31 @@
         </div>
       </div>
 
+      <!-- 分期管理 -->
+      <div class="func-section">
+        <div class="func-section-title">分期管理</div>
+        <div class="func-card" @click="goTo('/credit-center/installment')">
+          <div class="func-icon purple">
+            <van-icon name="plus" />
+          </div>
+          <div class="func-info">
+            <div class="func-name">创建分期</div>
+            <div class="func-desc">新建信用卡分期</div>
+          </div>
+          <van-icon name="arrow" class="func-arrow" />
+        </div>
+        <div class="func-card" @click="goTo('/credit-center/installment/list')">
+          <div class="func-icon purple">
+            <van-icon name="bill-o" />
+          </div>
+          <div class="func-info">
+            <div class="func-name">分期列表</div>
+            <div class="func-desc">查看所有分期记录</div>
+          </div>
+          <van-icon name="arrow" class="func-arrow" />
+        </div>
+      </div>
+
       <!-- 还款管理 -->
       <div class="func-section">
         <div class="func-section-title">还款管理</div>
@@ -235,6 +260,9 @@ onMounted(() => {
 
 .func-icon.teal {
   background: #009688;
+}
+.func-icon.purple {
+  background: #7232dd;
 }
 
 .func-info {

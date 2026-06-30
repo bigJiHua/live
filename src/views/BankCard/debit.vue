@@ -22,23 +22,24 @@
           :class="{
             'is-selected': selectedId === item.id,
             'is-dimmed': selectedId !== null && selectedId !== item.id,
-            'has-card-img': item.cardImgUrl,
           }"
-          :style="{
-            '--card-color': item.color || '#4A90E2',
-            '--stack-offset': `${index * 70}px`,
-            'z-index': selectedId === item.id ? 999 : index,
-            ...(item.cardImgUrl ? { backgroundImage: `url(${item.cardImgUrl})` } : {}),
-          }"
+          :style="getCardStyle(item, index)"
           @click.stop="handleCardClick(item, index)"
         >
-          <div class="bg-pattern" v-if="!item.cardImgUrl"></div>
+          <!-- 隐藏的图片用于检测卡面图片加载失败 -->
+          <img 
+            v-if="item.cardImgUrl" 
+            :src="item.cardImgUrl" 
+            style="display: none;" 
+            @error="onCardImgError(item.id)"
+          />
+          <div class="bg-pattern" v-if="!item.cardImgUrl || cardImgError[item.id]"></div>
 
-          <!-- 有卡面图片时：隐藏左上角银行信息，右上角显示尾号 -->
-          <div class="card-header" v-if="!item.cardImgUrl">
+          <!-- 无卡面图片或图片加载失败时：显示左上角银行信息 -->
+          <div class="card-header" v-if="!item.cardImgUrl || cardImgError[item.id]">
             <div class="bank-info">
-              <div class="bank-icon" v-if="item.bankIconUrl">
-                <img :src="item.bankIconUrl" :alt="item.bankName" />
+              <div class="bank-icon" v-if="item.bankIconUrl && !bankIconError[item.id]">
+                <img :src="item.bankIconUrl" :alt="item.bankName" @error="onBankIconError(item.id)" />
               </div>
               <div class="bank-icon-mock" v-else>
                 {{ item.bankName?.charAt(0) || "?" }}
@@ -55,19 +56,19 @@
             >
           </div>
 
-          <!-- 有卡面图片时：右上角显示尾号后四位（弹出后隐藏） -->
-          <div class="card-header-img" v-if="item.cardImgUrl && selectedId !== item.id">
+          <!-- 有卡面图片且加载成功时：右上角显示尾号后四位（弹出后隐藏） -->
+          <div class="card-header-img" v-if="item.cardImgUrl && !cardImgError[item.id] && selectedId !== item.id">
             <van-tag v-if="item.isDefault || item.is_default" class="custom-tag"
               >默认</van-tag
             >
             <span class="card-img-last4">{{ item.last4No }}</span>
           </div>
 
-          <div class="card-number" v-if="!item.cardImgUrl">
+          <div class="card-number" v-if="!item.cardImgUrl || cardImgError[item.id]">
             {{ formatCardNo(item) }}
           </div>
 
-          <div class="card-footer" v-if="!item.cardImgUrl">
+          <div class="card-footer" v-if="!item.cardImgUrl || cardImgError[item.id]">
             <div class="holder-section">
               <span class="label">{{
                 item.cardType === "credit" ? "CREDIT CARD" : "DEBIT CARD"
@@ -86,8 +87,8 @@
             </div>
           </div>
 
-          <!-- 有卡面图片时：弹出后左下角显示尾号 -->
-          <div class="card-footer-img" v-if="item.cardImgUrl && selectedId === item.id">
+          <!-- 有卡面图片且加载成功时：弹出后左下角显示尾号 -->
+          <div class="card-footer-img" v-if="item.cardImgUrl && !cardImgError[item.id] && selectedId === item.id">
             <span class="card-img-last4-bottom">{{ item.last4No }}</span>
           </div>
 
@@ -97,8 +98,8 @@
                 <van-icon name="setting-o" />
                 <span>管理</span>
               </button>
-              <!-- 卡组织图标 - 右上角选中时 -->
-              <div class="card-org card-org-top" v-if="item.cardOrgIconUrl && !item.cardImgUrl">
+              <!-- 卡组织图标 - 右上角选中时（无卡面图片或卡面图片加载失败时） -->
+              <div class="card-org card-org-top" v-if="item.cardOrgIconUrl && (!item.cardImgUrl || cardImgError[item.id])">
                 <img :src="item.cardOrgIconUrl" alt="卡组织" />
               </div>
             </div>
@@ -140,6 +141,8 @@ const cardList = ref([]);
 const bankList = ref([]);
 const loading = ref(false);
 const selectedId = ref(null);
+const bankIconError = ref({});
+const cardImgError = ref({});
 
 // BASE_URL
 import ENV from '@/utils/env'
@@ -155,6 +158,32 @@ const getBankInfo = (bankId) => {
     };
   }
   return { name: "", iconUrl: "" };
+};
+
+// 银行图标加载失败处理
+const onBankIconError = (cardId) => {
+  bankIconError.value[cardId] = true;
+};
+
+// 卡面图片加载失败处理
+const onCardImgError = (cardId) => {
+  cardImgError.value[cardId] = true;
+};
+
+// 计算卡片样式
+const getCardStyle = (item, index) => {
+  const style = {
+    '--card-color': item.color || '#4A90E2',
+    '--stack-offset': `${index * 70}px`,
+    'z-index': selectedId.value === item.id ? 999 : index,
+  };  
+  
+  // 如果有卡面图片且加载成功，用图片+渐变作为背景
+  if (item.cardImgUrl && !cardImgError.value[item.id]) {
+    style.backgroundImage = `url(${item.cardImgUrl}), linear-gradient(135deg, ${item.color || '#4A90E2'} 0%, #1a1a1a 150%)`;
+  }
+  
+  return style;
 };
 
 // 获取卡组织信息（根据 card_org 匹配 name）
@@ -329,7 +358,10 @@ onMounted(async () => {
   padding: 20px 5px 20px 20px;
   box-sizing: border-box;
   color: #fff;
-  background: linear-gradient(135deg, var(--card-color) 0%, #1a1a1a 150%);
+  background-image: linear-gradient(135deg, var(--card-color) 0%, #1a1a1a 150%);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
   top: var(--stack-offset);
   transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), top 0.5s ease,
     filter 0.4s ease, box-shadow 0.4s ease;
@@ -347,13 +379,6 @@ onMounted(async () => {
   filter: brightness(0.5) blur(1px);
   transform: translateY(10px) scale(0.95);
   opacity: 0.6;
-}
-
-/* 有卡面图片时：用图片做背景，去掉渐变 */
-.bank-card-item.has-card-img {
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
 }
 
 /* 有卡面图片时的右上角尾号 */

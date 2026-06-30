@@ -428,16 +428,7 @@ const goToLedger = (item) => {
 
 // 跳转到还款
 const goToRepay = (item) => {
-  // 携带账单ID、卡ID等信息
-  const params = new URLSearchParams({
-    billId: item.id,
-    cardId: item.card_id,
-    last4: item.card_last4 || '',
-    alias: item.card_alias || '',
-    billDay: formatDay(item.bill_start_date),
-    repayDay: formatDay(item.bill_end_date)
-  });
-  router.push(`/card/repay/add?${params.toString()}`);
+  router.push(`/card/repay/add?billId=${item.id}`);
 };
 
 // 跳转到添加

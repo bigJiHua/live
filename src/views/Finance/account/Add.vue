@@ -384,7 +384,7 @@ import { useRouter } from "vue-router";
 import dayjs from "dayjs";
 import { categoryApi } from "@/utils/api/category";
 import { getCardList } from "@/utils/api/card";
-import { createAccount } from "@/utils/api/account";
+import { createDebitAccount, createCreditAccount } from "@/utils/api/account";
 import ENV from "@/utils/env";
 import { useFlowSyncStore } from "@/stores/flowSync";
 
@@ -435,6 +435,15 @@ const selectedPayMethod = ref("");
 
 // 卡片状态
 const cardList = ref([]);
+
+// 根据卡片类型选择借记卡/信用卡接口
+// cardId 为 xxxx(现金)/yyyy(余额) 走 debit；其余查 cardList 判断 card_type
+const createAccount = async (data) => {
+  const cardId = data.cardId;
+  const card = cardId ? cardList.value.find(c => c.id === cardId) : null;
+  const isCredit = card && card.card_type === 'credit';
+  return isCredit ? createCreditAccount(data) : createDebitAccount(data);
+};
 const bankList = ref([]);
 const selectedCard = ref(null);
 const showCardPicker = ref(false);

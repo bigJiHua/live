@@ -80,7 +80,7 @@
         </van-grid-item>
         <van-grid-item @click="goFunction('recurring')">
           <template #icon><van-icon name="clock-o" class="grid-icon pink" /></template>
-          <template #text><span class="grid-text">固定支出</span></template>
+          <template #text><span class="grid-text">固定事件</span></template>
         </van-grid-item>
         <van-grid-item @click="goFunction('report')">
           <template #icon><van-icon name="chart-trending-o" class="grid-icon blue" /></template>
@@ -206,7 +206,7 @@ const goFunction = (type) => {
     report: "/finance/report",
     "data-manage": "/finance/data",
     budget: "/finance/budget",
-    recurring: "/finance/recurring",
+    recurring: "/finance/events",
     invest: "/finance/report/fund",
   };
   if (routes[type]) router.push(routes[type]);

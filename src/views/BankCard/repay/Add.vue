@@ -20,8 +20,16 @@
         </van-cell-group>
       </div>
 
-      <!-- 还款信息 -->
-      <div class="form-section">
+      <!-- 还款信息：已结清 -->
+      <div class="form-section" v-if="oweAmount <= 0">
+        <div class="section-title">还款信息</div>
+        <van-cell-group inset>
+          <div class="cleared-notice">该笔账单已结清，无需还款</div>
+        </van-cell-group>
+      </div>
+
+      <!-- 还款信息：未结清 -->
+      <div class="form-section" v-else>
         <div class="section-title">还款信息</div>
         <van-cell-group inset>
           <van-field
@@ -34,7 +42,14 @@
             @click="openKeyboard('repayAmount')"
             :rules="[{ required: true, message: '请输入还款金额' }]"
           >
-            <template #button>元</template>
+            <template #button>
+              <span class="repay-amount-actions">
+                <van-button size="small" type="primary" plain @click.stop="fillFullAmount">
+                  全额还款
+                </van-button>
+                <span>元</span>
+              </span>
+            </template>
           </van-field>
           <van-field
             name="repayMethod"
@@ -73,7 +88,7 @@
       </div>
 
       <!-- 备注 -->
-      <div class="form-section">
+      <div class="form-section" v-if="oweAmount > 0">
         <div class="section-title">备注</div>
         <van-cell-group inset>
           <van-field
@@ -87,7 +102,7 @@
         </van-cell-group>
       </div>
 
-      <div class="submit-btn-wrap">
+      <div class="submit-btn-wrap" v-if="oweAmount > 0">
         <van-button type="primary" block round native-type="submit" :loading="loading" :disabled="loading">
           立即还款
         </van-button>
@@ -254,7 +269,7 @@ const formData = reactive({
   cardId: "",
   billId: "",
   repayAmount: "0", // 默认0
-  repayMethod: "cash", // 默认现金
+  repayMethod: "bank_card",
   repayMethodCardId: "",
   repayTime: "",
   billMonth: "",
@@ -269,6 +284,11 @@ const openKeyboard = (field) => {
   currentField.value = field;
   keyboardMaxlength.value = fieldConfig[field]?.maxlength || 10;
   showKeyboard.value = true;
+};
+
+// 一键全额还款
+const fillFullAmount = () => {
+  formData.repayAmount = oweAmount.value.toFixed(2);
 };
 
 // 数字键盘输入
@@ -321,7 +341,11 @@ const loadDebitCards = async () => {
     const res = await getCardList();
     const allCards = res.data || res || [];
     // 只获取借记卡
-    debitCardList.value = allCards.filter(card => card.card_type !== 'credit');
+    debitCardList.value = allCards.filter(card =>
+      card.card_type !== 'credit' &&
+      card.card_type !== 'virtual_cash' &&
+      card.card_type !== 'virtual_balance'
+    );
   } catch (error) {
     debitCardList.value = [];
   }
@@ -530,5 +554,18 @@ onMounted(() => {
   padding: 30px;
   color: #969799;
   font-size: 14px;
+}
+
+.repay-amount-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cleared-notice {
+  padding: 24px 16px;
+  text-align: center;
+  font-size: 15px;
+  color: #07c160;
 }
 </style>

@@ -23,6 +23,14 @@ const RouterMap = [
     meta: { title: "请求过于频繁" },
   },
 
+  // --- 公开分享页（无需登录） ---
+  {
+    path: "/share/diary/detail",
+    name: "ShareDetail",
+    component: () => import("@/views/Diary/ShareDetail.vue"),
+    meta: { title: "分享动态" },
+  },
+
   // --- 主布局容器 (包含底部 Tabbar 导航) ---
   {
     path: "/",
@@ -95,6 +103,12 @@ const RouterMap = [
         name: "FinanceFlowDetail",
         component: () => import("../views/Finance/flow/Detail.vue"),
         meta: { title: "收支详情", hideTabbar: true },
+      },
+      {
+        path: "finance/events",
+        name: "FinanceEvents",
+        component: () => import("../views/Finance/events/Index.vue"),
+        meta: { title: "固定事件", hideTabbar: true },
       },
       {
         path: "finance/recurring",
@@ -411,6 +425,18 @@ const RouterMap = [
         name: "CreditCenter",
         component: () => import("../views/BankCard/CreditCenter.vue"),
         meta: { title: "信用卡专项", hideTabbar: true },
+      },
+      {
+        path: "credit-center/installment",
+        name: "CreditInstallment",
+        component: () => import("../views/BankCard/Installment.vue"),
+        meta: { title: "创建分期", hideTabbar: true },
+      },
+      {
+        path: "credit-center/installment/list",
+        name: "CreditInstallmentList",
+        component: () => import("../views/BankCard/InstallmentList.vue"),
+        meta: { title: "分期列表", hideTabbar: true },
       },
       // 【临时测试】信用卡全功能录入
       {

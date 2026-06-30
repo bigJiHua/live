@@ -9,7 +9,7 @@ const router = createRouter({
 });
 
 const whiteList = {
-  public: ["/login", "/register", "/429"],
+  public: ["/login", "/register", "/429", "/share/diary/detail"],
 };
 
 const LOGIN_PATH = "/login";

@@ -54,8 +54,8 @@
           <van-cell title="还款状态" :value="billData.repay_status || '未还'" />
           <van-cell title="是否逾期">
             <template #value>
-              <van-tag :type="billData.is_overdue ? 'danger' : 'success'">
-                {{ billData.is_overdue ? `逾期 ${billData.overdue_days} 天` : '正常' }}
+              <van-tag :type="isOverdue ? 'danger' : 'success'">
+                {{ isOverdue ? `逾期 ${displayOverdueDays} 天` : '正常' }}
               </van-tag>
             </template>
           </van-cell>
@@ -67,10 +67,10 @@
         <van-button plain block round type="primary" @click="goToLedger">
           查看流水明细
         </van-button>
-        <van-button type="primary" block round @click="goToRepay">
+        <van-button type="primary" block round @click="goToRepay" v-if="!isPaidOff">
           添加还款记录
         </van-button>
-        <van-button plain block round type="danger" @click="handleDelete">
+        <van-button plain block round type="danger" @click="handleDelete" v-if="!isPaidOff">
           删除账单
         </van-button>
       </div>
@@ -85,7 +85,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from "vue";
+import { ref, computed, onMounted } from "vue";
 import { showToast, showConfirmDialog, showLoadingToast, closeToast } from "vant";
 import { useRouter, useRoute } from "vue-router";
 import { getBillDetail, deleteBill } from "@/utils/api/card";
@@ -95,6 +95,28 @@ const route = useRoute();
 
 const loading = ref(false);
 const billData = ref({});
+
+// 实时计算逾期状态：已还清或待还金额为0时，不应显示逾期
+const isOverdue = computed(() => {
+  const bill = billData.value;
+  // 已还清或待还为0，强制不逾期
+  if (!bill.need_repay || Number(bill.need_repay) <= 0) return false;
+  if (bill.repay_status === "已还清") return false;
+  return !!bill.is_overdue;
+});
+
+const displayOverdueDays = computed(() => {
+  if (!isOverdue.value) return 0;
+  return billData.value.overdue_days || 0;
+});
+
+// 是否已还清：还清后隐藏 添加还款记录 和 删除账单 按钮
+const isPaidOff = computed(() => {
+  const bill = billData.value;
+  if (bill.repay_status === "已还清") return true;
+  if (bill.need_repay !== null && bill.need_repay !== undefined && Number(bill.need_repay) <= 0) return true;
+  return false;
+});
 
 // 加载账单详情
 const loadBillDetail = async () => {
@@ -140,7 +162,7 @@ const goToLedger = () => {
 
 // 添加还款记录
 const goToRepay = () => {
-  router.push(`/card/repay/add?billId=${billData.value.id}&cardId=${billData.value.card_id}`);
+  router.push(`/card/repay/add?billId=${billData.value.id}`);
 };
 
 // 删除账单

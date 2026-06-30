@@ -14,15 +14,15 @@
     </div>
 
     <!-- 提醒横幅 -->
-    <div v-if="realReminders.length > 0" class="reminder-banner" :class="{ 'has-reminders': realReminders.length > 0 }">
+    <div v-if="calendarReminders.length > 0" class="reminder-banner">
       <div class="reminder-header">
         <van-icon name="bell" />
-        <span>待办提醒</span>
-        <span class="reminder-count">{{ realReminders.length }}个</span>
+        <span>{{ currentYear }}年{{ currentMonth + 1 }}月提醒</span>
+        <span class="reminder-count">{{ calendarReminders.length }}个</span>
       </div>
       <div class="reminder-list">
         <div
-          v-for="item in realReminders"
+          v-for="item in calendarReminders"
           :key="item.id"
           class="reminder-item"
           :class="'reminder-' + getReminderBannerLevel(item)"
@@ -94,42 +94,67 @@
           <van-loading size="24px">加载中...</van-loading>
         </div>
 
-        <div v-else class="event-items">
-          <div
-            v-for="event in selectedEvents"
-            :key="event.id"
-            class="event-item"
-            :class="{ completed: event.status === '已完成', recurring: event.source === 'recurring' }"
-            @click="showEventActions(event)"
-          >
+        <!-- 消费分期专区 -->
+        <div v-else-if="installmentEvents.length > 0" class="event-section">
+          <div class="event-section-header">
+            <van-icon name="bill-o" color="#ee0a24" />
+            <span>消费分期</span>
+          </div>
+          <div v-for="event in installmentEvents" :key="event.id" class="event-item inst-item">
             <div class="event-content">
               <div class="event-title">{{ event.content }}</div>
               <div class="event-meta">
-                <van-tag v-if="event.source === 'recurring'" size="small" type="warning">
-                  固定支出
-                </van-tag>
-                <van-tag v-if="event.event_type" size="small" type="primary">
-                  {{ getEventTypeName(event.event_type) }}
-                </van-tag>
-                <van-tag v-if="event.priority === 1" size="small" type="danger"
-                  >高优</van-tag
-                >
-                <van-tag v-if="event.is_recurring" size="small" type="success"
-                  >每年</van-tag
-                >
-                <span v-if="event.source === 'recurring'" class="event-amount">
-                  ￥{{ Number(event.amount || 0).toFixed(2) }}
-                </span>
+                <van-tag type="danger" size="small">消费分期</van-tag>
+                <span class="event-amount">￥{{ Number(event.amount || 0).toFixed(2) }}</span>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 其他计划 -->
+        <div v-if="otherEvents.length > 0" class="event-section">
+          <div class="event-section-header" v-if="installmentEvents.length > 0">
+            <van-icon name="todo-list-o" color="#1989fa" />
+            <span>计划</span>
+          </div>
+          <div class="event-items">
+            <div
+              v-for="event in otherEvents"
+              :key="event.id"
+              class="event-item"
+              :class="{ completed: event.status === '已完成', recurring: event.source === 'recurring' }"
+              @click="showEventActions(event)"
+            >
+              <div class="event-content">
+                <div class="event-title">{{ event.content }}</div>
+                <div class="event-meta">
+                  <van-tag v-if="event.source === 'recurring' && Number(event.amount) > 0" size="small" type="warning">
+                    固定支出
+                  </van-tag>
+                  <van-tag v-else-if="event.source === 'recurring'" size="small" color="#7232dd" text-color="#fff">
+                    事件提醒
+                  </van-tag>
+                  <van-tag v-if="event.event_type && event.event_type !== 'fixed_expense'" size="small" type="primary">
+                    {{ getEventTypeName(event.event_type) }}
+                  </van-tag>
+                  <van-tag v-if="event.priority === 1" size="small" type="danger">高优</van-tag>
+                  <van-tag v-if="event.source === 'recurring' && event.cycle === 'year'" size="small" type="success">每年</van-tag>
+                  <van-tag v-if="event.source !== 'recurring' && event.is_recurring" size="small" type="success">每年</van-tag>
+                  <span v-if="event.source === 'recurring' && Number(event.amount) > 0" class="event-amount">
+                    ￥{{ Number(event.amount || 0).toFixed(2) }}
+                  </span>
+                </div>
               <div class="event-remark" v-if="event.remark">
                 {{ event.remark }}
               </div>
             </div>
             <van-icon :name="event.source === 'recurring' ? 'cash-back-record' : 'arrow'" class="arrow-icon" />
           </div>
+          </div>
         </div>
       </van-pull-refresh>
     </div>
+
 
     <!-- 事件操作弹出菜单 -->
     <van-action-sheet
@@ -378,6 +403,9 @@ const calendarData = ref({});
 const selectedEvents = ref([]);
 const loadingEvents = ref(false);
 
+const installmentEvents = computed(() => selectedEvents.value.filter(e => e.category_id === 'installment'))
+const otherEvents = computed(() => selectedEvents.value.filter(e => e.category_id !== 'installment'))
+
 // 提醒数据
 const reminders = ref([]);
 const reminderLoading = ref(false);
@@ -386,6 +414,20 @@ const reminderLoading = ref(false);
 const realReminders = computed(() =>
   reminders.value.filter((r) => r.content !== "1")
 );
+
+// 当月提醒：从日历数据中提取待完成/未跳过的事件，跟随切换月份
+const calendarReminders = computed(() => {
+  const days = calendarData.value?.days || [];
+  const result = [];
+  days.forEach(day => {
+    (day.list || []).forEach(item => {
+      if (item.content !== '1' && item.status !== '已完成' && item.month_status !== 'done' && item.month_status !== 'skipped') {
+        result.push(item);
+      }
+    });
+  });
+  return result.sort((a, b) => (a.happen_date || '').localeCompare(b.happen_date || ''));
+});
 
 // 计算单个事件的提醒等级
 const calcReminderLevel = (item) => {
@@ -562,9 +604,7 @@ const loadCalendarMonth = async () => {
     const res = await getCalendarMonth({
       year: currentYear.value,
       month: currentMonth.value + 1,
-    });
-    console.log(res.data);
-    
+    });    
     calendarData.value = res.data || res;
     syncSelectedRecurringEvents();
   } catch {
@@ -1096,6 +1136,14 @@ onMounted(() => {
   justify-content: center;
   padding: 20px 0;
 }
+
+.event-section { margin-bottom: 14px; }
+.event-section-header {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 14px; font-weight: 600; color: #323233;
+  padding: 4px 0 10px;
+}
+.inst-item { border-left: 3px solid #ee0a24; padding-left: 9px; }
 
 .event-items {
   display: flex;

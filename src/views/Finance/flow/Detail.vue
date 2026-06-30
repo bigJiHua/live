@@ -209,7 +209,8 @@ import dayjs from "dayjs";
 import zhCn from "dayjs/locale/zh-cn";
 import {
   getAccountDetail,
-  updateAccount,
+  updateDebitAccount,
+  updateCreditAccount,
   updateAccountRemark,
   reverseDebit,
   reverseCreditExpense,
@@ -453,7 +454,11 @@ const handleSaveCategory = async () => {
   }
   try {
     categoryLoading.value = true;
-    await updateAccount(route.params.id, { categoryId: selectedCategoryId.value });
+    // 按流水卡类型选调对应接口：信用卡走 credit，其余走 debit
+    const updateApi = detail.value.account_type === 'credit'
+      ? updateCreditAccount
+      : updateDebitAccount;
+    await updateApi(route.params.id, { categoryId: selectedCategoryId.value });
     const selected = categoryList.value.find(c => c.id === selectedCategoryId.value);
     detail.value.category_id = selectedCategoryId.value;
     detail.value.category_name = selected?.name || "未知分类";

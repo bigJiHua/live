@@ -22,7 +22,8 @@
       <div class="section-title">组成</div>
       <div v-for="item in summary.categoryStats" :key="item.category_id || item.category_name" class="category-row">
         <span>{{ item.category_name }}</span>
-        <span>￥{{ formatAmount(item.amount) }}</span>
+        <span v-if="item.category_name === '事件提醒'">{{ item.count }}件</span>
+        <span v-else>￥{{ formatAmount(item.amount) }}</span>
       </div>
     </div>
 
@@ -34,27 +35,36 @@
             <div>
               <div class="item-title">{{ item.name }}</div>
               <div class="item-sub">
-                每月{{ item.day_of_cycle }}号
-                <span v-if="item.category_name"> · {{ item.category_name }}</span>
-              </div>
+              {{ item.cycle === 'year' ? '每年' : '每月' }}{{ item.cycle === 'year' && item.month_of_cycle ? item.month_of_cycle + '月' : '' }}{{ item.day_of_cycle }}号
+              <span v-if="item.repeat_count" class="installment-badge"> · 第{{ doneCount(item) }}/{{ item.repeat_count }}期</span>
+              <span v-if="item.category_name"> · {{ item.category_name }}</span>
             </div>
-            <div class="item-amount">￥{{ formatAmount(item.month_amount) }}</div>
+            </div>
+            <div v-if="Number(item.month_amount) > 0" class="item-amount">￥{{ formatAmount(item.month_amount) }}</div>
+            <div v-else class="item-amount event-only">仅提醒</div>
           </div>
           <div class="item-footer">
+            <template v-if="!isInstallment(item)">
             <div class="tag-row">
-              <van-tag :type="item.month_status === 'done' ? 'success' : 'warning'">
+              <van-tag :type="item.month_status === 'done' ? 'success' : item.month_status === 'skipped' ? 'danger' : 'warning'">
                 {{ item.month_status === 'done' ? '已处理' : item.month_status === 'skipped' ? '已跳过' : '待处理' }}
               </van-tag>
+              <van-tag v-if="item.cycle === 'year'" type="primary" size="small">年</van-tag>
+              <van-tag v-if="item.repeat_count" color="#7232dd" text-color="#fff" size="small">{{ doneCount(item) }}/{{ item.repeat_count }}期</van-tag>
               <van-tag v-if="!item.is_active" type="default">已停用</van-tag>
+              <span v-if="item.end_date" class="end-date">至 {{ item.end_date }}</span>
               <span class="due-date">{{ item.happen_date }}</span>
             </div>
             <div class="actions">
-              <van-button size="mini" plain type="primary" @click="toggleDone(item)">
-                {{ item.month_status === 'done' ? '设为待处理' : '已处理' }}
+              <van-button v-if="item.month_status !== 'skipped'" size="mini" plain type="primary" @click="toggleDone(item)">
+                {{ item.month_status === 'done' ? '设为待处理' : '设为已处理' }}
               </van-button>
+              <van-tag v-else type="danger" size="small">已跳过</van-tag>
               <van-button size="mini" plain @click="openEdit(item)">编辑</van-button>
-              <van-button size="mini" plain type="danger" @click="handleDelete(item)">删除</van-button>
+              <van-button size="mini" plain type="danger" @click="handleSkipMonth(item)" v-if="item.month_status !== 'skipped'">跳过本月</van-button>
             </div>
+            </template>
+            <span v-else class="due-date">{{ item.happen_date }}</span>
           </div>
         </div>
       </div>
@@ -62,33 +72,14 @@
 
     <van-popup v-model:show="showForm" position="bottom" round close-on-click-overlay>
       <div class="form-panel">
-        <div class="form-title">{{ editingId ? '编辑固定支出' : '新增固定支出' }}</div>
-        <van-field v-model="form.name" label="名称" placeholder="如 话费、剪头发" maxlength="100" />
-        <van-field v-model="form.amount" label="金额" type="number" placeholder="0.00" />
-        <van-field label="每月日期">
-          <template #input>
-            <van-stepper v-model="form.day_of_cycle" min="1" max="31" />
-          </template>
+        <div class="form-title">编辑当月 — {{ editingMonth }}</div>
+        <van-field v-model="form.name" label="名称" readonly />
+        <van-field v-if="form.is_expense" v-model="form.amount" label="本月金额" type="number" placeholder="0.00" />
+        <van-field v-else class="expense-off-hint">
+          <template #input><span>仅事件提醒，不计入支出</span></template>
         </van-field>
-        <van-field label="提前提醒">
-          <template #input>
-            <van-stepper v-model="form.remind_days" min="0" max="30" />
-          </template>
-        </van-field>
-        <van-field
-          v-model="categoryLabel"
-          label="分类"
-          readonly
-          is-link
-          placeholder="选择支出分类"
-          @click="showCategoryPicker = true"
-        />
-        <van-field v-model="form.remark" label="备注" placeholder="选填" maxlength="100" />
-        <van-field label="启用">
-          <template #input>
-            <van-switch v-model="form.is_active" />
-          </template>
-        </van-field>
+        <van-field v-model="form.remark" label="本月备注" placeholder="选填" maxlength="100" />
+        <van-button v-if="editingSkipped" round block type="warning" @click="restoreMonth" style="margin-bottom:10px">恢复事件（取消跳过）</van-button>
         <div class="form-actions">
           <van-button round block @click="showForm = false">取消</van-button>
           <van-button round block type="primary" :loading="submitting" @click="handleSubmit">保存</van-button>
@@ -96,41 +87,21 @@
       </div>
     </van-popup>
 
-    <van-popup v-model:show="showCategoryPicker" position="bottom" round>
-      <van-picker
-        title="选择分类"
-        :columns="categoryColumns"
-        @confirm="onCategoryConfirm"
-        @cancel="showCategoryPicker = false"
-      />
-    </van-popup>
 
-    <van-button
-      class="fab-add"
-      round
-      type="primary"
-      icon="plus"
-      @click="openCreate"
-    />
+
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
 import { showConfirmDialog, showSuccessToast, showToast } from 'vant'
 import dayjs from 'dayjs'
-import { categoryApi } from '@/utils/api/category'
 import {
   getRecurringList,
   getRecurringSummary,
-  createRecurring,
-  updateRecurring,
-  deleteRecurring,
   updateRecurringMonthStatus,
 } from '@/utils/api/recurring'
 
-const router = useRouter()
 const currentMonth = ref(dayjs().startOf('month'))
 const list = ref([])
 const summary = ref({ totalAmount: 0, total: 0, pending: 0, categoryStats: [] })
@@ -138,45 +109,16 @@ const loading = ref(false)
 const refreshing = ref(false)
 const submitting = ref(false)
 const showForm = ref(false)
-const showCategoryPicker = ref(false)
-const editingId = ref('')
-const categories = ref([])
+const editingMonth = ref('')
+const editingSkipped = ref(false)
 
 const monthKey = computed(() => currentMonth.value.format('YYYY-MM'))
 const monthTitle = computed(() => currentMonth.value.format('YYYY年M月'))
 
-const defaultForm = () => ({
-  name: '',
-  amount: '',
-  category_id: '',
-  day_of_cycle: 1,
-  remind_days: 0,
-  remark: '',
-  is_active: true,
-})
-
+const defaultForm = () => ({ name: '', amount: '', is_expense: true, remark: '' })
 const form = ref(defaultForm())
 
-const categoryColumns = computed(() => [
-  { text: '未分类', value: '' },
-  ...categories.value.map(item => ({ text: item.name, value: item.id })),
-])
-
-const categoryLabel = computed(() => {
-  const item = categories.value.find(category => category.id === form.value.category_id)
-  return item ? item.name : ''
-})
-
 const formatAmount = (value) => Number(value || 0).toFixed(2)
-
-const loadCategories = async () => {
-  try {
-    const res = await categoryApi.list('expense')
-    categories.value = res.data || []
-  } catch {
-    categories.value = []
-  }
-}
 
 const loadData = async () => {
   loading.value = true
@@ -200,53 +142,64 @@ const changeMonth = (step) => {
   loadData()
 }
 
-const openCreate = () => {
-  editingId.value = ''
-  form.value = defaultForm()
-  showForm.value = true
-}
-
 const openEdit = (item) => {
-  editingId.value = item.id
+  const itemAmount = Number(item.amount || 0)
+  const monthRecord = item.month_record || {}
+  const monthAmount = monthRecord.amount !== undefined ? Number(monthRecord.amount) : itemAmount
+  editingMonth.value = item.happen_date || monthKey.value
+  editingSkipped.value = item.month_status === 'skipped'
   form.value = {
     name: item.name || '',
-    amount: String(item.amount || ''),
-    category_id: item.category_id || '',
-    day_of_cycle: item.day_of_cycle || 1,
-    remind_days: item.remind_days || 0,
-    remark: item.remark || '',
-    is_active: !!item.is_active,
+    amount: itemAmount > 0 ? String(monthAmount) : '0',
+    is_expense: itemAmount > 0,
+    remark: monthRecord.remark || '',
   }
   showForm.value = true
 }
 
-const onCategoryConfirm = ({ selectedOptions }) => {
-  form.value.category_id = selectedOptions?.[0]?.value || ''
-  showCategoryPicker.value = false
+const restoreMonth = async () => {
+  const item = list.value.find(i => i.name === form.value.name.trim())
+  if (!item) return showToast('数据异常')
+  try {
+    await updateRecurringMonthStatus(item.id, { month: monthKey.value, status: 'pending' })
+    showSuccessToast('已恢复为待处理')
+    showForm.value = false
+    loadData()
+  } catch (e) {
+    showToast(e.message || '操作失败')
+  }
+}
+
+const isInstallment = (item) => {
+  if (item.category_id === 'installment') return true
+  try { const a = JSON.parse(item.account_id || '{}'); return a.type === 'installment' } catch { return false }
+}
+
+const doneCount = (item) => {
+  const records = item.month_records
+  if (!records) return 0
+  if (typeof records === 'object' && !Array.isArray(records)) {
+    return Object.values(records).filter(r => r && r.status === 'done').length
+  }
+  return 0
 }
 
 const handleSubmit = async () => {
   if (!form.value.name.trim()) return showToast('请输入名称')
-  if (!form.value.amount || Number(form.value.amount) <= 0) return showToast('请输入金额')
+  if (form.value.is_expense && (!form.value.amount || Number(form.value.amount) <= 0)) return showToast('请输入金额')
+
+  // 从列表中找到当前正在编辑的项
+  const item = list.value.find(i => i.name === form.value.name.trim())
+  if (!item) return showToast('数据异常')
 
   submitting.value = true
-  const payload = {
-    name: form.value.name.trim(),
-    amount: Number(form.value.amount),
-    category_id: form.value.category_id || null,
-    cycle: 'month',
-    day_of_cycle: Number(form.value.day_of_cycle || 1),
-    remind_days: Number(form.value.remind_days || 0),
-    remark: form.value.remark?.trim() || '',
-    is_active: form.value.is_active ? 1 : 0,
-  }
-
   try {
-    if (editingId.value) {
-      await updateRecurring(editingId.value, payload)
-    } else {
-      await createRecurring(payload)
-    }
+    await updateRecurringMonthStatus(item.id, {
+      month: monthKey.value,
+      status: item.month_status === 'skipped' ? 'pending' : item.month_status,
+      amount: form.value.is_expense ? Number(form.value.amount) : 0,
+      remark: form.value.remark?.trim() || '',
+    })
     showSuccessToast('保存成功')
     showForm.value = false
     loadData()
@@ -272,25 +225,22 @@ const toggleDone = async (item) => {
   }
 }
 
-const handleDelete = async (item) => {
+const handleSkipMonth = async (item) => {
   try {
     await showConfirmDialog({
-      title: '确认删除',
-      message: `确定删除「${item.name}」？`,
+      title: '跳过本月',
+      message: `确定跳过「${item.name}」本月？跳过后不再计入统计。`,
       confirmButtonColor: '#ee0a24',
     })
-    await deleteRecurring(item.id)
-    showSuccessToast('删除成功')
+    await updateRecurringMonthStatus(item.id, { month: monthKey.value, status: 'skipped' })
+    showSuccessToast('已跳过')
     loadData()
   } catch (error) {
-    if (error !== 'cancel') showToast('删除失败')
+    if (error !== 'cancel') showToast('操作失败')
   }
 }
 
-onMounted(() => {
-  loadCategories()
-  loadData()
-})
+onMounted(() => loadData())
 </script>
 
 <style scoped>
@@ -298,17 +248,6 @@ onMounted(() => {
   min-height: 100vh;
   padding: 12px 16px 96px;
   background: #f7f8fa;
-}
-
-.fab-add {
-  position: fixed;
-  right: 20px;
-  bottom: 36px;
-  z-index: 100;
-  width: 44px;
-  height: 44px;
-  font-size: 22px;
-  box-shadow: 0 4px 12px rgba(25, 137, 250, 0.35);
 }
 
 .summary-card,
@@ -341,9 +280,20 @@ onMounted(() => {
 
 .summary-label,
 .item-sub,
-.due-date {
+.due-date,
+.end-date {
   color: #969799;
   font-size: 12px;
+}
+
+.end-date {
+  color: #ee0a24;
+  font-size: 11px;
+}
+
+.installment-badge {
+  color: #7232dd;
+  font-weight: 500;
 }
 
 .summary-amount {
@@ -406,6 +356,17 @@ onMounted(() => {
   color: #ee0a24;
   font-size: 18px;
   font-weight: 700;
+}
+
+.item-amount.event-only {
+  color: #1989fa;
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.expense-off-hint {
+  color: #969799;
+  font-size: 13px;
 }
 
 .item-footer {

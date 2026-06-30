@@ -553,7 +553,7 @@ const handleSave = async () => {
       images,
       mood: mood.value,
       location: locationData.value,
-      visibleType: 0,
+      visibleType: { vt: 0, vs: 0, pw: 0 },
     });
 
     closeToast();

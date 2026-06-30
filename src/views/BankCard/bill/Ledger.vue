@@ -271,6 +271,30 @@ onDeactivated(() => {
 })
 
 onActivated(() => {
+  // keep-alive 下切换不同 ?id 时组件复用，需重新加载
+  const currentId = route.query.id
+  if (currentId && currentId !== billData.value.id) {
+    // 切到不同账单 → 重置 + 重拉
+    billData.value = {}
+    cardBankIcon.value = ''
+    list.value = []
+    summaryData.value = null
+    page.value = 1
+    finished.value = false
+    loading.value = false
+    // 关键：onActivated 是同步触发的，等下一帧再调 API，
+    // 否则可能与 van-list 的首次自动 load 时机冲突
+    nextTick(() => {
+      loadBillDetail()
+        .then(() => Promise.all([loadSummary(), loadData()]))
+        .catch(() => {})
+        .finally(() => {
+          loading.value = false
+        })
+    })
+    return
+  }
+  // 同一账单回到前台 → 恢复滚动位置
   nextTick(() => {
     if (savedScrollY.value > 0) window.scrollTo({ top: savedScrollY.value, behavior: 'instant' })
   })
