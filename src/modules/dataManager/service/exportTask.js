@@ -150,24 +150,41 @@ class ExportTaskManager {
     this.tasks.set(taskId, task);
 
     const includeData = task.options.includeData !== false;
-    const filename = `${dayjs().format('YYYYMMDD-HHmmss')}-${task.tableName}.sql`;
-    const filepath = path.join(this.getBackupDir(), filename);
+    const sqlFilename = `${dayjs().format('YYYYMMDD-HHmmss')}-${task.tableName}.sql`;
+    const sqlFilepath = path.join(this.getBackupDir(), sqlFilename);
+    const zipFilename = `${dayjs().format('YYYYMMDD-HHmmss')}-${task.tableName}.sql.zip`;
+    const zipFilepath = path.join(this.getBackupDir(), zipFilename);
 
     try {
       task.progress = 15; this.tasks.set(taskId, task);
-      const opts = this.buildDumpOptions(task.tableName, includeData, filepath);
+      const opts = this.buildDumpOptions(task.tableName, includeData, sqlFilepath);
       await mysqldump(opts);
 
-      if (task.status === TASK_STATUS.CANCELLED) { this.cleanupFile(filepath); return; }
+      if (task.status === TASK_STATUS.CANCELLED) { this.cleanupFile(sqlFilepath); return; }
 
-      const stats = fs.statSync(filepath);
+      task.progress = 70; this.tasks.set(taskId, task);
+
+      await new Promise((resolve, reject) => {
+        const output = fs.createWriteStream(zipFilepath);
+        const archive = new archiver.ZipArchive({ zlib: { level: 6 } });
+        output.on('close', resolve);
+        archive.on('error', reject);
+        archive.pipe(output);
+        archive.file(sqlFilepath, { name: sqlFilename });
+        archive.finalize();
+      });
+
+      if (fs.existsSync(sqlFilepath)) fs.unlinkSync(sqlFilepath);
+
+      const stats = fs.statSync(zipFilepath);
       task.status = TASK_STATUS.COMPLETED;
       task.progress = 100;
       task.completedAt = new Date();
-      task.result = { filename, filepath, size: stats.size, rowCount: task.tableSize };
+      task.result = { filename: zipFilename, filepath: zipFilepath, size: stats.size, rowCount: task.tableSize };
     } catch (error) {
       console.error(`[TaskManager] Export table task ${taskId} failed:`, error);
-      this.cleanupFile(filepath);
+      this.cleanupFile(sqlFilepath);
+      this.cleanupFile(zipFilepath);
       task.status = TASK_STATUS.FAILED;
       task.error = error.message;
       task.completedAt = new Date();
@@ -221,14 +238,9 @@ class ExportTaskManager {
     this.tasks.set(taskId, task);
 
     const includeData = task.options.includeData !== false;
-    const format = task.options.format || 'sql';
     const timestamp = dayjs().format('YYYYMMDD-HHmmss');
 
-    if (format === 'zip') {
-      await this.executeFullExportToZip(taskId, task, includeData, timestamp);
-    } else {
-      await this.executeFullExportToSql(taskId, task, includeData, timestamp);
-    }
+    await this.executeFullExportToZip(taskId, task, includeData, timestamp);
   }
 
   static async executeFullExportToSql(taskId, task, includeData, timestamp) {
@@ -274,7 +286,7 @@ class ExportTaskManager {
 
       await new Promise((resolve, reject) => {
         const output = fs.createWriteStream(zipFilepath);
-        const archive = new archiver('zip', { zlib: { level: 6 } });
+        const archive = new archiver.ZipArchive({ zlib: { level: 6 } });
         output.on('close', resolve);
         archive.on('error', reject);
         archive.pipe(output);

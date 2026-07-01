@@ -94,7 +94,7 @@ class DataManagerController {
 
   static async exportFullDatabase(req, res) {
     try {
-      const { format = 'sql', includeData = 'true' } = req.query;
+      const { includeData = 'true' } = req.query;
 
       // 并发保护
       const running = ExportTaskManager.getRunningTask('export_full_database');
@@ -107,8 +107,7 @@ class DataManagerController {
       }
 
       const task = await ExportTaskManager.createFullExportTask({
-        includeData: includeData === 'true',
-        format
+        includeData: includeData === 'true'
       });
 
       res.json({
@@ -301,6 +300,7 @@ class DataManagerController {
       const resolvedBase = path.resolve(BackupService.getBackupDir());
       if (!resolvedPath.startsWith(resolvedBase)) return res.json({ status: 403, message: '禁止访问' });
       if (!fs.existsSync(filepath)) return res.json({ status: 404, message: '备份文件不存在' });
+      console.log(`[DataManager] downloadBackup: ${filename}`);
       res.download(filepath);
     } catch (error) {
       console.error('[DataManager] downloadBackup error:', error);
