@@ -95,35 +95,6 @@
         </van-cell-group>
       </div>
 
-      <div class="format-section">
-        <div class="section-title">选择导出格式</div>
-        <van-radio-group v-model="selectedFormat">
-          <van-cell-group inset class="app-card">
-            <van-cell
-              title="SQL 格式"
-              label="标准SQL文件，可直接导入"
-              clickable
-              @click="selectedFormat = 'sql'"
-            >
-              <template #right-icon>
-                <van-radio name="sql" />
-              </template>
-            </van-cell>
-            <van-cell
-              title="ZIP 格式"
-              label="压缩格式，文件更小"
-              clickable
-              @click="selectedFormat = 'zip'"
-              v-if="selectedType === 'all'"
-            >
-              <template #right-icon>
-                <van-radio name="zip" />
-              </template>
-            </van-cell>
-          </van-cell-group>
-        </van-radio-group>
-      </div>
-
       <div class="option-section">
         <div class="section-title">导出选项</div>
         <van-cell-group inset class="app-card">
@@ -249,7 +220,6 @@ import { getTableList, getTableStatus, exportSingleTable, exportFullDatabase, ge
 
 const selectedType = ref("all");
 const selectedTable = ref("");
-const selectedFormat = ref("sql");
 const includeData = ref(true);
 const loading = ref(false);
 const exportCompleted = ref(false);
@@ -340,7 +310,6 @@ const handleExport = async () => {
 
     if (selectedType.value === "all") {
       res = await exportFullDatabase({
-        format: selectedFormat.value,
         includeData: includeData.value ? "true" : "false"
       });
     } else {

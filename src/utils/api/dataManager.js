@@ -112,7 +112,7 @@ export function deleteBackup(filename) {
 }
 
 /**
- * 下载备份文件
+ * 下载备份文件（所有导出统一为 .sql.zip，避免 nginx 拦截 .sql 扩展名）
  * @param {string} filename - 文件名
  */
 export function downloadBackup(filename) {
