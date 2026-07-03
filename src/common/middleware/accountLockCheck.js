@@ -11,9 +11,6 @@ const RATE_LIMIT = {
 async function accountLockCheck(req, res, next) {
   try {
     const { nameOrEmail } = req.body.data || {};
-    console.log("nameOrEmail", nameOrEmail)
-    console.log("req.body", req.body.data);
-    
     if (!nameOrEmail) {
       return res.say("非法未知参数请求！", 401);
     }

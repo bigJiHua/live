@@ -251,7 +251,7 @@ class Card {
    * 更新卡片
    */
   static async update(id, userId, updates) {
-    console.log('[Card.update] 接收到的 updates:', JSON.stringify(updates));
+    // console.log('[Card.update] 接收到的 updates:', JSON.stringify(updates));
     
     // 获取原始卡片数据
     const original = await this.findById(id, userId);
@@ -268,7 +268,7 @@ class Card {
         throw new Error('该卡片已有收支记录或还款记录，不允许修改账单日/还款日。如需修改，请删除相关记录后重新创建卡片。');
       }
       
-      console.log('[Card.update] 新卡检测通过，允许修改账单日/还款日');
+      // console.log('[Card.update] 新卡检测通过，允许修改账单日/还款日');
     }
 
     const now = String(Date.now());
@@ -316,11 +316,11 @@ class Card {
     });
 
     if (fields.length === 0) {
-      console.log('[Card.update] 没有需要更新的字段，fields:', fields);
+      // console.log('[Card.update] 没有需要更新的字段，fields:', fields);
       return this.findById(id, userId);
     }
 
-    console.log('[Card.update] 实际更新的字段:', fields);
+    // console.log('[Card.update] 实际更新的字段:', fields);
     fields.push('update_time = ?');
     params.push(now);
     params.push(id, userId);
@@ -330,10 +330,10 @@ class Card {
       SET ${fields.join(', ')}
       WHERE id = ? AND user_id = ? AND is_deleted = 0
     `;
-    console.log('[Card.update] SQL:', query);
-    console.log('[Card.update] Params:', params);
+    // console.log('[Card.update] SQL:', query);
+    // console.log('[Card.update] Params:', params);
     const [result] = await db.execute(query, params);
-    console.log('[Card.update] affectedRows:', result.affectedRows);
+    // console.log('[Card.update] affectedRows:', result.affectedRows);
 
     // 如果修改了账单日或还款日，自动重建历史账单
     if (isCreditCard && (billDayChanged || repayDayChanged)) {
