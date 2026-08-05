@@ -82,7 +82,6 @@
             type="number"
             placeholder="如: 684.5125"
             @focus="showKeyboard = false"
-            suffix="/100"
           />
 
           <!-- 备注 -->
@@ -471,13 +470,13 @@ const selectedIncomeCardId = ref("");
 // 币种状态
 const currencyOptions = [
   { code: "CNY", label: "人民币", symbol: "¥", rate: 1 },
-  { code: "USD", label: "美元", symbol: "$", rate: 6.8451 },
-  { code: "EUR", label: "欧元", symbol: "€", rate: 7.5 },
-  { code: "HKD", label: "港币", symbol: "HK$", rate: 0.88 },
-  { code: "JPY", label: "日元", symbol: "¥", rate: 0.045 },
-  { code: "GBP", label: "英镑", symbol: "£", rate: 8.7 },
-  { code: "KRW", label: "韩元", symbol: "₩", rate: 0.005 },
-  { code: "TWD", label: "台币", symbol: "NT$", rate: 0.22 },
+  { code: "USD", label: "美元", symbol: "$", rate: 684.51 },
+  { code: "EUR", label: "欧元", symbol: "€", rate: 750 },
+  { code: "HKD", label: "港币", symbol: "HK$", rate: 88 },
+  { code: "JPY", label: "日元", symbol: "¥", rate: 4.5 },
+  { code: "GBP", label: "英镑", symbol: "£", rate: 870 },
+  { code: "KRW", label: "韩元", symbol: "₩", rate: 0.5 },
+  { code: "TWD", label: "台币", symbol: "NT$", rate: 22 },
 ];
 const selectedCurrency = ref(currencyOptions[0]);
 const showCurrencyPicker = ref(false);
@@ -488,6 +487,7 @@ const exchangedAmount = computed(() => {
   if (!displayAmount.value || selectedCurrency.value.code === "CNY") return 0;
   const foreignAmount = Number(displayAmount.value);
   const rate = Number(exchangeRate.value) || selectedCurrency.value.rate;
+  // 汇率语义：exchangeRate = 每100外币等值人民币 → 约¥ = 金额 × 汇率 ÷ 100（与后端一致）
   return (foreignAmount * rate) / 100;
 });
 
@@ -892,10 +892,10 @@ const handleSubmit = async () => {
     const amount = Number(displayAmount.value);
     const transDate = formatDate(selectedDate.value);
     const currency = selectedCurrency.value.code;
-    let exchangeRate = 1;
+    let finalRate = 1;
     if (currency !== "CNY") {
       const rate = Number(exchangeRate.value) || selectedCurrency.value.rate;
-      exchangeRate = Math.round(rate * 100000) / 100000;
+      finalRate = Math.round(rate * 100000) / 100000;
     }
 
     const buildCardId = (method, card) => {
@@ -916,7 +916,7 @@ const handleSubmit = async () => {
           currency,
           transDate,
           cardId: buildCardId(selectedPayMethod.value, selectedCard.value),
-          exchangeRate,
+          exchangeRate: finalRate,
           remark: remark.value.trim() || "",
         });
       } else if (transferMode.value === "withdraw") {
@@ -935,7 +935,7 @@ const handleSubmit = async () => {
           currency,
           transDate,
           cardId: "yyyy",
-          exchangeRate,
+          exchangeRate: finalRate,
           remark: remarkText || "提现",
           transferGroupId,
         });
@@ -950,7 +950,7 @@ const handleSubmit = async () => {
           currency,
           transDate,
           cardId: selectedIncomeCard.value?.id,
-          exchangeRate,
+          exchangeRate: finalRate,
           remark: remarkText || "提现",
           transferGroupId,
         });
@@ -969,7 +969,7 @@ const handleSubmit = async () => {
           currency,
           transDate,
           cardId: buildCardId(selectedPayMethod.value, selectedCard.value),
-          exchangeRate,
+          exchangeRate: finalRate,
           remark: remarkText ? `转出 - ${remarkText}` : "转出",
           transferGroupId,
         });
@@ -984,7 +984,7 @@ const handleSubmit = async () => {
           currency,
           transDate,
           cardId: buildCardId(incomePayMethod.value, selectedIncomeCard.value),
-          exchangeRate,
+          exchangeRate: finalRate,
           remark: remarkText ? `转入 - ${remarkText}` : "转入",
           transferGroupId,
         });
@@ -1002,7 +1002,7 @@ const handleSubmit = async () => {
         currency,
         transDate,
         cardId,
-        exchangeRate,
+        exchangeRate: finalRate,
         remark: remark.value.trim() || "",
       };
 

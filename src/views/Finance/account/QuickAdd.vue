@@ -411,7 +411,6 @@
             placeholder="如: 684.5125"
             @focus="showKeyboard = false"
           />
-          <span class="rate-unit">/100</span>
         </div>
         <div class="amount-tip">点击金额区域唤起键盘</div>
 
@@ -611,13 +610,13 @@ const transferMode = ref(null);
 // 币种配置（与 Add.vue 一致）
 const currencyOptions = [
   { code: "CNY", label: "人民币", symbol: "¥", rate: 1 },
-  { code: "USD", label: "美元", symbol: "$", rate: 6.8451 },
-  { code: "EUR", label: "欧元", symbol: "€", rate: 7.5 },
-  { code: "HKD", label: "港币", symbol: "HK$", rate: 0.88 },
-  { code: "JPY", label: "日元", symbol: "¥", rate: 0.045 },
-  { code: "GBP", label: "英镑", symbol: "£", rate: 8.7 },
-  { code: "KRW", label: "韩元", symbol: "₩", rate: 0.005 },
-  { code: "TWD", label: "台币", symbol: "NT$", rate: 0.22 },
+  { code: "USD", label: "美元", symbol: "$", rate: 684.51 },
+  { code: "EUR", label: "欧元", symbol: "€", rate: 750 },
+  { code: "HKD", label: "港币", symbol: "HK$", rate: 88 },
+  { code: "JPY", label: "日元", symbol: "¥", rate: 4.5 },
+  { code: "GBP", label: "英镑", symbol: "£", rate: 870 },
+  { code: "KRW", label: "韩元", symbol: "₩", rate: 0.5 },
+  { code: "TWD", label: "台币", symbol: "NT$", rate: 22 },
 ];
 const selectedCurrency = ref(currencyOptions[0]);
 const showCurrencyPicker = ref(false);
@@ -626,6 +625,7 @@ const exchangedAmount = computed(() => {
   if (!form.value.amount || selectedCurrency.value.code === "CNY") return 0;
   const foreignAmount = Number(form.value.amount);
   const rate = Number(exchangeRate.value) || selectedCurrency.value.rate;
+  // 汇率语义：exchangeRate = 每100外币等值人民币 → 约¥ = 金额 × 汇率 ÷ 100（与后端一致）
   return (foreignAmount * rate) / 100;
 });
 const currencyColumns = currencyOptions.map((c) => ({
@@ -1572,11 +1572,6 @@ const onSubmit = async () => {
   font-family: inherit;
 }
 .rate-input::placeholder { color: var(--theme-text-tertiary); }
-.rate-unit {
-  flex-shrink: 0;
-  font-size: 13px;
-  color: var(--theme-text-tertiary);
-}
 
 /* 巨大下一步按钮 */
 .next-big-btn {

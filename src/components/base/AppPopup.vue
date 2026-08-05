@@ -22,6 +22,11 @@
 <script setup>
 import { computed, useAttrs } from 'vue'
 
+// 关闭属性自动继承：本组件模板根为 <Teleport>，Vue 无法把透传属性（如 style）
+// 自动继承到 Teleport 上，会触发 "Extraneous non-props attributes" 警告。
+// 因此显式关闭自动继承，style 改由 panelStyle 通过 useAttrs() 手动应用到面板。
+defineOptions({ inheritAttrs: false })
+
 // 自写主题化弹层，替代 van-popup
 // 支持 v-model:show（兼容 :show / v-model）、position(bottom/top/left/right/center)、round、overlay、
 // close-on-click-overlay、teleport；父级 :style 透传到面板
