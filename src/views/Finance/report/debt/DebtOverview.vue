@@ -106,7 +106,7 @@
       </div>
 
       <!-- 分类/日流水弹窗 -->
-      <van-popup v-model:show="showCatPopup" position="bottom" round>
+      <app-popup v-model:show="showCatPopup" position="bottom" round>
         <div class="cat-popup">
           <div class="popup-header">
             <span>{{ selectedCatName }} <span class="popup-sub">{{ dayCatItems.length }}笔</span></span>
@@ -123,7 +123,7 @@
             <div v-if="dayCatItems.length === 0" class="empty-hint">暂无明细</div>
           </div>
         </div>
-      </van-popup>
+      </app-popup>
     </template>
   </div>
 </template>
@@ -400,11 +400,11 @@ onActivated(() => {
 <style scoped>
 .page-debt {
   min-height: 100vh;
-  background: #f5f6fa;
+  background: var(--theme-bg-primary);
   padding-bottom: 30px;
 }
 .month-bar {
-  background: #fff;
+  background: var(--theme-bg-secondary);
   padding: 14px 16px;
   display: flex;
   align-items: center;
@@ -414,11 +414,11 @@ onActivated(() => {
 .month-text {
   font-size: 16px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
 }
 .month-arrow {
   font-size: 18px;
-  color: #1989fa;
+  color: var(--theme-primary);
   cursor: pointer;
   padding: 4px;
 }
@@ -436,7 +436,7 @@ onActivated(() => {
 }
 .sw-left {
   flex: 1;
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 12px;
   padding: 12px 14px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.04);
@@ -449,20 +449,21 @@ onActivated(() => {
   align-items: center;
   justify-content: space-between;
 }
-.sw-label { font-size: 12px; color: #969799; }
+.sw-label { font-size: 12px; color: var(--theme-text-tertiary); }
 .sw-value {
   font-size: 16px;
   font-weight: 700;
   font-family: 'DIN Alternate', sans-serif;
+  color: var(--theme-text-primary);
 }
-.sw-value.expense { color: #ee0a24; }
-.sw-value.warning { color: #fa8c16; }
+.sw-value.expense { color: var(--van-danger-color, #ee0a24); }
+.sw-value.warning { color: var(--van-orange, #fa8c16); }
 .sw-right {
   display: flex;
   gap: 6px;
 }
 .sw-card {
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 12px;
   padding: 12px 10px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.04);
@@ -485,7 +486,7 @@ onActivated(() => {
   grid-template-columns: repeat(7, 1fr);
   text-align: center;
   font-size: 11px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   padding: 0 0 6px;
 }
 .cal-wd { padding: 4px 0; }
@@ -506,23 +507,24 @@ onActivated(() => {
 }
 .cal-empty { background: transparent; cursor: default; }
 .cal-today { background: #f0f5ff; }
-.cal-selected { background: #1989fa !important; }
-.cal-selected .cal-day { color: #fff; font-weight: 700; }
+.cal-selected { background: var(--theme-primary) !important; }
+/* 今天+选中同一天时，避免 .cal-today .cal-day 的主题色文字覆盖到主题色背景上 */
+.cal-selected .cal-day { color: #fff !important; font-weight: 700; }
 .cal-selected .cal-amt { color: #fff; }
 .cal-has { cursor: pointer; }
-.cal-has:active { background: #e8f0fe; }
+.cal-has:active { background: var(--theme-primary-light); }
 .cal-day {
   font-size: 14px;
-  color: #323233;
+  color: var(--theme-text-primary);
   font-weight: 500;
 }
 .cal-today .cal-day {
-  color: #1989fa;
+  color: var(--theme-primary);
   font-weight: 700;
 }
 .cal-amt {
   font-size: 10px;
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
   margin-top: 2px;
   white-space: nowrap;
   overflow: hidden;
@@ -532,7 +534,7 @@ onActivated(() => {
 
 /* 通用区块 */
 .section-card {
-  background: #fff;
+  background: var(--theme-bg-secondary);
   margin: 10px 16px 0;
   border-radius: 12px;
   padding: 16px;
@@ -541,18 +543,18 @@ onActivated(() => {
 .sec-title {
   font-size: 14px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
   margin-bottom: 12px;
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
-.sec-sub { font-size: 11px; font-weight: 400; color: #969799; }
-.reset-btn { color: #1989fa; cursor: pointer; }
+.sec-sub { font-size: 11px; font-weight: 400; color: var(--theme-text-tertiary); }
+.reset-btn { color: var(--theme-primary); cursor: pointer; }
 .empty-hint {
   text-align: center;
   padding: 20px 0;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   font-size: 13px;
 }
 
@@ -562,20 +564,20 @@ onActivated(() => {
   justify-content: space-between;
   align-items: center;
   padding: 10px 0;
-  border-bottom: 1px solid #f5f5f5;
+  border: 1px solid var(--theme-border);
 }
 .warn-row:last-child { border-bottom: none; }
-.warn-row.danger { background: #fff0f0; margin: 0 -16px; padding: 10px 16px; }
-.warn-name { font-size: 13px; color: #323233; }
+.warn-row.danger { background: var(--van-danger-bg); margin: 0 -16px; padding: 10px 16px; }
+.warn-name { font-size: 13px; color: var(--theme-text-primary); }
 .warn-badge {
   font-size: 10px;
   padding: 2px 8px;
   border-radius: 8px;
   white-space: nowrap;
 }
-.badge-red { background: #ffebe8; color: #ee0a24; }
-.badge-orange { background: #fff7e6; color: #fa8c16; }
-.badge-green { background: #f0fff4; color: #07c160; }
+.badge-red { background: var(--van-danger-bg, #ffebe8); color: var(--van-danger-color, #ee0a24); }
+.badge-orange { background: var(--van-orange-bg, #fff7e6); color: var(--van-orange, #fa8c16); }
+.badge-green { background: var(--van-green-bg, #f0fff4); color: var(--van-green, #07c160); }
 
 .expiry-table {
   font-size: 12px;
@@ -584,14 +586,14 @@ onActivated(() => {
   display: flex;
   align-items: center;
   padding: 8px 0;
-  border-bottom: 1px solid #f5f5f5;
+  border: 1px solid var(--theme-border);
 }
-.expiry-header { color: #969799; font-weight: 500; }
+.expiry-header { color: var(--theme-text-tertiary); font-weight: 500; }
 .expiry-row:last-child { border-bottom: none; }
-.expiry-row.danger { background: #fff0f0; margin: 0 -16px; padding: 8px 16px; }
-.expiry-row.warn { background: #fffcf0; margin: 0 -16px; padding: 8px 16px; }
-.exp-col-name { flex: 1; color: #323233; }
-.exp-col-date { width: 72px; text-align: center; color: #969799; }
+.expiry-row.danger { background: var(--van-danger-bg); margin: 0 -16px; padding: 8px 16px; }
+.expiry-row.warn { background: var(--van-orange-bg); margin: 0 -16px; padding: 8px 16px; }
+.exp-col-name { flex: 1; color: var(--theme-text-primary); }
+.exp-col-date { width: 72px; text-align: center; color: var(--theme-text-tertiary); }
 .exp-col-status { width: 80px; text-align: right; }
 .exp-col-status .badge-red, .exp-col-status .badge-orange, .exp-col-status .badge-green {
   font-size: 10px;
@@ -609,7 +611,7 @@ onActivated(() => {
 }
 .cat-name {
   font-size: 12px;
-  color: #323233;
+  color: var(--theme-text-primary);
   width: 54px;
   flex-shrink: 0;
   overflow: hidden;
@@ -619,7 +621,7 @@ onActivated(() => {
 .cat-bar-track {
   flex: 1;
   height: 8px;
-  background: #f0f0f0;
+  background: var(--theme-bg-tertiary);
   border-radius: 4px;
   overflow: hidden;
 }
@@ -631,7 +633,7 @@ onActivated(() => {
 .cat-value {
   font-size: 11px;
   font-weight: 500;
-  color: #323233;
+  color: var(--theme-text-primary);
   width: 62px;
   text-align: right;
   font-family: 'DIN Alternate', sans-serif;
@@ -648,28 +650,28 @@ onActivated(() => {
   justify-content: space-between;
   align-items: center;
   padding: 16px;
-  border-bottom: 1px solid #eee;
+  border: 1px solid var(--theme-border);
   font-size: 15px;
   font-weight: 600;
 }
 .popup-header .van-icon {
   font-size: 20px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   cursor: pointer;
 }
-.popup-sub { font-size: 12px; font-weight: 400; color: #969799; }
+.popup-sub { font-size: 12px; font-weight: 400; color: var(--theme-text-tertiary); }
 .cat-items { flex: 1; overflow-y: auto; }
 .cat-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
-  border-bottom: 1px solid #f5f5f5;
+  border: 1px solid var(--theme-border);
   cursor: pointer;
 }
-.cat-item:active { background: #f7f8fa; }
-.ci-title { font-size: 14px; color: #323233; }
-.ci-desc { font-size: 11px; color: #969799; margin-top: 2px; }
+.cat-item:active { background: var(--theme-bg-primary); }
+.ci-title { font-size: 14px; color: var(--theme-text-primary); }
+.ci-desc { font-size: 11px; color: var(--theme-text-tertiary); margin-top: 2px; }
 .ci-right { font-size: 14px; font-weight: 600; font-family: 'DIN Alternate', sans-serif; }
-.ci-right.expense { color: #ee0a24; }
+.ci-right.expense { color: var(--van-danger-color, #ee0a24); }
 </style>

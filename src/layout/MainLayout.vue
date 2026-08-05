@@ -7,8 +7,10 @@
       :left-arrow="showBackButton"
     >
       <template #left>
-        <van-icon name="arrow-left" v-if="showBackButton" @click.stop="onBack" />
-        <van-icon name="wap-home-o" size="20" style="margin-left: 8px;" @click="goHome" />
+        <div class="nav-bar-left">
+          <van-icon name="arrow-left" v-if="showBackButton" class="nav-left-icon" @click.stop="onBack" />
+          <van-icon name="wap-home-o" class="nav-left-icon" @click="goHome" />
+        </div>
       </template>
       <template #right>
         <van-icon name="lock" size="20" @click="handleLockSystem" style="margin-right: 12px;" />
@@ -19,7 +21,7 @@
     <div class="main-body">
       <router-view v-slot="{ Component }">
         <transition name="fade" mode="out-in">
-          <keep-alive :include="cachedPages">
+          <keep-alive :include="cachedViewNames">
             <component :is="Component" />
           </keep-alive>
         </transition>
@@ -65,20 +67,20 @@ import PinVerifyDialog from "@/components/PinVerifyDialog.vue";
 const route = useRoute();
 const router = useRouter();
 
-// keep-alive 缓存列表：这些页面跳转到明细后返回不会重新加载
-// 注意：include 匹配的是"组件 name"（来自 defineOptions 或组件 name 选项），
-// 而不是路由的 name。例如 FinanceFlowList 实际是组件 name，对应路由 name 是 FinanceFlow。
-// Home / Finance 不参与缓存：返回时强制重载，避免显示过期数据。
-const cachedPages = [
-  'FinanceFlowList',     // 组件 name；路由 name = FinanceFlow
-  'FinanceFlowCalendar',
-  'FinanceReportFlowFilter',
-  'FinanceReportCardFlow',
-  'FinanceReportMonthlyTrend',
-  'FinanceReportDebtOverview',
-  'CardFlowList',
-  'BillLedger',
-]
+// 局部 keep-alive：通过 include 按组件 name 精准缓存带 onActivated 滚动恢复的
+// 8 个列表页（与 router/map.js 中 keepAlive:true 路由一致）。
+// 详情/编辑/tab 根等页不缓存，保证每次进入重新拉取实时数据。
+// 缓存页在 onActivated 内通过 flowSync 消费变更，确保缓存期间数据不过期。
+const cachedViewNames = [
+  "FinanceFlowList",
+  "FinanceFlowCalendar",
+  "FinanceReportFlowFilter",
+  "FinanceReportCardFlow",
+  "FinanceReportMonthlyTrend",
+  "FinanceReportDebtOverview",
+  "CardFlowList",
+  "BillLedger",
+];
 
 // PIN 验证引用
 const pinVerifyRef = ref(null);
@@ -183,8 +185,8 @@ const goHome = () => {
 .app-wrapper {
   width: 100%;
   min-height: 100vh;
-  /* 规整：清爽背景，突出毛玻璃 */
-  background-color: #f7f8fa;
+  /* 跟随主题背景（浅色/深色自动切换） */
+  background-color: var(--theme-bg-primary);
 }
 
 /* TODO 待定 */
@@ -215,16 +217,16 @@ const goHome = () => {
   z-index: 999; /* 保证在最顶层 */
 
   /* ———— 极致核心：毛玻璃效果 (Backdrop Blur) ———— */
-  /* 透明背景 + 毛玻璃模糊 */
-  background-color: transparent;
-  background-image: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%);
+  /* 透明背景 + 毛玻璃模糊（跟随主题的玻璃色，深色下为深半透明） */
+  background-color: var(--tabbar-glass-bg);
+  background-image: none;
   /* 核心：模糊背景 + 提升饱和度，非常果味 */
   backdrop-filter: blur(15px) saturate(160%) !important;
   -webkit-backdrop-filter: blur(15px) saturate(160%) !important;
 
   /* ———— 阴影与边框，增加精致感和悬浮感 ———— */
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
-  border: 1px solid rgba(182, 182, 182, 0.696); /* 超细的高亮边框 */
+  border: 1px solid var(--tabbar-glass-border); /* 跟随主题的高亮边框 */
 }
 
 /* 5. 导航项 (nav-item) 样式 */
@@ -236,7 +238,7 @@ const goHome = () => {
   flex: 1; /* 均分宽度 */
   height: 100%;
   text-decoration: none; /* 去掉下划线 */
-  color: #7d7e80; /* 未选中时的颜色 */
+  color: var(--tabbar-text); /* 未选中时的颜色（跟随主题） */
   transition: color 0.2s ease; /* 颜色过渡动画 */
   border-radius: 30px; /* 预留，以便选中态显示背景高亮 */
 }
@@ -255,7 +257,7 @@ const goHome = () => {
 
 /* 6. 核心：router-link 选中时的样式 (.router-link-active) */
 .nav-item.router-link-active {
-  color: #1989fa; /* 选中时的颜色 */
+  color: var(--theme-primary); /* 选中时的颜色（跟随主题主色） */
 }
 
 /* (可选) 选中时增加一个微弱的背景高亮，更显规整 */
@@ -274,13 +276,18 @@ const goHome = () => {
   opacity: 0;
 }
 
-/* 扩大导航栏左侧按钮点击区域 */
+/* 导航栏左侧按钮：放大点击热区，且图标间互不冲突 */
 :deep(.van-nav-bar__left) {
-  padding: 10px 16px;
-  margin-left: -8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
 }
 
-:deep(.van-nav-bar__left .van-icon) {
-  padding: 8px;
+/* 每个图标独立热区：padding 放大点击范围，
+   由 flex gap 分隔，热区边界清晰、不重叠 */
+:deep(.van-nav-bar__left .nav-left-icon) {
+  font-size: 20px; /* 明确图标大小，避免回落默认导致视觉变小 */
+  padding: 10px;
 }
 </style>

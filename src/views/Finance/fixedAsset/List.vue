@@ -47,9 +47,9 @@
         <div class="card-content">
           <div class="card-header">
             <span class="card-title">{{ item.info }}</span>
-            <van-tag :type="getStatusType(item.status)" size="small">
+            <app-tag :type="getStatusType(item.status)" size="small">
               {{ getStatusText(item.status) }}
-            </van-tag>
+            </app-tag>
           </div>
           <div class="card-tag" v-if="item.tag">{{ item.tag }}</div>
           <div class="card-info">
@@ -82,14 +82,14 @@
               <span class="cost-info"
                 >每日成本 ¥{{ formatDailyCost(item) }}</span
               >
-              <van-tag
+              <app-tag
                 v-if="item.deprec_finished === 1"
                 type="success"
                 size="small"
                 plain
               >
                 折旧完毕
-              </van-tag>
+              </app-tag>
             </div>
           </div>
         </div>
@@ -112,12 +112,12 @@
 
     <!-- 底部按钮 -->
     <div class="bottom-actions">
-      <van-button type="primary" round block @click="openAddForm">
+      <app-button type="primary" round block @click="openAddForm">
         <van-icon name="plus" /> 登记固定资产
-      </van-button>
-      <van-button type="default" round block @click="goRecycleBin">
+      </app-button>
+      <app-button type="default" round block @click="goRecycleBin">
         <van-icon name="delete-o" /> 回收站
-      </van-button>
+      </app-button>
     </div>
 
     <!-- 表单弹窗 -->
@@ -294,14 +294,14 @@ onMounted(() => {
 <style scoped>
 .page-fixed-asset {
   min-height: 100vh;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   padding-bottom: 100px;
 }
 
 .stats-card {
   display: flex;
   align-items: center;
-  background: linear-gradient(135deg, #1989fa, #1976d2);
+  background: linear-gradient(135deg, var(--theme-primary), var(--theme-primary-grad));
   margin: 12px 16px;
   border-radius: 12px;
   padding: 16px;
@@ -327,7 +327,8 @@ onMounted(() => {
 }
 
 .stat-value.primary {
-  color: #ffd700;
+  /* 渐变卡内避免金色系文字在黑金主题（金色渐变）下融合 */
+  color: rgba(255, 255, 255, 0.95);
 }
 
 .stat-divider {
@@ -338,7 +339,7 @@ onMounted(() => {
 
 .filter-tabs {
   margin: 0 16px;
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 8px;
 }
 
@@ -350,7 +351,7 @@ onMounted(() => {
 .asset-card {
   display: flex;
   align-items: center;
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 12px;
   padding: 12px;
   margin-bottom: 12px;
@@ -372,11 +373,11 @@ onMounted(() => {
 }
 
 .card-image.placeholder {
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   font-size: 24px;
 }
 
@@ -396,7 +397,7 @@ onMounted(() => {
 .card-title {
   font-size: 15px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -404,7 +405,7 @@ onMounted(() => {
 
 .card-tag {
   font-size: 12px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   margin-top: 4px;
 }
 
@@ -422,13 +423,13 @@ onMounted(() => {
 
 .info-row .label {
   font-size: 12px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 
 .info-row .value {
   font-size: 13px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
 }
 
 .info-row .value.primary {
@@ -445,12 +446,12 @@ onMounted(() => {
 
 .deprec-info {
   font-size: 11px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 
 .usage-info {
   font-size: 11px;
-  color: #1989fa;
+  color: var(--theme-primary);
 }
 
 .cost-info {
@@ -459,7 +460,7 @@ onMounted(() => {
 }
 
 .card-arrow {
-  color: #969799;
+  color: var(--theme-text-tertiary);
   font-size: 14px;
   flex-shrink: 0;
 }

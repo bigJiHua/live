@@ -53,12 +53,10 @@
             <div class="di-left">
               <div class="di-cat">{{ getCategoryName(item) }}</div>
               <div class="di-desc">
-                <van-image
-                  v-if="getCardBankIcon(item.card_id)"
-                  width="14"
-                  height="14"
+                <BankIcon
                   :src="getFullUrl(getCardBankIcon(item.card_id))"
-                  fit="contain"
+                  :name="getCardBankName(item.card_id)"
+                  :size="14"
                   class="card-tag-icon"
                 />
                 {{ getCardInfoText(item) }}
@@ -95,6 +93,7 @@ import { getAccountList } from '@/utils/api/account'
 import { getCardList } from '@/utils/api/card'
 import { categoryApi } from '@/utils/api/category'
 import ENV from '@/utils/env'
+import BankIcon from '@/components/BankIcon.vue'
 import * as echarts from 'echarts/core'
 import { BarChart, LineChart } from 'echarts/charts'
 import { DataZoomComponent, GridComponent, TooltipComponent, LegendComponent } from 'echarts/components'
@@ -150,6 +149,15 @@ const getCardBankIcon = (id) => {
   const bankId = card.bank_id || card.bankId
   const bank = bankId ? getBankInfo(bankId) : null
   return bank?.icon_url || bank?.iconUrl || ''
+}
+
+const getCardBankName = (id) => {
+  if (!id) return ''
+  const card = cardList.value.find((c) => c.id === id)
+  if (!card) return ''
+  const bankId = card.bank_id || card.bankId
+  const bank = bankId ? getBankInfo(bankId) : null
+  return bank?.name || bank?.bank_name || card.bank_name || ''
 }
 
 const getCardInfoText = (item) => {
@@ -325,7 +333,7 @@ const getDailyChartOption = () => {
         const dateKey = data[items[0]?.dataIndex]?.date || ''
         return `<div style="font-size:13px;font-weight:600;margin-bottom:4px">${date}</div>`
           + rows.join('<br/>')
-          + `<div style="margin-top:8px;border-top:1px solid #eee;padding-top:6px;text-align:center">
+          + `<div style="margin-top:8px;border: 1px solid var(--theme-border);padding-top:6px;text-align:center">
               <a data-date="${dateKey}" style="color:#1989fa;font-size:12px;text-decoration:none;cursor:pointer">📋 查看当日流水</a>
              </div>`
       },
@@ -485,11 +493,11 @@ onUnmounted(() => {
 <style scoped>
 .page-stats {
   min-height: 100vh;
-  background: #f5f6fa;
+  background: var(--theme-bg-primary);
   padding-bottom: 30px;
 }
 .month-bar {
-  background: #fff;
+  background: var(--theme-bg-secondary);
   padding: 14px 16px;
   display: flex;
   align-items: center;
@@ -499,18 +507,18 @@ onUnmounted(() => {
 .month-text {
   font-size: 16px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
   cursor: pointer;
 }
 .month-arrow {
   font-size: 18px;
-  color: #1989fa;
+  color: var(--theme-primary);
   cursor: pointer;
   padding: 4px;
 }
 .type-tabs {
   display: flex;
-  background: #fff;
+  background: var(--theme-bg-secondary);
   padding: 0 16px 12px;
   gap: 8px;
 }
@@ -518,12 +526,12 @@ onUnmounted(() => {
   font-size: 12px;
   padding: 4px 14px;
   border-radius: 14px;
-  background: #f5f6fa;
-  color: #969799;
+  background: var(--theme-bg-tertiary);
+  color: var(--theme-text-tertiary);
   cursor: pointer;
 }
 .type-tab.active {
-  background: #1989fa;
+  background: var(--theme-primary);
   color: #fff;
 }
 .filter-btn {
@@ -531,21 +539,21 @@ onUnmounted(() => {
   font-size: 12px;
   padding: 4px 14px;
   border-radius: 14px;
-  background: #f5f6fa;
-  color: #969799;
+  background: var(--theme-bg-tertiary);
+  color: var(--theme-text-tertiary);
   cursor: pointer;
   white-space: nowrap;
 }
 .filter-btn.active {
-  background: #f0fff4;
-  color: #07c160;
+  background: var(--van-green-bg, #f0fff4);
+  color: var(--van-green, #07c160);
 }
 .chart-toggle {
   font-size: 12px;
   padding: 4px 12px;
   border-radius: 14px;
-  background: #f0f4ff;
-  color: #1989fa;
+  background: var(--theme-primary-light);
+  color: var(--theme-primary);
   cursor: pointer;
   white-space: nowrap;
   display: flex;
@@ -558,7 +566,7 @@ onUnmounted(() => {
   padding: 60px 0;
 }
 .chart-section {
-  background: #fff;
+  background: var(--theme-bg-secondary);
   margin: 10px 16px 0;
   border-radius: 12px;
   padding: 16px;
@@ -567,7 +575,7 @@ onUnmounted(() => {
 .section-title {
   font-size: 14px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
   margin-bottom: 14px;
   display: flex;
   justify-content: space-between;
@@ -576,7 +584,7 @@ onUnmounted(() => {
 .section-sub {
   font-size: 11px;
   font-weight: 400;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -588,15 +596,15 @@ onUnmounted(() => {
   height: 8px;
   border-radius: 2px;
 }
-.legend-income { background: #07c160; }
-.legend-expense { background: #ee0a24; }
+.legend-income { background: var(--van-green, #07c160); }
+.legend-expense { background: var(--van-danger-color, #ee0a24); }
 .daily-chart {
   width: 100%;
   height: 290px;
 }
 
 .day-detail-section {
-  background: #fff;
+  background: var(--theme-bg-secondary);
   margin: 10px 16px 0;
   border-radius: 12px;
   padding: 0 0 4px;
@@ -608,29 +616,29 @@ onUnmounted(() => {
 }
 .close-detail {
   font-size: 18px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   cursor: pointer;
   padding: 4px;
 }
 .day-items {
-  border-top: 1px solid #f5f5f5;
+  border: 1px solid var(--theme-border);
 }
 .day-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
-  border-bottom: 1px solid #f5f5f5;
+  border: 1px solid var(--theme-border);
   cursor: pointer;
 }
 .day-item:last-child { border-bottom: none; }
-.di-cat { font-size: 14px; color: #323233; }
+.di-cat { font-size: 14px; color: var(--theme-text-primary); }
 .di-desc {
   display: flex;
   align-items: center;
   gap: 4px;
   font-size: 11px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   margin-top: 2px;
 }
 .card-tag-icon {
@@ -649,11 +657,11 @@ onUnmounted(() => {
   font-family: 'DIN Alternate', sans-serif;
   line-height: 1;
 }
-.di-amount.income { color: #07c160; }
-.di-amount.expense { color: #ee0a24; }
+.di-amount.income { color: var(--van-green, #07c160); }
+.di-amount.expense { color: var(--van-danger-color, #ee0a24); }
 .di-time {
   font-size: 10px;
-  color: #c8c9cc;
+  color: var(--theme-text-tertiary);
   font-family: 'DIN Alternate', sans-serif;
 }
 </style>

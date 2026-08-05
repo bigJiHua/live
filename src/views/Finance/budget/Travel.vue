@@ -4,21 +4,21 @@
       <van-collapse v-model="activeCollapse">
         <van-collapse-item name="info" title="行程概览" icon="location-o">
           <van-cell-group :border="false">
-            <van-field
+            <app-field
               v-model="formData.title"
               label="行程标题"
               placeholder="如：香港3天2晚"
               label-width="70px"
               required
             />
-            <van-field
+            <app-field
               v-model="formData.route"
               label="路线规划"
               placeholder="深圳 → 香港"
               label-width="70px"
               required
             />
-            <van-field
+            <app-field
               v-model="formData.budget_amount"
               label="总预算"
               type="number"
@@ -27,8 +27,8 @@
               required
             >
               <template #extra><span class="unit-text">CNY</span></template>
-            </van-field>
-            <van-field
+            </app-field>
+            <app-field
               v-model="formData.cycle"
               label="预算周期"
               readonly
@@ -36,8 +36,8 @@
               @click="showCyclePicker = true"
             >
               <template #extra><van-icon name="arrow-down" /></template>
-            </van-field>
-            <van-field
+            </app-field>
+            <app-field
               v-model="formData.plan_date"
               label="计划日期"
               readonly
@@ -46,7 +46,7 @@
               @click="openPlanDatePicker"
             >
               <template #extra><van-icon name="arrow-down" /></template>
-            </van-field>
+            </app-field>
           </van-cell-group>
 
           <div class="exchange-rates-section">
@@ -124,14 +124,13 @@
       <div class="days-container">
         <div class="section-top">
           <span class="title">消费明细清单</span>
-          <van-button
+          <app-button
             size="small"
             type="primary"
             round
             icon="plus"
             @click="addDay"
-            >增加天数</van-button
-          >
+            >增加天数</app-button>
         </div>
 
         <van-collapse v-model="activeDays">
@@ -148,7 +147,7 @@
             <div class="day-info" @click="editDayDate(dayIndex)">
               <van-icon name="calendar-o" />
               <span class="date-text">{{ day.date || "未设置日期" }}</span>
-              <van-icon name="arrow" size="12" color="#969799" />
+              <van-icon name="arrow" size="12" :color="'var(--theme-text-tertiary)'" />
             </div>
             <van-icon
               name="delete-o"
@@ -165,14 +164,14 @@
             >
               <div class="item-main">
                 <div class="line-one">
-                  <van-tag
+                  <app-tag
                     :type="getTypeColor(item.type)"
                     size="medium"
                     round
                     @click="showTypePicker(dayIndex, itemIndex)"
                   >
                     {{ item.type || "类型" }} <van-icon name="arrow-down" />
-                  </van-tag>
+                  </app-tag>
                   <input
                     v-model="item.description"
                     placeholder="备注(如：晚餐)"
@@ -180,7 +179,7 @@
                   />
                   <van-icon
                     name="clear"
-                    color="#ebedf0"
+                    :color="'var(--theme-text-tertiary)'"
                     @click="removeItem(dayIndex, itemIndex)"
                   />
                 </div>
@@ -226,7 +225,7 @@
       </div>
 
       <div class="remark-card">
-        <van-field
+        <app-field
           v-model="formData.notes"
           type="textarea"
           placeholder="有什么需要特别注意的？（例如：签证准备、小费习惯等）"
@@ -237,7 +236,7 @@
       </div>
 
       <div class="bottom-action">
-        <van-button
+        <app-button
           block
           round
           type="primary"
@@ -246,11 +245,11 @@
           @click="submit"
         >
           {{ isEdit ? "保存更新" : "立即创建预算" }}
-        </van-button>
+        </app-button>
       </div>
     </div>
 
-    <van-popup v-model:show="showDatePicker" position="bottom" round>
+    <app-popup v-model:show="showDatePicker" position="bottom" round>
       <van-date-picker
         title="选择日期"
         :min-date="new Date(2021, 0, 1)"
@@ -259,43 +258,43 @@
         @confirm="onDateConfirm"
         @cancel="showDatePicker = false"
       />
-    </van-popup>
-    <van-popup v-model:show="showTypePopup" position="bottom" round>
+    </app-popup>
+    <app-popup v-model:show="showTypePopup" position="bottom" round>
       <van-picker
         title="选择分类"
         :columns="typeColumns"
         @confirm="onTypeConfirm"
         @cancel="showTypePopup = false"
       />
-    </van-popup>
-    <van-popup v-model:show="showCurrencyPopup" position="bottom" round>
+    </app-popup>
+    <app-popup v-model:show="showCurrencyPopup" position="bottom" round>
       <van-picker
         title="选择币种"
         :columns="currencyColumns"
         @confirm="onCurrencyConfirm"
         @cancel="showCurrencyPopup = false"
       />
-    </van-popup>
-    <van-popup v-model:show="showAddRatePopup" position="bottom" round>
+    </app-popup>
+    <app-popup v-model:show="showAddRatePopup" position="bottom" round>
       <div class="custom-currency-popup">
         <div class="popup-header">
           <span class="popup-title">添加常用汇率</span>
         </div>
         <van-cell-group inset>
-          <van-field
+          <app-field
             v-model="newCustomRate.name"
             label="币种名称"
             placeholder="如：韩元"
             label-width="70px"
           />
-          <van-field
+          <app-field
             v-model="newCustomRate.code"
             label="币种代码"
             placeholder="如：KRW"
             label-width="70px"
             :formatter="formatCurrencyCode"
           />
-          <van-field
+          <app-field
             v-model="newCustomRate.value"
             label="汇率"
             placeholder="1外币 = ? CNY"
@@ -306,20 +305,20 @@
           />
         </van-cell-group>
         <div class="popup-actions">
-          <van-button block round @click="showAddRatePopup = false">取消</van-button>
-          <van-button block round type="primary" @click="addCustomRate">确定</van-button>
+          <app-button block round @click="showAddRatePopup = false">取消</app-button>
+          <app-button block round type="primary" @click="addCustomRate">确定</app-button>
         </div>
       </div>
-    </van-popup>
-    <van-popup v-model:show="showCyclePicker" position="bottom" round>
+    </app-popup>
+    <app-popup v-model:show="showCyclePicker" position="bottom" round>
       <van-picker
         title="选择周期"
         :columns="cycleColumns"
         @confirm="onCycleConfirm"
         @cancel="showCyclePicker = false"
       />
-    </van-popup>
-    <van-popup v-model:show="showPlanDatePicker" position="bottom" round>
+    </app-popup>
+    <app-popup v-model:show="showPlanDatePicker" position="bottom" round>
       <van-date-picker
         title="选择日期"
         :min-date="new Date(2021, 0, 1)"
@@ -328,7 +327,7 @@
         @confirm="onPlanDateConfirm"
         @cancel="showPlanDatePicker = false"
       />
-    </van-popup>
+    </app-popup>
   </div>
 </template>
 
@@ -749,19 +748,19 @@ onMounted(() => {
 
 <style scoped>
 .van-tag--purple {
-  background: #f3e8ff !important;
-  color: #9333ea !important;
-  border-color: #9333ea !important;
+  background: rgba(114, 50, 221, 0.1) !important;
+  color: var(--van-purple, #7232dd) !important;
+  border-color: rgba(114, 50, 221, 0.4) !important;
 }
 .van-tag--orange {
-  background: #fff7e6 !important;
-  color: #ff8c00 !important;
-  border-color: #ff8c00 !important;
+  background: var(--van-orange-bg) !important;
+  color: var(--van-orange) !important;
+  border-color: rgba(255, 151, 106, 0.4) !important;
 }
 
 .page-budget-travel {
   min-height: 100vh;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   padding-bottom: 100px;
 }
 .page-content {
@@ -770,7 +769,7 @@ onMounted(() => {
 
 /* 基础信息卡片 */
 .info-card {
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 12px;
   padding: 12px;
   margin-bottom: 12px;
@@ -782,7 +781,7 @@ onMounted(() => {
   margin-bottom: 12px;
 }
 .header-icon {
-  color: #1989fa;
+  color: var(--theme-primary);
   font-size: 18px;
 }
 .header-title {
@@ -790,18 +789,18 @@ onMounted(() => {
   font-size: 15px;
 }
 .unit-text {
-  color: #969799;
+  color: var(--theme-text-tertiary);
   font-size: 12px;
 }
 
 .exchange-rates-section {
   margin-top: 12px;
   padding-top: 12px;
-  border-top: 1px dashed #ebedf0;
+  border: 1px solid var(--theme-border);
 }
 .sub-title {
   font-size: 12px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   margin-bottom: 8px;
 }
 .rate-grid {
@@ -812,26 +811,26 @@ onMounted(() => {
 .rate-tag {
   display: flex;
   align-items: center;
-  background: #f2f3f5;
+  background: var(--theme-bg-tertiary);
   padding: 4px 8px;
   border-radius: 4px;
   font-size: 12px;
 }
 
 .rate-tag.add-rate {
-  background: #e6f7ff;
-  color: #1890ff;
+  background: rgba(var(--theme-primary-rgb), 0.1);
+  color: var(--theme-primary);
   cursor: pointer;
   padding: 6px 10px;
 }
 
 .rate-tag.add-rate:hover {
-  background: #bae7ff;
+  background: rgba(var(--theme-primary-rgb), 0.2);
 }
 
 .rate-delete {
   margin-left: 4px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   cursor: pointer;
   font-size: 12px;
 }
@@ -841,23 +840,23 @@ onMounted(() => {
 }
 
 .currency-name {
-  color: #646566;
+  color: var(--theme-text-secondary);
   margin-right: 4px;
-  border-right: 1px solid #ddd;
+  border: 1px solid var(--theme-border);
   padding-right: 4px;
 }
 .rate-mini-input {
   width: 45px;
   border: none;
   background: transparent;
-  color: #1989fa;
+  color: var(--theme-primary);
   font-weight: bold;
   text-align: center;
 }
 
 /* 汇总卡片 */
 .summary-card {
-  background: linear-gradient(135deg, #1989fa, #0570db);
+  background: linear-gradient(135deg, var(--theme-primary), var(--theme-primary-grad));
   border-radius: 12px;
   padding: 16px;
   color: #fff;
@@ -886,7 +885,7 @@ onMounted(() => {
   font-weight: bold;
 }
 .summary-item .value.danger {
-  color: #ffe58f;
+  color: rgba(255, 255, 255, 0.95);
 }
 .summary-item .value.success {
   color: #b7eb8f;
@@ -920,7 +919,7 @@ onMounted(() => {
 }
 .progress-fill {
   height: 100%;
-  background: #fff;
+  background: var(--theme-bg-secondary);
   transition: width 0.3s;
 }
 .progress-text {
@@ -937,10 +936,10 @@ onMounted(() => {
 }
 .section-top .title {
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
 }
 .day-block {
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 12px;
   padding: 12px;
   margin-bottom: 12px;
@@ -950,14 +949,14 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 10px;
-  border-bottom: 1px solid #f7f8fa;
+  border-bottom: 1px solid var(--theme-border);
   padding-bottom: 8px;
 }
 .day-info {
   display: flex;
   align-items: center;
   gap: 6px;
-  color: #1989fa;
+  color: var(--theme-primary);
   font-weight: 600;
 }
 .delete-day {
@@ -967,8 +966,8 @@ onMounted(() => {
 
 /* 消费项重构 */
 .item-row {
-  background: #fcfcfc;
-  border: 1px solid #f2f3f5;
+  background: var(--theme-bg-secondary);
+  border: 1px solid var(--theme-border);
   border-radius: 8px;
   padding: 10px;
   margin-bottom: 8px;
@@ -993,8 +992,8 @@ onMounted(() => {
 .amount-box {
   display: flex;
   align-items: center;
-  background: #fff;
-  border: 1px solid #ebedf0;
+  background: var(--theme-bg-secondary);
+  border: 1px solid var(--theme-border);
   border-radius: 4px;
   overflow: hidden;
 }
@@ -1008,13 +1007,13 @@ onMounted(() => {
 .currency-unit {
   font-size: 12px;
   padding: 4px 8px;
-  background: #f7f8fa;
-  color: #1989fa;
-  border-left: 1px solid #ebedf0;
+  background: var(--theme-bg-primary);
+  color: var(--theme-primary);
+  border: 1px solid var(--theme-border);
 }
 .cny-convert {
   font-size: 12px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   font-style: italic;
 }
 
@@ -1024,8 +1023,8 @@ onMounted(() => {
   justify-content: center;
   gap: 4px;
   padding: 10px;
-  color: #1989fa;
-  border: 1px dashed #1989fa;
+  color: var(--theme-primary);
+  border: 1px dashed var(--theme-primary);
   border-radius: 8px;
   margin: 8px 0;
   font-size: 13px;
@@ -1033,20 +1032,20 @@ onMounted(() => {
 .day-summary {
   text-align: right;
   font-size: 13px;
-  border-top: 1px solid #f7f8fa;
+  border-top: 1px solid var(--theme-border);
   padding-top: 8px;
 }
 .day-summary .label {
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 .day-summary .val {
-  color: #1989fa;
+  color: var(--theme-primary);
   font-weight: bold;
   margin-left: 4px;
 }
 
 .remark-card {
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 12px;
   overflow: hidden;
   margin-bottom: 20px;
@@ -1057,7 +1056,7 @@ onMounted(() => {
   left: 0;
   right: 0;
   padding: 16px;
-  background: #fff;
+  background: var(--theme-bg-secondary);
   box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
   padding-bottom: calc(16px + env(safe-area-inset-bottom));
   z-index: 10;

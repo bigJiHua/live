@@ -103,23 +103,23 @@
       </span>
     </div>
 
-    <van-popup v-model:show="showDayPopup" position="bottom" round>
+    <app-popup v-model:show="showDayPopup" position="bottom" round>
       <div class="day-popup" v-if="selectedRecord">
         <div class="popup-header">
           <span>{{ selectedRecord.record_date }} 记录</span>
           <van-icon name="cross" @click="showDayPopup = false" />
         </div>
         <div class="popup-body">
-          <van-field label="日期" :model-value="selectedRecord.record_date" readonly />
-          <van-field v-model="editNet" label="今日收益" placeholder="如 0.19 / -0.30" type="number" clearable :input-attr="{ autocomplete: 'off' }" />
-          <van-field v-model="editMkt" label="增持本金" placeholder="如 5000，不增持填 0" type="number" clearable :input-attr="{ autocomplete: 'off' }" />
+          <app-field label="日期" :model-value="selectedRecord.record_date" readonly />
+          <app-field v-model="editNet" label="今日收益" placeholder="如 0.19 / -0.30" type="number" clearable :input-attr="{ autocomplete: 'off' }" />
+          <app-field v-model="editMkt" label="增持本金" placeholder="如 5000，不增持填 0" type="number" clearable :input-attr="{ autocomplete: 'off' }" />
         </div>
         <div class="popup-actions">
-          <van-button plain size="small" type="danger" :loading="deleting" @click="handleDelete">删除</van-button>
-          <van-button size="small" type="primary" :loading="saving" @click="handleUpdate">保存修改</van-button>
+          <app-button plain size="small" type="danger" :loading="deleting" @click="handleDelete">删除</app-button>
+          <app-button size="small" type="primary" :loading="saving" @click="handleUpdate">保存修改</app-button>
         </div>
       </div>
-    </van-popup>
+    </app-popup>
 
     <van-empty v-if="fundList.length === 0" description="暂无数据" />
   </div>
@@ -127,7 +127,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { getFundList, getFundHistory, updateFundHistory, deleteFundHistory } from '@/utils/api/fund'
+import { getFundList, getMonthlyHistory, updateFundHistory, deleteFundHistory } from '@/utils/api/fund'
 import { showConfirmDialog, showToast } from 'vant'
 import dayjs from 'dayjs'
 
@@ -161,8 +161,8 @@ const historyList = ref([])
 const currentFund = computed(() => fundList.value.find(f => f.id === selectedFund.value))
 const calendarMonth = ref(dayjs().startOf('month'))
 const calendarMonthTitle = computed(() => calendarMonth.value.format('YYYY年M月'))
-const latestRecord = computed(() => historyList.value.length > 0 ? historyList.value[historyList.value.length - 1] : null)
-const latestRecordMonth = computed(() => latestRecord.value?.record_date ? dayjs(latestRecord.value.record_date).startOf('month') : null)
+const globalLatestDate = ref('')
+const latestRecordMonth = computed(() => globalLatestDate.value ? dayjs(globalLatestDate.value).startOf('month') : null)
 const buyDateMonth = computed(() => {
   const buyDateStr = parseFundDate(currentFund.value?.buy_date)
   return buyDateStr ? dayjs(buyDateStr).startOf('month') : null
@@ -199,21 +199,10 @@ const focusCalendarMonth = () => {
   }
 }
 
-const prevMonth = () => {
-  calendarMonth.value = calendarMonth.value.subtract(1, 'month')
-}
-
-const nextMonth = () => {
-  calendarMonth.value = calendarMonth.value.add(1, 'month')
-}
-
-const goLatestRecordMonth = () => {
-  if (latestRecordMonth.value) calendarMonth.value = latestRecordMonth.value
-}
-
-const goBuyDateMonth = () => {
-  if (buyDateMonth.value) calendarMonth.value = buyDateMonth.value
-}
+const prevMonth = () => { calendarMonth.value = calendarMonth.value.subtract(1, 'month'); loadHistory() }
+const nextMonth = () => { calendarMonth.value = calendarMonth.value.add(1, 'month'); loadHistory() }
+const goLatestRecordMonth = () => { if (latestRecordMonth.value) { calendarMonth.value = latestRecordMonth.value; loadHistory() } }
+const goBuyDateMonth = () => { if (buyDateMonth.value) { calendarMonth.value = buyDateMonth.value; loadHistory() } }
 
 const showDayPopup = ref(false)
 const selectedRecord = ref(null)
@@ -279,12 +268,11 @@ const handleDelete = () => {
 const loadHistory = async () => {
   if (!selectedFund.value) return
   try {
-    const res = await getFundHistory(selectedFund.value, 365)
-    historyList.value = res.data?.list || []
-    focusCalendarMonth()
-  } catch (e) {
-    historyList.value = []
-  }
+    const y = calendarMonth.value.year(); const m = calendarMonth.value.month() + 1
+    const res = await getMonthlyHistory(selectedFund.value, y, m)
+    historyList.value = res.data?.records || []
+    if (res.data?.latestRecordDate) globalLatestDate.value = res.data.latestRecordDate
+  } catch (e) { historyList.value = [] }
 }
 
 const loadFundList = async () => {
@@ -356,71 +344,71 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.page-fund-earnings { min-height: 100vh; background: #f7f8fa; padding: 12px 16px 30px; }
-.overview-card { background: #fff; border-radius: 10px; padding: 12px 6px; margin-bottom: 20px; }
+.page-fund-earnings { min-height: 100vh; background: var(--theme-bg-primary); padding: 12px 16px 30px; }
+.overview-card { background: var(--theme-bg-secondary); border-radius: 10px; padding: 12px 6px; margin-bottom: 20px; }
 .oc-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: stretch; }
-.oc-item { min-width: 0; text-align: center; padding: 0 5px; border-right: 1px solid #f0f0f0; }
+.oc-item { min-width: 0; text-align: center; padding: 0 5px; border: 1px solid var(--theme-border); }
 .oc-item:last-child { border-right: 0; }
-.oc-label { font-size: 10px; color: #969799; margin-bottom: 4px; line-height: 1.15; white-space: nowrap; }
+.oc-label { font-size: 10px; color: var(--theme-text-tertiary); margin-bottom: 4px; line-height: 1.15; white-space: nowrap; }
 .oc-value { max-width: 100%; overflow: hidden; text-overflow: ellipsis; font-size: 14px; line-height: 1.2; font-weight: 700; font-family: 'DIN Alternate', sans-serif; white-space: nowrap; }
-.oc-value.primary { color: #1989fa; }
-.oc-value.success { color: #ee0a24; }
-.oc-value.danger { color: #07c160; }
-.section-title { font-size: 15px; font-weight: 600; color: #323233; margin-bottom: 10px; padding-left: 2px; }
+.oc-value.primary { color: var(--theme-primary); }
+.oc-value.success { color: var(--van-danger-color, #ee0a24); }
+.oc-value.danger { color: var(--van-green, #07c160); }
+.section-title { font-size: 15px; font-weight: 600; color: var(--theme-text-primary); margin-bottom: 10px; padding-left: 2px; }
 .fund-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
-.chip { font-size: 12px; padding: 6px 12px; border-radius: 16px; background: #f5f6fa; color: #646566; cursor: pointer; white-space: nowrap; }
-.chip.active { background: #1989fa; color: #fff; }
-.earning-card { background: #fff; border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; }
+.chip { font-size: 12px; padding: 6px 12px; border-radius: 16px; background: var(--theme-bg-tertiary); color: var(--theme-text-secondary); cursor: pointer; white-space: nowrap; }
+.chip.active { background: var(--theme-primary); color: #fff; }
+.earning-card { background: var(--theme-bg-secondary); border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; }
 .ec-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
 .ec-title { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.ec-name { font-size: 15px; line-height: 1.35; font-weight: 600; color: #323233; word-break: break-all; }
-.ec-company { font-size: 11px; color: #969799; }
-.ec-rate { flex: 0 0 auto; min-width: 58px; padding: 3px 8px; border-radius: 999px; font-size: 13px; line-height: 1.3; text-align: center; font-family: 'DIN Alternate', sans-serif; font-weight: 700; background: #f7f8fa; }
-.ec-rate.success { color: #ee0a24; background: #fff1f0; }
-.ec-rate.danger { color: #07c160; background: #eefaf3; }
+.ec-name { font-size: 15px; line-height: 1.35; font-weight: 600; color: var(--theme-text-primary); word-break: break-all; }
+.ec-company { font-size: 11px; color: var(--theme-text-tertiary); }
+.ec-rate { flex: 0 0 auto; min-width: 58px; padding: 3px 8px; border-radius: 999px; font-size: 13px; line-height: 1.3; text-align: center; font-family: 'DIN Alternate', sans-serif; font-weight: 700; background: var(--theme-bg-primary); }
+.ec-rate.success { color: var(--van-danger-color, #ee0a24); background: var(--van-danger-bg, #fff1f0); }
+.ec-rate.danger { color: var(--van-green, #07c160); background: var(--van-green-bg, #eefaf3); }
 .ec-body { display: flex; flex-direction: column; gap: 12px; }
 .ec-profit-block { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; padding-bottom: 2px; }
-.ec-label { font-size: 11px; color: #969799; line-height: 1.2; }
+.ec-label { font-size: 11px; color: var(--theme-text-tertiary); line-height: 1.2; }
 .ec-profit-main { font-family: 'DIN Alternate', sans-serif; font-size: 24px; line-height: 1; font-weight: 700; white-space: nowrap; }
-.ec-profit-main.success { color: #ee0a24; }
-.ec-profit-main.danger { color: #07c160; }
+.ec-profit-main.success { color: var(--van-danger-color, #ee0a24); }
+.ec-profit-main.danger { color: var(--van-green, #07c160); }
 .ec-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; }
-.ec-metric { min-width: 0; padding: 9px 10px; border-radius: 8px; background: #f7f8fa; }
-.ec-value { display: block; margin-top: 4px; font-size: 15px; line-height: 1.2; color: #323233; font-family: 'DIN Alternate', sans-serif; font-weight: 700; word-break: break-all; }
-.ec-meta { display: flex; flex-wrap: wrap; gap: 6px; color: #646566; font-size: 11px; line-height: 1.2; }
-.ec-meta span { padding: 4px 7px; border-radius: 999px; background: #f7f8fa; }
+.ec-metric { min-width: 0; padding: 9px 10px; border-radius: 8px; background: var(--theme-bg-primary); }
+.ec-value { display: block; margin-top: 4px; font-size: 15px; line-height: 1.2; color: var(--theme-text-primary); font-family: 'DIN Alternate', sans-serif; font-weight: 700; word-break: break-all; }
+.ec-meta { display: flex; flex-wrap: wrap; gap: 6px; color: var(--theme-text-secondary); font-size: 11px; line-height: 1.2; }
+.ec-meta span { padding: 4px 7px; border-radius: 999px; background: var(--theme-bg-primary); }
 .ec-bar { margin-top: 2px; }
-.ec-bar-track { height: 6px; background: #f0f0f0; border-radius: 3px; overflow: hidden; }
+.ec-bar-track { height: 6px; background: var(--theme-bg-tertiary); border-radius: 3px; overflow: hidden; }
 .ec-bar-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
-.ec-bar-fill.success { background: #ee0a24; }
-.ec-bar-fill.danger { background: #07c160; }
-.cal-header { display: flex; align-items: center; justify-content: center; gap: 22px; margin: -2px 0 8px; color: #323233; }
-.cal-header .van-icon { font-size: 18px; color: #646566; cursor: pointer; padding: 4px; }
+.ec-bar-fill.success { background: var(--van-danger-color, #ee0a24); }
+.ec-bar-fill.danger { background: var(--van-green, #07c160); }
+.cal-header { display: flex; align-items: center; justify-content: center; gap: 22px; margin: -2px 0 8px; color: var(--theme-text-primary); }
+.cal-header .van-icon { font-size: 18px; color: var(--theme-text-secondary); cursor: pointer; padding: 4px; }
 .cal-month-title { font-size: 14px; font-weight: 600; min-width: 90px; text-align: center; }
 .cal-shortcuts { display: flex; justify-content: center; gap: 8px; margin: 0 0 8px; }
-.cal-shortcut { border: 1px solid #dcdfe6; background: #fff; color: #323233; border-radius: 14px; padding: 4px 12px; font-size: 12px; line-height: 1.4; cursor: pointer; }
-.cal-shortcut:active { background: #f0f5ff; border-color: #1989fa; color: #1989fa; }
-.cal-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-size: 11px; color: #969799; padding: 0 0 6px; }
+.cal-shortcut { border: 1px solid var(--theme-border); background: var(--theme-bg-secondary); color: var(--theme-text-primary); border-radius: 14px; padding: 4px 12px; font-size: 12px; line-height: 1.4; cursor: pointer; }
+.cal-shortcut:active { background: var(--van-blue-bg, #f0f5ff); border-color: var(--van-blue, #1989fa); color: var(--theme-primary); }
+.cal-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-size: 11px; color: var(--theme-text-tertiary); padding: 0 0 6px; }
 .cal-wd { padding: 4px 0; }
 .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
 .cal-cell { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 48px; border-radius: 6px; position: relative; }
 .cal-empty { background: transparent; }
-.cal-cell.has-buy { background: #fff8e6; }
-.cal-cell.has-record:not(.has-buy) { background: #fafafa; }
-.cal-day { font-size: 12px; color: #323233; font-weight: 500; }
+.cal-cell.has-buy { background: var(--van-orange-bg); }
+.cal-cell.has-record:not(.has-buy) { background: var(--theme-bg-tertiary); }
+.cal-day { font-size: 12px; color: var(--theme-text-primary); font-weight: 500; }
 .cal-earn { font-size: 10px; margin-top: 2px; font-family: 'DIN Alternate', sans-serif; }
-.cal-earn.up { color: #ee0a24; }
-.cal-earn.down { color: #07c160; }
+.cal-earn.up { color: var(--van-danger-color, #ee0a24); }
+.cal-earn.down { color: var(--van-green, #07c160); }
 .cal-flag { font-size: 12px; line-height: 1; margin-top: 1px; position: absolute; top: 2px; right: 3px; }
 .cal-clickable { cursor: pointer; }
-.cal-clickable:active { background: #f0f5ff !important; }
-.cal-legend { display: flex; gap: 14px; margin-bottom: 8px; padding-left: 2px; font-size: 11px; color: #646566; }
+.cal-clickable:active { background: var(--theme-primary-light) !important; }
+.cal-legend { display: flex; gap: 14px; margin-bottom: 8px; padding-left: 2px; font-size: 11px; color: var(--theme-text-secondary); }
 .legend-item { display: flex; align-items: center; gap: 4px; }
 .legend-dot { display: inline-block; width: 14px; text-align: center; font-size: 11px; }
 .legend-dot.normal { width: 8px; height: 8px; border-radius: 50%; background: #e8e8e8; }
 .day-popup { padding: 16px; }
 .popup-header { display: flex; justify-content: space-between; align-items: center; font-size: 16px; font-weight: 600; margin-bottom: 12px; }
-.popup-header .van-icon { font-size: 20px; color: #969799; cursor: pointer; }
+.popup-header .van-icon { font-size: 20px; color: var(--theme-text-tertiary); cursor: pointer; }
 .popup-body { margin-bottom: 12px; }
 .popup-actions { display: flex; gap: 12px; justify-content: flex-end; }
 </style>

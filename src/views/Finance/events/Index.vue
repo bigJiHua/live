@@ -34,38 +34,38 @@
             <van-switch :model-value="!!item.is_active" size="20px" @update:model-value="(v) => toggleActive(item, v)" />
           </div>
 
-          <van-field v-model="editForm.name" label="名称" maxlength="100" />
-          <van-field v-if="Number(item.amount) > 0" v-model="editForm.amount" label="金额" type="number" />
-          <van-field v-else label="金额" class="expense-off">
-            <template #input><span>仅事件提醒</span></template>
-          </van-field>
-          <van-field :label="item.cycle === 'year' ? '几号' : '每月几号'">
-            <template #input><van-stepper v-model="editForm.day_of_cycle" min="1" max="31" /></template>
-          </van-field>
-          <van-field v-if="item.cycle === 'year'" label="每年几月">
-            <template #input><van-stepper v-model="editForm.month_of_cycle" min="1" max="12" /></template>
-          </van-field>
-          <van-field
+          <app-field v-model="editForm.name" label="名称" maxlength="100" />
+          <app-field v-if="Number(item.amount) > 0" v-model="editForm.amount" label="金额" type="number" />
+          <app-field v-else label="金额" class="expense-off">
+            <span>仅事件提醒</span>
+          </app-field>
+          <app-field :label="item.cycle === 'year' ? '几号' : '每月几号'">
+            <van-stepper v-model="editForm.day_of_cycle" min="1" max="31" />
+          </app-field>
+          <app-field v-if="item.cycle === 'year'" label="每年几月">
+            <van-stepper v-model="editForm.month_of_cycle" min="1" max="12" />
+          </app-field>
+          <app-field
             v-model="editForm.end_date" label="失效日期" readonly is-link
             :placeholder="editForm.end_date || '选填'" @click="openEndDatePicker(item)"
           />
-          <van-field v-model="editForm.remark" label="备注" placeholder="选填" maxlength="100" />
+          <app-field v-model="editForm.remark" label="备注" placeholder="选填" maxlength="100" />
 
           <div class="month-records-section">
             <div class="mr-title">月度处理记录</div>
             <div v-for="m in getMonthRecords(item)" :key="m.month" class="mr-row">
               <span class="mr-month">{{ m.month }}</span>
-              <van-tag :type="m.status === 'done' ? 'success' : m.status === 'skipped' ? 'danger' : 'warning'" size="small">
+              <app-tag :type="m.status === 'done' ? 'success' : m.status === 'skipped' ? 'danger' : 'warning'" size="small">
                 {{ m.status === 'done' ? '已处理' : m.status === 'skipped' ? '已跳过' : '待处理' }}
-              </van-tag>
+              </app-tag>
               <span v-if="m.amount > 0" class="mr-amount">￥{{ formatAmount(m.amount) }}</span>
-              <van-button size="mini" plain @click="toggleMonthStatus(item, m)">切换状态</van-button>
+              <app-button size="mini" plain @click="toggleMonthStatus(item, m)">切换状态</app-button>
             </div>
           </div>
 
           <div class="expand-actions">
-            <van-button round block type="primary" :loading="savingId === item.id" @click="handleSave(item)">保存修改</van-button>
-            <van-button round block type="danger" @click="handleDelete(item)">删除此项</van-button>
+            <app-button round block type="primary" :loading="savingId === item.id" @click="handleSave(item)">保存修改</app-button>
+            <app-button round block type="danger" @click="handleDelete(item)">删除此项</app-button>
           </div>
         </div>
       </div>
@@ -96,38 +96,38 @@
             <span>{{ item.is_active ? '已启用' : '已停用' }}</span>
             <van-switch :model-value="!!item.is_active" size="20px" @update:model-value="(v) => toggleActive(item, v)" />
           </div>
-          <van-field v-model="editForm.name" label="名称" maxlength="100" />
-          <van-field v-if="Number(item.amount) > 0" v-model="editForm.amount" label="金额" type="number" />
-          <van-field v-else label="金额" class="expense-off">
-            <template #input><span>仅事件提醒</span></template>
-          </van-field>
-          <van-field label="每年几月">
-            <template #input><van-stepper v-model="editForm.month_of_cycle" min="1" max="12" /></template>
-          </van-field>
-          <van-field label="几号">
-            <template #input><van-stepper v-model="editForm.day_of_cycle" min="1" max="31" /></template>
-          </van-field>
-          <van-field
+          <app-field v-model="editForm.name" label="名称" maxlength="100" />
+          <app-field v-if="Number(item.amount) > 0" v-model="editForm.amount" label="金额" type="number" />
+          <app-field v-else label="金额" class="expense-off">
+            <span>仅事件提醒</span>
+          </app-field>
+          <app-field label="每年几月">
+            <van-stepper v-model="editForm.month_of_cycle" min="1" max="12" />
+          </app-field>
+          <app-field label="几号">
+            <van-stepper v-model="editForm.day_of_cycle" min="1" max="31" />
+          </app-field>
+          <app-field
             v-model="editForm.end_date" label="失效日期" readonly is-link
             :placeholder="editForm.end_date || '选填'" @click="openEndDatePicker(item)"
           />
-          <van-field v-model="editForm.remark" label="备注" placeholder="选填" maxlength="100" />
+          <app-field v-model="editForm.remark" label="备注" placeholder="选填" maxlength="100" />
 
           <div class="month-records-section">
             <div class="mr-title">月度处理记录</div>
             <div v-for="m in getMonthRecords(item)" :key="m.month" class="mr-row">
               <span class="mr-month">{{ m.month }}</span>
-              <van-tag :type="m.status === 'done' ? 'success' : m.status === 'skipped' ? 'danger' : 'warning'" size="small">
+              <app-tag :type="m.status === 'done' ? 'success' : m.status === 'skipped' ? 'danger' : 'warning'" size="small">
                 {{ m.status === 'done' ? '已处理' : m.status === 'skipped' ? '已跳过' : '待处理' }}
-              </van-tag>
+              </app-tag>
               <span v-if="m.amount > 0" class="mr-amount">￥{{ formatAmount(m.amount) }}</span>
-              <van-button size="mini" plain @click="toggleMonthStatus(item, m)">切换状态</van-button>
+              <app-button size="mini" plain @click="toggleMonthStatus(item, m)">切换状态</app-button>
             </div>
           </div>
 
           <div class="expand-actions">
-            <van-button round block type="primary" :loading="savingId === item.id" @click="handleSave(item)">保存修改</van-button>
-            <van-button round block type="danger" @click="handleDelete(item)">删除此项</van-button>
+            <app-button round block type="primary" :loading="savingId === item.id" @click="handleSave(item)">保存修改</app-button>
+            <app-button round block type="danger" @click="handleDelete(item)">删除此项</app-button>
           </div>
         </div>
       </div>
@@ -136,69 +136,67 @@
     <van-empty v-if="!loading && list.length === 0" description="暂无固定事件" />
 
     <!-- 失效日期选择器 -->
-    <van-popup v-model:show="showEndDatePicker" position="bottom" round>
+    <app-popup v-model:show="showEndDatePicker" position="bottom" round>
       <van-date-picker v-model="endDatePickerValue" title="选择失效日期" :min-date="minDate"
         @confirm="onEndDateConfirm" @cancel="showEndDatePicker = false" />
-    </van-popup>
+    </app-popup>
 
     <!-- 新增事件表单 -->
-    <van-popup v-model:show="showAddForm" position="bottom" round close-on-click-overlay style="height:80vh;overflow-y:auto">
+    <app-popup v-model:show="showAddForm" position="bottom" round close-on-click-overlay style="height:80vh;overflow-y:auto">
       <div class="form-panel">
         <div class="form-title">新增固定事件</div>
-        <van-field v-model="addForm.name" label="名称" placeholder="如 话费、房租、生日" maxlength="100" />
-        <van-field label="金额">
-          <template #input><van-switch v-model="addForm.is_expense" size="20px" /></template>
-        </van-field>
-        <van-field v-if="addForm.is_expense" v-model="addForm.amount" type="number" placeholder="0.00" />
-        <van-field v-else class="expense-off-hint">
-          <template #input><span>仅事件提醒，不计入支出</span></template>
-        </van-field>
-        <van-field label="周期">
-          <template #input>
-            <van-radio-group v-model="addForm.cycle" direction="horizontal">
-              <van-radio name="month">每月</van-radio>
-              <van-radio name="year">每年</van-radio>
-            </van-radio-group>
-          </template>
-        </van-field>
-        <van-field v-if="addForm.cycle === 'year'" label="每年几月">
-          <template #input><van-stepper v-model="addForm.month_of_cycle" min="1" max="12" /></template>
-        </van-field>
-        <van-field :label="addForm.cycle === 'year' ? '几号' : '每月几号'">
-          <template #input><van-stepper v-model="addForm.day_of_cycle" min="1" max="31" /></template>
-        </van-field>
-        <van-field
+        <app-field v-model="addForm.name" label="名称" placeholder="如 话费、房租、生日" maxlength="100" />
+        <app-field label="金额">
+          <van-switch v-model="addForm.is_expense" size="20px" />
+        </app-field>
+        <app-field v-if="addForm.is_expense" v-model="addForm.amount" type="number" placeholder="0.00" />
+        <app-field v-else class="expense-off-hint">
+          <span>仅事件提醒，不计入支出</span>
+        </app-field>
+        <app-field label="周期">
+          <van-radio-group v-model="addForm.cycle" direction="horizontal">
+            <van-radio name="month">每月</van-radio>
+            <van-radio name="year">每年</van-radio>
+          </van-radio-group>
+        </app-field>
+        <app-field v-if="addForm.cycle === 'year'" label="每年几月">
+          <van-stepper v-model="addForm.month_of_cycle" min="1" max="12" />
+        </app-field>
+        <app-field :label="addForm.cycle === 'year' ? '几号' : '每月几号'">
+          <van-stepper v-model="addForm.day_of_cycle" min="1" max="31" />
+        </app-field>
+        <app-field
           v-model="addForm.end_date" label="失效日期" readonly is-link
           placeholder="选填" @click="openAddEndDatePicker"
         />
-        <van-field v-if="addForm.is_expense" v-model="addForm.categoryLabel" label="分类" readonly is-link
+        <app-field v-if="addForm.is_expense" v-model="addForm.categoryLabel" label="分类" readonly is-link
           placeholder="选择支出分类" @click="showAddCategoryPicker = true" />
-        <van-field v-model="addForm.remark" label="备注" placeholder="选填" maxlength="100" />
-        <van-field label="提前提醒">
-          <template #input><van-stepper v-model="addForm.remind_days" min="0" max="30" /></template>
-        </van-field>
-        <van-field label="启用">
-          <template #input><van-switch v-model="addForm.is_active" /></template>
-        </van-field>
+        <app-field v-model="addForm.remark" label="备注" placeholder="选填" maxlength="100" />
+        <app-field label="提前提醒">
+          <van-stepper v-model="addForm.remind_days" min="0" max="30" />
+        </app-field>
+        <app-field label="启用">
+          <van-switch v-model="addForm.is_active" />
+        </app-field>
         <div class="form-actions">
-          <van-button round block @click="showAddForm = false">取消</van-button>
-          <van-button round block type="primary" :loading="adding" @click="handleAdd">保存</van-button>
+          <app-button round block @click="showAddForm = false">取消</app-button>
+          <app-button round block type="primary" :loading="adding" @click="handleAdd">保存</app-button>
         </div>
       </div>
-    </van-popup>
+    </app-popup>
 
-    <van-popup v-model:show="showAddCategoryPicker" position="bottom" round>
+    <app-popup v-model:show="showAddCategoryPicker" position="bottom" round>
       <van-picker title="选择分类" :columns="categoryColumns" @confirm="onAddCategoryConfirm" @cancel="showAddCategoryPicker = false" />
-    </van-popup>
+    </app-popup>
 
-    <van-popup v-model:show="showAddEndDatePicker" position="bottom" round>
+    <app-popup v-model:show="showAddEndDatePicker" position="bottom" round>
       <van-date-picker v-model="addEndDatePickerValue" title="选择失效日期" :min-date="minDate"
         @confirm="onAddEndDateConfirm" @cancel="showAddEndDatePicker = false" />
-    </van-popup>
+    </app-popup>
 
     <div class="footer-actions">
-      <van-button round block type="default" @click="goRecurring">按月管理</van-button>
-      <van-button round block type="primary" icon="plus" @click="openAdd">新增事件</van-button>
+      <app-button round block type="default" @click="goRecurring">按月管理</app-button>
+      <app-button round block type="primary" icon="plus" @click="openAdd">新增事件</app-button>
     </div>
   </div>
 </template>
@@ -419,29 +417,29 @@ onMounted(() => loadData())
 </script>
 
 <style scoped>
-.page-events { min-height: 100vh; padding: 12px 16px 110px; background: #f7f8fa; }
-.header-card { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 20px; margin-bottom: 16px; color: #fff; }
+.page-events { min-height: 100vh; padding: 12px 16px 110px; background: var(--theme-bg-primary); }
+.header-card { background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-primary-grad) 100%); border-radius: 12px; padding: 20px; margin-bottom: 16px; color: #fff; }
 .header-title { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
 .header-stats { display: flex; gap: 16px; font-size: 13px; opacity: 0.85; }
 .section { margin-bottom: 14px; }
-.section-title { font-size: 13px; font-weight: 600; color: #969799; margin-bottom: 8px; padding-left: 4px; }
-.event-card { background: #fff; border-radius: 8px; padding: 14px; margin-bottom: 8px; }
+.section-title { font-size: 13px; font-weight: 600; color: var(--theme-text-tertiary); margin-bottom: 8px; padding-left: 4px; }
+.event-card { background: var(--theme-bg-secondary); border-radius: 8px; padding: 14px; margin-bottom: 8px; }
 .event-card.inactive { opacity: 0.55; }
 .event-head { display: flex; align-items: center; justify-content: space-between; cursor: pointer; }
-.event-name { font-size: 16px; font-weight: 600; color: #323233; margin-bottom: 4px; }
-.event-meta { font-size: 12px; color: #969799; }
+.event-name { font-size: 16px; font-weight: 600; color: var(--theme-text-primary); margin-bottom: 4px; }
+.event-meta { font-size: 12px; color: var(--theme-text-tertiary); }
 .end-hint { color: #ee0a24; }
 .event-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .event-amount { font-size: 18px; font-weight: 700; color: #ee0a24; }
-.event-amount.tag { font-size: 13px; font-weight: 400; color: #7232dd; background: rgba(114, 50, 221, 0.08); padding: 2px 10px; border-radius: 10px; }
-.expand-icon { color: #969799; font-size: 14px; }
+.event-amount.tag { font-size: 13px; font-weight: 400; color: var(--van-purple, #7232dd); background: rgba(114, 50, 221, 0.1); padding: 2px 10px; border-radius: 10px; }
+.expand-icon { color: var(--theme-text-tertiary); font-size: 14px; }
 .expand-body { margin-top: 4px; }
-.toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; font-size: 14px; color: #323233; }
-.expense-off, .expense-off-hint { color: #969799; font-size: 13px; }
+.toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; font-size: 14px; color: var(--theme-text-primary); }
+.expense-off, .expense-off-hint { color: var(--theme-text-tertiary); font-size: 13px; }
 .month-records-section { margin-top: 12px; }
-.mr-title { font-size: 13px; font-weight: 600; color: #646566; margin-bottom: 6px; }
-.mr-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid #f2f3f5; font-size: 13px; }
-.mr-month { color: #323233; font-weight: 500; min-width: 64px; }
+.mr-title { font-size: 13px; font-weight: 600; color: var(--theme-text-secondary); margin-bottom: 6px; }
+.mr-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; border: 1px solid var(--theme-border); font-size: 13px; }
+.mr-month { color: var(--theme-text-primary); font-weight: 500; min-width: 64px; }
 .mr-amount { color: #ee0a24; font-weight: 500; }
 .expand-actions { display: flex; gap: 12px; margin-top: 16px; }
 .expand-actions .van-button { flex: 1; }

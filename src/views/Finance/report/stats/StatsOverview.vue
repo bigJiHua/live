@@ -76,11 +76,11 @@
 
       <div class="chart-section" v-if="categoryStats.length > 0">
         <div class="section-title">
-          <span>分类支出排行</span>
-          <span class="section-sub">金额</span>
+          <span>{{ categorySectionTitle }}</span>
+          <span class="section-sub">点击分类查看明细</span>
         </div>
         <div class="category-bars">
-          <div v-for="item in categoryStats.slice(0, 8)" :key="item.name" class="cat-bar-row">
+          <div v-for="item in categoryStats.slice(0, 8)" :key="item.name" class="cat-bar-row" @click="showCategoryItems(item.name)">
             <span class="cat-bar-name">{{ item.name }}</span>
             <div class="cat-bar-track">
               <div class="cat-bar-fill" :style="{ width: itemBarWidth(item) + '%', background: item.color }"></div>
@@ -97,6 +97,41 @@
         <div ref="donutRef" class="donut-chart"></div>
       </div>
     </template>
+
+    <app-popup v-model:show="showDrawer" position="bottom" round
+      :style="{ maxHeight: '75vh', minHeight: '35vh' }">
+      <div class="drawer-header">
+        <span class="drawer-title">{{ selectedCategoryName }}</span>
+        <van-icon name="cross" class="drawer-close" @click="showDrawer = false" />
+      </div>
+      <div class="drawer-type-tabs">
+        <span v-for="t in drawerTypeOptions" :key="t.value"
+          :class="['drawer-type-tab', { active: drawerType === t.value }]"
+          @click="drawerType = t.value">
+          {{ t.label }}
+        </span>
+      </div>
+      <div class="drawer-list">
+        <div v-for="item in filteredDrawerItems" :key="item.id || item._key" class="drawer-item">
+          <div class="drawer-item-icon" :class="item.direction === 1 ? 'icon-income' : 'icon-expense'">
+            <van-icon :name="item.direction === 1 ? 'arrow-down' : 'arrow-up'" />
+          </div>
+          <div class="drawer-item-body">
+            <div class="drawer-item-top">
+              <span class="drawer-item-cat">{{ item.category_name }}</span>
+              <span class="drawer-item-amount" :class="item.direction === 1 ? 'income' : 'expense'">
+                {{ item.direction === 1 ? '+' : '-' }}{{ formatAmount(item.amount) }}
+              </span>
+            </div>
+            <div class="drawer-item-bottom">
+              <span class="drawer-item-date">{{ item.trans_date }}</span>
+              <span class="drawer-item-remark">{{ item.remark || '无备注' }}</span>
+            </div>
+          </div>
+        </div>
+        <div v-if="filteredDrawerItems.length === 0" class="drawer-empty">暂无记录</div>
+      </div>
+    </app-popup>
 
     <van-calendar
       v-model:show="showCalendar"
@@ -196,9 +231,15 @@ const categoryColors = [
 ]
 
 const categoryStats = computed(() => {
-  const expenseItems = filteredBaseList.value.filter((item) => item.direction === 0)
+  let items
+  if (activeType.value === 'income') {
+    items = filteredBaseList.value.filter((item) => item.direction === 1)
+  } else {
+    // 支出（含全部时默认展示支出排行）
+    items = filteredBaseList.value.filter((item) => item.direction === 0)
+  }
   const map = {}
-  expenseItems.forEach((item) => {
+  items.forEach((item) => {
     const name = item.category_name || '未分类'
     const amt = parseFloat(item.amount) || 0
     if (!map[name]) map[name] = 0
@@ -209,6 +250,41 @@ const categoryStats = computed(() => {
     color: categoryColors[i % categoryColors.length],
   })).filter((item) => item.amount > 0).sort((a, b) => b.amount - a.amount)
 })
+
+const categorySectionTitle = computed(() =>
+  activeType.value === 'income' ? '分类收入排行' : '分类支出排行'
+)
+
+// 分类明细弹窗
+const showDrawer = ref(false)
+const selectedCategoryName = ref('')
+const drawerType = ref('all')
+const drawerTypeOptions = [
+  { label: '全部', value: 'all' },
+  { label: '收入', value: 'income' },
+  { label: '支出', value: 'expense' },
+]
+
+const filteredDrawerItems = computed(() => {
+  const items = allList.value.filter((item) => {
+    const catMatch = (item.category_name || '未分类') === selectedCategoryName.value
+    if (!catMatch) return false
+    if (drawerType.value === 'all') return true
+    if (drawerType.value === 'income') return item.direction === 1
+    if (drawerType.value === 'expense') return item.direction === 0
+    return true
+  })
+  return items.map((item, idx) => ({
+    ...item,
+    _key: item.id || `${item.trans_date}_${idx}_${Math.random()}`,
+  }))
+})
+
+const showCategoryItems = (name) => {
+  selectedCategoryName.value = name
+  drawerType.value = 'all'
+  showDrawer.value = true
+}
 
 const maxCategoryAmount = computed(() => {
   return Math.max(...categoryStats.value.map((item) => item.amount), 1)
@@ -303,11 +379,11 @@ onUnmounted(() => {
 <style scoped>
 .page-stats {
   min-height: 100vh;
-  background: #f5f6fa;
+  background: var(--theme-bg-primary);
   padding-bottom: 30px;
 }
 .month-bar {
-  background: #fff;
+  background: var(--theme-bg-secondary);
   padding: 14px 16px;
   display: flex;
   align-items: center;
@@ -317,18 +393,18 @@ onUnmounted(() => {
 .month-text {
   font-size: 16px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
   cursor: pointer;
 }
 .month-arrow {
   font-size: 18px;
-  color: #1989fa;
+  color: var(--theme-primary);
   cursor: pointer;
   padding: 4px;
 }
 .type-tabs {
   display: flex;
-  background: #fff;
+  background: var(--theme-bg-secondary);
   padding: 0 16px 12px;
   gap: 8px;
 }
@@ -336,12 +412,12 @@ onUnmounted(() => {
   font-size: 12px;
   padding: 4px 14px;
   border-radius: 14px;
-  background: #f5f6fa;
-  color: #969799;
+  background: var(--theme-bg-tertiary);
+  color: var(--theme-text-tertiary);
   cursor: pointer;
 }
 .type-tab.active {
-  background: #1989fa;
+  background: var(--theme-primary);
   color: #fff;
 }
 .filter-btn {
@@ -349,14 +425,14 @@ onUnmounted(() => {
   font-size: 12px;
   padding: 4px 14px;
   border-radius: 14px;
-  background: #f5f6fa;
-  color: #969799;
+  background: var(--theme-bg-tertiary);
+  color: var(--theme-text-tertiary);
   cursor: pointer;
   white-space: nowrap;
 }
 .filter-btn.active {
-  background: #f0fff4;
-  color: #07c160;
+  background: var(--van-green-bg, #f0fff4);
+  color: var(--van-green, #07c160);
 }
 .page-loading {
   display: flex;
@@ -370,7 +446,7 @@ onUnmounted(() => {
   padding: 10px 16px 0;
 }
 .summary-card {
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 12px;
   padding: 14px;
   display: flex;
@@ -388,13 +464,13 @@ onUnmounted(() => {
   font-size: 18px;
   flex-shrink: 0;
 }
-.income-icon { background: #f0fff4; color: #07c160; }
-.expense-icon { background: #fff0f0; color: #ee0a24; }
-.net-positive { background: #f0fff4; color: #07c160; }
-.net-negative { background: #fff0f0; color: #ee0a24; }
-.count-icon { background: #f0f5ff; color: #1989fa; }
+.income-icon { background: var(--van-green-bg, #f0fff4); color: var(--van-green, #07c160); }
+.expense-icon { background: var(--van-danger-bg, #fff0f0); color: var(--van-danger-color, #ee0a24); }
+.net-positive { background: var(--van-green-bg, #f0fff4); color: var(--van-green, #07c160); }
+.net-negative { background: var(--van-danger-bg, #fff0f0); color: var(--van-danger-color, #ee0a24); }
+.count-icon { background: #f0f5ff; color: var(--theme-primary); }
 .sc-body { flex: 1; min-width: 0; }
-.sc-label { font-size: 11px; color: #969799; margin-bottom: 2px; }
+.sc-label { font-size: 11px; color: var(--theme-text-tertiary); margin-bottom: 2px; }
 .sc-value {
   font-size: 16px;
   font-weight: 700;
@@ -403,9 +479,9 @@ onUnmounted(() => {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.sc-value.income { color: #07c160; }
-.sc-value.expense { color: #ee0a24; }
-.sc-value.count { color: #1989fa; }
+.sc-value.income { color: var(--van-green, #07c160); }
+.sc-value.expense { color: var(--van-danger-color, #ee0a24); }
+.sc-value.count { color: var(--theme-primary); }
 .extra-cards {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -413,18 +489,18 @@ onUnmounted(() => {
   padding: 8px 16px 0;
 }
 .extra-card {
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 10px;
   border-radius: 10px;
   padding: 12px 14px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.04);
 }
-.ec-label { font-size: 11px; color: #969799; margin-bottom: 4px; }
+.ec-label { font-size: 11px; color: var(--theme-text-tertiary); margin-bottom: 4px; }
 .ec-value { font-size: 15px; font-weight: 700; font-family: 'DIN Alternate', sans-serif; }
-.ec-value.income { color: #07c160; }
-.ec-value.expense { color: #ee0a24; }
+.ec-value.income { color: var(--van-green, #07c160); }
+.ec-value.expense { color: var(--van-danger-color, #ee0a24); }
 .chart-section {
-  background: #fff;
+  background: var(--theme-bg-secondary);
   margin: 10px 16px 0;
   border-radius: 12px;
   padding: 16px;
@@ -433,7 +509,7 @@ onUnmounted(() => {
 .section-title {
   font-size: 14px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
   margin-bottom: 12px;
   display: flex;
   justify-content: space-between;
@@ -442,17 +518,21 @@ onUnmounted(() => {
 .section-sub {
   font-size: 11px;
   font-weight: 400;
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 .category-bars { display: flex; flex-direction: column; gap: 10px; }
 .cat-bar-row {
   display: flex;
   align-items: center;
   gap: 8px;
+  cursor: pointer;
+}
+.cat-bar-row:active {
+  opacity: 0.6;
 }
 .cat-bar-name {
   font-size: 12px;
-  color: #323233;
+  color: var(--theme-text-primary);
   width: 50px;
   flex-shrink: 0;
   overflow: hidden;
@@ -462,7 +542,7 @@ onUnmounted(() => {
 .cat-bar-track {
   flex: 1;
   height: 8px;
-  background: #f0f0f0;
+  background: var(--theme-bg-tertiary);
   border-radius: 4px;
   overflow: hidden;
 }
@@ -474,7 +554,7 @@ onUnmounted(() => {
 .cat-bar-value {
   font-size: 12px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
   width: 60px;
   text-align: right;
   font-family: 'DIN Alternate', sans-serif;
@@ -482,5 +562,90 @@ onUnmounted(() => {
 .donut-chart {
   width: 100%;
   height: 200px;
+}
+.drawer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 16px 8px;
+  font-size: 16px;
+  font-weight: 600;
+}
+.drawer-close {
+  font-size: 18px;
+  color: var(--theme-text-tertiary);
+  cursor: pointer;
+}
+.drawer-type-tabs {
+  display: flex;
+  padding: 0 16px 12px;
+  gap: 8px;
+}
+.drawer-type-tab {
+  font-size: 12px;
+  padding: 4px 14px;
+  border-radius: 14px;
+  background: var(--theme-bg-tertiary);
+  color: var(--theme-text-tertiary);
+  cursor: pointer;
+}
+.drawer-type-tab.active {
+  background: var(--theme-primary);
+  color: #fff;
+}
+.drawer-list {
+  padding: 0 16px 20px;
+  max-height: 55vh;
+  overflow-y: auto;
+}
+.drawer-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--theme-border);
+}
+.drawer-item-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+.icon-income { background: var(--van-green-bg, #f0fff4); color: var(--van-green, #07c160); }
+.icon-expense { background: var(--van-danger-bg, #fff0f0); color: var(--van-danger-color, #ee0a24); }
+.drawer-item-body { flex: 1; min-width: 0; }
+.drawer-item-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.drawer-item-cat {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--theme-text-primary);
+}
+.drawer-item-amount {
+  font-size: 14px;
+  font-weight: 700;
+  font-family: 'DIN Alternate', sans-serif;
+}
+.drawer-item-amount.income { color: var(--van-green, #07c160); }
+.drawer-item-amount.expense { color: var(--van-danger-color, #ee0a24); }
+.drawer-item-bottom {
+  display: flex;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--theme-text-tertiary);
+  margin-top: 3px;
+}
+.drawer-empty {
+  text-align: center;
+  color: var(--theme-text-tertiary);
+  font-size: 13px;
+  padding: 30px 0;
 }
 </style>

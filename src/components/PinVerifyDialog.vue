@@ -18,10 +18,10 @@
         <div v-if="errorMessage" class="pin-error">{{ errorMessage }}</div>
 
         <div class="pin-actions">
-          <van-button size="small" plain @click="onCancel">取消</van-button>
-          <!-- <van-button size="small" type="primary" :disabled="pinValue.length < 6" @click="onConfirm">
+          <app-button size="small" plain @click="onCancel">取消</app-button>
+          <!-- <app-button size="small" type="primary" :disabled="pinValue.length < 6" @click="onConfirm">
             确认
-          </van-button> -->
+          </app-button> -->
         </div>
       </div>
     </div>
@@ -122,7 +122,7 @@ defineExpose({ show, hide, setError });
 
 .pin-verify-card {
   width: 320px;
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 16px;
   padding: 28px 24px 20px;
   text-align: center;
@@ -131,13 +131,13 @@ defineExpose({ show, hide, setError });
 .pin-title {
   font-size: 18px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
   margin-bottom: 8px;
 }
 
 .pin-desc {
   font-size: 14px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   margin-bottom: 24px;
 }
 
@@ -151,7 +151,7 @@ defineExpose({ show, hide, setError });
 :deep(.van-password-input__item) {
   /* 基础边框 */
   border: 1px solid #acabab !important; /* Vant 的标准灰色边框色 */
-  background-color: #ffffff; /* 强制白色背景，防止看不见 */
+  background-color: var(--theme-bg-secondary)fff; /* 强制白色背景，防止看不见 */
   border-radius: 6px; /* 让格子稍微圆润一点 */
   transition: all 0.2s; /* 增加过渡动画，更好看 */
   flex: 1; /* 均匀分配空间 */
@@ -162,19 +162,19 @@ defineExpose({ show, hide, setError });
 /* 2. 选中“聚焦”状态下的格子（当前正在输入的那个格子） */
 :deep(.van-password-input__item--focus) {
   /* 聚焦时改变边框颜色，提示用户 */
-  border-color: var(--app-primary, #07c160) !important; /* 使用你的主题色 */
+  border-color: var(--app-primary) !important; /* 使用你的主题色 */
   /* 增加一个淡淡的呼吸灯阴影效果 (可选) */
-  box-shadow: 0 0 8px rgba(7, 193, 96, 0.2);
+  box-shadow: 0 0 8px var(--theme-shadow-color, rgba(7, 193, 96, 0.2));
 }
 
 /* 3. 选中格子内部的那个“闪烁光标” */
 :deep(.van-password-input__cursor) {
   /* 确保光标颜色也是主题色 (可选) */
-  background-color: var(--app-primary, #07c160) !important;
+  background-color: var(--app-primary) !important;
 }
 
 .pin-error {
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
   font-size: 13px;
   margin-bottom: 16px;
   min-height: 18px;

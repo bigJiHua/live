@@ -97,6 +97,15 @@ export function getMonthStats(params) {
 }
 
 /**
+ * 获取所有银行卡近 N 个月「支出/收入笔数」（按卡聚合）
+ * @param {object} params - { months? } 默认 6
+ * @returns {Promise} data: { start, end, list: Array<{ cardId, expenseCount, incomeCount }> }
+ */
+export function getCardsFlowStats(params) {
+  return request.get('/account/stats/cards-flow', { params })
+}
+
+/**
  * ========== 账户余额管理 API ==========
  * 基础路径: /api/v1/accountBalance
  */

@@ -2,10 +2,10 @@
   <div class="page-bill-ledger">
     <div class="bill-info-section" v-if="billData.id">
       <van-cell-group inset>
-        <van-cell>
+        <app-cell>
           <div class="bill-info-row">
             <div class="bill-info-left">
-              <img v-if="cardBankIcon" :src="getFullUrl(cardBankIcon)" class="bank-icon" />
+              <BankIcon :src="getFullUrl(cardBankIcon)" :name="cardBankName" :size="22" class="bank-icon" />
               <div>
                 <div class="bill-card-name">{{ billData.card_alias || '信用卡' }}</div>
                 <div class="bill-card-last4" v-if="billData.card_last4">**** {{ billData.card_last4 }}</div>
@@ -16,13 +16,13 @@
               <div class="bill-month-tag">{{ billData.bill_month }} 账单</div>
             </div>
           </div>
-        </van-cell>
+        </app-cell>
       </van-cell-group>
     </div>
 
     <div class="stats-section" v-if="summaryData">
       <van-cell-group inset>
-        <van-cell>
+        <app-cell>
           <div class="stats-row">
             <div class="stat-item">
               <div class="stat-label">账单金额</div>
@@ -38,12 +38,12 @@
             </div>
           </div>
           <div class="match-tip" v-if="isMatched">
-            <van-icon name="success" color="#07c160" /> 流水金额与账单一致
+            <van-icon name="success" :color="themeSuccess" /> 流水金额与账单一致
           </div>
           <div class="match-tip mismatch" v-else-if="summaryData.expense > 0">
-            <van-icon name="cross" color="#ee0a24" /> 流水与账单金额有差异
+            <van-icon name="cross" :color="themeDanger" /> 流水与账单金额有差异
           </div>
-        </van-cell>
+        </app-cell>
       </van-cell-group>
     </div>
 
@@ -52,7 +52,7 @@
         <div v-for="(group, date) in groupedList" :key="date" class="date-group">
           <div class="date-header">{{ formatDateHeader(date) }}</div>
           <div class="date-items">
-            <div v-for="item in group" :key="item.id" class="flow-item" @click="goDetail(item)">
+            <div v-for="item in group" :key="item.id" class="flow-item" :class="{ repay: item.category_id === 'CATEGORY_REPAY' }" @click="goDetail(item)">
               <div class="item-left">
                 <div class="category-icon"><van-icon :name="getCategoryIcon(item.category_name)" /></div>
                 <div class="item-info">
@@ -62,7 +62,10 @@
               </div>
               <div class="item-right">
                 <div class="amount" :class="item.direction === 1 ? 'income' : 'expense'">
-                  {{ item.direction === 1 ? '+' : '-' }}{{ formatMoney(item.amount) }}
+                  {{ item.direction === 1 ? '+' : '-' }}{{ getCurrencySymbol(item.currency) }}{{ formatMoney(item.amount) }}
+                </div>
+                <div class="amount-cny" v-if="item.currency && item.currency !== 'CNY'">
+                  ≈ ¥{{ formatMoney((Number(item.amount) * Number(item.exchange_rate || 0)) / 100) }}
                 </div>
               </div>
             </div>
@@ -91,15 +94,19 @@ import { getBillDetail } from '@/utils/api/card'
 import { getAccountListByCard } from '@/utils/api/account'
 import { categoryApi } from '@/utils/api/category'
 import ENV from '@/utils/env'
+import { useUiTheme } from '@/composables/useUiTheme'
+import BankIcon from '@/components/BankIcon.vue'
 
 dayjs.locale(zhCn)
 const router = useRouter()
 const route = useRoute()
+const { success: themeSuccess, danger: themeDanger } = useUiTheme()
 const BASE_URL = ENV.FILE_BASE_URL
 
 const pageLoading = ref(false)
 const billData = ref({})
 const cardBankIcon = ref('')
+const cardBankName = ref('')
 const list = ref([])
 const loading = ref(false)
 const finished = ref(false)
@@ -124,7 +131,7 @@ const formatDate = (date) => {
   return date.split(' ')[0]
 }
 
-const formatMoney = (v) => (v !== null && v !== undefined ? Number(v).toFixed(2) : '0.00')
+import { formatMoney } from "@/utils/money";
 
 const formatDateHeader = (date) => {
   if (!date) return ''
@@ -143,6 +150,15 @@ const getCategoryIcon = (name) => {
 
 const getCategoryName = (item) => {
   return item.category_id === 'CATEGORY_REPAY' ? '信用卡还款' : (item.category_name || '未知分类')
+}
+
+// 币种符号（用于流水金额前展示，如 HK$/US$/€）
+const getCurrencySymbol = (code) => {
+  const symbols = {
+    CNY: '¥', USD: '$', EUR: '€', HKD: 'HK$', JPY: '¥',
+    GBP: '£', KRW: '₩', TWD: 'NT$'
+  }
+  return symbols[code] || code || '¥'
 }
 
 const isMatched = computed(() => {
@@ -180,7 +196,10 @@ const loadBillDetail = async () => {
         const bankRes = await categoryApi.list('bank')
         const bankList = bankRes.data || bankRes || []
         const bank = bankList.find((b) => b.id === bankId)
-        if (bank) cardBankIcon.value = bank.icon_url || bank.iconUrl || ''
+        if (bank) {
+          cardBankIcon.value = bank.icon_url || bank.iconUrl || ''
+          cardBankName.value = bank.name || bank.bank_name || ''
+        }
       }
     }
   } catch (e) {
@@ -304,7 +323,7 @@ onActivated(() => {
 <style scoped>
 .page-bill-ledger {
   min-height: 100vh;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   padding-bottom: 20px;
 }
 
@@ -335,12 +354,12 @@ onActivated(() => {
 .bill-card-name {
   font-size: 15px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
 }
 
 .bill-card-last4 {
   font-size: 12px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   margin-top: 2px;
 }
 
@@ -350,12 +369,12 @@ onActivated(() => {
 
 .bill-period {
   font-size: 12px;
-  color: #646566;
+  color: var(--theme-text-secondary);
 }
 
 .bill-month-tag {
   font-size: 11px;
-  color: #1989fa;
+  color: var(--theme-primary);
   margin-top: 4px;
 }
 
@@ -375,7 +394,7 @@ onActivated(() => {
 
 .stat-label {
   font-size: 12px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   margin-bottom: 4px;
 }
 
@@ -386,22 +405,22 @@ onActivated(() => {
 }
 
 .text-expense {
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
 }
 
 .text-income {
-  color: #07c160;
+  color: var(--van-green, #07c160);
 }
 
 .match-tip {
   text-align: center;
   font-size: 12px;
-  color: #07c160;
+  color: var(--van-green, #07c160);
   padding-top: 8px;
 }
 
 .match-tip.mismatch {
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
 }
 
 .date-group {
@@ -411,12 +430,12 @@ onActivated(() => {
 .date-header {
   padding: 8px 16px;
   font-size: 13px;
-  color: #646566;
-  background: #f7f8fa;
+  color: var(--theme-text-secondary);
+  background: var(--theme-bg-primary);
 }
 
 .date-items {
-  background: #fff;
+  background: var(--theme-bg-secondary);
 }
 
 .flow-item {
@@ -425,11 +444,23 @@ onActivated(() => {
   align-items: center;
   padding: 14px 16px;
   margin-left: 16px;
-  border-bottom: 1px solid #f2f2f2;
+  border-bottom: 1px solid var(--theme-border);
 }
 
 .flow-item:last-child {
   border-bottom: none;
+}
+
+/* 信用卡还款：置灰 */
+.flow-item.repay {
+  filter: grayscale(1);
+  opacity: 0.55;
+}
+
+/* 信用卡还款：置灰 */
+.flow-item.repay {
+  filter: grayscale(1);
+  opacity: 0.55;
 }
 
 .item-left {
@@ -442,23 +473,23 @@ onActivated(() => {
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 20px;
-  color: #1989fa;
+  color: var(--theme-primary);
 }
 
 .item-info .item-title {
   font-size: 15px;
-  color: #323233;
+  color: var(--theme-text-primary);
   font-weight: 500;
 }
 
 .item-info .item-desc {
   font-size: 12px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   margin-top: 4px;
 }
 
@@ -472,12 +503,19 @@ onActivated(() => {
   font-family: 'DIN Alternate', sans-serif;
 }
 
+.item-right .amount-cny {
+  font-size: 11px;
+  color: var(--theme-text-tertiary);
+  margin-top: 2px;
+  font-family: 'DIN Alternate', sans-serif;
+}
+
 .item-right .income {
-  color: #07c160;
+  color: var(--van-green, #07c160);
 }
 
 .item-right .expense {
-  color: #323233;
+  color: var(--theme-text-primary);
 }
 
 .flex-center {

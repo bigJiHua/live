@@ -1,7 +1,7 @@
 <template>
   <div class="page-asset-edit">
 
-    <van-form ref="formRef">
+    <app-form ref="formRef">
       <!-- 图片上传 -->
       <div class="upload-section">
         <div class="upload-label">资产图片</div>
@@ -15,13 +15,13 @@
       </div>
 
       <van-cell-group inset>
-        <van-field
+        <app-field
           v-model="formData.info"
           label="资产名称"
           placeholder="如：MacBook Pro 14寸"
           :rules="[{ required: true, message: '请输入资产名称' }]"
         />
-        <van-field
+        <app-field
           v-model="formData.tag"
           label="品类标签"
           readonly
@@ -29,76 +29,71 @@
           placeholder="请选择品类"
           :rules="[{ required: true, message: '请选择品类' }]"
         />
-        <van-field
+        <app-field
           v-model="formData.buy_price"
           label="购买价格"
           type="number"
           placeholder="必须大于0"
           :rules="[{ required: true, message: '请输入购买价格' }]"
-        >
-          <template #button><span class="yuan">元</span></template>
-        </van-field>
-        <van-field
+          suffix="元"
+        />
+        <app-field
           v-model="formData.buy_date"
           label="购买日期"
           type="date"
           placeholder="请选择"
           readonly
         />
-        <van-field
+        <app-field
           v-model="formData.use_years"
           label="预计使用年限"
           type="number"
           step="0.1"
           placeholder="预计使用年限"
           :rules="[{ required: true, message: '请输入预计使用年限' }]"
-        >
-          <template #button><span class="yuan">年</span></template>
-        </van-field>
-        <van-field
+          suffix="年"
+        />
+        <app-field
           v-model="formData.residual_rate"
           label="残值率"
           type="number"
           placeholder="0~100，默认5%"
           :rules="[{ required: true, message: '请输入残值率' }]"
-        >
-          <template #button><span class="yuan">%</span></template>
-        </van-field>
-        <van-field
+          suffix="%"
+        />
+        <app-field
           v-model="formData.secondhand_price"
           label="二手市场价"
           type="number"
           placeholder="选填"
-        >
-          <template #button><span class="yuan">元</span></template>
-        </van-field>
-        <van-field
+          suffix="元"
+        />
+        <app-field
           v-model="formData.now_val"
           label="当前账面价值"
           type="number"
           placeholder="选填，可手动调整"
-        >
-          <template #button><span class="yuan">元</span></template>
-        </van-field>
+          suffix="元"
+        />
       </van-cell-group>
 
       <div class="form-actions">
-        <van-button size="large" round type="primary" :loading="saving" @click="submit">保存</van-button>
+        <app-button size="large" round type="primary" :loading="saving" @click="submit">保存</app-button>
       </div>
-    </van-form>
+    </app-form>
 
     <!-- 品类选择 -->
-    <van-popup v-model:show="showTagPicker" position="bottom" round>
+    <app-popup v-model:show="showTagPicker" position="bottom" round>
       <van-picker
         title="选择品类"
         :columns="tagColumns"
         @confirm="onTagConfirm"
         @cancel="showTagPicker = false"
       />
-    </van-popup>
+    </app-popup>
 
     <!-- 图片选择弹窗 -->
-    <van-popup v-model:show="showImagePicker" position="bottom" round :style="{ height: '85%' }">
+    <app-popup v-model:show="showImagePicker" position="bottom" round :style="{ height: '85%' }">
       <div class="image-picker-popup">
         <div class="popup-header">
           <span class="popup-title">选择资产图片</span>
@@ -119,7 +114,7 @@
               <span>选择文件</span>
             </div>
           </van-uploader>
-          <van-button
+          <app-button
             type="primary"
             size="small"
             :loading="imageUploading"
@@ -128,7 +123,7 @@
             style="margin-top: 12px"
           >
             上传
-          </van-button>
+          </app-button>
         </div>
 
         <van-divider>或选择已有图片</van-divider>
@@ -152,7 +147,7 @@
         </div>
         <van-empty v-if="!imageLoading && imageList.length === 0" description="暂无图片" />
       </div>
-    </van-popup>
+    </app-popup>
   </div>
 </template>
 
@@ -312,26 +307,26 @@ onMounted(() => {
 <style scoped>
 .page-asset-edit {
   min-height: 100vh;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   padding-bottom: 20px;
 }
 
 .upload-section {
   padding: 16px;
-  background: #fff;
+  background: var(--theme-bg-secondary);
   margin-bottom: 12px;
 }
 
 .upload-label {
   font-size: 14px;
-  color: #646566;
+  color: var(--theme-text-secondary);
   margin-bottom: 8px;
 }
 
 .upload-area {
   width: 120px;
   height: 120px;
-  border: 1px dashed #dcdee0;
+  border: 1px dashed var(--theme-border);
   border-radius: 8px;
   display: flex;
   align-items: center;
@@ -345,7 +340,7 @@ onMounted(() => {
   flex-direction: column;
   align-items: center;
   gap: 4px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   font-size: 12px;
 }
 
@@ -360,7 +355,7 @@ onMounted(() => {
 }
 
 .yuan {
-  color: #969799;
+  color: var(--theme-text-tertiary);
   font-size: 14px;
 }
 
@@ -388,7 +383,7 @@ onMounted(() => {
 }
 
 .upload-trigger-small {
-  border: 1px dashed #dcdee0;
+  border: 1px dashed var(--theme-border);
   border-radius: 8px;
   width: 80px;
   height: 80px;
@@ -396,7 +391,7 @@ onMounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   font-size: 12px;
   gap: 4px;
 }
@@ -420,7 +415,7 @@ onMounted(() => {
 }
 
 .image-item.selected {
-  border-color: #1989fa;
+  border-color: var(--theme-primary);
 }
 
 .image-item img {
@@ -435,7 +430,7 @@ onMounted(() => {
   right: 4px;
   width: 20px;
   height: 20px;
-  background: #1989fa;
+  background: var(--theme-primary);
   border-radius: 50%;
   display: flex;
   align-items: center;

@@ -3,6 +3,7 @@ import { showToast, showSuccessToast, showFailToast } from "vant";
 import { UAParser } from "ua-parser-js";
 import { generateBrowserFingerprint } from "./device-hash";
 import { getFullNetworkInfo } from "./network";
+import { isPinResponse, requestPinVerify, PIN_CODE } from "./request/pin";
 import router from "@/router";
 
 const baseUrl = "/api/v1";
@@ -80,6 +81,12 @@ requestfile.interceptors.request.use(
 requestfile.interceptors.response.use(
   (response) => {
     const res = response.data || {};
+
+    // PIN 码拦截（8303 需要验证 / 8304 锁定）
+    if (isPinResponse(res)) {
+      return handleFilePinResponse(res, response);
+    }
+
     // 如果有 ismessage 字段且为 true，不显示任何 toast
     if (res.ismessage) {
       return res;
@@ -95,8 +102,15 @@ requestfile.interceptors.response.use(
     return Promise.reject(res);
   },
   (error) => {
+    const resData = error.response?.data;
+
+    // PIN 码拦截（HTTP 错误中的 8303/8304）
+    if (isPinResponse(resData)) {
+      return handleFilePinResponse(resData, error.response);
+    }
+
     // 如果有 ismessage 字段且为 true，不显示任何 toast
-    if (error.response?.data?.ismessage) {
+    if (resData?.ismessage) {
       return Promise.reject(error);
     }
     const status = error.response?.status;
@@ -109,10 +123,34 @@ requestfile.interceptors.response.use(
       localStorage.removeItem("finance_token");
       router.push("/login");
     } else {
-      showFailToast(error.response?.data?.message || "网络请求失败");
+      showFailToast(resData?.message || "网络请求失败");
     }
     return Promise.reject(error);
   }
 );
+
+function handleFilePinResponse(resData, response) {
+  if (resData.code === PIN_CODE.LOCKED) {
+    showToast({ message: resData.message || "PIN 已锁定", position: "top" });
+    sessionStorage.clear();
+    localStorage.removeItem("finance_token");
+    setTimeout(() => { window.location.href = "/login"; }, 800);
+    return Promise.reject(resData);
+  }
+
+  if (resData.code === PIN_CODE.NEED_VERIFY) {
+    const originalRequest = {
+      method: response.config.method,
+      url: response.config.url,
+      baseURL: response.config.baseURL,
+      headers: { ...response.config.headers },
+      data: response.config.data,
+      params: response.config.params,
+    };
+    return requestPinVerify(originalRequest, resData.data || {});
+  }
+
+  return Promise.reject(resData);
+}
 
 export default requestfile;

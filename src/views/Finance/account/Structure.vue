@@ -46,11 +46,17 @@
       <!-- 银行卡 -->
       <div class="section-title" v-if="bankCards.length > 0">银行卡</div>
       <div class="bank-search" v-if="bankCards.length > 0">
-        <van-search
-          v-model="bankSearchKey"
-          placeholder="搜索银行卡"
-          @clear="bankSearchKey = ''"
-        />
+        <div class="bank-search-row">
+          <van-search
+            v-model="bankSearchKey"
+            placeholder="搜索银行卡"
+            @clear="bankSearchKey = ''"
+          />
+          <button class="preview-btn" type="button" @click="goToPreview">
+            <van-icon :name="showFlowStats ? 'exchange' : 'eye-o'" />
+            <span>{{ showFlowStats ? '余额' : '动账' }}</span>
+          </button>
+        </div>
       </div>
       <div class="account-list" v-if="bankCards.length > 0">
         <div
@@ -60,11 +66,14 @@
           @click="goToCardFlow(account)"
         >
           <div class="account-left">
-            <div class="account-icon bank-icon" v-if="!getCardBankInfo(account.card_id).bankIcon">
-              <van-icon name="card" size="20" color="#fff" />
-            </div>
-            <div class="account-icon bank-icon-img" v-else>
-              <van-image width="28" height="28" :src="getFullUrl(getCardBankInfo(account.card_id).bankIcon)" fit="contain" />
+            <!-- 银行 logo：加载失败统一毛玻璃首字兜底 -->
+            <div class="account-icon">
+              <BankIcon
+                :src="getFullUrl(getCardBankInfo(account.card_id).bankIcon)"
+                :name="getCardBankInfo(account.card_id).bankName || account.card_alias || '卡'"
+                :size="28"
+                rounded="10"
+              />
             </div>
             <div class="account-info">
               <div class="account-name">
@@ -77,9 +86,25 @@
             </div>
           </div>
           <div class="account-right">
-            <div class="account-balance" :class="{ 'is-zero': Number(account.balance) === 0, 'is-negative': Number(account.balance) < 0 }">
-              {{ showAmount ? '¥' + formatMoney(account.balance) : '******' }}
-            </div>
+            <template v-if="showFlowStats">
+              <div
+                class="flow-stats"
+                :class="{ 'is-empty': isCardIdle(account.card_id) }"
+              >
+                <template v-if="isCardIdle(account.card_id)">
+                  <span class="flow-empty">近6个月无动账</span>
+                </template>
+                <template v-else>
+                  <div class="flow-line">消费 {{ getFlowExpense(account.card_id) }} 笔</div>
+                  <div class="flow-line">收入 {{ getFlowIncome(account.card_id) }} 笔</div>
+                </template>
+              </div>
+            </template>
+            <template v-else>
+              <div class="account-balance" :class="{ 'is-zero': Number(account.balance) === 0, 'is-negative': Number(account.balance) < 0 }">
+                {{ showAmount ? '¥' + formatMoney(account.balance) : '******' }}
+              </div>
+            </template>
             <van-icon name="arrow" color="#c8c9cc" class="arrow-icon" />
           </div>
         </div>
@@ -108,10 +133,11 @@
 import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useRouter } from "vue-router";
 import { showToast } from "vant";
-import { getBalanceList } from "@/utils/api/account";
+import { getBalanceList, getCardsFlowStats } from "@/utils/api/account";
 import { getCardList } from "@/utils/api/card";
 import { categoryApi } from "@/utils/api/category";
 import ENV from "@/utils/env";
+import BankIcon from "@/components/BankIcon.vue";
 
 const BASE_URL = ENV.FILE_BASE_URL;
 
@@ -126,6 +152,7 @@ const accountList = ref([]);
 const bankList = ref([]);
 const cardList = ref([]);
 const bankSearchKey = ref('');
+const bankIconError = ref({});
 
 // 获取完整 URL
 const getFullUrl = (path) => {
@@ -154,9 +181,9 @@ const getAccountIcon = (account) => {
 
 const getAccountColor = (account) => {
   if (isVirtualAccount(account.card_id)) {
-    return virtualConfig[account.card_id]?.color || "#1989fa";
+    return virtualConfig[account.card_id]?.color || "var(--theme-primary)";
   }
-  return "#7232dd";
+  return "var(--theme-primary)";
 };
 
 const getAccountTypeLabel = (account) => {
@@ -249,6 +276,42 @@ const goToCardFlow = (account) => {
   router.push(`/finance/report/card-flow?cardId=${account.card_id}`);
 };
 
+// 消费预览状态：点击后拉取所有银行卡近6个月支出/收入笔数，并就地切换余额展示为笔数
+const showFlowStats = ref(false);
+const flowStatsMap = ref({}); // card_id -> { expenseCount, incomeCount }
+
+const getFlowExpense = (cardId) => flowStatsMap.value[cardId]?.expenseCount ?? 0;
+const getFlowIncome = (cardId) => flowStatsMap.value[cardId]?.incomeCount ?? 0;
+// 该卡近6个月无任何支出/收入 → 视为无动账
+const isCardIdle = (cardId) =>
+  getFlowExpense(cardId) === 0 && getFlowIncome(cardId) === 0;
+
+// 消费预览：切换余额/笔数视图，进入预览态时批量拉取所有银行卡近6个月收支笔数
+const goToPreview = async () => {
+  // 已处于预览态则切回余额展示
+  if (showFlowStats.value) {
+    showFlowStats.value = false;
+    return;
+  }
+  try {
+    const res = await getCardsFlowStats({ months: 6 });
+    const list = res.data?.list || [];
+    const map = {};
+    list.forEach((item) => {
+      map[item.cardId] = {
+        expenseCount: item.expenseCount || 0,
+        incomeCount: item.incomeCount || 0,
+      };
+    });
+    // 严格按 card_id 匹配，保证每张卡颗粒度精确
+    flowStatsMap.value = map;
+    showFlowStats.value = true;
+  } catch (e) {
+    console.error("获取消费预览失败", e);
+    showToast("获取失败");
+  }
+};
+
 const loadData = async () => {
   loading.value = true;
   try {
@@ -275,7 +338,7 @@ onUnmounted(() => {
 <style scoped>
 .page-structure {
   min-height: 100vh;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   padding-bottom: 20px;
 }
 
@@ -284,7 +347,7 @@ onUnmounted(() => {
 }
 
 .total-card {
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 16px;
   padding: 24px;
   text-align: center;
@@ -294,7 +357,7 @@ onUnmounted(() => {
 
 .total-label {
   font-size: 14px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   margin-bottom: 8px;
 }
 
@@ -307,14 +370,14 @@ onUnmounted(() => {
 
 .currency {
   font-size: 20px;
-  color: #323233;
+  color: var(--theme-text-primary);
   font-weight: 500;
 }
 
 .amount-num {
   font-size: 32px;
   font-weight: bold;
-  color: #323233;
+  color: var(--theme-text-primary);
   font-family: "DIN Alternate", -apple-system, sans-serif;
 }
 
@@ -325,26 +388,26 @@ onUnmounted(() => {
   gap: 6px;
   margin-top: 16px;
   padding: 10px 16px;
-  background: #fff7e6;
+  background: var(--van-orange-bg);
   border-radius: 20px;
   font-size: 13px;
-  color: #fa8c16;
+  color: var(--van-orange);
   cursor: pointer;
 }
 
 .zero-tip:active {
-  background: #ffecc7;
+  background: rgba(255, 151, 106, 0.2);
 }
 
 .section-title {
   font-size: 13px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   margin: 16px 0 8px;
   padding-left: 4px;
 }
 
 .account-list {
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 16px;
   overflow: hidden;
   margin-bottom: 8px;
@@ -355,12 +418,12 @@ onUnmounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 16px;
-  border-bottom: 1px solid #f2f2f2;
+  border-bottom: 1px solid var(--theme-border);
   cursor: pointer;
 }
 
 .account-item:active {
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
 }
 
 .account-item:last-child {
@@ -383,11 +446,18 @@ onUnmounted(() => {
 }
 
 .bank-icon {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-primary-grad) 100%);
+}
+
+/* 银行名首字占位（logo 缺失/加载失败时） */
+.bank-mock {
+  color: #fff;
+  font-size: 18px;
+  font-weight: 600;
 }
 
 .bank-icon-img {
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -397,13 +467,13 @@ onUnmounted(() => {
 .account-info .account-name {
   font-size: 15px;
   font-weight: 500;
-  color: #323233;
+  color: var(--theme-text-primary);
   margin-bottom: 4px;
 }
 
 .account-info .account-type {
   font-size: 12px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 
 .account-right {
@@ -415,16 +485,36 @@ onUnmounted(() => {
 .account-balance {
   font-size: 16px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
   font-family: "DIN Alternate", -apple-system, sans-serif;
 }
 
 .account-balance.is-zero {
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 
 .account-balance.is-negative {
-  color: #ee0a24;
+  color: var(--theme-danger-color);
+}
+
+/* 消费预览：近6个月支出/收入笔数 */
+.flow-stats {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--theme-text-secondary);
+}
+
+.flow-line {
+  white-space: nowrap;
+}
+
+.flow-stats.is-empty .flow-empty {
+  color: var(--theme-danger-color);
+  font-weight: 500;
 }
 
 .view-tip {
@@ -434,7 +524,7 @@ onUnmounted(() => {
   gap: 6px;
   margin-top: 24px;
   font-size: 12px;
-  color: #c8c9cc;
+  color: var(--theme-text-tertiary);
 }
 
 .arrow-icon {
@@ -450,7 +540,57 @@ onUnmounted(() => {
 
 .bank-search {
   padding: 0 16px;
-  background: #fff;
+  background: var(--theme-bg-secondary);
+}
+
+.bank-search-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bank-search-row :deep(.van-search) {
+  flex: 1;
+  min-width: 0;
+}
+
+.preview-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  padding: 7px 14px;
+  border: none;
+  border-radius: 999px;
+  background: var(--theme-primary);
+  color: #fff;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.preview-btn:active {
+  opacity: 0.85;
+}
+
+/* 搜索框适配主题 */
+.bank-search :deep(.van-search) {
+  background: var(--theme-bg-secondary);
+  padding: 8px 0;
+}
+.bank-search :deep(.van-search__content) {
+  background: var(--theme-bg-tertiary);
+  border-radius: 999px;
+}
+.bank-search :deep(.van-field__control) {
+  color: var(--theme-text-primary);
+}
+.bank-search :deep(.van-field__control::placeholder) {
+  color: var(--theme-text-placeholder);
+}
+.bank-search :deep(.van-search__action) {
+  color: var(--theme-primary);
 }
 
 /* 返回顶部 */
@@ -460,14 +600,14 @@ onUnmounted(() => {
   bottom: 60px;
   width: 40px;
   height: 40px;
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 50%;
   box-shadow: 0 2px 12px rgba(0,0,0,0.15);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 20px;
-  color: #1989fa;
+  color: var(--theme-primary);
   z-index: 999;
 }
 </style>

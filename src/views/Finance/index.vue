@@ -8,14 +8,14 @@
 
       <van-row class="total-info">
         <van-col span="12" class="info-item">
-          <div class="label">本月总支出</div>
-          <div class="amount text-expense num-font">
+          <div class="label">本月总支出：</div>
+          <div class="amount total-expense num-font">
             {{ formatAmount(stats.expense) }}
           </div>
         </van-col>
         <van-col span="12" class="info-item">
-          <div class="label">本月总收入</div>
-          <div class="amount text-income num-font">
+          <div class="label">本月总收入：</div>
+          <div class="amount total-income num-font">
             {{ formatAmount(stats.income) }}
           </div>
         </van-col>
@@ -26,80 +26,80 @@
           <span class="label">结余：</span>
           <span class="val num-font">￥{{ formatAmount(stats.balance) }}</span>
         </div>
-        <van-button plain size="small" type="primary" class="quick-add-btn" icon="plus"
+        <app-button plain size="small" type="primary" class="quick-add-btn" icon="plus"
           @click="$router.push('/finance/add')">
           记一笔
-        </van-button>
+        </app-button>
       </div>
     </div>
 
     <div class="app-card menu-grid-wrapper">
       <div class="grid-section-title">财务把控中心</div>
-      <van-grid :column-num="3" :border="false" clickable>
-        <van-grid-item @click="goFunction('assets')">
+      <app-grid :column-num="3" :border="false" clickable>
+        <app-grid-item @click="goFunction('assets')">
           <template #icon><van-icon name="gem" class="grid-icon purple" /></template>
           <template #text><span class="grid-text">系统账户余额</span></template>
-        </van-grid-item>
-        <van-grid-item @click="goFunction('flow')">
+        </app-grid-item>
+        <app-grid-item @click="goFunction('flow')">
           <template #icon><van-icon name="orders-o" class="grid-icon blue" /></template>
           <template #text><span class="grid-text">流水明细</span></template>
-        </van-grid-item>
-        <van-grid-item @click="goFunction('fixed-assets')">
+        </app-grid-item>
+        <app-grid-item @click="goFunction('fixed-assets')">
           <template #icon><van-icon name="shop-o" class="grid-icon teal" /></template>
           <template #text><span class="grid-text">固定资产</span></template>
-        </van-grid-item>
-        <van-grid-item @click="goFunction('credit')">
+        </app-grid-item>
+        <app-grid-item @click="goFunction('credit')">
           <template #icon><van-icon name="credit-pay" class="grid-icon orange" /></template>
           <template #text><span class="grid-text">信用卡专项</span></template>
-        </van-grid-item>
-        <van-grid-item @click="goFunction('bill-list')">
+        </app-grid-item>
+        <app-grid-item @click="goFunction('bill-list')">
           <template #icon><van-icon name="todo-list-o" class="grid-icon red" /></template>
           <template #text><span class="grid-text">信用卡账单</span></template>
-        </van-grid-item>
-        <van-grid-item @click="goFunction('repay-list')">
+        </app-grid-item>
+        <app-grid-item @click="goFunction('repay-list')">
           <template #icon><van-icon name="paid" class="grid-icon green" /></template>
           <template #text><span class="grid-text">还款记录</span></template>
-        </van-grid-item>
-        <van-grid-item @click="goFunction('assets-reg')">
+        </app-grid-item>
+        <app-grid-item @click="goFunction('assets-reg')">
           <template #icon><van-icon name="location-o" class="grid-icon teal" /></template>
           <template #text><span class="grid-text">资产结构登记</span></template>
-        </van-grid-item>
-        <van-grid-item @click="goFunction('assets-list')">
+        </app-grid-item>
+        <app-grid-item @click="goFunction('assets-list')">
           <template #icon><van-icon name="todo-list-o" class="grid-icon gray" /></template>
           <template #text><span class="grid-text">登记记录</span></template>
-        </van-grid-item>
-        <!-- <van-grid-item @click="goFunction('super-calc')" class="special-item">
+        </app-grid-item>
+        <!-- <app-grid-item @click="goFunction('super-calc')" class="special-item">
           <template #icon
             ><van-icon name="points" class="grid-icon gold"
           /></template>
           <template #text><span class="grid-text">超级计算</span></template>
-        </van-grid-item> -->
-        <van-grid-item @click="goFunction('budget')">
+        </app-grid-item> -->
+        <app-grid-item @click="goFunction('budget')">
           <template #icon><van-icon name="balance-list" class="grid-icon cyan" /></template>
           <template #text><span class="grid-text">预算表</span></template>
-        </van-grid-item>
-        <van-grid-item @click="goFunction('recurring')">
+        </app-grid-item>
+        <app-grid-item @click="goFunction('recurring')">
           <template #icon><van-icon name="clock-o" class="grid-icon pink" /></template>
           <template #text><span class="grid-text">固定事件</span></template>
-        </van-grid-item>
-        <van-grid-item @click="goFunction('report')">
+        </app-grid-item>
+        <app-grid-item @click="goFunction('report')">
           <template #icon><van-icon name="chart-trending-o" class="grid-icon blue" /></template>
           <template #text><span class="grid-text">报表</span></template>
-        </van-grid-item>
-        <van-grid-item @click="goFunction('invest')">
+        </app-grid-item>
+        <app-grid-item @click="goFunction('invest')">
           <template #icon><van-icon name="gold-coin-o" class="grid-icon gold" /></template>
           <template #text><span class="grid-text">理财投资</span></template>
-        </van-grid-item>
-        <van-grid-item @click="goFunction('data-manage')">
+        </app-grid-item>
+        <app-grid-item @click="goFunction('data-manage')">
           <template #icon><van-icon name="notes-o" class="grid-icon gold" /></template>
           <template #text><span class="grid-text">数据管理</span></template>
-        </van-grid-item>
-      </van-grid>
+        </app-grid-item>
+      </app-grid>
     </div>
-    <van-popup v-model:show="showMonthPicker" position="bottom" round>
+    <app-popup v-model:show="showMonthPicker" position="bottom" round>
       <van-picker title="选择月份" v-model="selectedValues" :columns="pickerColumns" @confirm="onPickerConfirm"
         @cancel="showMonthPicker = false" />
-    </van-popup>
+    </app-popup>
   </div>
 </template>
 
@@ -222,7 +222,7 @@ onMounted(() => loadMonthStats());
 }
 
 .finance-header {
-  background: white;
+  background: var(--theme-bg-secondary);
   padding: 20px;
   border-radius: 20px;
   margin-bottom: 16px;
@@ -231,7 +231,7 @@ onMounted(() => loadMonthStats());
 
 .month-selector {
   font-size: 14px;
-  color: #646566;
+  color: var(--theme-text-secondary);
   margin-bottom: 15px;
   display: flex;
   align-items: center;
@@ -240,19 +240,27 @@ onMounted(() => loadMonthStats());
 
 .info-item .label {
   font-size: 12px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   margin-bottom: 4px;
 }
 
 .info-item .amount {
-  font-size: 22px;
+  font-size: 24px;
   font-weight: bold;
+}
+
+/* 总收支金额：固定红绿，不跟随主题 */
+.info-item .amount.total-expense {
+  color: #ee0a24;
+}
+
+.info-item .amount.total-income {
+  color: #07c160;
 }
 
 .header-footer {
   margin-top: 18px;
   padding-top: 15px;
-  border-top: 1px dashed #f2f3f5;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -260,12 +268,12 @@ onMounted(() => loadMonthStats());
 
 .net-assets .label {
   font-size: 12px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 
 .net-assets .val {
   font-size: 14px;
-  color: #323233;
+  color: var(--theme-text-primary);
   font-weight: 500;
 }
 
@@ -276,7 +284,7 @@ onMounted(() => loadMonthStats());
 }
 
 .menu-grid-wrapper {
-  background: white;
+  background: var(--theme-bg-secondary);
   padding: 16px 8px;
   border-radius: 20px;
   margin-bottom: 16px;
@@ -287,7 +295,7 @@ onMounted(() => loadMonthStats());
   font-weight: bold;
   padding-left: 10px;
   margin-bottom: 15px;
-  color: #323233;
+  color: var(--theme-text-primary);
 }
 
 .grid-icon {
@@ -297,23 +305,23 @@ onMounted(() => loadMonthStats());
 
 .grid-text {
   font-size: 13px;
-  color: #646566;
+  color: var(--theme-text-secondary);
 }
 
 .blue {
-  color: #1989fa;
+  color: var(--theme-primary);
 }
 
 .green {
-  color: #07c160;
+  color: var(--van-green, #07c160);
 }
 
 .orange {
-  color: #ff976a;
+  color: var(--van-orange, #ff976a);
 }
 
 .red {
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
 }
 
 .purple {
@@ -336,16 +344,20 @@ onMounted(() => loadMonthStats());
   color: #ffb300;
 }
 
+.gray {
+  color: var(--theme-text-tertiary);
+}
+
 .special-item {
-  background: #fff9e6;
+  background: var(--van-orange-bg);
   border-radius: 12px;
 }
 
 .text-income {
-  color: #07c160;
+  color: var(--van-green, #07c160);
 }
 
 .text-expense {
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
 }
 </style>

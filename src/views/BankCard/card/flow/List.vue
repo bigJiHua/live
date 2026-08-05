@@ -8,16 +8,16 @@
 
     <!-- 日期筛选 -->
     <van-cell-group inset class="filter-group">
-      <van-cell title="选择月份" is-link @click="showMonthPicker = true">
+      <app-cell title="选择月份" is-link @click="showMonthPicker = true">
         <template #value>
           <span>{{ currentMonth }}</span>
         </template>
-      </van-cell>
+      </app-cell>
     </van-cell-group>
 
     <!-- 统计概览 -->
     <van-cell-group inset class="stats-group">
-      <van-cell>
+      <app-cell>
         <div class="stats-row">
           <div class="stat-item">
             <div class="stat-label">支出</div>
@@ -32,7 +32,7 @@
             <div class="stat-value">{{ list.length }}</div>
           </div>
         </div>
-      </van-cell>
+      </app-cell>
     </van-cell-group>
 
     <!-- 流水列表 -->
@@ -44,7 +44,7 @@
         <van-empty description="暂无流水记录" />
       </template>
       <template v-else>
-        <van-cell
+        <app-cell
           v-for="item in list"
           :key="item.id"
           :title="item.category_name || item.pay_type || '未知'"
@@ -63,24 +63,24 @@
           <template #right-icon>
             <van-icon name="arrow" class="arrow-icon" />
           </template>
-        </van-cell>
+        </app-cell>
       </template>
     </van-cell-group>
 
     <!-- 月份选择器 -->
-    <van-popup v-model:show="showMonthPicker" position="bottom">
+    <app-popup v-model:show="showMonthPicker" position="bottom">
       <van-picker
         :columns="monthColumns"
         @confirm="onMonthConfirm"
         @cancel="showMonthPicker = false"
       />
-    </van-popup>
+    </app-popup>
 
     <!-- 加载更多 -->
     <div class="load-more" v-if="list.length > 0 && hasMore">
-      <van-button size="small" :loading="loadingMore" @click="loadMore">
+      <app-button size="small" :loading="loadingMore" @click="loadMore">
         加载更多
-      </van-button>
+      </app-button>
     </div>
 
     <div style="height: 20px"></div>
@@ -139,9 +139,7 @@ const stats = reactive({
 })
 
 // 格式化金额
-const formatMoney = (val) => {
-  return Number(val || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 })
-}
+import { formatMoney } from "@/utils/money";
 
 // 获取月份范围
 const getMonthRange = (monthStr) => {
@@ -295,7 +293,7 @@ onDeactivated(() => {
 <style scoped>
 .page-card-flow {
   min-height: 100vh;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
 }
 
 .filter-group {
@@ -318,7 +316,7 @@ onDeactivated(() => {
 
 .stat-label {
   font-size: 12px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   margin-bottom: 4px;
 }
 
@@ -327,15 +325,15 @@ onDeactivated(() => {
   font-weight: 600;
 }
 
-.text-income { color: #07c160; }
-.text-expense { color: #ee0a24; }
+.text-income { color: var(--van-green, #07c160); }
+.text-expense { color: var(--van-danger-color, #ee0a24); }
 
 .skeleton-item {
   padding: 16px;
 }
 
 .arrow-icon {
-  color: #969799;
+  color: var(--theme-text-tertiary);
   margin-left: 8px;
 }
 

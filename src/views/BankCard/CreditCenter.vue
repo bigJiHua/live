@@ -155,12 +155,12 @@ onMounted(() => {
 <style scoped>
 .page-credit-center {
   min-height: 100vh;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   padding: 16px;
 }
 
 .credit-header {
-  background: linear-gradient(135deg, #ee0a24 0%, #b80c19 100%);
+  background: linear-gradient(135deg, var(--theme-primary), var(--theme-primary-grad));
   border-radius: 20px;
   padding: 24px 20px;
   color: #fff;
@@ -208,7 +208,7 @@ onMounted(() => {
 }
 
 .func-section {
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 16px;
   padding: 16px;
 }
@@ -216,7 +216,7 @@ onMounted(() => {
 .func-section-title {
   font-size: 14px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
   margin-bottom: 12px;
   padding-left: 4px;
 }
@@ -230,14 +230,13 @@ onMounted(() => {
 }
 
 .func-card:active {
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
 }
 
 .func-icon {
   width: 44px;
   height: 44px;
   border-radius: 12px;
-  background: #1989fa;
   color: #fff;
   display: flex;
   align-items: center;
@@ -247,22 +246,22 @@ onMounted(() => {
 }
 
 .func-icon.red {
-  background: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
 }
 
 .func-icon.orange {
-  background: #ff976a;
+  color: var(--van-orange, #ff976a);
 }
 
 .func-icon.green {
-  background: #07c160;
+  color: var(--van-green, #07c160);
 }
 
 .func-icon.teal {
-  background: #009688;
+  color: #009688;
 }
 .func-icon.purple {
-  background: #7232dd;
+  color: #7232dd;
 }
 
 .func-info {
@@ -272,17 +271,17 @@ onMounted(() => {
 .func-name {
   font-size: 15px;
   font-weight: 500;
-  color: #323233;
+  color: var(--theme-text-primary);
 }
 
 .func-desc {
   font-size: 12px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   margin-top: 2px;
 }
 
 .func-arrow {
-  color: #c8c9cc;
+  color: var(--theme-text-tertiary);
   font-size: 16px;
 }
 </style>

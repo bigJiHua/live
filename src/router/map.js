@@ -1,4 +1,36 @@
 const RouterMap = [
+  // --- UI 配色展示 Demo (临时预览，无需登录) ---
+  {
+    path: "/demo/ui",
+    name: "UiShowcase",
+    component: () => import("@/views/Demo/UiShowcase.vue"),
+    meta: { title: "UI 配色展示" },
+  },
+
+  // --- 日历组件 Demo ---
+  {
+    path: "/demo/calendar",
+    name: "CalendarDemo",
+    component: () => import("@/views/Demo/CalendarDemo.vue"),
+    meta: { title: "日历组件 Demo" },
+  },
+
+  // --- 键盘组件 Demo ---
+  {
+    path: "/demo/keyboard",
+    name: "KeyboardDemo",
+    component: () => import("@/views/Demo/KeyboardDemo.vue"),
+    meta: { title: "键盘组件 Demo" },
+  },
+
+  // --- 卡组织 Icon Demo ---
+  {
+    path: "/demo/bank-org",
+    name: "BankOrgDemo",
+    component: () => import("@/views/Demo/BankOrgDemo.vue"),
+    meta: { title: "卡组织 Icon Demo" },
+  },
+
   // --- 登录页面 (独立于布局之外，实现全屏展示) ---
   {
     path: "/login",
@@ -90,13 +122,13 @@ const RouterMap = [
         path: "finance/flow",
         name: "FinanceFlow",
         component: () => import("../views/Finance/flow/List.vue"),
-        meta: { title: "流水明细", hideTabbar: true },
+        meta: { title: "流水明细", hideTabbar: true, keepAlive: true },
       },
       {
         path: "finance/flow/calendar",
         name: "FinanceFlowCalendar",
         component: () => import("../views/Finance/flow/Calendar.vue"),
-        meta: { title: "每日流水", hideTabbar: true },
+        meta: { title: "每日流水", hideTabbar: true, keepAlive: true },
       },
       {
         path: "finance/flow/:id",
@@ -151,7 +183,7 @@ const RouterMap = [
         path: "finance/report/flow-filter",
         name: "FinanceReportFlowFilter",
         component: () => import("../views/Finance/report/flow/FlowFilter.vue"),
-        meta: { title: "流水筛选", hideTabbar: true },
+        meta: { title: "流水筛选", hideTabbar: true, keepAlive: true },
       },
       {
         path: "finance/report/stats-overview",
@@ -169,13 +201,13 @@ const RouterMap = [
         path: "finance/report/monthly-trend",
         name: "FinanceReportMonthlyTrend",
         component: () => import("../views/Finance/report/stats/MonthlyTrend.vue"),
-        meta: { title: "月度收支趋势", hideTabbar: true },
+        meta: { title: "月度收支趋势", hideTabbar: true, keepAlive: true },
       },
       {
         path: "finance/report/card-flow",
         name: "FinanceReportCardFlow",
         component: () => import("../views/Finance/report/flow/CardFlow.vue"),
-        meta: { title: "银行卡收支明细", hideTabbar: true },
+        meta: { title: "银行卡收支明细", hideTabbar: true, keepAlive: true },
       },
       {
         path: "finance/report/transfer-list",
@@ -187,7 +219,7 @@ const RouterMap = [
         path: "finance/report/debt-overview",
         name: "FinanceReportDebtOverview",
         component: () => import("../views/Finance/report/debt/DebtOverview.vue"),
-        meta: { title: "负债统计", hideTabbar: true },
+        meta: { title: "负债统计", hideTabbar: true, keepAlive: true },
       },
       // 理财投资模块
       {
@@ -461,7 +493,7 @@ const RouterMap = [
         path: "card/flow",
         name: "CardFlow",
         component: () => import("../views/BankCard/card/flow/List.vue"),
-        meta: { title: "卡片流水", hideTabbar: true },
+        meta: { title: "卡片流水", hideTabbar: true, keepAlive: true },
       },
       // 账单管理
       {
@@ -480,7 +512,7 @@ const RouterMap = [
         path: "card/bill/ledger",
         name: "BillLedger",
         component: () => import("../views/BankCard/bill/Ledger.vue"),
-        meta: { title: "账单流水明细", hideTabbar: true },
+        meta: { title: "账单流水明细", hideTabbar: true, keepAlive: true },
       },
       {
         path: "card/bill/add",

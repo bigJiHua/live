@@ -13,8 +13,8 @@ export const aesUtil = {
   encrypt(data, key) {
     if (!data || !key) return data;
 
-    // 1. 格式化 Key 为 WordArray
-    const keyHex = CryptoJS.enc.Utf8.parse(key);
+    // 1. 格式化 Key 为 WordArray（Hex 解析：64位hex字符 → 32字节 = AES-256）
+    const keyHex = CryptoJS.enc.Hex.parse(key);
 
     // 2. 生成随机 IV (16字节)
     const iv = CryptoJS.lib.WordArray.random(16);
@@ -40,7 +40,7 @@ export const aesUtil = {
     if (!cipherTextWithIv || !key) return cipherTextWithIv;
 
     try {
-      const keyHex = CryptoJS.enc.Utf8.parse(key);
+      const keyHex = CryptoJS.enc.Hex.parse(key);
 
       // 1. 提取前 32 位 Hex 字符作为 IV
       const iv = CryptoJS.enc.Hex.parse(cipherTextWithIv.substring(0, 32));

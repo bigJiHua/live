@@ -36,7 +36,7 @@
     </div>
 
     <!-- Step 1: 方向 -->
-    <transition name="slide-fade">
+    <transition name="slide-fade" mode="out-in">
       <div v-if="step === 1" class="qsa-panel" :key="1">
         <h2 class="qsa-title">这一笔是？</h2>
         <div class="grid-1">
@@ -57,11 +57,9 @@
           </button>
         </div>
       </div>
-    </transition>
 
     <!-- Step 2: 分类（转账场景下显示三种子类型） -->
-    <transition name="slide-fade">
-      <div v-if="step === 2" class="qsa-panel" :key="2">
+      <div v-else-if="step === 2" class="qsa-panel" :key="2">
         <h2 class="qsa-title">{{ isTransfer ? '哪种转账？' : '哪个分类？' }}</h2>
         <!-- 转账：对外 / 自转 / 提现 -->
         <div v-if="isTransfer" class="grid-1">
@@ -107,11 +105,9 @@
         </div>
         <div v-if="!isTransfer && categoryOptions.length === 0" class="qsa-empty">该方向暂无可用分类</div>
       </div>
-    </transition>
 
     <!-- Step 3: 卡片（根据方向 + 转账模式动态布局） -->
-    <transition name="slide-fade">
-      <div v-if="step === 3" class="qsa-panel" :key="3">
+      <div v-else-if="step === 3" class="qsa-panel" :key="3">
         <h2 class="qsa-title">
           <template v-if="isTransfer && transferMode === 'self'">从哪张卡转出 / 转入？</template>
           <template v-else-if="isTransfer && transferMode === 'withdraw'">提现到哪张卡？</template>
@@ -227,6 +223,15 @@
           </div>
           <div class="qsa-divider">
             <span>到账借记卡</span>
+          </div>
+          <div class="card-search">
+            <van-search
+              v-model="cardSearchKey"
+              placeholder="搜索银行名/尾号"
+              shape="round"
+              background="transparent"
+              clearable
+            />
           </div>
           <div class="card-list">
             <button
@@ -378,11 +383,9 @@
           <van-icon name="arrow" />
         </button>
       </div>
-    </transition>
 
     <!-- Step 4: 金额 -->
-    <transition name="slide-fade">
-      <div v-if="step === 4" class="qsa-panel amount-panel" :key="4">
+      <div v-else-if="step === 4" class="qsa-panel amount-panel" :key="4">
         <h2 class="qsa-title">多少金额？</h2>
         <div class="currency-selector" @click.stop="showCurrencyPicker = true">
           <span class="currency-name">{{ selectedCurrency.label }}</span>
@@ -423,30 +426,10 @@
             <van-icon name="arrow" />
           </button>
         </transition>
-
-        <van-number-keyboard
-          v-model="form.amount"
-          :show="showKeyboard"
-          theme="custom"
-          extra-key="."
-          close-button-text="完成"
-          :maxlength="12"
-          @blur="showKeyboard = false"
-        />
-        <van-popup v-model:show="showCurrencyPicker" position="bottom" round>
-          <van-picker
-            title="选择币种"
-            :columns="currencyColumns"
-            @confirm="onCurrencyConfirm"
-            @cancel="showCurrencyPicker = false"
-          />
-        </van-popup>
       </div>
-    </transition>
 
     <!-- Step 5: 备注 + 确认 -->
-    <transition name="slide-fade">
-      <div v-if="step === 5" class="qsa-panel" :key="5">
+      <div v-else-if="step === 5" class="qsa-panel" :key="5">
         <h2 class="qsa-title">{{ remarkTitle }}</h2>
 
         <!-- 对外转账：必填收款人 -->
@@ -462,7 +445,7 @@
           />
         </div>
 
-        <van-field
+        <app-field
           v-else
           v-model="form.remark"
           :placeholder="remarkPlaceholder"
@@ -512,7 +495,7 @@
           </div>
         </div>
         <div class="qsa-actions">
-          <van-button
+          <app-button
             type="primary"
             block
             round
@@ -522,10 +505,28 @@
             @click="onSubmit"
           >
             {{ isTransfer && transferMode === 'withdraw' ? '确认提现' : isTransfer && transferMode === 'self' ? '确认自转' : '确认登记' }}
-          </van-button>
+          </app-button>
         </div>
       </div>
     </transition>
+
+    <van-number-keyboard
+      v-model="form.amount"
+      :show="showKeyboard"
+      theme="custom"
+      extra-key="."
+      close-button-text="完成"
+      :maxlength="12"
+      @blur="showKeyboard = false"
+    />
+    <app-popup v-model:show="showCurrencyPicker" position="bottom" round teleport="body">
+      <van-picker
+        title="选择币种"
+        :columns="currencyColumns"
+        @confirm="onCurrencyConfirm"
+        @cancel="showCurrencyPicker = false"
+      />
+    </app-popup>
   </div>
 </template>
 
@@ -637,10 +638,7 @@ const onCurrencyConfirm = ({ selectedOptions }) => {
     currencyOptions.find((c) => c.code === code) || currencyOptions[0];
   showCurrencyPicker.value = false;
 };
-const formatMoney = (val) => {
-  const num = Number(val) || 0;
-  return num.toFixed(2);
-};
+import { formatMoney } from "@/utils/money";
 
 // 数据
 const allCategories = ref({ expense: [], income: [] });
@@ -1074,7 +1072,7 @@ const onSubmit = async () => {
 <style scoped>
 .page-quick-add {
   min-height: 100vh;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   padding-bottom: 40px;
 }
 
@@ -1087,8 +1085,8 @@ const onSubmit = async () => {
   align-items: center;
   gap: 8px;
   padding: 10px 12px;
-  background: #fff;
-  border-bottom: 1px solid #ebedf0;
+  background: var(--theme-bg-secondary);
+  border: 1px solid var(--theme-border);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
 }
 .qsa-nav-btn {
@@ -1099,9 +1097,9 @@ const onSubmit = async () => {
   align-items: center;
   justify-content: center;
   border: none;
-  background: #f2f3f5;
+  background: var(--theme-bg-tertiary);
   border-radius: 50%;
-  color: #323233;
+  color: var(--theme-text-primary);
   font-size: 16px;
   cursor: pointer;
   outline: none;
@@ -1109,8 +1107,8 @@ const onSubmit = async () => {
 }
 .qsa-nav-btn:active { transform: scale(0.92); }
 .qsa-nav-btn.disabled {
-  background: #f7f8fa;
-  color: #c8c9cc;
+  background: var(--theme-bg-primary);
+  color: var(--theme-text-tertiary);
   cursor: not-allowed;
 }
 .qsa-steps {
@@ -1140,42 +1138,42 @@ const onSubmit = async () => {
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: #f2f3f5;
-  color: #969799;
+  background: var(--theme-bg-tertiary);
+  color: var(--theme-text-tertiary);
   font-size: 12px;
   font-weight: 600;
   transition: all 0.2s;
 }
 .qsa-lbl {
   font-size: 10px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   white-space: nowrap;
   transition: color 0.2s;
 }
 .qsa-step.done .qsa-num {
-  background: #e8f3ff;
-  color: #1989fa;
+  background: rgba(var(--theme-primary-rgb), 0.15);
+  color: var(--theme-primary);
 }
-.qsa-step.done .qsa-lbl { color: #1989fa; }
+.qsa-step.done .qsa-lbl { color: var(--theme-primary); }
 .qsa-step.active .qsa-num {
-  background: #1989fa;
+  background: var(--theme-primary);
   color: #fff;
-  box-shadow: 0 0 0 3px rgba(25, 137, 250, 0.15);
+  box-shadow: 0 0 0 3px rgba(var(--theme-primary-rgb), 0.15);
 }
-.qsa-step.active .qsa-lbl { color: #1989fa; font-weight: 600; }
+.qsa-step.active .qsa-lbl { color: var(--theme-primary); font-weight: 600; }
 
 /* 步骤面板 */
 .qsa-panel { padding: 24px 16px; }
 .qsa-title {
   font-size: 20px;
   font-weight: 700;
-  color: #323233;
+  color: var(--theme-text-primary);
   margin: 0 0 20px;
   text-align: center;
 }
 .qsa-empty {
   text-align: center;
-  color: #c8c9cc;
+  color: var(--theme-text-tertiary);
   font-size: 13px;
   margin-top: 24px;
 }
@@ -1205,8 +1203,8 @@ const onSubmit = async () => {
   width: 100%;
   min-height: 96px;
   padding: 16px 8px;
-  border: 2px solid #ebedf0;
-  background: #fff;
+  border: 1px solid var(--theme-border);
+  background: var(--theme-bg-secondary);
   border-radius: 12px;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -1221,27 +1219,27 @@ const onSubmit = async () => {
 .grid-1 .big-label { font-size: 20px; }
 .grid-1 .big-sub { font-size: 13px; margin-top: 4px; }
 .big-btn:active { transform: scale(0.97); }
-.big-btn.active { border-color: #1989fa; background: #e8f3ff; }
+.big-btn.active { border-color: var(--theme-primary); background: rgba(var(--theme-primary-rgb), 0.1); }
 
 .big-icon { font-size: 28px; margin-bottom: 6px; }
-.big-label { font-size: 16px; font-weight: 600; color: #323233; }
-.big-sub { font-size: 11px; color: #969799; margin-top: 3px; }
+.big-label { font-size: 16px; font-weight: 600; color: var(--theme-text-primary); }
+.big-sub { font-size: 11px; color: var(--theme-text-tertiary); margin-top: 3px; }
 
 /* 方向按钮配色 */
-.big-btn.out { border-color: #ffd6d6; }
-.big-btn.out .big-icon { color: #ee0a24; }
-.big-btn.out:active { background: #fff1f1; }
-.big-btn.out.active { border-color: #ee0a24; background: #fff1f1; }
+.big-btn.out { border-color: rgba(238, 10, 36, 0.3); }
+.big-btn.out .big-icon { color: var(--theme-danger); }
+.big-btn.out:active { background: rgba(238, 10, 36, 0.08); }
+.big-btn.out.active { border-color: var(--theme-danger); background: rgba(238, 10, 36, 0.08); }
 
-.big-btn.in { border-color: #c8efd0; }
-.big-btn.in .big-icon { color: #07c160; }
-.big-btn.in:active { background: #f0faf3; }
-.big-btn.in.active { border-color: #07c160; background: #f0faf3; }
+.big-btn.in { border-color: rgba(7, 193, 96, 0.3); }
+.big-btn.in .big-icon { color: var(--van-green); }
+.big-btn.in:active { background: rgba(7, 193, 96, 0.08); }
+.big-btn.in.active { border-color: var(--van-green); background: rgba(7, 193, 96, 0.08); }
 
-.big-btn.tf { border-color: #cce4ff; }
-.big-btn.tf .big-icon { color: #1989fa; }
-.big-btn.tf:active { background: #e8f3ff; }
-.big-btn.tf.active { border-color: #1989fa; background: #e8f3ff; }
+.big-btn.tf { border-color: rgba(var(--theme-primary-rgb), 0.3); }
+.big-btn.tf .big-icon { color: var(--theme-primary); }
+.big-btn.tf:active { background: rgba(var(--theme-primary-rgb), 0.1); }
+.big-btn.tf.active { border-color: var(--theme-primary); background: rgba(var(--theme-primary-rgb), 0.1); }
 
 .big-btn.cat .big-icon { font-size: 26px; }
 .grid-3 .big-btn.cat {
@@ -1251,31 +1249,31 @@ const onSubmit = async () => {
 .grid-3 .big-btn.cat .big-label { font-size: 15px; }
 
 /* 转账模式按钮 */
-.big-btn.tf-mode.external { border-color: #cce4ff; }
-.big-btn.tf-mode.external .big-icon { color: #1989fa; }
-.big-btn.tf-mode.external.active { border-color: #1989fa; background: #e8f3ff; }
-.big-btn.tf-mode.self { border-color: #d4e8c5; }
-.big-btn.tf-mode.self .big-icon { color: #07c160; }
-.big-btn.tf-mode.self.active { border-color: #07c160; background: #f0faf3; }
-.big-btn.tf-mode.withdraw { border-color: #ffe2cc; }
-.big-btn.tf-mode.withdraw .big-icon { color: #ff976a; }
-.big-btn.tf-mode.withdraw.active { border-color: #ff976a; background: #fff5ec; }
+.big-btn.tf-mode.external { border-color: rgba(var(--theme-primary-rgb), 0.3); }
+.big-btn.tf-mode.external .big-icon { color: var(--theme-primary); }
+.big-btn.tf-mode.external.active { border-color: var(--theme-primary); background: rgba(var(--theme-primary-rgb), 0.1); }
+.big-btn.tf-mode.self { border-color: rgba(7, 193, 96, 0.3); }
+.big-btn.tf-mode.self .big-icon { color: var(--van-green); }
+.big-btn.tf-mode.self.active { border-color: var(--van-green); background: rgba(7, 193, 96, 0.08); }
+.big-btn.tf-mode.withdraw { border-color: rgba(255, 151, 106, 0.3); }
+.big-btn.tf-mode.withdraw .big-icon { color: var(--van-orange); }
+.big-btn.tf-mode.withdraw.active { border-color: var(--van-orange); background: rgba(255, 151, 106, 0.12); }
 
 /* 现金/余额固定顶部 */
 .big-btn.fixed { min-height: 48px; padding: 6px 6px; }
 .big-btn.fixed .fixed-icon { font-size: 20px; margin-bottom: 2px; }
 .big-btn.fixed .big-label { font-size: 13px; }
 .big-btn.fixed .big-sub { display: none; }
-.big-btn.cash { border-color: #ffe2cc; }
-.big-btn.cash.active { border-color: #ff976a; background: #fff5ec; }
-.big-btn.balance { border-color: #cce4ff; }
-.big-btn.balance.active { border-color: #1989fa; background: #e8f3ff; }
+.big-btn.cash { border-color: rgba(255, 151, 106, 0.3); }
+.big-btn.cash.active { border-color: var(--van-orange); background: rgba(255, 151, 106, 0.12); }
+.big-btn.balance { border-color: rgba(var(--theme-primary-rgb), 0.3); }
+.big-btn.balance.active { border-color: var(--theme-primary); background: rgba(var(--theme-primary-rgb), 0.1); }
 
 .qsa-divider {
   display: flex;
   align-items: center;
   margin: 20px 0 12px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   font-size: 12px;
 }
 .qsa-divider::before,
@@ -1283,7 +1281,7 @@ const onSubmit = async () => {
   content: "";
   flex: 1;
   height: 1px;
-  background: #ebedf0;
+  background: var(--theme-border);
   margin: 0 8px;
 }
 
@@ -1305,8 +1303,8 @@ const onSubmit = async () => {
   box-sizing: border-box;
   min-height: 48px;
   padding: 6px 8px;
-  border: 1.5px solid #ebedf0;
-  background: #fff;
+  border: 1px solid var(--theme-border);
+  background: var(--theme-bg-secondary);
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -1317,19 +1315,19 @@ const onSubmit = async () => {
   overflow: hidden;
 }
 .card-item:active { transform: scale(0.99); }
-.card-item.active { border-color: #1989fa; background: #f0f8ff; }
+.card-item.active { border-color: var(--theme-primary); background: rgba(var(--theme-primary-rgb), 0.08); }
 .card-item.disabled {
   opacity: 0.4;
   cursor: not-allowed;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
 }
 
 /* 卡片搜索 */
 .card-search { margin: 0 0 10px; }
 .card-search :deep(.van-search) { padding: 6px 0; }
 .card-search :deep(.van-search__content) {
-  background: #f2f3f5;
-  border: 1px solid #ebedf0;
+  background: var(--theme-bg-tertiary);
+  border: 1px solid var(--theme-border);
 }
 
 /* 卡片类型 tab */
@@ -1343,14 +1341,14 @@ const onSubmit = async () => {
   text-align: center;
   padding: 8px 0;
   font-size: 14px;
-  color: #646566;
-  background: #f2f3f5;
+  color: var(--theme-text-secondary);
+  background: var(--theme-bg-tertiary);
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s;
 }
 .card-type-tab.active {
-  background: #1989fa;
+  background: var(--theme-primary);
   color: #fff;
   font-weight: 600;
 }
@@ -1367,7 +1365,7 @@ const onSubmit = async () => {
   justify-content: center;
   width: 28px;
   height: 28px;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   border-radius: 5px;
 }
 
@@ -1383,7 +1381,7 @@ const onSubmit = async () => {
 .card-last4 {
   font-size: 13px;
   font-weight: 700;
-  color: #323233;
+  color: var(--theme-text-primary);
   letter-spacing: 0.5px;
   font-family: "DIN Alternate", "SF Mono", monospace;
   flex-shrink: 0;
@@ -1391,12 +1389,12 @@ const onSubmit = async () => {
 .card-type-text {
   flex-shrink: 0;
   font-size: 11px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   line-height: 1.2;
 }
 .card-bank-name-line {
   font-size: 10px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   margin-top: 2px;
   line-height: 1.2;
   overflow: hidden;
@@ -1425,9 +1423,9 @@ const onSubmit = async () => {
   gap: 4px;
   font-size: 13px;
   font-weight: 600;
-  color: #ee0a24;
+  color: var(--theme-danger);
 }
-.side-label.in { color: #07c160; justify-content: flex-end; }
+.side-label.in { color: var(--van-green); justify-content: flex-end; }
 .side-label .van-icon { font-size: 14px; }
 .side-fixed {
   display: grid;
@@ -1439,19 +1437,19 @@ const onSubmit = async () => {
   padding: 4px 8px;
   font-size: 12px;
   font-weight: 600;
-  border: 1.5px solid #ebedf0;
-  background: #fff;
+  border: 1px solid var(--theme-border);
+  background: var(--theme-bg-secondary);
   border-radius: 6px;
   cursor: pointer;
   outline: none;
   font-family: inherit;
-  color: #323233;
+  color: var(--theme-text-primary);
   transition: all 0.2s;
 }
-.mini-btn.cash { border-color: #ffe2cc; }
-.mini-btn.cash.active { border-color: #ff976a; background: #fff5ec; color: #ff976a; }
-.mini-btn.balance { border-color: #cce4ff; }
-.mini-btn.balance.active { border-color: #1989fa; background: #e8f3ff; color: #1989fa; }
+.mini-btn.cash { border-color: rgba(255, 151, 106, 0.3); }
+.mini-btn.cash.active { border-color: var(--van-orange); background: rgba(255, 151, 106, 0.12); color: var(--van-orange); }
+.mini-btn.balance { border-color: rgba(var(--theme-primary-rgb), 0.3); }
+.mini-btn.balance.active { border-color: var(--theme-primary); background: rgba(var(--theme-primary-rgb), 0.1); color: var(--theme-primary); }
 .side-cards {
   display: flex;
   flex-direction: column;
@@ -1463,7 +1461,7 @@ const onSubmit = async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #1989fa;
+  color: var(--theme-primary);
   font-size: 18px;
 }
 
@@ -1476,22 +1474,22 @@ const onSubmit = async () => {
   margin-bottom: 6px;
 }
 .withdraw-out .side-label {
-  color: #ee0a24;
+  color: var(--theme-danger);
 }
 .withdraw-out-card {
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 12px 20px;
-  background: #fff;
-  border: 1.5px solid #cce4ff;
+  background: var(--theme-bg-secondary);
+  border: 1.5px solid rgba(var(--theme-primary-rgb), 0.3);
   border-radius: 10px;
   font-weight: 600;
-  color: #1989fa;
+  color: var(--theme-primary);
 }
 .withdraw-down {
   text-align: center;
-  color: #1989fa;
+  color: var(--theme-primary);
   font-size: 18px;
   margin: 4px 0;
 }
@@ -1507,11 +1505,11 @@ const onSubmit = async () => {
   align-items: center;
   gap: 4px;
   padding: 4px 12px;
-  background: #fff;
-  border: 1px solid #ebedf0;
+  background: var(--theme-bg-secondary);
+  border: 1px solid var(--theme-border);
   border-radius: 16px;
   font-size: 13px;
-  color: #323233;
+  color: var(--theme-text-primary);
   margin-bottom: 12px;
   cursor: pointer;
 }
@@ -1522,30 +1520,30 @@ const onSubmit = async () => {
   margin: 32px 0 12px;
   padding: 28px 0;
   width: 100%;
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 12px;
   cursor: pointer;
 }
 .amount-symbol {
   font-size: 28px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   margin-right: 4px;
 }
 .amount-num {
   font-size: 56px;
   font-weight: 700;
-  color: #323233;
+  color: var(--theme-text-primary);
   font-family: "DIN Alternate", "SF Mono", monospace;
   letter-spacing: 1px;
 }
 .amount-tip {
   font-size: 12px;
-  color: #c8c9cc;
+  color: var(--theme-text-tertiary);
   margin-top: 8px;
 }
 .exchange-tip {
   font-size: 13px;
-  color: #1989fa;
+  color: var(--theme-primary);
   margin-top: 4px;
 }
 .rate-field {
@@ -1554,13 +1552,13 @@ const onSubmit = async () => {
   width: 100%;
   margin-top: 14px;
   padding: 10px 14px;
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 10px;
   gap: 8px;
 }
 .rate-label {
   font-size: 14px;
-  color: #646566;
+  color: var(--theme-text-secondary);
   flex-shrink: 0;
 }
 .rate-input {
@@ -1568,16 +1566,16 @@ const onSubmit = async () => {
   border: none;
   outline: none;
   font-size: 15px;
-  color: #323233;
+  color: var(--theme-text-primary);
   background: transparent;
   min-width: 0;
   font-family: inherit;
 }
-.rate-input::placeholder { color: #c8c9cc; }
+.rate-input::placeholder { color: var(--theme-text-tertiary); }
 .rate-unit {
   flex-shrink: 0;
   font-size: 13px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 
 /* 巨大下一步按钮 */
@@ -1594,19 +1592,19 @@ const onSubmit = async () => {
   font-size: 20px;
   font-weight: 700;
   color: #fff;
-  background: linear-gradient(135deg, #1989fa 0%, #4fa5ff 100%);
+  background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-primary-grad) 100%);
   border: none;
   border-radius: 14px;
   cursor: pointer;
   outline: none;
-  box-shadow: 0 6px 16px rgba(25, 137, 250, 0.25);
+  box-shadow: 0 6px 16px rgba(var(--theme-primary-rgb), 0.25);
   transition: all 0.2s ease;
 }
 .next-big-btn:active { transform: scale(0.98); }
 .next-big-btn:disabled {
-  background: #c8c9cc;
+  background: var(--theme-bg-tertiary);
   box-shadow: none;
-  color: #fff;
+  color: var(--theme-text-tertiary);
   cursor: not-allowed;
 }
 .next-big-btn .van-icon {
@@ -1620,14 +1618,14 @@ const onSubmit = async () => {
   align-items: center;
   width: 100%;
   padding: 14px 16px;
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 10px;
   gap: 8px;
   margin-bottom: 12px;
 }
 .payee-label {
   font-size: 15px;
-  color: #323233;
+  color: var(--theme-text-primary);
   font-weight: 600;
   flex-shrink: 0;
 }
@@ -1636,16 +1634,16 @@ const onSubmit = async () => {
   border: none;
   outline: none;
   font-size: 15px;
-  color: #323233;
+  color: var(--theme-text-primary);
   background: transparent;
   min-width: 0;
   font-family: inherit;
 }
-.payee-input::placeholder { color: #c8c9cc; }
+.payee-input::placeholder { color: var(--theme-text-tertiary); }
 
 /* 摘要 */
 .summary {
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 12px;
   padding: 16px;
   margin-top: 16px;
@@ -1657,9 +1655,9 @@ const onSubmit = async () => {
   padding: 8px 0;
   font-size: 14px;
 }
-.summary-row + .summary-row { border-top: 1px solid #f7f8fa; }
-.summary-label { color: #969799; }
-.summary-val { color: #323233; font-weight: 500; }
+.summary-row + .summary-row { border-top: 1px solid var(--theme-border); }
+.summary-label { color: var(--theme-text-tertiary); }
+.summary-val { color: var(--theme-text-primary); font-weight: 500; }
 .summary-amount-row { margin-top: 4px; padding-top: 12px; }
 .summary-amount {
   font-size: 24px;

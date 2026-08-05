@@ -46,22 +46,22 @@
           <div class="item-footer">
             <template v-if="!isInstallment(item)">
             <div class="tag-row">
-              <van-tag :type="item.month_status === 'done' ? 'success' : item.month_status === 'skipped' ? 'danger' : 'warning'">
+              <app-tag :type="item.month_status === 'done' ? 'success' : item.month_status === 'skipped' ? 'danger' : 'warning'">
                 {{ item.month_status === 'done' ? '已处理' : item.month_status === 'skipped' ? '已跳过' : '待处理' }}
-              </van-tag>
-              <van-tag v-if="item.cycle === 'year'" type="primary" size="small">年</van-tag>
-              <van-tag v-if="item.repeat_count" color="#7232dd" text-color="#fff" size="small">{{ doneCount(item) }}/{{ item.repeat_count }}期</van-tag>
-              <van-tag v-if="!item.is_active" type="default">已停用</van-tag>
+              </app-tag>
+              <app-tag v-if="item.cycle === 'year'" type="primary" size="small">年</app-tag>
+              <app-tag v-if="item.repeat_count" :color="'var(--van-purple, #7232dd)'" text-color="#fff" size="small">{{ doneCount(item) }}/{{ item.repeat_count }}期</app-tag>
+              <app-tag v-if="!item.is_active" type="default">已停用</app-tag>
               <span v-if="item.end_date" class="end-date">至 {{ item.end_date }}</span>
               <span class="due-date">{{ item.happen_date }}</span>
             </div>
             <div class="actions">
-              <van-button v-if="item.month_status !== 'skipped'" size="mini" plain type="primary" @click="toggleDone(item)">
+              <app-button v-if="item.month_status !== 'skipped'" size="mini" plain type="primary" @click="toggleDone(item)">
                 {{ item.month_status === 'done' ? '设为待处理' : '设为已处理' }}
-              </van-button>
-              <van-tag v-else type="danger" size="small">已跳过</van-tag>
-              <van-button size="mini" plain @click="openEdit(item)">编辑</van-button>
-              <van-button size="mini" plain type="danger" @click="handleSkipMonth(item)" v-if="item.month_status !== 'skipped'">跳过本月</van-button>
+              </app-button>
+              <app-tag v-else type="danger" size="small">已跳过</app-tag>
+              <app-button size="mini" plain @click="openEdit(item)">编辑</app-button>
+              <app-button size="mini" plain type="danger" @click="handleSkipMonth(item)" v-if="item.month_status !== 'skipped'">跳过本月</app-button>
             </div>
             </template>
             <span v-else class="due-date">{{ item.happen_date }}</span>
@@ -70,22 +70,22 @@
       </div>
     </van-pull-refresh>
 
-    <van-popup v-model:show="showForm" position="bottom" round close-on-click-overlay>
+    <app-popup v-model:show="showForm" position="bottom" round close-on-click-overlay>
       <div class="form-panel">
         <div class="form-title">编辑当月 — {{ editingMonth }}</div>
-        <van-field v-model="form.name" label="名称" readonly />
-        <van-field v-if="form.is_expense" v-model="form.amount" label="本月金额" type="number" placeholder="0.00" />
-        <van-field v-else class="expense-off-hint">
-          <template #input><span>仅事件提醒，不计入支出</span></template>
-        </van-field>
-        <van-field v-model="form.remark" label="本月备注" placeholder="选填" maxlength="100" />
-        <van-button v-if="editingSkipped" round block type="warning" @click="restoreMonth" style="margin-bottom:10px">恢复事件（取消跳过）</van-button>
+        <app-field v-model="form.name" label="名称" readonly />
+        <app-field v-if="form.is_expense" v-model="form.amount" label="本月金额" type="number" placeholder="0.00" />
+        <app-field v-else class="expense-off-hint">
+          <span>仅事件提醒，不计入支出</span>
+        </app-field>
+        <app-field v-model="form.remark" label="本月备注" placeholder="选填" maxlength="100" />
+        <app-button v-if="editingSkipped" round block type="warning" @click="restoreMonth" style="margin-bottom:10px">恢复事件（取消跳过）</app-button>
         <div class="form-actions">
-          <van-button round block @click="showForm = false">取消</van-button>
-          <van-button round block type="primary" :loading="submitting" @click="handleSubmit">保存</van-button>
+          <app-button round block @click="showForm = false">取消</app-button>
+          <app-button round block type="primary" :loading="submitting" @click="handleSubmit">保存</app-button>
         </div>
       </div>
-    </van-popup>
+    </app-popup>
 
 
 
@@ -247,13 +247,13 @@ onMounted(() => loadData())
 .page-recurring {
   min-height: 100vh;
   padding: 12px 16px 96px;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
 }
 
 .summary-card,
 .category-card,
 .recurring-item {
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 8px;
   padding: 14px;
 }
@@ -267,7 +267,7 @@ onMounted(() => loadData())
   align-items: center;
   justify-content: center;
   gap: 18px;
-  color: #646566;
+  color: var(--theme-text-secondary);
   font-size: 14px;
   margin-bottom: 12px;
 }
@@ -282,22 +282,22 @@ onMounted(() => loadData())
 .item-sub,
 .due-date,
 .end-date {
-  color: #969799;
+  color: var(--theme-text-tertiary);
   font-size: 12px;
 }
 
 .end-date {
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
   font-size: 11px;
 }
 
 .installment-badge {
-  color: #7232dd;
+  color: var(--van-purple, #7232dd);
   font-weight: 500;
 }
 
 .summary-amount {
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
   font-size: 28px;
   font-weight: 700;
   margin-top: 4px;
@@ -309,7 +309,7 @@ onMounted(() => loadData())
   gap: 4px;
   text-align: right;
   font-size: 12px;
-  color: #646566;
+  color: var(--theme-text-secondary);
 }
 
 .category-card {
@@ -332,7 +332,7 @@ onMounted(() => loadData())
 .category-row {
   font-size: 13px;
   padding: 6px 0;
-  color: #646566;
+  color: var(--theme-text-secondary);
 }
 
 .recurring-list {
@@ -348,24 +348,24 @@ onMounted(() => loadData())
 .item-title {
   font-size: 16px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
   margin-bottom: 5px;
 }
 
 .item-amount {
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
   font-size: 18px;
   font-weight: 700;
 }
 
 .item-amount.event-only {
-  color: #1989fa;
+  color: var(--theme-primary);
   font-size: 13px;
   font-weight: 400;
 }
 
 .expense-off-hint {
-  color: #969799;
+  color: var(--theme-text-tertiary);
   font-size: 13px;
 }
 

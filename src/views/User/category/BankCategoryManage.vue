@@ -3,9 +3,9 @@
     <div class="category-content">
       <div class="action-bar">
         <span class="count">共 {{ categories.length }} 个银行分类</span>
-        <van-button size="small" type="primary" icon="plus" @click="handleAdd">
+        <app-button size="small" type="primary" icon="plus" @click="handleAdd">
           新增
-        </van-button>
+        </app-button>
       </div>
 
       <div class="category-grid" v-if="categories.length > 0">
@@ -16,16 +16,8 @@
           </div>
 
           <div class="card-left">
-            <div class="card-icon" v-if="item.icon_url || item.iconUrl">
-              <van-image
-                width="36"
-                height="36"
-                :src="getFullUrl(item.icon_url || item.iconUrl)"
-                fit="cover"
-              />
-            </div>
-            <div class="card-icon default" v-else>
-              <van-icon name="card" size="22" />
+            <div class="card-icon">
+              <BankIcon :src="getFullUrl(item.icon_url || item.iconUrl)" :name="item.name" :size="36" rounded="10" />
             </div>
           </div>
 
@@ -55,7 +47,7 @@
     </van-overlay>
 
     <!-- 新增/编辑弹窗 -->
-    <van-popup
+    <app-popup
       v-model:show="showDialog"
       position="bottom"
       round
@@ -69,7 +61,7 @@
         </div>
 
         <div class="dialog-form">
-          <van-field
+          <app-field
             v-model="formData.name"
             label="银行名称"
             placeholder="请输入银行名称"
@@ -96,7 +88,7 @@
             <div class="icon-tip" v-if="formData.iconUrl">点击更换图标</div>
           </div>
 
-          <van-field
+          <app-field
             v-model="formData.remark"
             label="备注"
             placeholder="选填"
@@ -106,18 +98,17 @@
         </div>
 
         <div class="dialog-actions">
-          <van-button plain size="large" round @click="showDialog = false"
-            >取消</van-button
-          >
-          <van-button type="primary" size="large" round @click="handleConfirm">
+          <app-button plain size="large" round @click="showDialog = false"
+            >取消</app-button>
+          <app-button type="primary" size="large" round @click="handleConfirm">
             保存
-          </van-button>
+          </app-button>
         </div>
       </div>
-    </van-popup>
+    </app-popup>
 
     <!-- 图标选择弹窗 -->
-    <van-popup
+    <app-popup
       v-model:show="showIconPicker"
       position="bottom"
       round
@@ -178,7 +169,7 @@
           description="暂无图标，请上传"
         />
       </div>
-    </van-popup>
+    </app-popup>
   </div>
 </template>
 
@@ -187,6 +178,7 @@ import { ref, onMounted, watch } from "vue";
 import { showToast, showConfirmDialog } from "vant";
 import { categoryApi } from "@/utils/api/category";
 import { uploadApi, BusType } from "@/utils/api/upload";
+import BankIcon from "@/components/BankIcon.vue";
 
 const categories = ref([]);
 const loading = ref(false);
@@ -230,11 +222,9 @@ const loadCategories = async () => {
     const res = await categoryApi.list("bank");
     categories.value = res.data || res || [];
   } catch (e) {
-    categories.value = [
-      { id: "1", name: "招商银行", remark: "招商银行银行卡", icon_url: "" },
-      { id: "2", name: "建设银行", remark: "建设银行银行卡", icon_url: "" },
-      { id: "3", name: "工商银行", remark: "工商银行银行卡", icon_url: "" },
-    ];
+    // 加载失败不注入 mock 数据，留空并提示
+    categories.value = [];
+    showToast("银行分类加载失败");
   } finally {
     loading.value = false;
   }
@@ -389,7 +379,7 @@ onMounted(() => loadCategories());
 <style scoped>
 .page-category-manage {
   min-height: 100vh;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
 }
 .category-content {
   padding: 16px;
@@ -402,7 +392,7 @@ onMounted(() => loadCategories());
 }
 .count {
   font-size: 13px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 .category-grid {
   display: grid;
@@ -410,7 +400,7 @@ onMounted(() => loadCategories());
   gap: 12px;
 }
 .category-card {
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 12px;
   padding: 14px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
@@ -425,7 +415,7 @@ onMounted(() => loadCategories());
   right: 10px;
   display: flex;
   gap: 10px;
-  color: #999;
+  color: var(--theme-text-tertiary);
 }
 .card-left {
   flex-shrink: 0;
@@ -438,9 +428,9 @@ onMounted(() => loadCategories());
 .card-icon.default {
   width: 36px;
   height: 36px;
-  background: #f2f2f2;
+  background: transparent;
   border-radius: 8px;
-  color: #999;
+  color: var(--theme-text-tertiary);
 }
 .card-content {
   flex: 1;
@@ -449,11 +439,11 @@ onMounted(() => loadCategories());
 .category-name {
   font-size: 15px;
   font-weight: 600;
-  color: #333;
+  color: var(--theme-text-primary);
 }
 .category-remark {
   font-size: 12px;
-  color: #999;
+  color: var(--theme-text-tertiary);
   margin-top: 2px;
 }
 .flex-center {
@@ -474,10 +464,10 @@ onMounted(() => loadCategories());
 .dialog-title {
   font-size: 18px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
 }
 .dialog-form {
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   border-radius: 12px;
   padding: 8px 0;
 }
@@ -495,12 +485,12 @@ onMounted(() => loadCategories());
   display: flex;
   align-items: center;
   padding: 12px 16px;
-  background: #fff;
-  border-bottom: 1px solid #ebedf0;
+  background: var(--theme-bg-secondary);
+  border: 1px solid var(--theme-border);
 }
 .icon-label {
   font-size: 14px;
-  color: #646566;
+  color: var(--theme-text-secondary);
   flex-shrink: 0;
 }
 .icon-preview {
@@ -510,16 +500,16 @@ onMounted(() => loadCategories());
 .icon-placeholder {
   width: 48px;
   height: 48px;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 .icon-tip {
   font-size: 12px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   margin-left: 8px;
 }
 
@@ -541,25 +531,25 @@ onMounted(() => loadCategories());
 .picker-title {
   font-size: 16px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
 }
 .upload-section {
   padding-bottom: 16px;
-  border-bottom: 1px solid #ebedf0;
+  border: 1px solid var(--theme-border);
   margin-bottom: 16px;
   flex-shrink: 0;
 }
 .upload-trigger {
   width: 60px;
   height: 60px;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   border-radius: 8px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 4px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   font-size: 11px;
 }
 .icon-loading {
@@ -592,13 +582,13 @@ onMounted(() => loadCategories());
   transform: scale(0.95);
 }
 .icon-item.active {
-  border-color: #1989fa;
+  border-color: var(--van-blue, #1989fa);
 }
 .icon-item .check-icon {
   position: absolute;
   top: 2px;
   right: 2px;
-  background: #1989fa;
+  background: var(--theme-primary);
   border-radius: 50%;
   padding: 2px;
   color: #fff;

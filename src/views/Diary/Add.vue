@@ -2,9 +2,9 @@
   <div class="page-diary-add">
     <van-nav-bar>
       <template #left>
-        <van-button size="small" plain type="default" round @click="handleCancel">
+        <app-button size="small" plain type="default" round @click="handleCancel">
           取消
-        </van-button>
+        </app-button>
       </template>
       <template #title>
         <div class="mode-toggle">
@@ -19,15 +19,15 @@
         </div>
       </template>
       <template #right>
-        <van-button size="small" type="primary" round @click="handleSave">
+        <app-button size="small" type="primary" round @click="handleSave">
           发布
-        </van-button>
+        </app-button>
       </template>
     </van-nav-bar>
 
     <!-- ============= 快速模式 ============= -->
     <div v-show="mode === 'quick'" class="editor-container">
-      <van-field
+      <app-field
         v-model="content"
         rows="10"
         autosize
@@ -63,21 +63,21 @@
 
     <!-- ============= 底部元信息（两种模式共用） ============= -->
     <van-cell-group inset class="meta-cells">
-      <van-cell
+      <app-cell
         title="今日心情"
         is-link
         :value="mood"
         @click="showMood = true"
         icon="smile-o"
       />
-      <van-cell
+      <app-cell
         title="添加图片"
         is-link
         value=""
         icon="photograph"
         @click="showImagePicker = true"
       />
-      <van-cell
+      <app-cell
         title="当前位置"
         is-link
         :value="locationText"
@@ -102,7 +102,7 @@
     />
 
     <!-- 图片选择弹窗 -->
-    <van-popup
+    <app-popup
       v-model:show="showImagePicker"
       position="bottom"
       round
@@ -114,9 +114,9 @@
           <span v-if="localSelected.length > 0" class="selected-count">
             已选 {{ localSelected.length }} 张
           </span>
-          <van-button size="small" type="primary" @click="confirmSelection">
+          <app-button size="small" type="primary" @click="confirmSelection">
             确认
-          </van-button>
+          </app-button>
         </div>
 
         <div class="upload-section">
@@ -154,7 +154,7 @@
         <van-empty v-if="!loading && imageList.length === 0" description="暂无图片，请上传" image="search" />
         <van-loading v-if="loading" class="loading" />
       </div>
-    </van-popup>
+    </app-popup>
   </div>
 </template>
 
@@ -575,7 +575,7 @@ const handleCancel = () => {
 <style scoped>
 .page-diary-add {
   min-height: 100dvh;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   display: flex;
   flex-direction: column;
 }
@@ -584,7 +584,7 @@ const handleCancel = () => {
 .mode-toggle {
   display: flex;
   align-items: center;
-  background: #f0f0f0;
+  background: var(--theme-bg-tertiary);
   border-radius: 16px;
   padding: 2px;
   font-size: 13px;
@@ -594,22 +594,22 @@ const handleCancel = () => {
 .mode-btn {
   padding: 4px 14px;
   border-radius: 14px;
-  color: #666;
+  color: var(--theme-text-secondary);
   transition: all 0.2s;
   cursor: pointer;
   user-select: none;
 }
 
 .mode-btn.active {
-  background: #fff;
-  color: #333;
+  background: var(--theme-bg-secondary);
+  color: var(--theme-text-primary);
   font-weight: 500;
   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
 /* ---------- 快速模式 ---------- */
 .editor-container {
-  background: #fff;
+  background: var(--theme-bg-secondary);
 }
 
 .diary-input {
@@ -662,7 +662,7 @@ const handleCancel = () => {
 }
 
 .wangeditor-toolbar {
-  border-bottom: 1px solid #eee;
+  border: 1px solid var(--theme-border);
   flex-shrink: 0;
   position: relative;
 }
@@ -683,7 +683,7 @@ const handleCancel = () => {
   left: 16px !important;
   font-size: 16px !important;
   line-height: 1.6 !important;
-  color: #c8c9cc;
+  color: var(--theme-text-tertiary);
 }
 
 /* 滚动容器 — 文本基础样式 */
@@ -704,7 +704,7 @@ const handleCancel = () => {
 }
 
 .wangeditor-editor :deep(.w-e-bar) {
-  background: #fff;
+  background: var(--theme-bg-secondary);
 }
 
 .wangeditor-editor :deep(.w-e-bar-item button) {
@@ -730,7 +730,7 @@ const handleCancel = () => {
   align-items: center;
   gap: 12px;
   padding-bottom: 16px;
-  border-bottom: 1px solid #eee;
+  border: 1px solid var(--theme-border);
 }
 
 .picker-title {
@@ -741,7 +741,7 @@ const handleCancel = () => {
 
 .selected-count {
   font-size: 13px;
-  color: #07c160;
+  color: var(--van-green, #07c160);
 }
 
 .upload-section {
@@ -751,14 +751,14 @@ const handleCancel = () => {
 .upload-trigger {
   width: 80px;
   height: 80px;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   border-radius: 8px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 4px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 
 .upload-trigger span {
@@ -793,7 +793,7 @@ const handleCancel = () => {
 }
 
 .image-item.checked {
-  border-color: #07c160;
+  border-color: var(--van-green, #07c160);
 }
 
 .image-item .van-image {

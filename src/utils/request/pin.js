@@ -24,6 +24,7 @@ let pinDialogInstance = null
 let forceLoginFn = null // 由 response.js 注入
 let isPageLoad = false // 是否是页面首次加载时触发的验证
 let verifyContext = null
+let lastSuccessAt = 0 // 上次 PIN 验证成功时间戳（防并发 8303 竞态）
 
 const ROUTE_VERIFY_ACTION = 'route_verify'
 
@@ -78,6 +79,18 @@ export function requestPinVerify(originalRequest, verifyData = {}) {
   const actionType = verifyData?.action_type || verifyData?.actionType
   const isRouteVerify = actionType === ROUTE_VERIFY_ACTION
   const currentIsRouteVerify = verifyContext?.action_type === ROUTE_VERIFY_ACTION
+
+  // 冷却窗口保护：验证成功后 30 秒内再收到 8303 → 静默重发，不再弹窗
+  const cooldownMs = 30000
+  if (!isVerifying && lastSuccessAt > 0 && (Date.now() - lastSuccessAt < cooldownMs)) {
+    return new Promise((resolve, reject) => {
+      const retryConfig = { ...originalRequest }
+      delete retryConfig.__pinVerify
+      axios(retryConfig)
+        .then(res => resolve(res.data || res))
+        .catch(err => reject(err))
+    })
+  }
 
   if (isVerifying && currentIsRouteVerify !== isRouteVerify) {
     return Promise.reject(new Error('已有 PIN 验证正在进行'))
@@ -188,6 +201,9 @@ export async function submitPin(pin) {
  */
 async function onPinSuccess(verifyResult = {}) {
   if (pinDialogInstance) pinDialogInstance.hide()
+
+  // 记录验证成功时间，启动冷却窗口保护
+  lastSuccessAt = Date.now()
 
   if (isRetrying) return
   isRetrying = true

@@ -1,110 +1,32 @@
 <template>
-  <div class="page-card-list" @click="handleBackdropClick">
+  <div class="page-card-list">
     <div class="page-header">
-      <h1 class="title">信用卡</h1>
-      <span class="subtitle">共 {{ cardList.length }} 张卡片</span>
-    </div>
-
-    <div class="card-stack-container" v-if="cardList.length > 0">
-      <div
-        class="stack-backdrop"
-        :class="{ 'is-visible': selectedId !== null }"
-      ></div>
-
-      <div
-        class="card-stack"
-        :style="{ height: `${220 + (cardList.length - 1) * 45}px` }"
-      >
-        <div
-          v-for="(item, index) in cardList"
-          :key="item.id"
-          class="bank-card-item"
-          :class="{
-            'is-selected': selectedId === item.id,
-            'is-dimmed': selectedId !== null && selectedId !== item.id,
-          }"
-          :style="getCardStyle(item, index)"
-          @click.stop="handleCardClick(item, index)"
-        >
-          <!-- 隐藏的图片用于检测卡面图片加载失败 -->
-          <img 
-            v-if="item.cardImgUrl" 
-            :src="item.cardImgUrl" 
-            style="display: none;" 
-            @error="onCardImgError(item.id)"
-          />
-          <div class="bg-pattern" v-if="!item.cardImgUrl || cardImgError[item.id]"></div>
-
-          <!-- 无卡面图片或图片加载失败时：左上角银行信息 -->
-          <div class="card-header" v-if="!item.cardImgUrl || cardImgError[item.id]">
-            <div class="bank-info">
-              <div class="bank-icon" v-if="item.bankIconUrl && !bankIconError[item.id]">
-                <img :src="item.bankIconUrl" :alt="item.bankName" @error="onBankIconError(item.id)" />
-              </div>
-              <div class="bank-icon-mock" v-else>
-                {{ item.bankName?.charAt(0) || "?" }}
-              </div>
-              <div class="bank-name">
-                {{ item.bankName || "未知银行" }}
-                <span class="bank-last4" v-if="selectedId === null"
-                  >（{{ item.last4No }}）</span
-                >
-              </div>
-            </div>
-            <van-tag v-if="item.isDefault || item.is_default" class="custom-tag"
-              >默认</van-tag
-            >
-          </div>
-
-          <!-- 有卡面图片且加载成功时：右上角显示尾号后四位（弹出后隐藏） -->
-          <div class="card-header-img" v-if="item.cardImgUrl && !cardImgError[item.id] && selectedId !== item.id">
-            <van-tag v-if="item.isDefault || item.is_default" class="custom-tag"
-              >默认</van-tag
-            >
-            <span class="card-img-last4">{{ item.last4No }}</span>
-          </div>
-
-          <div class="card-number" v-if="!item.cardImgUrl || cardImgError[item.id]">
-            {{ formatCardNo(item) }}
-          </div>
-
-          <div class="card-footer" v-if="!item.cardImgUrl || cardImgError[item.id]">
-            <div class="holder-section">
-              <span class="label">CREDIT CARD</span>
-              <span class="value">{{
-                item.alias || item.cardLevel || "信用卡"
-              }}</span>
-            </div>
-
-            <!-- 卡组织图标 - 左下角默认 -->
-            <div
-              class="card-org"
-              v-if="item.cardOrgIconUrl && selectedId === null"
-            >
-              <img :src="item.cardOrgIconUrl" alt="卡组织" />
-            </div>
-          </div>
-
-          <!-- 有卡面图片且加载成功时：弹出后左下角显示尾号 -->
-          <div class="card-footer-img" v-if="item.cardImgUrl && !cardImgError[item.id] && selectedId === item.id">
-            <span class="card-img-last4-bottom">{{ item.last4No }}</span>
-          </div>
-
-          <transition name="fade">
-            <div class="card-actions-quick" v-if="selectedId === item.id">
-              <button class="action-pill-btn" @click.stop="goToEdit(item)">
-                <van-icon name="setting-o" />
-                <span>管理</span>
-              </button>
-              <!-- 卡组织图标 - 右上角选中时（无卡面图片或卡面图片加载失败时） -->
-              <div class="card-org card-org-top" v-if="item.cardOrgIconUrl && (!item.cardImgUrl || cardImgError[item.id])">
-                <img :src="item.cardOrgIconUrl" alt="卡组织" />
-              </div>
-            </div>
-          </transition>
-        </div>
+      <div class="page-header-left">
+        <h1 class="title">信用卡</h1>
+        <span class="subtitle">共 {{ cardList.length }} 张卡片</span>
+      </div>
+      <div class="preview-toggle">
+        <span class="preview-label">预览</span>
+        <van-switch
+          v-model="previewMode"
+          size="20px"
+          inactive-color="#dcdee0"
+          active-color="#ee0a24"
+        />
       </div>
     </div>
+
+    <CardStack
+      v-model:selected-id="selectedId"
+      :card-list="displayCardList"
+      default-color="var(--theme-danger-color, #ee0a24)"
+      card-type-label="CREDIT CARD"
+      :card-img-errors="cardImgError"
+      :bank-icon-errors="bankIconError"
+      @edit="goToEdit"
+      @card-img-error="onCardImgError"
+      @bank-icon-error="onBankIconError"
+    />
 
     <van-empty
       v-if="!loading && cardList.length === 0"
@@ -127,11 +49,12 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from "vue";
+import { ref, computed, watch, onMounted } from "vue";
 import { showToast } from "vant";
 import { useRouter } from "vue-router";
 import { getCardList } from "@/utils/api/card";
 import { categoryApi } from "@/utils/api/category";
+import CardStack from "@/components/BankCard/CardStack.vue";
 
 const router = useRouter();
 
@@ -141,6 +64,46 @@ const loading = ref(false);
 const selectedId = ref(null);
 const bankIconError = ref({});
 const cardImgError = ref({});
+
+// 预览模式：开启后所有卡号/尾号随机化，用于录屏分享避免泄露
+const previewMode = ref(false);
+
+// 生成 4 位随机数字
+const random4 = () =>
+  String(Math.floor(1000 + Math.random() * 9000));
+// 生成 N 位随机数字串
+const randomDigits = (n) => {
+  let s = "";
+  for (let i = 0; i < n; i++) s += Math.floor(Math.random() * 10);
+  return s;
+};
+
+// 预览脱敏后缓存（保证列表/卡片显示一致，不随 render 变化）
+const maskedCardList = ref([]);
+
+// 预览脱敏处理：BIN 保留前 3 位 + 后 N 位随机数字，尾号 4 位随机
+const buildMaskedList = (list) =>
+  list.map((item) => {
+    const bin = item.card_bin || item.cardBin || "";
+    const maskedBin = bin.slice(0, 3) + randomDigits(bin.length > 3 ? bin.length - 3 : 3);
+    const fakeLast4 = random4();
+    return {
+      ...item,
+      last4No: fakeLast4,
+      last4_no: fakeLast4,
+      card_bin: maskedBin,
+      cardBin: maskedBin,
+    };
+  });
+
+// 传给 CardStack 的列表：预览模式用稳定缓存，否则用原始数据
+const displayCardList = computed(() =>
+  previewMode.value ? maskedCardList.value : cardList.value
+);
+
+watch([previewMode, cardList], ([mode, list]) => {
+  maskedCardList.value = mode ? buildMaskedList(list) : [];
+});
 
 // BASE_URL
 import ENV from '@/utils/env'
@@ -168,27 +131,10 @@ const onCardImgError = (cardId) => {
   cardImgError.value[cardId] = true;
 };
 
-// 计算卡片样式
-const getCardStyle = (item, index) => {
-  const style = {
-    '--card-color': item.color || '#ee0a24',
-    '--stack-offset': `${index * 70}px`,
-    'z-index': selectedId.value === item.id ? 999 : index,
-  };  
-  
-  // 如果有卡面图片且加载成功，用图片+渐变作为背景
-  if (item.cardImgUrl && !cardImgError.value[item.id]) {
-    style.backgroundImage = `url(${item.cardImgUrl}), linear-gradient(135deg, ${item.color || '#ee0a24'} 0%, #1a1a1a 150%)`;
-  }
-  
-  return style;
-};
-
 // 获取卡组织信息（根据 card_org 匹配 name）
 // 英文忽略大小写，中文全等匹配
 const getCardOrgInfo = (cardOrg) => {
   if (!cardOrg) return "";
-  // 判断是否包含中文
   const isChinese = /[\u4e00-\u9fa5]/.test(cardOrg);
   const org = bankList.value.find((b) => {
     if (isChinese) {
@@ -211,19 +157,6 @@ const loadBankList = async () => {
   } catch (e) {
     bankList.value = [];
   }
-};
-
-// 格式化卡号显示：4位一组，如 6228 48** **** ***6 6666
-const formatCardNo = (item) => {
-  const bin = item.card_bin || item.cardBin || "";
-  const length = parseInt(item.card_length || item.cardLength || "16");
-  const last4 = item.last4_no || item.last4No || "****";
-  const middleLength = length - bin.length - 4;
-  const middleStars = middleLength > 0 ? "*".repeat(middleLength) : "";
-  const fullNo = bin + middleStars + last4;
-
-  // 每4位一组，用空格分隔
-  return fullNo.match(/.{1,4}/g)?.join(" ") || fullNo;
 };
 
 // 加载卡片列表
@@ -265,18 +198,6 @@ const loadCards = async () => {
   }
 };
 
-const handleCardClick = (item) => {
-  if (selectedId.value === item.id) {
-    selectedId.value = null;
-  } else {
-    selectedId.value = item.id;
-  }
-};
-
-const handleBackdropClick = () => {
-  selectedId.value = null;
-};
-
 // 跳转到编辑页面
 const goToEdit = (item) => {
   router.push(`/card/edit?id=${item.id}&from=credit`);
@@ -297,7 +218,7 @@ onMounted(async () => {
 <style scoped>
 .page-card-list {
   min-height: calc(100vh - 100px);
-  background: #ffffff;
+  background: var(--theme-bg-secondary);
   padding: 24px 20px 120px;
   position: relative;
   overflow-x: hidden;
@@ -307,254 +228,37 @@ onMounted(async () => {
   margin-bottom: 24px;
   position: relative;
   z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.page-header-left {
+  display: flex;
+  flex-direction: column;
+}
+.preview-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: var(--theme-bg-primary, #fff);
+  border-radius: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+.preview-label {
+  font-size: 13px;
+  color: var(--theme-text-secondary);
+  font-weight: 500;
 }
 .page-header .title {
   font-size: 28px;
   font-weight: 800;
-  color: #1a1a1a;
+  color: var(--theme-text-primary);
   margin: 0;
 }
 .page-header .subtitle {
   font-size: 14px;
-  color: #8c8c8c;
-}
-
-/* 堆叠区域 */
-.card-stack-container {
-  position: relative;
-  z-index: 60;
-}
-
-.stack-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(8px);
-  -webkit-backflow-filter: blur(8px);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-  z-index: 50;
-}
-.stack-backdrop.is-visible {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.card-stack {
-  position: relative;
-  width: 100%;
-  margin-top: 10px;
-}
-
-.bank-card-item {
-  position: absolute;
-  left: 0;
-  right: 0;
-  border-radius: 20px;
-  height: 220px;
-  padding: 20px 5px 20px 20px;
-  box-sizing: border-box;
-  color: #fff;
-  background-image: linear-gradient(135deg, var(--card-color) 0%, #1a1a1a 150%);
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  top: var(--stack-offset);
-  transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), top 0.5s ease,
-    filter 0.4s ease, box-shadow 0.4s ease;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
-  overflow: hidden;
-}
-
-.bank-card-item.is-selected {
-  transform: translateY(-100px) scale(1.05);
-  box-shadow: 0 40px 80px rgba(0, 0, 0, 0.4);
-  filter: brightness(1.1);
-}
-
-.bank-card-item.is-dimmed {
-  filter: brightness(0.5) blur(1px);
-  transform: translateY(10px) scale(0.95);
-  opacity: 0.6;
-}
-
-/* 有卡面图片时的右上角尾号 */
-.card-header-img {
-  display: flex;
-  justify-content: flex-end;
-  align-items: flex-start;
-  position: relative;
-  z-index: 2;
-  gap: 8px;
-}
-.card-img-last4 {
-  font-size: 16px;
-  font-weight: 600;
-  letter-spacing: 2px;
-  background: rgba(0, 0, 0, 0.4);
-  padding: 4px 12px;
-  border-radius: 8px;
-}
-
-/* 有卡面图片时：弹出后左下角尾号 */
-.card-footer-img {
-  position: absolute;
-  left: 20px;
-  bottom: 20px;
-  z-index: 5;
-}
-.card-img-last4-bottom {
-  font-size: 18px;
-  font-weight: 600;
-  letter-spacing: 3px;
-  background: rgba(0, 0, 0, 0.4);
-  padding: 6px 14px;
-  border-radius: 8px;
-}
-
-.bg-pattern {
-  position: absolute;
-  top: -20%;
-  right: -10%;
-  width: 200px;
-  height: 200px;
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 50%;
-}
-
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  position: relative;
-  z-index: 2;
-}
-.bank-icon-mock {
-  width: 40px;
-  height: 40px;
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: bold;
-  font-size: 18px;
-}
-.bank-icon {
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-}
-.bank-icon img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
-.bank-name {
-  font-size: 18px;
-  font-weight: 600;
-  margin-left: 12px;
-}
-.bank-last4 {
-  font-size: 1rem;
-  font-weight: normal;
-}
-.bank-info {
-  display: flex;
-  align-items: center;
-}
-.custom-tag {
-  background: rgba(255, 255, 255, 0.2) !important;
-  border: none !important;
-}
-
-.card-number {
-  font-size: 20px;
-  font-weight: 600;
-  letter-spacing: 2px;
-  margin: 30px 0;
-  position: relative;
-  z-index: 2;
-}
-
-.card-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  position: relative;
-  z-index: 2;
-}
-.holder-section .label {
-  font-size: 14px;
-  opacity: 0.5;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-}
-.holder-section .value {
-  font-size: 14px;
-  font-weight: 600;
-  margin-top: 4px;
-  display: block;
-}
-
-/* 卡组织图标 */
-.card-org {
-  position: absolute;
-  right: 0;
-  bottom: -20px;
-  width: 100px;
-  height: 80px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-}
-.card-org img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
-.card-org-top {
-  position: static;
-  > img {
-    width: 80px;
-    height: 80px;
-  }
-}
-
-/* 操作按钮 */
-.card-actions-quick {
-  position: absolute;
-  right: 0;
-  top: 0;
-  height: 100%;
-  width: 100px;
-  z-index: 10;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: space-between;
-  align-content: space-around;
-  padding: 20px 10px 0 10px;
-  flex-wrap: nowrap;
-  box-sizing: border-box;
-}
-.action-pill-btn {
-  width: 100%;
-  background: #ffffff71;
-  color: #333;
-  border: none;
-  padding: 5px 12px;
-  border-radius: 30px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
-  font-size: 14px;
+  color: var(--theme-text-tertiary);
 }
 
 /* 底部按钮 */
@@ -563,12 +267,12 @@ onMounted(async () => {
   bottom: 30px;
   left: 20px;
   right: 20px;
-  z-index: 100;
+  z-index: 12000;
 }
 .glass-add-btn {
   width: 100%;
   height: 56px;
-  background: #ee0a24;
+  background: var(--van-danger-color, #ee0a24);
   color: #fff;
   border: none;
   border-radius: 28px;
@@ -586,15 +290,5 @@ onMounted(async () => {
   height: 100%;
   align-items: center;
   justify-content: center;
-}
-
-.fade-enter-active,
-.fade-leave-active {
-  transition: all 0.3s ease;
-}
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-  transform: translate(-50%, -30%);
 }
 </style>

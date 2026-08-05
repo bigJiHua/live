@@ -5,24 +5,21 @@
     <div class="card-preview" v-if="!loading && cardData.id">
       <div
         class="preview-card"
-        :style="{ background: `linear-gradient(135deg, ${formData.color} 0%, #1a1a1a 150%)` }"
+        :style="{ background: `linear-gradient(135deg, ${formData.color} 0%, var(--theme-text-primary) 150%)` }"
       >
         <div class="preview-bg-pattern"></div>
         
         <div class="preview-header">
           <div class="preview-bank-info">
-            <div class="preview-bank-icon" v-if="bankIconUrl">
-              <img :src="bankIconUrl" :alt="bankNameDisplay" />
-            </div>
-            <div class="preview-bank-icon-mock" v-else>
-              {{ (bankNameDisplay || '?').charAt(0) }}
+            <div class="preview-bank-icon">
+              <BankIcon :src="bankIconUrl" :name="bankNameDisplay" :size="40" rounded="12" />
             </div>
             <div class="preview-bank-name">
               {{ bankNameDisplay || '未知银行' }}
               <span class="preview-bank-last4">（{{ formData.last4No }}）</span>
             </div>
           </div>
-          <van-tag v-if="formData.isDefault" class="preview-tag">默认</van-tag>
+          <app-tag v-if="formData.isDefault" class="preview-tag">默认</app-tag>
         </div>
         
         <div class="preview-number">{{ previewCardNo }}</div>
@@ -33,22 +30,30 @@
             <div class="preview-value">{{ formData.alias || formData.cardLevel || (isCreditCard ? '信用卡' : '银行卡') }}</div>
           </div>
           
-          <!-- 卡组织图标 -->
-          <div class="preview-card-org" v-if="cardOrgIconUrl">
-            <img :src="cardOrgIconUrl" alt="卡组织" />
+          <!-- 卡组织图标：有 logo 图且能加载则显示图，否则显示银色 org 组件 -->
+          <div class="preview-card-org" v-if="cardOrgIconUrl && !cardOrgImgError">
+            <img :src="cardOrgIconUrl" alt="卡组织" @error="cardOrgImgError = true" />
           </div>
+          <CardOrgIcon
+            v-else-if="cardOrgKey"
+            class="preview-card-org-comp"
+            :org="cardOrgKey"
+            :width="orgSize(formData.cardOrg).width"
+            :height="orgSize(formData.cardOrg).height"
+            :filled="true"
+          />
         </div>
       </div>
     </div>
 
     <van-skeleton title :row="15" v-if="loading" />
 
-    <van-form @submit="onSubmit" ref="formRef" v-if="!loading && cardData.id">
+    <app-form @submit="onSubmit" ref="formRef" v-if="!loading && cardData.id">
       <!-- 基本信息 -->
       <div class="form-section">
         <div class="section-title">基本信息</div>
         <van-cell-group inset>
-          <van-field
+          <app-field
             v-model="bankNameDisplay"
             name="bankId"
             label="银行"
@@ -56,25 +61,25 @@
             readonly
             @click="showBankPicker = true"
           />
-          <van-field
+          <app-field
             v-model="formData.cardTypeName"
             name="cardType"
             label="卡类型"
             readonly
           />
-          <van-field
+          <app-field
             v-model="formData.alias"
             name="alias"
             label="卡片别名"
             placeholder="如：工资卡、留学卡"
           />
-          <van-field
+          <app-field
             v-model="formData.cardLevel"
             name="cardLevel"
             label="卡等级"
             placeholder="如：金卡、白金卡"
           />
-          <van-field
+          <app-field
             v-model="formData.mainSub"
             name="mainSub"
             label="主副卡"
@@ -89,7 +94,7 @@
       <div class="form-section">
         <div class="section-title">卡片信息</div>
         <van-cell-group inset>
-          <van-field
+          <app-field
             v-model="formData.cardOrg"
             name="cardOrg"
             label="卡组织"
@@ -99,7 +104,7 @@
             clickable
             @click="showCardOrgPicker = true"
           />
-          <van-field
+          <app-field
             v-model="formData.cardLength"
             name="cardLength"
             label="卡号长度"
@@ -108,7 +113,7 @@
             clickable
             @click="openKeyboard('cardLength')"
           />
-          <van-field
+          <app-field
             v-model="formData.currency"
             name="currency"
             label="币种"
@@ -118,7 +123,7 @@
             clickable
             @click="showCurrencyPicker = true"
           />
-          <van-field
+          <app-field
             v-model="formData.cardBin"
             name="cardBin"
             label="卡BIN"
@@ -127,7 +132,7 @@
             clickable
             @click="openKeyboard('cardBin')"
           />
-          <van-field
+          <app-field
             v-model="formData.last4No"
             name="last4No"
             label="卡号后4位"
@@ -136,7 +141,7 @@
             clickable
             @click="openKeyboard('last4No')"
           />
-          <van-field
+          <app-field
             v-model="formData.openDate"
             name="openDate"
             label="开卡日期"
@@ -144,7 +149,7 @@
             readonly
             @click="showOpenDatePicker = true"
           />
-          <van-field
+          <app-field
             v-model="formData.expireDate"
             name="expireDate"
             label="过期日期"
@@ -162,7 +167,7 @@
           信用卡专属
         </div>
         <van-cell-group inset>
-          <van-field
+          <app-field
             v-model="formData.billDay"
             name="billDay"
             label="账单日"
@@ -170,10 +175,9 @@
             readonly
             :clickable="isEditable"
             @click="isEditable && openKeyboard('billDay')"
-          >
-            <template #suffix>日</template>
-          </van-field>
-          <van-field
+            suffix="日"
+          />
+          <app-field
             v-model="formData.repayDay"
             name="repayDay"
             label="还款日"
@@ -181,22 +185,21 @@
             readonly
             :clickable="isEditable"
             @click="isEditable && openKeyboard('repayDay')"
-          >
-            <template #suffix>日</template>
-          </van-field>
+            suffix="日"
+          />
           <div class="check-editable">
-            <van-button
+            <app-button
               size="small"
               :loading="checkLoading"
               :disabled="isEditable !== null"
               @click="checkEditable"
             >
               {{ isEditable !== null ? (isEditable ? '已解锁' : '已锁定') : '检查是否可修改' }}
-            </van-button>
+            </app-button>
             <span class="check-hint" v-if="isEditable === false">有流水记录，不可修改</span>
             <span class="check-hint text-success" v-else-if="isEditable === true">可自由修改</span>
           </div>
-          <van-field
+          <app-field
             v-model="formData.annualFee"
             name="annualFee"
             label="年费"
@@ -204,10 +207,9 @@
             readonly
             clickable
             @click="openKeyboard('annualFee')"
-          >
-            <template #button>元</template>
-          </van-field>
-          <van-field
+            suffix="元"
+          />
+          <app-field
             v-model="formData.feeFreeRule"
             name="feeFreeRule"
             label="免年费规则"
@@ -220,7 +222,7 @@
       <div class="form-section">
         <div class="section-title">基本设置</div>
         <van-cell-group inset>
-          <van-field
+          <app-field
             v-model="formData.status"
             name="status"
             label="卡片状态"
@@ -228,16 +230,12 @@
             readonly
             @click="showStatusPicker = true"
           />
-          <van-field name="isDefault" label="设为默认卡">
-            <template #input>
-              <van-switch v-model="formData.isDefault" size="20" />
-            </template>
-          </van-field>
-          <van-field name="isHide" label="隐藏卡片">
-            <template #input>
-              <van-switch v-model="formData.isHide" size="20" />
-            </template>
-          </van-field>
+          <app-field name="isDefault" label="设为默认卡">
+            <van-switch v-model="formData.isDefault" size="20" />
+          </app-field>
+          <app-field name="isHide" label="隐藏卡片">
+            <van-switch v-model="formData.isHide" size="20" />
+          </app-field>
         </van-cell-group>
       </div>
 
@@ -245,22 +243,20 @@
       <div class="form-section">
         <div class="section-title">外观</div>
         <van-cell-group inset>
-          <van-field label="卡片颜色">
-            <template #input>
-              <div class="color-picker">
-                <div
-                  v-for="color in colorOptions"
-                  :key="color.value"
-                  class="color-option"
-                  :class="{ active: formData.color === color.value }"
-                  :style="{ background: color.value }"
-                  @click="formData.color = color.value"
-                >
-                  <van-icon v-if="formData.color === color.value" name="success" color="#fff" />
-                </div>
+          <app-field label="卡片颜色">
+            <div class="color-picker">
+              <div
+                v-for="color in colorOptions"
+                :key="color.value"
+                class="color-option"
+                :class="{ active: formData.color === color.value }"
+                :style="{ background: color.value }"
+                @click="formData.color = color.value"
+              >
+                <van-icon v-if="formData.color === color.value" name="success" color="#fff" />
               </div>
-            </template>
-          </van-field>
+            </div>
+          </app-field>
           <div class="custom-color">
             <span class="custom-label">自定义</span>
             <input
@@ -269,21 +265,21 @@
               class="color-input"
             />
           </div>
-          <van-cell
+          <app-cell
             title="卡面选择"
             is-link
             :value="formData.cardImg ? '已选择' : '未选择'"
             @click="showImagePicker = true"
           >
             <template #right-icon v-if="formData.cardImg">
-              <van-icon name="clear" color="#ee0a24" @click.stop="clearCardImg" />
+              <van-icon name="clear" :color="themeDanger" @click.stop="clearCardImg" />
             </template>
-          </van-cell>
+          </app-cell>
         </van-cell-group>
       </div>
 
       <!-- 图片选择弹窗 -->
-      <van-popup
+      <app-popup
         v-model:show="showImagePicker"
         position="bottom"
         round
@@ -293,12 +289,12 @@
           <div class="picker-header">
             <span class="picker-title">选择卡面</span>
             <div class="picker-actions">
-              <van-button size="small" plain type="danger" @click="clearCardImg">
+              <app-button size="small" plain type="danger" @click="clearCardImg">
                 清空
-              </van-button>
-              <van-button size="small" type="primary" @click="confirmCardImg">
+              </app-button>
+              <app-button size="small" type="primary" @click="confirmCardImg">
                 确认
-              </van-button>
+              </app-button>
             </div>
           </div>
           <van-loading v-if="imageLoading" class="loading" />
@@ -318,18 +314,18 @@
           </div>
           <van-empty v-if="!imageLoading && imageList.length === 0" description="暂无图片" image="search" />
         </div>
-      </van-popup>
+      </app-popup>
 
       <!-- 备注 -->
       <div class="form-section">
         <div class="section-title">备注</div>
         <van-cell-group inset>
-          <van-field
+          <app-field
             v-model="formData.tag"
             name="tag"
             label="标签"
           />
-          <van-field
+          <app-field
             v-model="formData.remark"
             name="remark"
             label="备注"
@@ -340,7 +336,7 @@
       </div>
 
       <div class="submit-btn-wrap">
-        <van-button
+        <app-button
           type="primary"
           block
           round
@@ -348,8 +344,8 @@
           :loading="loading"
         >
           保存修改
-        </van-button>
-        <van-button
+        </app-button>
+        <app-button
           plain
           type="danger"
           block
@@ -358,58 +354,70 @@
           @click="onDelete"
         >
           删除卡片
-        </van-button>
+        </app-button>
       </div>
-    </van-form>
+    </app-form>
 
     <!-- 银行选择 -->
-    <van-popup v-model:show="showBankPicker" position="bottom">
+    <app-popup v-model:show="showBankPicker" position="bottom">
       <van-picker
         :columns="bankColumns"
         @confirm="onBankConfirm"
         @cancel="showBankPicker = false"
       />
-    </van-popup>
+    </app-popup>
 
     <!-- 主副卡选择 -->
-    <van-popup v-model:show="showMainSubPicker" position="bottom">
+    <app-popup v-model:show="showMainSubPicker" position="bottom">
       <van-picker
         :columns="mainSubColumns"
         @confirm="onMainSubConfirm"
         @cancel="showMainSubPicker = false"
       />
-    </van-popup>
+    </app-popup>
 
-    <!-- 卡组织选择 -->
-    <van-popup v-model:show="showCardOrgPicker" position="bottom">
-      <van-picker
-        :columns="cardOrgColumns"
-        @confirm="onCardOrgConfirm"
-        @cancel="showCardOrgPicker = false"
-      />
-    </van-popup>
+    <!-- 卡组织选择（左侧带 org 图标） -->
+    <app-popup v-model:show="showCardOrgPicker" position="bottom" round>
+      <div class="org-picker">
+        <div class="org-picker-title">选择卡组织</div>
+        <div
+          class="org-picker-item"
+          v-for="col in cardOrgColumns"
+          :key="col.value"
+          @click="onCardOrgConfirm(col)"
+        >
+          <CardOrgIcon :org="ORG_NAME_MAP[col.value]" small :filled="true" />
+          <span class="org-picker-label">{{ col.text }}</span>
+          <van-icon
+            v-if="formData.cardOrg === col.value"
+            name="success"
+            class="org-picker-check"
+          />
+        </div>
+      </div>
+    </app-popup>
 
     <!-- 币种选择 -->
-    <van-popup v-model:show="showCurrencyPicker" position="bottom">
+    <app-popup v-model:show="showCurrencyPicker" position="bottom">
       <van-picker
         title="选择币种"
         :columns="currencyColumns"
         @confirm="onCurrencyConfirm"
         @cancel="showCurrencyPicker = false"
       />
-    </van-popup>
+    </app-popup>
 
     <!-- 卡片状态选择 -->
-    <van-popup v-model:show="showStatusPicker" position="bottom">
+    <app-popup v-model:show="showStatusPicker" position="bottom">
       <van-picker
         :columns="statusColumns"
         @confirm="onStatusConfirm"
         @cancel="showStatusPicker = false"
       />
-    </van-popup>
+    </app-popup>
 
     <!-- 开卡日期 -->
-    <van-popup v-model:show="showOpenDatePicker" position="bottom">
+    <app-popup v-model:show="showOpenDatePicker" position="bottom">
       <van-date-picker
         v-model="openDate"
         type="date"
@@ -419,10 +427,10 @@
         @confirm="onOpenDateConfirm"
         @cancel="showOpenDatePicker = false"
       />
-    </van-popup>
+    </app-popup>
 
     <!-- 过期日期 -->
-    <van-popup v-model:show="showExpireDatePicker" position="bottom">
+    <app-popup v-model:show="showExpireDatePicker" position="bottom">
       <van-date-picker
         v-model="expireDate"
         type="year-month"
@@ -432,7 +440,7 @@
         @confirm="onExpireDateConfirm"
         @cancel="showExpireDatePicker = false"
       />
-    </van-popup>
+    </app-popup>
 
     <!-- 数字键盘 -->
     <van-number-keyboard
@@ -457,15 +465,31 @@ import { getCardDetail, updateCard, deleteCard } from '@/utils/api/card'
 import { categoryApi } from '@/utils/api/category'
 import { getAccountListByCard } from '@/utils/api/account'
 import { uploadApi } from '@/utils/api/upload'
+import { useUiTheme } from '@/composables/useUiTheme'
+import BankIcon from '@/components/BankIcon.vue'
+import CardOrgIcon from '@/components/BankCard/org/CardOrgIcon.vue'
+import { ORG_NAME_MAP } from '@/components/BankCard/org/orgMap.js'
 
 const router = useRouter()
 const route = useRoute()
+const { danger: themeDanger } = useUiTheme()
 const loading = ref(false)
 const cardData = ref({})
 const bankNameDisplay = ref('')
 const bankIconUrl = ref('')
 const cardOrgIconUrl = ref('')
+const cardOrgImgError = ref(false)
 const bankList = ref([])
+
+// 卡组织中文名 → 组件 org key（无匹配返回空）
+const cardOrgKey = computed(() => (formData.cardOrg && ORG_NAME_MAP[formData.cardOrg]) || '')
+
+// 卡组织角标尺寸：银联/万事达/visa/大莱/JCB 统一 80×40；运通 50×50
+const orgSize = (name) => {
+  const k = (name && ORG_NAME_MAP[name]) || ''
+  if (k === 'amex') return { width: 50, height: 50 }
+  return { width: 80, height: 40 }
+}
 
 // 账单日/还款日是否可编辑（默认不可编辑）
 const isEditable = ref(null)
@@ -533,7 +557,7 @@ const formData = reactive({
   sort: 99,
   tag: '',
   remark: '',
-  color: '#1989fa',
+  color: '#0052cc',
   cardImg: '',
   annualFee: '',
   feeFreeRule: '',
@@ -780,11 +804,12 @@ const onBankConfirm = ({ selectedOptions }) => {
   showBankPicker.value = false
 }
 
-const onCardOrgConfirm = ({ selectedOptions }) => {
-  formData.cardOrg = selectedOptions[0].value
-  formData.cardLength = cardOrgLength[formData.cardOrg] || 16
-  cardOrgIconUrl.value = getCardOrgIcon(selectedOptions[0].value)
+const onCardOrgConfirm = (col) => {
+  formData.cardOrg = col.value
   showCardOrgPicker.value = false
+  formData.cardLength = cardOrgLength[formData.cardOrg] || 16
+  cardOrgImgError.value = false
+  cardOrgIconUrl.value = getCardOrgIcon(col.value)
 }
 
 const onCurrencyConfirm = ({ selectedOptions }) => {
@@ -938,7 +963,7 @@ const loadCardDetail = async () => {
     formData.sort = data.sort ?? 99
     formData.tag = data.tag || ''
     formData.remark = data.remark || ''
-    formData.color = data.color || '#1989fa'
+    formData.color = data.color || '#0052cc'
     formData.cardImg = data.card_img || data.cardImg || ''
     formData.annualFee = data.annual_fee ?? data.annualFee ?? ''
     formData.feeFreeRule = data.fee_free_rule || data.feeFreeRule || ''
@@ -950,6 +975,7 @@ const loadCardDetail = async () => {
     bankIconUrl.value = bankInfo.iconUrl
     
     // 设置卡组织图标
+    cardOrgImgError.value = false
     cardOrgIconUrl.value = getCardOrgIcon(formData.cardOrg)
 
     // 处理日期选择器
@@ -1042,7 +1068,7 @@ const onDelete = async () => {
     await showConfirmDialog({
       title: '删除确认',
       message: '确定要删除这张卡片吗？删除后无法恢复。',
-      confirmButtonColor: '#ee0a24'
+      confirmButtonColor: 'var(--van-danger-color, #ee0a24)'
     })
 
     showLoadingToast({ message: '删除中...', forbidClick: true })
@@ -1065,12 +1091,12 @@ onMounted(() => {
 <style scoped>
 .page-edit-card {
   min-height: 100vh;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   padding-bottom: 40px;
 }
 
 .page-header {
-  background: #fff;
+  background: var(--theme-bg-secondary);
 }
 
 /* 卡片预览 */
@@ -1081,7 +1107,7 @@ onMounted(() => {
 .preview-card {
   position: relative;
   border-radius: 20px;
-  padding: 20px 5px 20px 20px;
+  padding: 20px;
   color: #fff;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
   overflow: hidden;
@@ -1125,6 +1151,11 @@ onMounted(() => {
   object-fit: contain;
 }
 
+/* 预览卡银行图标兜底块：灰色文字改为白色 */
+.preview-bank-icon :deep(.bank-icon-mock) {
+  color: #fff !important;
+}
+
 .preview-bank-icon-mock {
   width: 40px;
   height: 40px;
@@ -1151,6 +1182,7 @@ onMounted(() => {
 .preview-tag {
   background: rgba(255, 255, 255, 0.2) !important;
   border: none !important;
+  color: #fff !important;
 }
 
 .preview-number {
@@ -1172,7 +1204,8 @@ onMounted(() => {
 
 .preview-holder .preview-label {
   font-size: 14px;
-  opacity: 0.5;
+  opacity: 1;
+  color: #fff;
   text-transform: uppercase;
   letter-spacing: 1px;
 }
@@ -1186,10 +1219,10 @@ onMounted(() => {
 
 .preview-card-org {
   position: absolute;
-  right: 0;
-  bottom: -20px;
-  width: 100px;
-  height: 80px;
+  right: 12px;
+  bottom: 0;
+  max-width: 100px;
+  max-height: 80px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1197,9 +1230,14 @@ onMounted(() => {
 }
 
 .preview-card-org img {
-  width: 100%;
-  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
   object-fit: contain;
+}
+.preview-card-org-comp {
+  position: absolute;
+  right: -15px;
+  bottom: -10px;
 }
 
 .form-section {
@@ -1208,14 +1246,14 @@ onMounted(() => {
 
 .section-title {
   font-size: 14px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   padding: 16px 16px 8px;
   display: flex;
   align-items: center;
 }
 
 .credit-section .section-title {
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
 }
 
 .check-editable {
@@ -1227,11 +1265,11 @@ onMounted(() => {
 
 .check-hint {
   font-size: 12px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 
 .check-hint.text-success {
-  color: #07c160;
+  color: var(--van-green, #07c160);
 }
 
 .color-picker {
@@ -1268,13 +1306,13 @@ onMounted(() => {
 
 .custom-label {
   font-size: 14px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 
 .color-input {
   width: 40px;
   height: 28px;
-  border: 1px solid #ebedf0;
+  border: 1px solid var(--theme-border);
   border-radius: 4px;
   padding: 0;
   cursor: pointer;
@@ -1305,7 +1343,7 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   padding-bottom: 12px;
-  border-bottom: 1px solid #ebedf0;
+  border: 1px solid var(--theme-border);
   margin-bottom: 12px;
   flex-shrink: 0;
 }
@@ -1341,17 +1379,17 @@ onMounted(() => {
 }
 
 .image-list::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: var(--theme-bg-tertiary);
   border-radius: 2px;
 }
 
 .image-list::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
+  background: var(--theme-text-placeholder);
   border-radius: 2px;
 }
 
 .image-list::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
+  background: var(--theme-text-tertiary);
 }
 
 .image-item {
@@ -1363,7 +1401,7 @@ onMounted(() => {
 }
 
 .image-item.selected {
-  border-color: #1989fa;
+  border-color: var(--van-blue, #1989fa);
 }
 
 .image-item :deep(.van-image) {
@@ -1375,7 +1413,7 @@ onMounted(() => {
   position: absolute;
   right: 4px;
   top: 4px;
-  background: #1989fa;
+  background: var(--theme-primary);
   color: #fff;
   border-radius: 50%;
   padding: 2px;
@@ -1387,5 +1425,39 @@ onMounted(() => {
   justify-content: center;
   align-items: center;
   height: 200px;
+}
+
+/* 卡组织选择器：左侧 org 图标 + 文字 */
+.org-picker {
+  background: var(--theme-bg-primary);
+  padding: 8px 0 16px;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+.org-picker-title {
+  text-align: center;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--theme-text-primary);
+  padding: 12px 0 8px;
+}
+.org-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 20px;
+  cursor: pointer;
+}
+.org-picker-item:active {
+  background: var(--theme-bg-secondary);
+}
+.org-picker-label {
+  flex: 1;
+  font-size: 15px;
+  color: var(--theme-text-primary);
+}
+.org-picker-check {
+  color: var(--theme-primary);
+  font-size: 18px;
 }
 </style>

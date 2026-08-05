@@ -44,12 +44,12 @@
         <div class="item-left">
           <span class="item-date">{{ formatDate(item.date) }}</span>
           <div class="item-tags">
-            <van-tag v-if="item.formal?.income > 0" type="primary" size="small">
+            <app-tag v-if="item.formal?.income > 0" type="primary" size="small">
               正式 ¥{{ item.formal.income }}
-            </van-tag>
-            <van-tag v-if="item.parttimes?.length > 0" type="warning" size="small">
+            </app-tag>
+            <app-tag v-if="item.parttimes?.length > 0" type="warning" size="small">
               兼职×{{ item.parttimes.length }}
-            </van-tag>
+            </app-tag>
           </div>
         </div>
         <div class="item-right">
@@ -62,7 +62,7 @@
     </div>
 
     <!-- 月份选择器 -->
-    <van-popup v-model:show="showMonthPicker" position="bottom" round>
+    <app-popup v-model:show="showMonthPicker" position="bottom" round>
       <van-picker
         title="选择月份"
         v-model="pickerSelectedValues"
@@ -70,7 +70,7 @@
         @confirm="onPickerConfirm"
         @cancel="showMonthPicker = false"
       />
-    </van-popup>
+    </app-popup>
   </div>
 </template>
 
@@ -194,7 +194,7 @@ onMounted(() => {
 <style scoped>
 .page-salary-stat {
   min-height: 100vh;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   padding-bottom: 20px;
 }
 
@@ -203,19 +203,19 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 16px;
-  background: #fff;
+  background: var(--theme-bg-secondary);
 }
 
 .header .van-icon {
   font-size: 18px;
   padding: 6px;
-  color: #07c160;
+  color: var(--van-green, #07c160);
 }
 
 .month-title {
   font-size: 18px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
   display: flex;
   align-items: center;
   gap: 4px;
@@ -223,7 +223,7 @@ onMounted(() => {
 
 /* 统计汇总卡片 */
 .stat-summary {
-  background: linear-gradient(135deg, #07c160, #06ad56);
+  background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-primary-grad) 100%);
   margin: 12px 16px;
   border-radius: 16px;
   padding: 20px;
@@ -272,7 +272,8 @@ onMounted(() => {
 }
 
 .detail-value.blue {
-  color: #3618cd;
+  /* 渐变卡上浅色主题下 primary-light 会与渐变融合，改用高亮白 */
+  color: rgba(255, 255, 255, 0.92);
 }
 
 .detail-value.orange {
@@ -282,7 +283,7 @@ onMounted(() => {
 /* 每日明细 */
 .daily-list {
   margin: 12px 16px;
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 12px;
   overflow: hidden;
 }
@@ -294,14 +295,14 @@ onMounted(() => {
   padding: 16px;
   font-size: 15px;
   font-weight: 600;
-  color: #323233;
-  border-bottom: 1px solid #f2f3f5;
+  color: var(--theme-text-primary);
+  border: 1px solid var(--theme-border);
 }
 
 .work-days {
   font-size: 13px;
   font-weight: 400;
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 
 .daily-item {
@@ -309,7 +310,7 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 14px 16px;
-  border-bottom: 1px solid #f2f3f5;
+  border: 1px solid var(--theme-border);
   cursor: pointer;
 }
 
@@ -325,7 +326,7 @@ onMounted(() => {
 
 .item-date {
   font-size: 14px;
-  color: #323233;
+  color: var(--theme-text-primary);
   font-weight: 500;
 }
 
@@ -343,11 +344,11 @@ onMounted(() => {
 .item-amount {
   font-size: 15px;
   font-weight: 600;
-  color: #07c160;
+  color: var(--van-green, #07c160);
 }
 
 .arrow-icon {
-  color: #969799;
+  color: var(--theme-text-tertiary);
   font-size: 14px;
 }
 </style>

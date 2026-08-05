@@ -8,7 +8,9 @@
     
     <!-- 路由视图 -->
     <router-view v-slot="{ Component }">
-      <component :is="Component" />
+      <transition name="card-tab-fade" mode="out-in">
+        <component :is="Component" />
+      </transition>
     </router-view>
   </div>
 </template>
@@ -37,7 +39,7 @@ watch(() => route.path, (path) => {
 <style scoped>
 .page-bank-card-manage {
   height: calc(100vh - 50px);
-  background: #fff;
+  background: var(--theme-bg-secondary);
   display: flex;
   flex-direction: column;
 }
@@ -47,11 +49,25 @@ watch(() => route.path, (path) => {
 }
 
 .page-bank-card-manage :deep(.van-tabs__line) {
-  background-color: #1989fa;
+  background-color: var(--theme-primary);
 }
 
 .page-bank-card-manage :deep(.van-tabs__content) {
   flex: 1;
   overflow-y: auto;
+}
+
+/* 借记卡/信用卡切换过渡：淡入 + 轻微上滑 */
+.card-tab-fade-enter-active,
+.card-tab-fade-leave-active {
+  transition: opacity 0.28s ease, transform 0.28s ease;
+}
+.card-tab-fade-enter-from {
+  opacity: 0;
+  transform: translateY(12px);
+}
+.card-tab-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-12px);
 }
 </style>

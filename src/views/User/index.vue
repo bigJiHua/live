@@ -20,7 +20,7 @@
     <div class="menu-sections">
       <div class="section-title">安全与隐私</div>
       <van-cell-group inset class="app-card">
-        <van-cell title="PIN 码访问锁定" label="进入系统需二次验证" center>
+        <app-cell title="PIN 码访问锁定" label="进入系统需二次验证" center>
           <template #right-icon>
             <van-switch
               v-model="userStore.pinEnabled"
@@ -28,16 +28,16 @@
               @change="onPinSwitch"
             />
           </template>
-        </van-cell>
-        <van-cell title="PIN 码管理" is-link center @click="goToPinManage" />
+        </app-cell>
+        <app-cell title="PIN 码管理" is-link center @click="goToPinManage" />
 
         <!-- TODO 注释 -->
         <div v-if="showDemoInfo"
           style="
             padding: 12px 16px;
             font-size: 13px;
-            color: #07c160;
-            background: #f0f9eb;
+            color: var(--van-green, #07c160);
+            background: var(--van-green-bg, #f0f9eb);
           "
         >
           当前 PIN 码为 123456
@@ -46,13 +46,13 @@
 
       <div class="section-title">系统管理</div>
       <van-cell-group inset class="app-card">
-        <van-cell
+        <app-cell
           title="应用设置"
           icon="setting-o"
           is-link
           @click="$router.push('/user/app-settings')"
         />
-        <van-cell
+        <app-cell
           title="文件资源管理"
           icon="photograph"
           is-link
@@ -62,9 +62,8 @@
     </div>
 
     <div class="logout-wrapper">
-      <van-button block round type="danger" plain @click="onLogout"
-        >退出当前登录</van-button
-      >
+      <app-button block round type="danger" plain @click="onLogout"
+        >退出当前登录</app-button>
     </div>
   </div>
 </template>
@@ -161,14 +160,14 @@ onMounted(() => {
 
 <style scoped>
 .page-user {
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   height: 100vh;
   overflow-y: auto;
   padding-bottom: 30px;
 }
 
 .profile-card {
-  background: white;
+  background: var(--theme-bg-secondary);
   padding: 50px 20px 30px;
   display: flex;
   align-items: center;
@@ -176,12 +175,12 @@ onMounted(() => {
 }
 
 .profile-card:active {
-  background: #f2f3f5;
+  background: var(--theme-bg-tertiary);
 }
 
 .profile-avatar {
   margin-right: 16px;
-  border: 1px solid #f2f3f5;
+  border: 1px solid var(--theme-border);
 }
 
 .profile-info {
@@ -198,18 +197,18 @@ onMounted(() => {
 .nickname {
   font-size: 20px;
   font-weight: bold;
-  color: #323233;
+  color: var(--theme-text-primary);
 }
 
 .user-id {
   font-size: 13px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 
 .section-title {
   padding: 20px 20px 10px;
   font-size: 13px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   font-weight: 500;
 }
 

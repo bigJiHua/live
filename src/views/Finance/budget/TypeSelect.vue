@@ -49,7 +49,7 @@ const selectType = (type) => {
 <style scoped>
 .page-budget-type-select {
   min-height: 100vh;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   padding: 16px;
 }
 
@@ -61,7 +61,7 @@ const selectType = (type) => {
 }
 
 .type-card {
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 16px;
   padding: 24px 16px;
   text-align: center;
@@ -85,30 +85,30 @@ const selectType = (type) => {
 }
 
 .type-icon.shopping {
-  background: linear-gradient(135deg, #ff6034, #ee0a24);
+  background: linear-gradient(135deg, var(--van-danger-grad, #ff6034), var(--van-danger-color, #ee0a24));
   color: #fff;
 }
 
 .type-icon.travel {
-  background: linear-gradient(135deg, #1989fa, #1976d2);
+  background: linear-gradient(135deg, var(--theme-primary), var(--theme-primary-grad));
   color: #fff;
 }
 
 .type-icon.eat {
-  background: linear-gradient(135deg, #ff976a, #ee0a24);
+  background: linear-gradient(135deg, var(--van-orange, #ff976a), var(--van-danger-color, #ee0a24));
   color: #fff;
 }
 
 .type-title {
   font-size: 16px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
   margin-bottom: 4px;
 }
 
 .type-desc {
   font-size: 12px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   line-height: 1.4;
 }
 

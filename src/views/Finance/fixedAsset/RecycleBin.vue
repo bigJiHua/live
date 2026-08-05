@@ -18,6 +18,6 @@ onMounted(() => {
 <style scoped>
 .page-recycle-bin {
   min-height: 100vh;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
 }
 </style>

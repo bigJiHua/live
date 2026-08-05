@@ -1,5 +1,5 @@
 <template>
-  <van-popup v-model:show="show" position="bottom" round>
+  <app-popup v-model:show="show" position="bottom" round>
     <div class="detail-popup" v-if="asset">
       <div class="popup-header">
         <span class="popup-title">{{ asset.info }}</span>
@@ -11,52 +11,52 @@
       </div>
 
       <van-cell-group inset>
-        <van-cell title="品类" :value="asset.tag || '-'" />
-        <van-cell title="购买价格" :value="'¥' + formatAmount(asset.buy_price)" />
-        <van-cell title="购买日期" :value="asset.buy_date" />
-        <van-cell title="预计使用年限" :value="asset.use_years + '年'" />
-        <van-cell title="残值率" :value="asset.residual_rate + '%'" />
-        <van-cell title="残值" :value="'¥' + formatAmount(asset.residual_val)" />
-        <van-cell title="二手市场价" :value="asset.secondhand_price ? '¥' + formatAmount(asset.secondhand_price) : '-'" />
+        <app-cell title="品类" :value="asset.tag || '-'" />
+        <app-cell title="购买价格" :value="'¥' + formatAmount(asset.buy_price)" />
+        <app-cell title="购买日期" :value="asset.buy_date" />
+        <app-cell title="预计使用年限" :value="asset.use_years + '年'" />
+        <app-cell title="残值率" :value="asset.residual_rate + '%'" />
+        <app-cell title="残值" :value="'¥' + formatAmount(asset.residual_val)" />
+        <app-cell title="二手市场价" :value="asset.secondhand_price ? '¥' + formatAmount(asset.secondhand_price) : '-'" />
         <van-divider />
-        <van-cell title="月折旧" :value="'¥' + formatAmount(asset.month_deprec)" />
-        <van-cell title="累计折旧" :value="'¥' + formatAmount(asset.total_deprec)" />
-        <van-cell title="当前账面价值" value-class="primary-value" :value="'¥' + formatAmount(asset.now_val)" />
-        <van-cell title="已使用时长" :value="formatUsedTime(asset)" />
-        <van-cell title="上次折旧日期" :value="asset.last_deprec_date || '-'" />
+        <app-cell title="月折旧" :value="'¥' + formatAmount(asset.month_deprec)" />
+        <app-cell title="累计折旧" :value="'¥' + formatAmount(asset.total_deprec)" />
+        <app-cell title="当前账面价值" value-class="primary-value" :value="'¥' + formatAmount(asset.now_val)" />
+        <app-cell title="已使用时长" :value="formatUsedTime(asset)" />
+        <app-cell title="上次折旧日期" :value="asset.last_deprec_date || '-'" />
         <van-divider />
-        <van-cell title="状态">
+        <app-cell title="状态">
           <template #value>
-            <van-tag :type="getStatusType(asset.status)">{{ getStatusText(asset.status) }}</van-tag>
+            <app-tag :type="getStatusType(asset.status)">{{ getStatusText(asset.status) }}</app-tag>
           </template>
-        </van-cell>
-        <van-cell title="结束日期" v-if="asset.scrap_date" :value="asset.scrap_date" />
-        <van-cell title="折旧状态">
+        </app-cell>
+        <app-cell title="结束日期" v-if="asset.scrap_date" :value="asset.scrap_date" />
+        <app-cell title="折旧状态">
           <template #value>
-            <van-tag :type="asset.deprec_finished === 1 ? 'success' : 'primary'" size="small">
+            <app-tag :type="asset.deprec_finished === 1 ? 'success' : 'primary'" size="small">
               {{ asset.deprec_finished === 1 ? '已折旧完毕' : '未折旧完' }}
-            </van-tag>
+            </app-tag>
           </template>
-        </van-cell>
+        </app-cell>
       </van-cell-group>
 
       <div class="detail-actions">
-        <van-button size="small" type="default" @click="handleEdit">编辑</van-button>
-        <van-button size="small" type="warning" @click="handleChangeStatus">变更状态</van-button>
-        <van-button size="small" type="danger" @click="handleDelete">删除</van-button>
+        <app-button size="small" type="default" @click="handleEdit">编辑</app-button>
+        <app-button size="small" type="warning" @click="handleChangeStatus">变更状态</app-button>
+        <app-button size="small" type="danger" @click="handleDelete">删除</app-button>
       </div>
     </div>
 
     <!-- 状态变更弹窗 -->
-    <van-popup v-model:show="showStatusPicker" position="bottom" round>
+    <app-popup v-model:show="showStatusPicker" position="bottom" round>
       <van-picker
         title="选择状态"
         :columns="statusColumns"
         @confirm="onStatusConfirm"
         @cancel="showStatusPicker = false"
       />
-    </van-popup>
-  </van-popup>
+    </app-popup>
+  </app-popup>
 </template>
 
 <script setup>

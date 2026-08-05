@@ -9,7 +9,7 @@
     <div class="section">
       <div class="section-title">新建分期</div>
 
-      <van-field
+      <app-field
         v-model="cardLabel"
         label="目标信用卡"
         readonly is-link
@@ -26,16 +26,14 @@
         <span class="input-value">{{ formFee || '0.0000' }}</span>
         <van-icon name="arrow" class="input-arrow" />
       </div>
-      <van-field label="分期期数">
-        <template #input>
-          <div class="period-btns">
-            <span v-for="p in periodOptions" :key="p"
-              class="period-btn" :class="{ active: formPeriods === p }"
-              @click="formPeriods = p"
-            >{{ p }}期</span>
-          </div>
-        </template>
-      </van-field>
+      <app-field label="分期期数">
+        <div class="period-btns">
+          <span v-for="p in periodOptions" :key="p"
+            class="period-btn" :class="{ active: formPeriods === p }"
+            @click="formPeriods = p"
+          >{{ p }}期</span>
+        </div>
+      </app-field>
 
       <!-- 预览 -->
       <div class="preview-card" v-if="preview.periods > 0">
@@ -65,7 +63,7 @@
       </div>
 
       <div class="form-actions">
-        <van-button round block type="primary" :loading="submitting" @click="handleSubmit">确认创建分期</van-button>
+        <app-button round block type="primary" :loading="submitting" @click="handleSubmit">确认创建分期</app-button>
       </div>
     </div>
 
@@ -81,14 +79,14 @@
     />
 
     <!-- 信用卡选择 -->
-    <van-popup v-model:show="showCardPicker" position="bottom" round>
+    <app-popup v-model:show="showCardPicker" position="bottom" round>
       <van-picker
         title="选择信用卡"
         :columns="cardColumns"
         @confirm="onCardConfirm"
         @cancel="showCardPicker = false"
       />
-    </van-popup>
+    </app-popup>
   </div>
 </template>
 
@@ -264,39 +262,39 @@ onMounted(() => loadData())
 </script>
 
 <style scoped>
-.page-installment { min-height: 100vh; padding: 12px 16px 100px; background: #f7f8fa; }
-.header-card { background: linear-gradient(135deg, #ee0a24 0%, #d91a4a 100%); border-radius: 12px; padding: 20px; margin-bottom: 16px; color: #fff; }
+.page-installment { min-height: 100vh; padding: 12px 16px 100px; background: var(--theme-bg-primary); }
+.header-card { background: linear-gradient(135deg, var(--van-danger-color, #ee0a24) 0%, var(--van-danger-grad, #d91a4a) 100%); border-radius: 12px; padding: 20px; margin-bottom: 16px; color: #fff; }
 .header-title { font-size: 20px; font-weight: 700; }
 .header-sub { font-size: 13px; opacity: 0.85; margin-top: 6px; }
 
 .section { margin-bottom: 16px; }
-.section-title { font-size: 13px; font-weight: 600; color: #969799; margin-bottom: 8px; padding-left: 4px; }
+.section-title { font-size: 13px; font-weight: 600; color: var(--theme-text-tertiary); margin-bottom: 8px; padding-left: 4px; }
 
 .input-cell {
   display: flex; align-items: center;
-  padding: 10px 16px; background: #fff;
-  border-bottom: 1px solid #f2f3f5;
+  padding: 10px 16px; background: var(--theme-bg-secondary);
+  border: 1px solid var(--theme-border);
 }
-.input-label { flex-shrink: 0; width: 80px; font-size: 14px; color: #323233; }
-.input-value { flex: 1; text-align: right; font-size: 16px; font-weight: 600; color: #ee0a24; }
-.input-arrow { margin-left: 8px; color: #969799; font-size: 14px; }
+.input-label { flex-shrink: 0; width: 80px; font-size: 14px; color: var(--theme-text-primary); }
+.input-value { flex: 1; text-align: right; font-size: 16px; font-weight: 600; color: var(--van-danger-color, #ee0a24); }
+.input-arrow { margin-left: 8px; color: var(--theme-text-tertiary); font-size: 14px; }
 
 .period-btns { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; padding: 4px 0; }
 .period-btn { 
   padding: 4px 14px; border-radius: 14px; font-size: 13px; 
-  background: #f2f3f5; color: #646566; transition: all .2s;
+  background: var(--theme-bg-tertiary); color: var(--theme-text-secondary); transition: all .2s;
 }
-.period-btn.active { background: #ee0a24; color: #fff; font-weight: 600; }
+.period-btn.active { background: var(--van-danger-color, #ee0a24); color: #fff; font-weight: 600; }
 
-.preview-card { background: #fff; border-radius: 8px; padding: 14px; margin-top: 12px; }
-.preview-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 14px; color: #323233; }
-.preview-amount { color: #ee0a24; font-weight: 700; }
-.preview-date { color: #07c160; font-weight: 600; }
-.preview-list { margin-top: 10px; border-top: 1px solid #f2f3f5; padding-top: 8px; }
-.preview-item { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; color: #646566; }
-.pi-idx { color: #323233; font-weight: 500; }
-.pi-date { color: #07c160; }
-.pi-amount { color: #ee0a24; }
+.preview-card { background: var(--theme-bg-secondary); border-radius: 8px; padding: 14px; margin-top: 12px; }
+.preview-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 14px; color: var(--theme-text-primary); }
+.preview-amount { color: var(--van-danger-color, #ee0a24); font-weight: 700; }
+.preview-date { color: var(--van-green, #07c160); font-weight: 600; }
+.preview-list { margin-top: 10px; border: 1px solid var(--theme-border); padding-top: 8px; }
+.preview-item { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; color: var(--theme-text-secondary); }
+.pi-idx { color: var(--theme-text-primary); font-weight: 500; }
+.pi-date { color: var(--van-green, #07c160); }
+.pi-amount { color: var(--van-danger-color, #ee0a24); }
 
 .form-actions { margin-top: 16px; }
 </style>

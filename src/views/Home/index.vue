@@ -1,31 +1,31 @@
 <template>
   <div class="page-home">
     <div class="app-card total-assets-card">
-      <!-- 日期牌 -->
-      <div class="date-badge" @click="goSubPage('todo')">
-        <div class="date-month" @click="goSubPage('todo')">
-          {{ currentMonth }}月
-        </div>
-        <div class="date-day" @click="goSubPage('todo')">{{ currentDay }}</div>
-      </div>
-
       <div class="header-main">
-        <div class="label-group">
-          <span class="label">预估总资产 (元)</span>
-          <van-icon
-            :name="showAmount ? 'eye-o' : 'closed-eye'"
-            @click="toggleEye"
-            class="eye-icon"
-          />
+        <!-- 第一行：预估总资产 + 日期牌 -->
+        <div class="header-row-top">
+          <div class="label-group">
+            <span class="label">预估总资产 (元)</span>
+            <van-icon
+              :name="showAmount ? 'eye-o' : 'closed-eye'"
+              @click="toggleEye"
+              class="eye-icon"
+            />
+          </div>
+          <div class="date-badge" @click="goSubPage('todo')">
+            <div class="date-month">{{ currentMonth }}月</div>
+            <div class="date-day">{{ currentDay }}</div>
+          </div>
         </div>
+        <!-- 第二行：金额 + 今日收支 -->
         <div class="amount-row">
           <div class="total-amount num-font">
             {{ showAmount ? formatMoney(dashboardData.totalBalance) : "****" }}
           </div>
           <div class="income-expense">
             <div class="income-item">
-              <span class="ie-label">今日收入</span>
-              <span class="num-font text-income"
+              <span class="ie-label">今日收入：</span>
+              <span class="num-font income-val in"
                 >{{ showAmount ? "+" : ""
                 }}{{
                   showAmount ? formatMoney(dashboardData.todayIncome) : "****"
@@ -33,8 +33,8 @@
               >
             </div>
             <div class="income-item">
-              <span class="ie-label">今日支出</span>
-              <span class="num-font text-expense"
+              <span class="ie-label">今日支出：</span>
+              <span class="num-font income-val out"
                 >{{ showAmount ? "-" : ""
                 }}{{
                   showAmount ? formatMoney(dashboardData.todayExpense) : "****"
@@ -74,44 +74,45 @@
     </div>
 
     <!-- TODO 注释 -->
-    <div v-if="showDemoInfo"
+    <div
+      v-if="showDemoInfo"
       style="
         padding: 12px 16px;
         font-size: 13px;
-        color: #e6a23c;
-        background: #fdf6ec;
+        color: var(--van-orange);
+        background: var(--van-orange-bg);
       "
     >
       ！当前项目部署在英国伦敦服务器上，所以数据加载可能会有延迟
     </div>
 
     <div class="app-card menu-grid-card">
-      <van-grid :column-num="4" :border="false" clickable>
-        <van-grid-item @click="goSubPage('flow')">
+      <app-grid :column-num="4" :border="false" clickable>
+        <app-grid-item @click="goSubPage('flow')">
           <template #icon
             ><van-icon name="orders-o" class="grid-icon blue"
           /></template>
           <template #text><span class="grid-text">流水明细</span></template>
-        </van-grid-item>
-        <van-grid-item @click="goSubPage('credit-center')">
+        </app-grid-item>
+        <app-grid-item @click="goSubPage('credit-center')">
           <template #icon
             ><van-icon name="credit-pay" class="grid-icon orange"
           /></template>
           <template #text><span class="grid-text">信用卡</span></template>
-        </van-grid-item>
-        <van-grid-item @click="goSubPage('assets-list')">
+        </app-grid-item>
+        <app-grid-item @click="goSubPage('assets-list')">
           <template #icon
             ><van-icon name="gem" class="grid-icon purple"
           /></template>
           <template #text><span class="grid-text">资产结构</span></template>
-        </van-grid-item>
-        <van-grid-item @click="goSubPage('salary')">
+        </app-grid-item>
+        <app-grid-item @click="goSubPage('salary')">
           <template #icon
             ><van-icon name="points" class="grid-icon gold"
           /></template>
           <template #text><span class="grid-text">薪资计算</span></template>
-        </van-grid-item>
-      </van-grid>
+        </app-grid-item>
+      </app-grid>
     </div>
 
     <div class="app-card info-card">
@@ -143,14 +144,14 @@
     </div>
 
     <div class="quick-add-bar">
-      <van-button
+      <app-button
         type="primary"
         plain
         size="small"
         round
         icon="plus"
         @click="goToAddFlow"
-        >快速登记流水</van-button
+        >快速登记流水</app-button
       >
     </div>
 
@@ -161,10 +162,10 @@
           <span class="view-detail" @click="goSubPage('flow')">查看明细></span>
         </div>
       </template>
-      <van-cell
+      <app-cell
         v-for="item in recentItems"
         :key="item.id"
-        :title="item.pay_type + (item.direction === 1 ? '收入' : '支出')"
+        :title="getTitle(item)"
         :label="item.trans_date"
         clickable
         @click="goToDetail(item)"
@@ -174,15 +175,15 @@
             {{ getAmountPrefix(item) }}{{ formatMoney(item.amount) }}元
           </span>
         </template>
-      </van-cell>
-      <van-cell v-if="recentItems.length === 0" title="暂无大额流水" is-link />
+      </app-cell>
+      <app-cell v-if="recentItems.length === 0" title="暂无大额流水" is-link />
     </van-cell-group>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, onMounted, computed } from "vue";
-defineOptions({ name: 'Home' })
+defineOptions({ name: "Home" });
 import { useRouter } from "vue-router";
 import { getAssetHome } from "@/utils/api/asset";
 import { getReminders } from "@/utils/api/todo";
@@ -208,7 +209,7 @@ const recentItems = ref([]);
 const showAmount = ref(true);
 const topReminder = ref(null); // 最重要的1条提醒
 const todaySalaryData = ref(null); // 今日薪酬数据
-const showDemoInfo = import.meta.env.VITE_APP_DEMO === 'true'
+const showDemoInfo = import.meta.env.VITE_APP_DEMO === "true";
 
 // 日期
 const now = new Date();
@@ -242,10 +243,10 @@ const loadHomeData = async () => {
   }
 };
 
-// 加载待办提醒（使用默认参数，获取3-5天内的提醒）
+// 加载待办提醒（含当天起 0-30 天窗口）
 const loadReminder = async () => {
   try {
-    const res = await getReminders(); // 不传参数，获取默认提醒
+    const res = await getReminders({ scope: "all" }); // 不传 scope 后端默认 3-10 天，会漏掉当天/明日提醒
     const list = res.data || [];
     if (list.length > 0) {
       // 排序：时间升序（越接近今天越前）> 优先等级（1最高）
@@ -287,7 +288,7 @@ const dailySalary = computed(() => {
   const daysInMonth = new Date(
     today.getFullYear(),
     today.getMonth() + 1,
-    0
+    0,
   ).getDate();
   const day = today.getDate();
   return (dashboardData.monthIncome / daysInMonth) * day || 0;
@@ -328,45 +329,37 @@ const goToAddFlow = () => {
 };
 
 const formatMoney = (val) => {
-  const v = Number(val || 0)
-  const isNegative = v < 0
-  const abs = Math.abs(v)
-  let result
+  const v = Number(val || 0);
+  const isNegative = v < 0;
+  const abs = Math.abs(v);
+  let result;
   if (abs >= 100000000) {
-    const yi = abs / 100000000
-    const intPart = Math.floor(yi)
-    let decPart = Math.round((yi - intPart) * 1000)
-    if (decPart >= 1000) decPart = 999
-    result = intPart + '.' + String(decPart).padStart(3, '0') + '亿'
+    const yi = abs / 100000000;
+    const intPart = Math.floor(yi);
+    let decPart = Math.round((yi - intPart) * 1000);
+    if (decPart >= 1000) decPart = 999;
+    result = intPart + "." + String(decPart).padStart(3, "0") + "亿";
   } else if (abs >= 10000) {
-    const wan = abs / 10000
-    const intPart = Math.floor(wan)
-    let decPart = Math.round((wan - intPart) * 1000)
-    if (decPart >= 1000) decPart = 999
-    result = intPart + '.' + String(decPart).padStart(3, '0') + '万'
+    const wan = abs / 10000;
+    const intPart = Math.floor(wan);
+    let decPart = Math.round((wan - intPart) * 1000);
+    if (decPart >= 1000) decPart = 999;
+    result = intPart + "." + String(decPart).padStart(3, "0") + "万";
   } else {
-    const intPart = Math.floor(abs)
-    let decPart = Math.round((abs - intPart) * 100)
-    if (decPart >= 100) decPart = 99
-    result = intPart + '.' + String(decPart).padStart(2, '0')
+    const intPart = Math.floor(abs);
+    let decPart = Math.round((abs - intPart) * 100);
+    if (decPart >= 100) decPart = 99;
+    result = intPart + "." + String(decPart).padStart(2, "0");
   }
-  return (isNegative ? '-' : '') + result
-}
-
-// 流水类型文字
-const getTransText = (type) => {
-  console.log(type);
-
-  const map = {
-    repay: "信用卡还款",
-    account: "账户变动",
-    income: "收入",
-    expense: "支出",
-  };
-  return map[type] || "交易记录";
+  return (isNegative ? "-" : "") + result;
 };
 
-// 颜色 + 符号
+// 近期消费标题
+const getTitle = (item) => {
+  return (item.pay_type || "") + (item.direction === 1 ? "收入" : "支出");
+};
+
+// 金额颜色：收入绿、支出红
 const getAmountClass = (item) => {
   return item.direction === 1 ? "text-income" : "text-expense";
 };
@@ -387,29 +380,32 @@ onMounted(() => {
 <style scoped>
 .page-home {
   padding: 0.4rem 0.8rem;
-  background-color: #f7f8fa;
+  background-color: var(--theme-bg-primary);
   min-height: 100vh;
 }
 
 /* 总资产卡片 */
 .total-assets-card {
-  background: linear-gradient(135deg, #4e7af5, #3a66e0);
+  background: linear-gradient(
+    135deg,
+    var(--theme-primary),
+    var(--theme-primary-grad)
+  );
   color: white;
   padding: 1.6rem 1.2rem;
   border-radius: 1.4rem;
   margin-bottom: 1rem;
-  box-shadow: 0 0.6rem 1.4rem rgba(58, 102, 224, 0.25);
+  box-shadow: 0 0.6rem 1.4rem rgba(var(--theme-primary-rgb), 0.25);
   position: relative;
   overflow: hidden;
 }
 
-/* 右上角日期牌 */
+/* 右上角日期牌 — 正常流，由 header-main flex 推到右侧 */
 .date-badge {
-  position: absolute;
-  top: 1rem;
-  right: 1rem;
+  position: relative;
   width: 2.4rem;
   height: 2.4rem;
+  flex-shrink: 0;
   background: rgba(255, 255, 255, 0.15);
   border-radius: 0.4rem;
   display: flex;
@@ -417,13 +413,25 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   backdrop-filter: blur(6px);
-  overflow: hidden;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 扩大点击热区（视觉不变，可点范围四周外扩） */
+.date-badge::before {
+  content: "";
+  position: absolute;
+  top: -0.6rem;
+  right: -0.6rem;
+  bottom: -0.6rem;
+  left: -0.6rem;
 }
 
 .date-month {
   width: 100%;
   height: 0.9rem;
   background: rgba(255, 255, 255, 0.25);
+  border-radius: 0.4rem 0.4rem 0 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -438,6 +446,17 @@ onMounted(() => {
   justify-content: center;
   font-size: 0.9rem;
   font-weight: bold;
+}
+
+.header-main {
+  /* 两行垂直堆叠 */
+}
+
+/* 第一行：预估总资产标签 + 日期牌 */
+.header-row-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .label-group {
@@ -455,7 +474,6 @@ onMounted(() => {
 
 .total-amount {
   font-size: 2.2rem;
-  margin-top: 0.5rem;
   font-weight: 700;
   letter-spacing: 0.05rem;
 }
@@ -464,21 +482,40 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
-  margin-top: 0.5rem;
 }
 
 .income-expense {
-  font-size: 0.7rem;
-  text-align: right;
+  font-size: 0.82rem;
 }
 
+/* label 固定左侧，金额靠右，上下两行对齐 */
 .income-item {
-  margin-bottom: 0.2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 0.25rem;
 }
 
 .ie-label {
   opacity: 0.75;
-  font-size: 0.55rem;
+  font-size: 0.6rem;
+  flex-shrink: 0;
+}
+
+/* 今日收支金额：固定红绿，不跟随主题 */
+.income-val {
+  font-weight: 600;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.income-val.in {
+  color: #07c160;
+}
+
+.income-val.out {
+  color: #ee0a24;
 }
 
 .asset-details {
@@ -504,7 +541,7 @@ onMounted(() => {
 
 /* 菜单 */
 .menu-grid-card {
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 1.2rem;
   padding: 0.5rem 0;
   margin-bottom: 1rem;
@@ -517,23 +554,23 @@ onMounted(() => {
 
 .grid-text {
   font-size: 13px;
-  color: #646566;
+  color: var(--theme-text-secondary);
 }
 
 .blue {
-  color: #1989fa;
+  color: var(--theme-primary);
 }
 
 .green {
-  color: #07c160;
+  color: var(--van-green, #07c160);
 }
 
 .orange {
-  color: #ff976a;
+  color: var(--van-orange, #ff976a);
 }
 
 .red {
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
 }
 
 .purple {
@@ -558,7 +595,7 @@ onMounted(() => {
 
 /* 信息卡片 */
 .info-card {
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 1.2rem;
   padding: 1rem;
   margin-bottom: 1rem;
@@ -580,30 +617,30 @@ onMounted(() => {
 
 .info-icon {
   font-size: 1.2rem;
-  color: #4e7af5;
+  color: var(--theme-primary);
 }
 
 .info-label {
   font-size: 0.9rem;
-  color: #333;
+  color: var(--theme-text-primary);
 }
 
 .arrow-right {
-  color: #999;
+  color: var(--theme-text-tertiary);
   font-size: 0.8rem;
 }
 
 .reminder-dot {
   width: 6px;
   height: 6px;
-  background: #ee0a24;
+  background: var(--van-danger-color, #ee0a24);
   border-radius: 50%;
   margin-left: 4px;
 }
 
 .reminder-text {
   font-size: 0.8rem;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   margin-left: 6px;
   max-width: 120px;
   overflow: hidden;
@@ -614,11 +651,11 @@ onMounted(() => {
 /* 颜色 */
 .text-income {
   font-weight: bold;
-  color: #ee0a24 !important;
+  color: var(--van-danger-color, #ee0a24) !important;
 }
 
 .text-expense {
-  color: #07c160 !important;
+  color: var(--van-green, #07c160) !important;
 }
 
 /* 流水 */
@@ -634,22 +671,22 @@ onMounted(() => {
 .quick-add-bar {
   margin: 12px 16px;
   display: flex;
-  justify-content: center;
 }
 
-.quick-add-bar .van-button {
+.quick-add-bar .app-btn {
   flex: 1;
+  width: 100%;
 }
 
 .recent-records {
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 1.2rem;
   overflow: hidden;
 }
 
 .view-detail {
   font-size: 0.8rem;
-  color: #0a4ba8;
+  color: var(--theme-primary);
   margin-top: 0.5rem;
   text-align: center;
 }

@@ -7,7 +7,7 @@
           <span class="month-year">{{ currentYear }}年{{ currentMonth }}月</span>
           <van-icon name="arrow-down" size="16" />
         </div>
-        <van-icon name="calendar-o" size="22" color="#1989fa" @click="goCalendar" />
+        <van-icon name="calendar-o" size="22" :color="'var(--theme-primary)'" @click="goCalendar" />
       </div>
 
       <!-- 统计数字 -->
@@ -45,12 +45,7 @@
     </div>
 
     <!-- ====== 时间线列表 ====== -->
-    <div ref="listScrollRef" class="timeline-scroll">
-      <!-- 滚动吸顶日期 -->
-      <div v-if="stickyDate" class="sticky-date-bar">
-        <span class="sticky-date-dot" :class="isToday(stickyDate) ? 'today' : ''"></span>
-        <span class="sticky-date-text">{{ formatDateHeader(stickyDate) }}</span>
-      </div>
+    <div ref="listScrollRef" class="timeline-scroll" @scroll="onScroll">
       <van-pull-refresh v-model="refreshing" :disabled="!isCurrentMonth" @refresh="onRefresh">
         <van-list v-model:loading="loading" :finished="finished" finished-text="— 已经看到底了 —" @load="loadData">
 
@@ -159,17 +154,17 @@
                   <div class="pd-main pd-reversal" @click="toggleTransferExpand(item.expense.id)">
                     <div class="tf-row tf-time-row">
                       <span class="tf-t">{{ formatTime(item.expense.create_time) }}</span>
-                      <span class="tf-label" style="text-decoration:line-through;color:#8e8e93">冲正</span>
+                      <span class="tf-label" style="text-decoration:line-through;color:var(--theme-text-tertiary)">冲正</span>
                       <span class="tf-t">{{ formatTime(item.income.create_time) }}</span>
                     </div>
                     <div class="tf-row tf-amount-row">
-                      <span class="tf-amt out" style="color:#8e8e93">-{{ formatAmount(item.expense.amount) }}</span>
-                      <van-icon name="revoke" class="tf-exchange-icon" style="color:#8e8e93" />
-                      <span class="tf-amt in" style="color:#8e8e93">+{{ formatAmount(item.income.amount) }}</span>
+                      <span class="tf-amt out" style="color:var(--theme-text-tertiary)">-{{ formatAmount(item.expense.amount) }}</span>
+                      <van-icon name="revoke" class="tf-exchange-icon" style="color:var(--theme-text-tertiary)" />
+                      <span class="tf-amt in" style="color:var(--theme-text-tertiary)">+{{ formatAmount(item.income.amount) }}</span>
                     </div>
                     <div class="tf-row tf-bank-row">
-                      <span class="tf-bank-name" style="color:#a0a0a4">{{ getCardName(item.expense.card_id) || getCompactCardLabel(item.expense) }}</span>
-                      <span class="tf-bank-name" style="color:#a0a0a4">{{ getCardName(item.income.card_id) || getCompactCardLabel(item.income) }}</span>
+                      <span class="tf-bank-name" style="color:var(--theme-text-tertiary)">{{ getCardName(item.expense.card_id) || getCompactCardLabel(item.expense) }}</span>
+                      <span class="tf-bank-name" style="color:var(--theme-text-tertiary)">{{ getCardName(item.income.card_id) || getCompactCardLabel(item.income) }}</span>
                     </div>
                   </div>
                   <!-- 展开明细（与 transfer 块相同的子列表结构） -->
@@ -197,7 +192,7 @@
                 <!--    视觉：普通 flow-card + 右上角徽标（不用虚线框 / 三层布局） -->
                 <!--    对外转账：支出方向，pay_type='转账' 无配对 → 支出视角 -->
                 <!--    给我转账：收入方向，pay_type='转账' 无配对 → 收入视角 -->
-                <div v-else-if="item.type === 'external-transfer' || item.type === 'incoming-transfer'" class="flow-card" @click="goDetail(item.data)">
+                <div v-else-if="item.type === 'external-transfer' || item.type === 'incoming-transfer'" class="flow-card" :class="isRepay(item.data) ? 'fc-repay' : ''" @click="goDetail(item.data)">
                   <div :class="item.type === 'incoming-transfer' ? 'fc-badge fc-badge-income' : 'fc-badge fc-badge-warn'">
                     {{ item.type === 'incoming-transfer' ? '给我转账' : '对外转账' }}
                   </div>
@@ -206,7 +201,7 @@
                     <div class="fc-meta">
                       {{ item.data.pay_method || "-" }} · {{ formatTime(item.data.create_time) }}
                       <span v-if="item.data.card_id && !['xxxx','yyyy'].includes(item.data.card_id)" class="fc-bank-chip">
-                        <van-image v-if="getCardBankIcon(item.data.card_id)" width="12" height="12" :src="getFullUrl(getCardBankIcon(item.data.card_id))" fit="contain" />
+                        <BankIcon :src="getFullUrl(getCardBankIcon(item.data.card_id))" :name="getCardBankName(item.data.card_id)" :size="12" />
                         {{ getCardName(item.data.card_id) }}
                       </span>
                     </div>
@@ -218,7 +213,7 @@
                 </div>
 
                 <!-- === 普通流水条目 === -->
-                <div v-else class="flow-card" :class="item.data.direction === 1 ? 'fc-income' : 'fc-expense'" @click="goDetail(item.data)">
+                <div v-else class="flow-card" :class="[item.data.direction === 1 ? 'fc-income' : 'fc-expense', isRepay(item.data) ? 'fc-repay' : '']" @click="goDetail(item.data)">
                   <span class="fc-arrow" :class="item.data.direction === 1 ? 'in' : 'out'">
                     {{ item.data.direction === 1 ? '↓' : '↑' }}
                   </span>
@@ -227,7 +222,7 @@
                     <div class="fc-meta">
                       {{ item.data.pay_method || "-" }}
                       <span v-if="item.data.card_id && !['xxxx','yyyy'].includes(item.data.card_id)" class="fc-bank-chip">
-                        <van-image v-if="getCardBankIcon(item.data.card_id)" width="12" height="12" :src="getFullUrl(getCardBankIcon(item.data.card_id))" fit="contain" />
+                        <BankIcon :src="getFullUrl(getCardBankIcon(item.data.card_id))" :name="getCardBankName(item.data.card_id)" :size="12" />
                         {{ getCardName(item.data.card_id) }}
                       </span>
                     </div>
@@ -251,9 +246,9 @@
     </div>
 
     <!-- ====== Popups ====== -->
-    <van-popup v-model:show="showDatePicker" position="bottom" round>
+    <app-popup v-model:show="showDatePicker" position="bottom" round>
       <van-picker v-model="selectedValues" title="选择月份" :columns="pickerColumns" @confirm="onPickerConfirm" @cancel="showDatePicker = false" />
-    </van-popup>
+    </app-popup>
 
     <van-icon v-show="showBackTop" name="back-top" class="back-top" @click="scrollToTop" />
   </div>
@@ -271,6 +266,7 @@ import { getCardList } from "@/utils/api/card";
 import { categoryApi } from "@/utils/api/category";
 import ENV from "@/utils/env";
 import { useFlowSyncStore } from "@/stores/flowSync";
+import BankIcon from "@/components/BankIcon.vue";
 
 dayjs.locale(zhCn);
 const router = useRouter();
@@ -311,7 +307,6 @@ const expandedTransferIds = ref(new Set());
 const showBackTop = ref(false)
 const savedScrollY = ref(0)
 const listScrollRef = ref(null)
-const stickyDate = ref(null)
 
 const toggleTransferExpand = (expenseId) => {
   const s = new Set(expandedTransferIds.value);
@@ -326,26 +321,9 @@ const scrollToTop = () => {
 
 const onScroll = () => {
   showBackTop.value = (listScrollRef.value?.scrollTop || 0) > 400
-
-  // 检测当前可见的日期头（用于吸顶）
-  const container = listScrollRef.value
-  if (!container) return
-  const headers = container.querySelectorAll('.day-head')
-  let current = null
-  for (const h of headers) {
-    const rect = h.getBoundingClientRect()
-    const containerRect = container.getBoundingClientRect()
-    if (rect.top <= containerRect.top + 10) {
-      current = h.getAttribute('data-date')
-    } else {
-      break
-    }
-  }
-  stickyDate.value = current
 }
 
 onMounted(() => {
-  listScrollRef.value?.addEventListener('scroll', onScroll)
   categoryApi.list("bank").then((res) => (bankList.value = res.data || res || [])).catch(() => {});
   getCardList().then((res) => (cardList.value = res.data || []));
   loadSummary();
@@ -513,6 +491,9 @@ const getCategoryName = (item) => {
   return item.category_name || "未知分类";
 };
 
+// 是否为信用卡还款（用于流水卡片置灰，资金转移非实际消费）
+const isRepay = (item) => item && item.category_id === "CATEGORY_REPAY";
+
 const getCardName = (id) => {
   if (!id) return "";
   if (id === "xxxx") return "现金";
@@ -537,6 +518,16 @@ const getCardBankIcon = (id) => {
   const bankId = card.bank_id || card.bankId;
   const bank = bankId ? getBankInfo(bankId) : null;
   return bank?.icon_url || bank?.iconUrl || "";
+};
+
+// 获取卡片银行名称（用于图标加载失败时的首字兜底）
+const getCardBankName = (id) => {
+  if (!id) return "";
+  const card = cardList.value.find((c) => c.id === id);
+  if (!card) return "";
+  const bankId = card.bank_id || card.bankId;
+  const bank = bankId ? getBankInfo(bankId) : null;
+  return bank?.name || bank?.bank_name || card.bank_name || "";
 };
 
 // ── 转账/提现检测 + 分组输出（watch list 每次全量重算）──
@@ -927,7 +918,7 @@ const goCalendar = () => router.push("/finance/flow/calendar");
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: #f0f2f5;
+  background: var(--theme-bg-primary);
   overflow: hidden;
   position: relative;
   font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
@@ -936,7 +927,7 @@ const goCalendar = () => router.push("/finance/flow/calendar");
 /* ── 月份卡片 ── */
 .month-card {
   margin: 10px 12px 8px;
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 5px;
   padding: 16px 18px 14px;
   box-shadow: 0 1px 8px rgba(0,0,0,0.04);
@@ -956,7 +947,7 @@ const goCalendar = () => router.push("/finance/flow/calendar");
 .month-year {
   font-size: 20px;
   font-weight: 700;
-  color: #1a1a2e;
+  color: var(--theme-text-primary);
 }
 
 /* ── 统计行 ── */
@@ -974,22 +965,22 @@ const goCalendar = () => router.push("/finance/flow/calendar");
 }
 .sk-label {
   font-size: 11px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 .sk-val {
   font-size: 19px;
   font-weight: 700;
-  color: #323233;
+  color: var(--theme-text-primary);
   font-family: "DIN Alternate", "SF Mono", monospace;
 }
-.sk-val.in { color: #07c160; }
-.sk-val.out { color: #ee0a24; }
+.sk-val.in { color: var(--van-green, #07c160); }
+.sk-val.out { color: var(--van-danger-color, #ee0a24); }
 .stat-divider {
   width: 1px;
   height: 32px;
-  background: #ebedf0;
+  background: var(--theme-border);
 }
 
 /* ── 迷你进度条 ── */
@@ -999,17 +990,17 @@ const goCalendar = () => router.push("/finance/flow/calendar");
   border-radius: 2px;
   overflow: hidden;
   margin-top: 12px;
-  background: #f2f3f5;
+  background: var(--theme-bg-tertiary);
 }
 .mb-seg { min-width: 4px; transition: flex 0.4s ease; }
-.mb-in { background: #07c160; }
-.mb-out { background: #ee0a24; }
+.mb-in { background: var(--van-green, #07c160); }
+.mb-out { background: var(--van-danger-color, #ee0a24); }
 
 /* ── Tab 筛选 ── */
 .tab-bar {
   display: flex;
   margin: 0 12px 8px;
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 5px;
   padding: 3px;
 }
@@ -1019,15 +1010,15 @@ const goCalendar = () => router.push("/finance/flow/calendar");
   padding: 7px 0;
   font-size: 13px;
   font-weight: 500;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   border-radius: 5px;
   cursor: pointer;
   transition: all 0.2s;
 }
 .tab-item.active {
-  background: #1989fa;
+  background: var(--theme-primary);
   color: #fff;
-  box-shadow: 0 2px 6px rgba(25,137,250,0.25);
+  box-shadow: 0 2px 6px rgba(var(--theme-primary-rgb), 0.25);
 }
 
 /* ── 时间线滚动区 ── */
@@ -1037,6 +1028,14 @@ const goCalendar = () => router.push("/finance/flow/calendar");
   -webkit-overflow-scrolling: touch;
   padding: 0 12px;
   position: relative;
+}
+
+/* van-pull-refresh 的 overflow: hidden 会创建不可滚动的 scroll container，
+   导致内部 day-head 的 position: sticky 失效。
+   此处覆盖 overflow 让 sticky 能穿透到 .timeline-scroll 吸顶。
+   下拉刷新效果不受影响（仅 touchmove 控制） */
+.timeline-scroll :deep(.van-pull-refresh) {
+  overflow: visible;
 }
 
 /* ── 日期区块 ── */
@@ -1051,50 +1050,19 @@ const goCalendar = () => router.push("/finance/flow/calendar");
   position: sticky;
   top: 0;
   z-index: 5;
-  background: #f0f2f5;
+  background: var(--theme-bg-primary);
 }
 .day-dot {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: #dcdee0;
+  background: var(--theme-text-placeholder);
   flex-shrink: 0;
-  border: 2px solid #f0f2f5;
+  border: 2px solid var(--theme-bg-primary);
 }
 .day-dot.today {
-  background: #1989fa;
-  box-shadow: 0 0 0 3px rgba(25,137,250,0.18);
-}
-
-/* 滚动吸顶日期 */
-.sticky-date-bar {
-  position: sticky;
-  top: 0;
-  z-index: 99;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 6px 6px;
-  margin: 0 -12px;
-  background: #f0f2f5;
-  pointer-events: none;
-}
-.sticky-date-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: #dcdee0;
-  flex-shrink: 0;
-  border: 2px solid #f0f2f5;
-}
-.sticky-date-dot.today {
-  background: #1989fa;
-  box-shadow: 0 0 0 3px rgba(25,137,250,0.18);
-}
-.sticky-date-text {
-  font-size: 15px;
-  font-weight: 600;
-  color: #323233;
+  background: var(--theme-primary);
+  box-shadow: 0 0 0 3px rgba(var(--theme-primary-rgb), 0.18);
 }
 .day-text {
   flex: 1;
@@ -1105,11 +1073,11 @@ const goCalendar = () => router.push("/finance/flow/calendar");
 .day-date {
   font-size: 15px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
 }
 .day-weekday {
   font-size: 12px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 .day-sum {
   display: flex;
@@ -1117,13 +1085,12 @@ const goCalendar = () => router.push("/finance/flow/calendar");
   font-size: 12px;
   font-weight: 600;
 }
-.ds-in { color: #07c160; }
-.ds-out { color: #ee0a24; }
+.ds-in { color: var(--van-green, #07c160); }
+.ds-out { color: var(--van-danger-color, #ee0a24); }
 
 /* ── 条目卡片容器 ── */
 .day-cards {
   margin-left: 5px;
-  border-left: 1.5px solid #ebedf0;
   padding-left: 14px;
 }
 
@@ -1131,7 +1098,7 @@ const goCalendar = () => router.push("/finance/flow/calendar");
 .flow-card {
   display: flex;
   align-items: center;
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 5px;
   padding: 12px 14px;
   margin-bottom: 6px;
@@ -1144,6 +1111,23 @@ const goCalendar = () => router.push("/finance/flow/calendar");
   box-shadow: 0 2px 8px rgba(0,0,0,0.06);
 }
 
+/* 信用卡还款：置灰（资金转移，非实际消费） */
+.flow-card.fc-repay {
+  filter: grayscale(1);
+  opacity: 0.55;
+}
+/* 非默认（深色）主题：不置灰，改为普通白色文字 */
+html[data-theme-mono="1"] .flow-card.fc-repay {
+  filter: none;
+  opacity: 1;
+}
+html[data-theme-mono="1"] .flow-card.fc-repay .fc-cat,
+html[data-theme-mono="1"] .flow-card.fc-repay .fc-meta,
+html[data-theme-mono="1"] .flow-card.fc-repay .fc-time,
+html[data-theme-mono="1"] .flow-card.fc-repay .fc-bank-chip {
+  color: #fff;
+}
+
 .fc-arrow {
   font-size: 18px;
   font-weight: 700;
@@ -1152,8 +1136,8 @@ const goCalendar = () => router.push("/finance/flow/calendar");
   width: 22px;
   text-align: center;
 }
-.fc-arrow.in { color: #07c160; }
-.fc-arrow.out { color: #ee0a24; }
+.fc-arrow.in { color: var(--van-green, #07c160); }
+.fc-arrow.out { color: var(--van-danger-color, #ee0a24); }
 
 .fc-body {
   flex: 1;
@@ -1162,12 +1146,12 @@ const goCalendar = () => router.push("/finance/flow/calendar");
 .fc-cat {
   font-size: 14px;
   font-weight: 500;
-  color: #323233;
+  color: var(--theme-text-primary);
   margin-bottom: 3px;
 }
 .fc-meta {
   font-size: 11px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   display: flex;
   align-items: center;
   gap: 4px;
@@ -1177,11 +1161,11 @@ const goCalendar = () => router.push("/finance/flow/calendar");
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   border-radius: 3px;
   padding: 1px 5px;
   font-size: 10px;
-  color: #646566;
+  color: var(--theme-text-secondary);
   margin-left: 2px;
 }
 .fc-right {
@@ -1197,14 +1181,14 @@ const goCalendar = () => router.push("/finance/flow/calendar");
   white-space: nowrap;
   font-family: "DIN Alternate", "SF Mono", monospace;
 }
-.fc-amount.in { color: #07c160; }
-.fc-amount.out { color: #ee0a24; }
+.fc-amount.in { color: var(--van-green, #07c160); }
+.fc-amount.out { color: var(--van-danger-color, #ee0a24); }
 .fc-time {
   font-size: 10px;
-  color: #c8c9cc;
+  color: var(--theme-text-tertiary);
   margin-top: 2px;
 }
-.fc-currency { font-size: 11px; font-weight: 500; margin-right: 1px; }
+.fc-currency { font-size: 15px; font-weight: 500; margin-right: 1px; }
 
 .fc-badge {
   position: absolute;
@@ -1215,8 +1199,8 @@ const goCalendar = () => router.push("/finance/flow/calendar");
   padding: 2px 6px;
   border-radius: 0 5px 0 5px;
 }
-.fc-badge-warn { background: #fff7e6; color: #ff976a; }
-.fc-badge-income { background: #e8f9ee; color: #07c160; }
+.fc-badge-warn { background: var(--van-orange-bg, #fff7e6); color: var(--van-orange, #ff976a); }
+.fc-badge-income { background: var(--van-green-bg, #e8f9ee); color: var(--van-green, #07c160); }
 
 /* ── 配对区块（转账 / 提现 / 冲正）── */
 .paired-block, .transfer-block {
@@ -1234,18 +1218,18 @@ const goCalendar = () => router.push("/finance/flow/calendar");
 
 /* 转账：蓝 */
 .tf-main {
-  background: rgba(25,137,250,0.04);
-  border: 2px dashed #1989fa;
+  background: rgba(var(--theme-primary-rgb), 0.04);
+  border: 2px dashed var(--theme-primary);
 }
 /* 提现：绿 */
 .pd-withdrawal {
-  background: rgba(46,125,50,0.04);
-  border: 2px dashed #2e7d32;
+  background: rgba(7,193,96,0.05);
+  border: 2px dashed var(--van-green);
 }
 /* 冲正：灰 */
 .pd-reversal {
-  background: rgba(0,0,0,0.03);
-  border: 2px dashed rgba(0,0,0,0.16);
+  background: var(--theme-bg-tertiary);
+  border: 2px dashed var(--theme-border);
   opacity: 0.85;
 }
 
@@ -1255,16 +1239,16 @@ const goCalendar = () => router.push("/finance/flow/calendar");
 .tf-time-row {
   justify-content: space-between;
 }
-.tf-t { font-size: 11px; color: #969799; }
+.tf-t { font-size: 11px; color: var(--theme-text-tertiary); }
 .tf-label {
   font-size: 11px;
   font-weight: 600;
-  color: #1989fa;
+  color: var(--theme-primary);
 }
 .pd-label {
   font-size: 11px;
   font-weight: 600;
-  color: #2e7d32;
+  color: var(--van-green);
 }
 
 /* 第二层：金额 + icon + 金额 */
@@ -1278,11 +1262,11 @@ const goCalendar = () => router.push("/finance/flow/calendar");
   font-weight: 700;
   font-family: "DIN Alternate", "SF Mono", monospace;
 }
-.tf-amt.out { color: #ee0a24; }
-.tf-amt.in { color: #07c160; }
+.tf-amt.out { color: var(--van-danger-color, #ee0a24); }
+.tf-amt.in { color: var(--van-green, #07c160); }
 .tf-exchange-icon {
   font-size: 18px;
-  color: #1989fa;
+  color: var(--theme-primary);
   flex-shrink: 0;
 }
 
@@ -1292,7 +1276,7 @@ const goCalendar = () => router.push("/finance/flow/calendar");
 }
 .tf-bank-name {
   font-size: 11px;
-  color: #646566;
+  color: var(--theme-text-secondary);
   max-width: 45%;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1306,7 +1290,7 @@ const goCalendar = () => router.push("/finance/flow/calendar");
 .tf-detail-item {
   display: flex;
   align-items: center;
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 5px;
   padding: 10px 12px;
   margin-top: 4px;
@@ -1319,14 +1303,14 @@ const goCalendar = () => router.push("/finance/flow/calendar");
   margin-right: 10px;
   flex-shrink: 0;
 }
-.tfd-dot.out { background: #ee0a24; }
-.tfd-dot.in { background: #07c160; }
+.tfd-dot.out { background: var(--van-danger-color, #ee0a24); }
+.tfd-dot.in { background: var(--van-green, #07c160); }
 .tfd-body {
   flex: 1;
   min-width: 0;
 }
-.tfd-cat { font-size: 13px; color: #323233; font-weight: 500; }
-.tfd-meta { font-size: 11px; color: #969799; margin-top: 1px; }
+.tfd-cat { font-size: 13px; color: var(--theme-text-primary); font-weight: 500; }
+.tfd-meta { font-size: 11px; color: var(--theme-text-tertiary); margin-top: 1px; }
 .tfd-amt {
   font-size: 15px;
   font-weight: 600;
@@ -1334,8 +1318,8 @@ const goCalendar = () => router.push("/finance/flow/calendar");
   margin-left: 8px;
   white-space: nowrap;
 }
-.tfd-amt.out { color: #ee0a24; }
-.tfd-amt.in { color: #07c160; }
+.tfd-amt.out { color: var(--van-danger-color, #ee0a24); }
+.tfd-amt.in { color: var(--van-green, #07c160); }
 
 /* ── 返回顶部 ── */
 .back-top {
@@ -1344,14 +1328,14 @@ const goCalendar = () => router.push("/finance/flow/calendar");
   bottom: 60px;
   width: 40px;
   height: 40px;
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 50%;
   box-shadow: 0 2px 12px rgba(0,0,0,0.15);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 20px;
-  color: #1989fa;
+  color: var(--theme-primary);
   z-index: 999;
 }
 

@@ -51,12 +51,12 @@
             </div>
             <div class="card-meta">
               <span class="meta-date">{{ item.plan_date }}</span>
-              <van-tag :type="getTypeColor(item.budget_type)" size="small">
+              <app-tag :type="getTypeColor(item.budget_type)" size="small">
                 {{ getTypeName(item.budget_type) }}
-              </van-tag>
-              <van-tag :type="getCycleColor(item.cycle)" size="small" plain>
+              </app-tag>
+              <app-tag :type="getCycleColor(item.cycle)" size="small" plain>
                 {{ getCycleName(item.cycle) }}
-              </van-tag>
+              </app-tag>
             </div>
           </div>
           <div class="card-right">
@@ -88,7 +88,7 @@
 
         <!-- 标签 -->
         <div class="card-tags" v-if="isOverBudget(item)">
-          <van-tag type="danger" size="small">已超支</van-tag>
+          <app-tag type="danger" size="small">已超支</app-tag>
         </div>
       </div>
     </div>
@@ -99,9 +99,9 @@
 
     <!-- 底部按钮 -->
     <div class="bottom-actions">
-      <van-button type="primary" round block @click="goAdd">
+      <app-button type="primary" round block @click="goAdd">
         <van-icon name="plus" /> 登记预算
-      </van-button>
+      </app-button>
     </div>
   </div>
 </template>
@@ -243,13 +243,13 @@ onMounted(() => {
 <style scoped>
 .page-budget-list {
   min-height: 100vh;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   padding-bottom: 100px;
 }
 
 /* 顶部统计 */
 .stats-summary {
-  background: linear-gradient(135deg, #1989fa, #1976d2);
+  background: linear-gradient(135deg, var(--theme-primary), var(--theme-primary-grad));
   margin: 12px;
   border-radius: 16px;
   padding: 16px;
@@ -280,7 +280,7 @@ onMounted(() => {
 }
 
 .summary-item .value.danger {
-  color: #ffd000;
+  color: rgba(255, 255, 255, 0.95);
 }
 
 .summary-item .value.success {
@@ -324,23 +324,23 @@ onMounted(() => {
   align-items: center;
   gap: 4px;
   padding: 8px 12px;
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 20px;
   font-size: 13px;
-  color: #646566;
+  color: var(--theme-text-secondary);
   white-space: nowrap;
   flex-shrink: 0;
 }
 
 .cycle-tab.active {
-  background: linear-gradient(135deg, #1989fa, #1976d2);
+  background: linear-gradient(135deg, var(--theme-primary), var(--theme-primary-grad));
   color: #fff;
 }
 
 /* 预算卡片 */
 .budget-card {
   position: relative;
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 12px;
   padding: 14px;
   margin: 0 12px 10px;
@@ -356,11 +356,11 @@ onMounted(() => {
   width: 4px;
 }
 
-.card-cycle-bar.日 { background: #07c160; }
-.card-cycle-bar.周 { background: #1989fa; }
-.card-cycle-bar.月 { background: #ff976a; }
-.card-cycle-bar.季 { background: #7232dd; }
-.card-cycle-bar.年 { background: #ee0a24; }
+.card-cycle-bar.日 { background: var(--van-green, #07c160); }
+.card-cycle-bar.周 { background: var(--theme-primary); }
+.card-cycle-bar.月 { background: var(--van-orange, #ff976a); }
+.card-cycle-bar.季 { background: var(--van-purple, #7232dd); }
+.card-cycle-bar.年 { background: var(--van-danger-color, #ee0a24); }
 
 /* 统计卡片 */
 .stats-cards {
@@ -374,7 +374,7 @@ onMounted(() => {
 .stat-card {
   flex: 0 0 auto;
   min-width: 110px;
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 12px;
   padding: 12px;
   display: flex;
@@ -393,9 +393,9 @@ onMounted(() => {
   color: #fff;
 }
 
-.stat-icon.行 { background: linear-gradient(135deg, #1989fa, #1976d2); }
-.stat-icon.买 { background: linear-gradient(135deg, #ee0a24, #ff6034); }
-.stat-icon.吃 { background: linear-gradient(135deg, #ff976a, #ee0a24); }
+.stat-icon.行 { background: linear-gradient(135deg, var(--theme-primary), var(--theme-primary-grad)); }
+.stat-icon.买 { background: linear-gradient(135deg, var(--van-danger-color, #ee0a24), var(--van-danger-grad, #ff6034)); }
+.stat-icon.吃 { background: linear-gradient(135deg, var(--van-orange, #ff976a), var(--van-danger-color, #ee0a24)); }
 
 .stat-info {
   flex: 1;
@@ -403,14 +403,14 @@ onMounted(() => {
 
 .stat-name {
   font-size: 12px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   margin-bottom: 2px;
 }
 
 .stat-amount {
   font-size: 14px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
 }
 
 .stat-progress {
@@ -432,7 +432,7 @@ onMounted(() => {
 
 .ring-bg {
   fill: none;
-  stroke: #f0f0f0;
+  stroke: var(--theme-bg-tertiary);
   stroke-width: 3;
 }
 
@@ -450,7 +450,7 @@ onMounted(() => {
   transform: translate(-50%, -50%);
   font-size: 9px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
 }
 
 /* 预算卡片 */
@@ -459,7 +459,7 @@ onMounted(() => {
 }
 
 .budget-card {
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 12px;
   padding: 14px;
   margin-bottom: 10px;
@@ -479,7 +479,7 @@ onMounted(() => {
 .card-title {
   font-size: 15px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
   margin-bottom: 4px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -488,7 +488,7 @@ onMounted(() => {
 
 .card-route {
   font-size: 12px;
-  color: #646566;
+  color: var(--theme-text-secondary);
   display: flex;
   align-items: center;
   gap: 2px;
@@ -504,7 +504,7 @@ onMounted(() => {
 
 .meta-date {
   font-size: 11px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 
 .card-right {
@@ -514,7 +514,7 @@ onMounted(() => {
 .card-budget {
   font-size: 16px;
   font-weight: 700;
-  color: #323233;
+  color: var(--theme-text-primary);
   margin-bottom: 2px;
 }
 
@@ -523,11 +523,11 @@ onMounted(() => {
 }
 
 .card-remaining.positive {
-  color: #07c160;
+  color: var(--van-green);
 }
 
 .card-remaining.negative {
-  color: #ee0a24;
+  color: var(--van-danger-color);
 }
 
 .progress-section {
@@ -536,14 +536,14 @@ onMounted(() => {
 
 .progress-bar {
   height: 4px;
-  background: #ebedf0;
+  background: var(--theme-bg-tertiary);
   border-radius: 2px;
   overflow: hidden;
 }
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #1989fa, #07c160);
+  background: linear-gradient(90deg, var(--theme-primary), var(--van-green));
   border-radius: 2px;
   transition: width 0.3s;
 }
@@ -556,12 +556,12 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   font-size: 11px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   margin-top: 4px;
 }
 
 .progress-percent {
-  color: #1989fa;
+  color: var(--theme-primary);
   font-weight: 600;
 }
 

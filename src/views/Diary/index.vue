@@ -143,7 +143,7 @@ onUnmounted(() => {
 <style scoped>
 .page-diary {
   padding: 8px;
-  background-color: #f4f4f5;
+  background-color: var(--theme-bg-tertiary);
   min-height: 100dvh;
 }
 
@@ -191,14 +191,14 @@ onUnmounted(() => {
   bottom: 80px;
   width: 40px;
   height: 40px;
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 50%;
   box-shadow: 0 2px 12px rgba(0,0,0,0.15);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 20px;
-  color: #1989fa;
+  color: var(--theme-primary);
   z-index: 999;
 }
 </style>

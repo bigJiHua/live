@@ -11,7 +11,7 @@
         <div class="section-title">选择导出类型</div>
         <van-radio-group v-model="selectedType">
           <van-cell-group inset class="app-card">
-            <van-cell
+            <app-cell
               title="导出全部数据"
               label="包含所有表数据（SQL或ZIP格式）"
               clickable
@@ -20,8 +20,8 @@
               <template #right-icon>
                 <van-radio name="all" />
               </template>
-            </van-cell>
-            <van-cell
+            </app-cell>
+            <app-cell
               title="导出单张表"
               label="选择一个表导出"
               clickable
@@ -30,7 +30,7 @@
               <template #right-icon>
                 <van-radio name="single" />
               </template>
-            </van-cell>
+            </app-cell>
           </van-cell-group>
         </van-radio-group>
       </div>
@@ -38,7 +38,7 @@
       <div class="table-section" v-if="selectedType === 'single'">
         <div class="section-title">选择表</div>
         <van-cell-group inset class="app-card">
-          <van-field
+          <app-field
             v-model="searchQuery"
             placeholder="搜索表名..."
             left-icon="search"
@@ -47,7 +47,7 @@
           />
           <div class="table-list">
             <van-radio-group v-model="selectedTable">
-              <van-cell
+              <app-cell
                 v-for="table in filteredTables"
                 :key="table"
                 :title="table"
@@ -57,7 +57,7 @@
                 <template #right-icon>
                   <van-radio :name="table" />
                 </template>
-              </van-cell>
+              </app-cell>
             </van-radio-group>
           </div>
         </van-cell-group>
@@ -66,53 +66,53 @@
       <div class="table-info" v-if="selectedType === 'all'">
         <div class="section-title">数据库概览</div>
         <van-cell-group inset class="app-card">
-          <van-cell title="表数量">
+          <app-cell title="表数量">
             <template #value>
               <span class="num-font">{{ tableInfo.count }} 张</span>
             </template>
-          </van-cell>
-          <van-cell title="总数据行数">
+          </app-cell>
+          <app-cell title="总数据行数">
             <template #value>
               <span class="num-font">{{ formatNumber(tableInfo.totalRows) }} 行</span>
             </template>
-          </van-cell>
+          </app-cell>
         </van-cell-group>
       </div>
 
       <div class="table-info" v-if="selectedType === 'single' && selectedTable">
         <div class="section-title">表信息</div>
         <van-cell-group inset class="app-card">
-          <van-cell title="表名">
+          <app-cell title="表名">
             <template #value>
               <span class="num-font">{{ selectedTable }}</span>
             </template>
-          </van-cell>
-          <van-cell title="数据行数" v-if="tableStatus[selectedTable]">
+          </app-cell>
+          <app-cell title="数据行数" v-if="tableStatus[selectedTable]">
             <template #value>
               <span class="num-font">{{ formatNumber(tableStatus[selectedTable].rowCount) }} 行</span>
             </template>
-          </van-cell>
+          </app-cell>
         </van-cell-group>
       </div>
 
       <div class="option-section">
         <div class="section-title">导出选项</div>
         <van-cell-group inset class="app-card">
-          <van-cell title="包含数据">
+          <app-cell title="包含数据">
             <template #value>
               <van-switch v-model="includeData" size="20" />
             </template>
-          </van-cell>
-          <van-cell title="仅结构（不含数据）">
+          </app-cell>
+          <app-cell title="仅结构（不含数据）">
             <template #label>
               <span class="label-text">适用于仅备份表结构</span>
             </template>
-          </van-cell>
+          </app-cell>
         </van-cell-group>
       </div>
 
       <div class="action-section">
-        <van-button
+        <app-button
           type="primary"
           size="large"
           block
@@ -122,8 +122,8 @@
           @click="handleExport"
         >
           {{ isAsyncTask ? '导出中...' : '确认导出' }}
-        </van-button>
-        <van-button
+        </app-button>
+        <app-button
           v-if="isAsyncTask"
           type="warning"
           size="large"
@@ -133,30 +133,30 @@
           @click="handleCancelTask"
         >
           取消导出
-        </van-button>
+        </app-button>
       </div>
 
       <div class="async-progress" v-if="isAsyncTask">
         <div class="section-title">导出进度</div>
         <van-cell-group inset class="app-card">
-          <van-cell title="状态">
+          <app-cell title="状态">
             <template #value>
-              <van-tag type="warning" size="large">后台导出中</van-tag>
+              <app-tag type="warning" size="large">后台导出中</app-tag>
             </template>
-          </van-cell>
-          <van-cell title="进度">
+          </app-cell>
+          <app-cell title="进度">
             <template #value>
               <span class="num-font">{{ asyncProgress }}%</span>
             </template>
-          </van-cell>
+          </app-cell>
           <van-progress
             :percentage="asyncProgress"
             :show-pivot="true"
             :stroke-width="12"
             color="#07c160"
           />
-          <van-cell>
-            <van-button
+          <app-cell>
+            <app-button
               type="default"
               size="small"
               block
@@ -165,41 +165,41 @@
               @click="manualRefreshStatus"
             >
               手动刷新状态
-            </van-button>
-          </van-cell>
+            </app-button>
+          </app-cell>
         </van-cell-group>
       </div>
 
       <div class="export-result" v-if="exportCompleted">
         <div class="section-title">导出结果</div>
         <van-cell-group inset class="app-card">
-          <van-cell title="状态">
+          <app-cell title="状态">
             <template #value>
-              <van-tag :type="exportStatus.type" size="large">
+              <app-tag :type="exportStatus.type" size="large">
                 {{ exportStatus.text }}
-              </van-tag>
+              </app-tag>
             </template>
-          </van-cell>
-          <van-cell title="文件名" v-if="exportStatus.type === 'success'">
+          </app-cell>
+          <app-cell title="文件名" v-if="exportStatus.type === 'success'">
             <template #value>
               <span class="filename">{{ resultFilename }}</span>
             </template>
-          </van-cell>
-          <van-cell title="文件大小" v-if="exportStatus.type === 'success'">
+          </app-cell>
+          <app-cell title="文件大小" v-if="exportStatus.type === 'success'">
             <template #value>
               <span class="num-font">{{ formatFileSize(resultSize) }}</span>
             </template>
-          </van-cell>
-          <van-cell title="导出时间" v-if="exportStatus.type === 'success'">
+          </app-cell>
+          <app-cell title="导出时间" v-if="exportStatus.type === 'success'">
             <template #value>
               <span class="time-text">{{ exportTime }}</span>
             </template>
-          </van-cell>
-          <van-cell title="操作" v-if="exportStatus.type === 'success'">
+          </app-cell>
+          <app-cell title="操作" v-if="exportStatus.type === 'success'">
             <template #value>
               <a class="download-link" @click.prevent="handleDownload">点击下载</a>
             </template>
-          </van-cell>
+          </app-cell>
         </van-cell-group>
       </div>
 
@@ -519,7 +519,7 @@ onUnmounted(() => {
 <style scoped>
 .page-db-export {
   min-height: 100vh;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
 }
 
 .page-content {
@@ -530,7 +530,7 @@ onUnmounted(() => {
 .page-header {
   text-align: center;
   padding: 30px 0;
-  background: white;
+  background: var(--theme-bg-secondary);
   border-radius: 16px;
   margin-bottom: 20px;
 }
@@ -544,19 +544,19 @@ onUnmounted(() => {
 .header-title {
   font-size: 20px;
   font-weight: bold;
-  color: #323233;
+  color: var(--theme-text-primary);
   margin-bottom: 8px;
 }
 
 .header-desc {
   font-size: 14px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 
 .section-title {
   padding: 8px 16px;
   font-size: 13px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   font-weight: 500;
   margin-bottom: 8px;
 }
@@ -601,18 +601,18 @@ onUnmounted(() => {
 
 .filename {
   font-size: 12px;
-  color: #646566;
+  color: var(--theme-text-secondary);
   word-break: break-all;
 }
 
 .time-text {
   font-size: 13px;
-  color: #646566;
+  color: var(--theme-text-secondary);
 }
 
 .label-text {
   font-size: 12px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 
 .cancel-btn {
@@ -634,7 +634,7 @@ onUnmounted(() => {
 }
 
 .download-link {
-  color: #1989fa;
+  color: var(--theme-primary);
   text-decoration: underline;
 }
 
@@ -646,7 +646,7 @@ onUnmounted(() => {
   padding: 16px;
   margin-top: 20px;
   margin-bottom: 10px;
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 12px;
   font-size: 14px;
   font-weight: 500;

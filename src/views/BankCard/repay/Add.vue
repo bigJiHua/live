@@ -1,17 +1,17 @@
 <template>
   <div class="page-repay-add">
-    <van-form @submit="onSubmit" ref="formRef">
+    <app-form @submit="onSubmit" ref="formRef">
       <!-- 关联信息（只读展示） -->
       <div class="form-section">
         <div class="section-title">关联信息</div>
         <van-cell-group inset>
-          <van-field
+          <app-field
             v-model="selectedCardName"
             label="信用卡"
             readonly
             class="readonly-field"
           />
-          <van-field
+          <app-field
             v-model="selectedBillName"
             label="账单"
             readonly
@@ -32,7 +32,7 @@
       <div class="form-section" v-else>
         <div class="section-title">还款信息</div>
         <van-cell-group inset>
-          <van-field
+          <app-field
             v-model="formData.repayAmount"
             name="repayAmount"
             label="还款金额"
@@ -42,16 +42,16 @@
             @click="openKeyboard('repayAmount')"
             :rules="[{ required: true, message: '请输入还款金额' }]"
           >
-            <template #button>
+            <template #right-icon>
               <span class="repay-amount-actions">
-                <van-button size="small" type="primary" plain @click.stop="fillFullAmount">
+                <app-button size="small" type="primary" plain @click.stop="fillFullAmount">
                   全额还款
-                </van-button>
+                </app-button>
                 <span>元</span>
               </span>
             </template>
-          </van-field>
-          <van-field
+          </app-field>
+          <app-field
             name="repayMethod"
             label="还款方式"
             readonly
@@ -62,7 +62,7 @@
             :rules="[{ required: true, message: '请选择还款方式' }]"
           />
           <!-- 还款银行卡选择（当选择bank_card时显示） -->
-          <van-field
+          <app-field
             v-if="formData.repayMethod === 'bank_card'"
             name="repayMethodCardId"
             label="还款银行卡"
@@ -74,7 +74,7 @@
             @click="showDebitCardPicker = true"
             :rules="[{ required: true, message: '请选择还款银行卡' }]"
           />
-          <van-field
+          <app-field
             v-model="formData.repayTime"
             name="repayTime"
             label="还款时间"
@@ -91,7 +91,7 @@
       <div class="form-section" v-if="oweAmount > 0">
         <div class="section-title">备注</div>
         <van-cell-group inset>
-          <van-field
+          <app-field
             v-model="formData.remark"
             name="remark"
             label="备注"
@@ -103,24 +103,24 @@
       </div>
 
       <div class="submit-btn-wrap" v-if="oweAmount > 0">
-        <van-button type="primary" block round native-type="submit" :loading="loading" :disabled="loading">
+        <app-button type="primary" block round native-type="submit" :loading="loading" :disabled="loading">
           立即还款
-        </van-button>
+        </app-button>
       </div>
-    </van-form>
+    </app-form>
 
     <!-- 还款方式选择 -->
-    <van-popup v-model:show="showMethodPicker" position="bottom">
+    <app-popup v-model:show="showMethodPicker" position="bottom">
       <van-picker
         title="选择还款方式"
         :columns="methodColumns"
         @confirm="onMethodConfirm"
         @cancel="showMethodPicker = false"
       />
-    </van-popup>
+    </app-popup>
 
     <!-- 借记卡选择 -->
-    <van-popup v-model:show="showDebitCardPicker" position="bottom" round>
+    <app-popup v-model:show="showDebitCardPicker" position="bottom" round>
       <div class="debit-card-popup">
         <div class="popup-header">
           <span>选择还款银行卡</span>
@@ -139,15 +139,15 @@
             @click="onDebitCardSelect(card)"
           >
             <span class="card-text">{{ card.text }}</span>
-            <van-icon v-if="card.value === formData.repayMethodCardId" name="success" color="#07c160" />
+            <van-icon v-if="card.value === formData.repayMethodCardId" name="success" :color="themePrimary" />
           </div>
           <div v-if="filteredDebitCardColumns.length === 0" class="empty-tip">未找到匹配的银行卡</div>
         </div>
       </div>
-    </van-popup>
+    </app-popup>
 
     <!-- 日期选择 -->
-    <van-popup v-model:show="showDatePicker" position="bottom">
+    <app-popup v-model:show="showDatePicker" position="bottom">
       <van-date-picker
         v-model="currentDate"
         title="选择日期"
@@ -156,7 +156,7 @@
         @confirm="onDateConfirm"
         @cancel="showDatePicker = false"
       />
-    </van-popup>
+    </app-popup>
 
     <!-- 数字键盘 -->
     <van-number-keyboard
@@ -177,6 +177,10 @@ import { showToast, showLoadingToast, closeToast } from "vant";
 import { useRouter, useRoute } from "vue-router";
 import { createRepay, getBillDetail, getBillList, getCardList } from "@/utils/api/card";
 import { categoryApi } from "@/utils/api/category";
+import { formatMoney } from "@/utils/money";
+import { useUiTheme } from "@/composables/useUiTheme";
+
+const { primary: themePrimary } = useUiTheme();
 
 const router = useRouter();
 const route = useRoute();
@@ -288,7 +292,7 @@ const openKeyboard = (field) => {
 
 // 一键全额还款
 const fillFullAmount = () => {
-  formData.repayAmount = oweAmount.value.toFixed(2);
+  formData.repayAmount = formatMoney(oweAmount.value);
 };
 
 // 数字键盘输入
@@ -380,7 +384,7 @@ const loadBillData = async () => {
         const cardName = bill.card_alias || "信用卡";
         const cardNo = bill.card_last4 ? `****${bill.card_last4}` : "";
         selectedCardName.value = cardNo ? `${cardName} ${cardNo}` : cardName;
-        selectedBillName.value = `欠款 ¥${oweAmount.value.toFixed(2)}`;
+        selectedBillName.value = `欠款 ¥${formatMoney(oweAmount.value)}`;
       }
     }
   } catch (error) {
@@ -424,7 +428,7 @@ const onSubmit = async () => {
       return showToast("请输入还款金额");
     }
     if (repayAmount > oweAmount.value) {
-      return showToast(`还款金额不能超过欠款 ¥${oweAmount.value.toFixed(2)}`);
+      return showToast(`还款金额不能超过欠款 ¥${formatMoney(oweAmount.value)}`);
     }
 
     if (formData.repayMethod === "bank_card" && !formData.repayMethodCardId) {
@@ -487,7 +491,7 @@ onMounted(() => {
 <style scoped>
 .page-repay-add {
   min-height: 100vh;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   padding-bottom: 40px;
 }
 
@@ -497,12 +501,12 @@ onMounted(() => {
 
 .section-title {
   font-size: 14px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   padding: 16px 16px 8px;
 }
 
 .readonly-field {
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
 }
 
 .submit-btn-wrap {
@@ -520,7 +524,7 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 16px;
-  border-bottom: 1px solid #eee;
+  border: 1px solid var(--theme-border);
   font-size: 16px;
   font-weight: 600;
 }
@@ -536,23 +540,23 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 14px 16px;
-  border-bottom: 1px solid #f5f5f5;
+  border: 1px solid var(--theme-border);
   cursor: pointer;
 }
 
 .card-item:active {
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
 }
 
 .card-text {
   font-size: 14px;
-  color: #323233;
+  color: var(--theme-text-primary);
 }
 
 .empty-tip {
   text-align: center;
   padding: 30px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   font-size: 14px;
 }
 
@@ -566,6 +570,6 @@ onMounted(() => {
   padding: 24px 16px;
   text-align: center;
   font-size: 15px;
-  color: #07c160;
+  color: var(--theme-primary);
 }
 </style>

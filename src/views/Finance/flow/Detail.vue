@@ -8,7 +8,7 @@
     <!-- 详情内容 -->
     <div v-else-if="detail" class="detail-content">
       <!-- 金额卡片 -->
-      <div class="amount-card" :class="{ 'is-expense': detail.direction !== 1 }">
+      <div class="amount-card">
         <div class="amount-label">
           {{ detail.direction === 1 ? "收入" : "支出" }}
           <span class="currency-tag">{{ detail.currency || "CNY" }}</span>
@@ -28,96 +28,93 @@
 
       <!-- 信息列表 -->
       <van-cell-group inset class="info-group">
-        <van-cell title="分类" is-link @click="openCategoryPopup">
+        <app-cell title="分类" is-link @click="openCategoryPopup">
           <template #value>
             <span>{{ getCategoryText(detail) }}</span>
           </template>
-        </van-cell>
-        <van-cell title="币种">
+        </app-cell>
+        <app-cell title="币种">
           <template #value>
             <span>{{ detail.currency || "CNY" }}</span>
           </template>
-        </van-cell>
-        <van-cell
+        </app-cell>
+        <app-cell
           v-if="detail.currency && detail.currency !== 'CNY'"
           title="汇率"
         >
           <template #value>
             <span>{{ detail.exchange_rate || "-" }}</span>
           </template>
-        </van-cell>
-        <van-cell title="时间">
+        </app-cell>
+        <app-cell title="时间">
           <template #value>
             <span>{{ formatDateTime(detail.create_time) }}</span>
           </template>
-        </van-cell>
-        <van-cell title="交易方式">
+        </app-cell>
+        <app-cell title="交易方式">
           <template #value>
             <span>{{ detail.pay_method || "-" }}</span>
           </template>
-        </van-cell>
-        <van-cell title="关联卡片">
+        </app-cell>
+        <app-cell title="关联卡片">
           <template #value>
             <div style="display: flex; align-items: center; justify-content: flex-end;">
-              <van-image
-              v-if="getCardBankIcon(detail.card_id)"
-              width="18"
-              height="18"
-              :src="getFullUrl(getCardBankIcon(detail.card_id))"
-              fit="contain"
-              style="vertical-align: middle; margin-right: 5px;"
-            />
-            <span>{{ getCardText(detail.card_id) }}</span>
+              <BankIcon
+                :src="getFullUrl(getCardBankIcon(detail.card_id))"
+                :name="getCardBankName(detail.card_id)"
+                :size="18"
+                style="margin-right: 5px;"
+              />
+              <span>{{ getCardText(detail.card_id) }}</span>
             </div>
           </template>
-        </van-cell>
-        <van-cell title="交易日期">
+        </app-cell>
+        <app-cell title="交易日期">
           <template #value>
             <span>{{ detail.trans_date || "-" }}</span>
           </template>
-        </van-cell>
+        </app-cell>
       </van-cell-group>
 
-      <!-- 备注 -->
+      <!-- 备注：标签与内容 55 分，内容超宽自动换行 -->
       <van-cell-group inset class="info-group">
-        <van-cell title="备注">
-          <template #value>
-            <div class="remark-cell">
-              <span
-                class="remark-text"
-                :class="{ collapsed: !remarkExpanded && shouldTruncateRemark }"
-                >{{ detail.remark || "暂无备注" }}</span
-              >
-              <span
-                v-if="shouldTruncateRemark"
-                class="remark-toggle"
-                @click="remarkExpanded = !remarkExpanded"
-                >{{ remarkExpanded ? "收起" : "展开" }}</span
-              >
-            </div>
-          </template>
-        </van-cell>
+        <div class="remark-row">
+          <div class="remark-title">备注</div>
+          <div class="remark-value" :class="{ 'is-empty': !detail.remark }">
+            <span
+              class="remark-text"
+              :class="{ collapsed: !remarkExpanded && shouldTruncateRemark }"
+              >{{ detail.remark || "暂无备注" }}</span
+            >
+            <span
+              v-if="shouldTruncateRemark"
+              class="remark-toggle"
+              @click="remarkExpanded = !remarkExpanded"
+              >{{ remarkExpanded ? "收起" : "展开" }}</span
+            >
+          </div>
+        </div>
       </van-cell-group>
 
       <!-- 操作按钮 -->
       <div class="action-btns">
-        <van-button
+        <app-button
           v-if="getReverseType(detail) && getReverseType(detail) !== 'credit-repay' && getReverseType(detail) !== 'transfer-legacy'"
-          :style="{ borderRadius: '5px', border: '2px dashed #f97316', background: 'transparent', color: '#f97316' }"
+          :style="{ borderRadius: '5px', border: '2px dashed var(--theme-warning)', background: 'transparent', color: 'var(--theme-warning)' }"
           round
           @click="handleReverse"
         >
           {{ getReverseBtnText(getReverseType(detail), detail) }}
-        </van-button>
-        <van-button
+        </app-button>
+        <app-button
           v-if="getReverseType(detail) !== 'credit-repay'"
-          :style="{ borderRadius: '5px', border: '2px dashed #3b82f6', background: 'transparent', color: '#3b82f6' }"
+          :style="{ borderRadius: '5px', border: '2px dashed var(--theme-primary)', background: 'transparent', color: 'var(--theme-primary)' }"
           block
           round
           @click="openRemarkPopup"
         >
           修改备注
-        </van-button>
+        </app-button>
       </div>
 
       <!-- 还款撤销提示 -->
@@ -133,14 +130,14 @@
       </div>
 
       <!-- 备注编辑弹窗 -->
-      <van-popup v-model:show="showRemarkPopup" position="bottom" round>
+      <app-popup v-model:show="showRemarkPopup" position="bottom" round>
         <div class="remark-popup">
           <div class="popup-header">
             <span>修改备注</span>
             <van-icon name="cross" @click="showRemarkPopup = false" />
           </div>
           <div class="popup-tip">请输入新的备注</div>
-          <van-field
+          <app-field
             v-model="editRemark"
             type="textarea"
             rows="3"
@@ -149,22 +146,20 @@
             show-word-limit
           />
           <div class="popup-footer">
-            <van-button size="small" @click="showRemarkPopup = false"
-              >取消</van-button
-            >
-            <van-button
+            <app-button size="small" @click="showRemarkPopup = false"
+              >取消</app-button>
+            <app-button
               type="primary"
               size="small"
               :loading="remarkLoading"
               @click="handleSaveRemark"
-              >保存</van-button
-            >
+              >保存</app-button>
           </div>
         </div>
-      </van-popup>
+      </app-popup>
 
       <!-- 分类编辑弹窗 -->
-      <van-popup v-model:show="showCategoryPopup" position="bottom" round>
+      <app-popup v-model:show="showCategoryPopup" position="bottom" round>
         <div class="category-popup">
           <div class="popup-header">
             <span>{{ categoryPopupTitle }}</span>
@@ -180,20 +175,20 @@
               @click="selectCategory(cat)"
             >
               <span class="category-name">{{ cat.name }}</span>
-              <van-icon v-if="selectedCategoryId === cat.id" name="success" color="#07c160" />
+              <van-icon v-if="selectedCategoryId === cat.id" name="success" :color="'var(--theme-success)'" />
             </div>
           </div>
           <div class="popup-footer">
-            <van-button size="small" @click="showCategoryPopup = false">取消</van-button>
-            <van-button
+            <app-button size="small" @click="showCategoryPopup = false">取消</app-button>
+            <app-button
               type="primary"
               size="small"
               :loading="categoryLoading"
               @click="handleSaveCategory"
-            >保存</van-button>
+            >保存</app-button>
           </div>
         </div>
-      </van-popup>
+      </app-popup>
     </div>
 
     <!-- 空状态 -->
@@ -219,7 +214,9 @@ import {
 import { getCardList } from "@/utils/api/card";
 import { categoryApi } from "@/utils/api/category";
 import ENV from "@/utils/env";
+import { formatMoney } from "@/utils/money";
 import { useFlowSyncStore } from "@/stores/flowSync";
+import BankIcon from "@/components/BankIcon.vue";
 defineOptions({ name: "FinanceFlowDetail" });
 
 dayjs.locale(zhCn);
@@ -249,22 +246,23 @@ const shouldTruncateRemark = computed(
 
 const flowSync = useFlowSyncStore()
 
-// 格式化原币金额（不做换算）
+// 格式化原币金额（不做换算，保留 4 位小数、不四舍五入）
 const formatOriginalAmount = (amount) => {
   if (amount === null || amount === undefined) return "0.00";
-  return Number(amount).toFixed(2);
+  return formatMoney(Number(amount));
 };
 
 // 格式化 CNY 换算金额（外币时使用）
+// 保留 4 位小数、不四舍五入（外币折算需精确，如 1HKD@86.25=0.8625、1GBP@911.32=9.1132）
 const formatCnyAmount = (amount) => {
   if (amount === null || amount === undefined) return "0.00";
   const num = Number(amount);
   if (!detail.value?.currency || detail.value.currency === "CNY") {
-    return num.toFixed(2);
+    return formatMoney(num);
   }
   // 外币：金额 * 汇率 / 100
   const rate = Number(detail.value.exchange_rate) || 0;
-  return ((num * rate) / 100).toFixed(2);
+  return formatMoney((num * rate) / 100);
 };
 
 // 获取币种符号
@@ -335,6 +333,16 @@ const getCardBankIcon = (cardId) => {
   const bankId = card.bank_id || card.bankId;
   const bank = bankId ? getBankInfo(bankId) : null;
   return bank?.icon_url || bank?.iconUrl || "";
+};
+
+// 获取卡片银行名称（图标加载失败时首字兜底）
+const getCardBankName = (cardId) => {
+  if (!cardId) return "";
+  const card = cardList.value.find((c) => c.id === cardId);
+  if (!card) return "";
+  const bankId = card.bank_id || card.bankId;
+  const bank = bankId ? getBankInfo(bankId) : null;
+  return bank?.name || bank?.bank_name || card.bank_name || "";
 };
 
 // 获取分类显示文本
@@ -586,7 +594,7 @@ onMounted(() => {
 
 <style scoped>
 .page-flow-detail {
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
 }
 
 .loading-center {
@@ -597,14 +605,10 @@ onMounted(() => {
 }
 
 .amount-card {
-  background: linear-gradient(135deg, #79818f 0%, #052356 100%);
+  background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-primary-grad) 100%);
   padding: 40px 20px;
   text-align: center;
   color: #fff;
-}
-
-.amount-card.is-expense {
-  background: linear-gradient(135deg, #79818f 0%, #052356 100%);
 }
 
 .amount-label {
@@ -640,11 +644,38 @@ onMounted(() => {
   overflow: hidden;
 }
 
+/* 备注行：标签 50% / 内容 50%（55 分），内容超宽自动换行 */
+.remark-row {
+  display: flex;
+  align-items: flex-start;
+  padding: 12px 16px;
+  background: var(--theme-bg-secondary);
+  border-bottom: 1px solid var(--theme-border);
+  box-sizing: border-box;
+  width: 100%;
+}
+.remark-title {
+  flex: 1 1 50%;
+  min-width: 0;
+  color: var(--theme-text-primary);
+  font-size: 14px;
+}
+.remark-value {
+  flex: 1 1 50%;
+  min-width: 0;
+  color: var(--theme-text-secondary);
+  font-size: 14px;
+  text-align: left;
+}
+/* 暂无备注 → 文字靠右 */
+.remark-value.is-empty {
+  text-align: right;
+}
+
 .remark-text {
-  color: #646566;
+  color: var(--theme-text-secondary);
   word-break: break-all;
   white-space: pre-wrap;
-  text-align: right;
 }
 
 .remark-text.collapsed {
@@ -654,18 +685,12 @@ onMounted(() => {
   overflow: hidden;
 }
 
-.remark-cell {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  max-width: 70%;
-}
-
 .remark-toggle {
-  color: #1989fa;
+  color: var(--theme-primary);
   font-size: 12px;
   margin-top: 4px;
   cursor: pointer;
+  display: inline-block;
 }
 
 .card-cell {
@@ -690,10 +715,10 @@ onMounted(() => {
   gap: 6px;
   margin: 16px;
   padding: 12px 16px;
-  background: #fff7e6;
+  background: var(--van-orange-bg);
   border-radius: 8px;
   font-size: 13px;
-  color: #fa8c16;
+  color: var(--van-orange);
 }
 
 .notice-banner .van-icon {
@@ -704,12 +729,12 @@ onMounted(() => {
   padding: 20px 16px;
   display: flex;
   gap: 12px;
-  justify-content: center;
 }
 
-.action-btns .van-button {
-  flex: 0 0 auto;
-  width: 150px;
+/* app-button 渲染的是 .app-btn（非 .van-button），两个按钮均 flex:1 平分 */
+.action-btns .app-btn {
+  flex: 1 1 0;
+  width: auto;
   padding: 0 10px;
 }
 
@@ -727,14 +752,14 @@ onMounted(() => {
 }
 
 .popup-tip {
-  color: #969799;
+  color: var(--theme-text-tertiary);
   font-size: 14px;
   margin-bottom: 12px;
 }
 
 .popup-header .van-icon {
   font-size: 20px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 
 .popup-footer {
@@ -751,10 +776,10 @@ onMounted(() => {
   gap: 6px;
   padding: 12px 16px;
   margin: 16px;
-  background: #fff7e6;
+  background: var(--van-orange-bg);
   border-radius: 8px;
   font-size: 13px;
-  color: #fa8c16;
+  color: var(--van-orange);
 }
 
 .repay-hint .van-icon {
@@ -780,7 +805,7 @@ onMounted(() => {
   align-items: center;
   gap: 6px;
   padding: 14px 8px;
-  border: 1px solid #f0f0f0;
+  border: 1px solid var(--theme-border);
   border-radius: 10px;
   cursor: pointer;
   position: relative;
@@ -788,12 +813,12 @@ onMounted(() => {
 }
 
 .category-item:active {
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
 }
 
 .category-item.active {
-  border-color: #07c160;
-  background: #f0fff5;
+  border-color: var(--van-green, #07c160);
+  background: var(--van-green-bg, #f0fff5);
 }
 
 .category-item .van-icon-success {
@@ -805,7 +830,7 @@ onMounted(() => {
 
 .category-name {
   font-size: 12px;
-  color: #323233;
+  color: var(--theme-text-primary);
   text-align: center;
   line-height: 1.3;
 }

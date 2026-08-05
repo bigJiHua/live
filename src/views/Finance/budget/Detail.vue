@@ -7,9 +7,9 @@
       <div class="header-card">
         <div class="header-title">
           <span>{{ detail.title }}</span>
-          <van-tag :type="getTypeColor(detail.budget_type)" size="medium">
+          <app-tag :type="getTypeColor(detail.budget_type)" size="medium">
             {{ getTypeName(detail.budget_type) }}
-          </van-tag>
+          </app-tag>
         </div>
         <div class="header-route" v-if="detail.route">
           <van-icon name="location-o" /> {{ detail.route }}
@@ -82,9 +82,9 @@
             <div v-if="day.items && day.items.length > 0">
               <div v-for="(item, itemIndex) in day.items" :key="itemIndex" class="expense-item">
                 <div class="expense-left">
-                  <van-tag :type="getExpenseTypeColor(item.type)" size="small" plain>
+                  <app-tag :type="getExpenseTypeColor(item.type)" size="small" plain>
                     {{ item.type }}
-                  </van-tag>
+                  </app-tag>
                   <span class="expense-desc">{{ item.description || '无描述' }}</span>
                 </div>
                 <div class="expense-right">
@@ -134,9 +134,9 @@
           <div v-for="(item, index) in shoppingItems" :key="index" class="shop-item">
             <div class="shop-item-header">
               <span class="shop-index">{{ index + 1 }}</span>
-              <van-tag :type="getPriorityColor(item.priority)" size="small">
+              <app-tag :type="getPriorityColor(item.priority)" size="small">
                 {{ item.priority || '未设置' }}
-              </van-tag>
+              </app-tag>
             </div>
             <div class="shop-item-info">
               <div class="shop-name">{{ item.name || '未命名商品' }}</div>
@@ -199,12 +199,12 @@
 
       <!-- 操作按钮 -->
       <div class="action-buttons">
-        <van-button size="large" round type="primary" @click="goEdit">
+        <app-button size="large" round type="primary" @click="goEdit">
           编辑预算
-        </van-button>
-        <van-button size="large" round type="default" @click="handleDelete" class="delete-btn">
+        </app-button>
+        <app-button size="large" round type="default" @click="handleDelete" class="delete-btn">
           删除预算
-        </van-button>
+        </app-button>
       </div>
     </div>
 
@@ -358,19 +358,19 @@ onMounted(() => {
 
 <style scoped>
 .van-tag--purple {
-  background: #f3e8ff !important;
-  color: #9333ea !important;
-  border-color: #9333ea !important;
+  background: rgba(114, 50, 221, 0.1) !important;
+  color: var(--van-purple, #7232dd) !important;
+  border-color: rgba(114, 50, 221, 0.4) !important;
 }
 .van-tag--orange {
-  background: #fff7e6 !important;
-  color: #ff8c00 !important;
-  border-color: #ff8c00 !important;
+  background: var(--van-orange-bg) !important;
+  color: var(--van-orange) !important;
+  border-color: rgba(255, 151, 106, 0.4) !important;
 }
 
 .page-budget-detail {
   min-height: 100vh;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   padding-bottom: 24px;
 }
 
@@ -387,7 +387,7 @@ onMounted(() => {
 
 /* 头部卡片 */
 .header-card {
-  background: linear-gradient(135deg, #1989fa, #1976d2);
+  background: linear-gradient(135deg, var(--theme-primary), var(--theme-primary-grad));
   border-radius: 16px;
   padding: 20px;
   color: #fff;
@@ -444,7 +444,7 @@ onMounted(() => {
 }
 
 .amount-value.used {
-  color: #ffd000;
+  color: rgba(255, 255, 255, 0.95);
 }
 
 .amount-value.remaining {
@@ -486,13 +486,13 @@ onMounted(() => {
 }
 
 .over-warning {
-  color: #ffd000;
+  color: rgba(255, 255, 255, 0.95);
   font-weight: 600;
 }
 
 /* 通用卡片 */
 .section-card {
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 12px;
   padding: 16px;
   margin-bottom: 12px;
@@ -504,14 +504,14 @@ onMounted(() => {
   gap: 6px;
   font-size: 15px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
   margin-bottom: 12px;
   padding-bottom: 10px;
-  border-bottom: 1px solid #f2f3f5;
+  border: 1px solid var(--theme-border);
 }
 
 .section-title .van-icon {
-  color: #1989fa;
+  color: var(--theme-primary);
 }
 
 /* 汇率 */
@@ -523,15 +523,15 @@ onMounted(() => {
 
 .rate-tag {
   font-size: 12px;
-  color: #646566;
-  background: #f7f8fa;
+  color: var(--theme-text-secondary);
+  background: var(--theme-bg-primary);
   padding: 4px 10px;
   border-radius: 4px;
 }
 
 /* 出行-每日明细 */
 .day-block {
-  background: #fafafa;
+  background: var(--theme-bg-tertiary);
   border-radius: 10px;
   padding: 12px;
   margin-bottom: 12px;
@@ -543,10 +543,10 @@ onMounted(() => {
   gap: 6px;
   font-size: 14px;
   font-weight: 600;
-  color: #1989fa;
+  color: var(--theme-primary);
   margin-bottom: 10px;
   padding-bottom: 8px;
-  border-bottom: 1px dashed #ebedf0;
+  border: 1px solid var(--theme-border);
 }
 
 .expense-item {
@@ -554,7 +554,7 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 8px 0;
-  border-bottom: 1px dashed #f0f0f0;
+  border: 1px solid var(--theme-border);
 }
 
 .expense-item:last-of-type {
@@ -570,7 +570,7 @@ onMounted(() => {
 
 .expense-desc {
   font-size: 13px;
-  color: #323233;
+  color: var(--theme-text-primary);
 }
 
 .expense-right {
@@ -586,12 +586,12 @@ onMounted(() => {
 .expense-cny {
   display: block;
   font-size: 11px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 
 .empty-day {
   text-align: center;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   font-size: 13px;
   padding: 8px 0;
 }
@@ -602,21 +602,21 @@ onMounted(() => {
   align-items: center;
   margin-top: 10px;
   padding-top: 10px;
-  border-top: 1px solid #ebedf0;
+  border: 1px solid var(--theme-border);
   font-size: 13px;
-  color: #646566;
+  color: var(--theme-text-secondary);
 }
 
 .day-total-value {
   font-weight: 600;
-  color: #1989fa;
+  color: var(--theme-primary);
 }
 
 /* 购物统计 */
 .shop-stats {
   display: flex;
   justify-content: space-between;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   border-radius: 10px;
   padding: 12px;
   margin-bottom: 12px;
@@ -630,14 +630,14 @@ onMounted(() => {
 .stat-label {
   display: block;
   font-size: 11px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   margin-bottom: 4px;
 }
 
 .stat-value {
   font-size: 14px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
 }
 
 .stat-value.danger {
@@ -646,7 +646,7 @@ onMounted(() => {
 
 /* 购物项 */
 .shop-item {
-  background: #fafafa;
+  background: var(--theme-bg-tertiary);
   border-radius: 10px;
   padding: 12px;
   margin-bottom: 10px;
@@ -665,7 +665,7 @@ onMounted(() => {
   justify-content: center;
   width: 20px;
   height: 20px;
-  background: #1989fa;
+  background: var(--theme-primary);
   color: #fff;
   border-radius: 50%;
   font-size: 11px;
@@ -679,13 +679,13 @@ onMounted(() => {
 .shop-name {
   font-size: 14px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
   margin-bottom: 4px;
 }
 
 .shop-detail {
   font-size: 12px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   margin-bottom: 6px;
 }
 
@@ -695,7 +695,7 @@ onMounted(() => {
 }
 
 .price-estimated {
-  color: #646566;
+  color: var(--theme-text-secondary);
 }
 
 .price-actual {
@@ -706,7 +706,7 @@ onMounted(() => {
 
 .shop-date {
   font-size: 12px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   display: flex;
   align-items: center;
   gap: 4px;
@@ -714,7 +714,7 @@ onMounted(() => {
 
 .shop-notes {
   font-size: 12px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   font-style: italic;
   margin-top: 4px;
 }
@@ -724,7 +724,7 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: #fff0f0;
+  background: var(--van-danger-bg);
   border-radius: 10px;
   padding: 12px;
   margin-bottom: 12px;
@@ -742,7 +742,7 @@ onMounted(() => {
   align-items: flex-start;
   gap: 10px;
   padding: 10px 0;
-  border-bottom: 1px dashed #f0f0f0;
+  border: 1px solid var(--theme-border);
 }
 
 .dish-item:last-child {
@@ -755,7 +755,7 @@ onMounted(() => {
   justify-content: center;
   width: 20px;
   height: 20px;
-  background: #ee0a24;
+  background: var(--van-danger-color, #ee0a24);
   color: #fff;
   border-radius: 50%;
   font-size: 11px;
@@ -769,18 +769,18 @@ onMounted(() => {
 
 .dish-name {
   font-size: 14px;
-  color: #323233;
+  color: var(--theme-text-primary);
   margin-bottom: 2px;
 }
 
 .dish-detail {
   font-size: 12px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 
 .dish-price {
   font-size: 13px;
-  color: #646566;
+  color: var(--theme-text-secondary);
   text-align: right;
 }
 
@@ -792,7 +792,7 @@ onMounted(() => {
 /* 备注 */
 .notes-content {
   font-size: 14px;
-  color: #646566;
+  color: var(--theme-text-secondary);
   line-height: 1.6;
 }
 

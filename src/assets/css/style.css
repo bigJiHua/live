@@ -1,9 +1,9 @@
 /* --- 1. 核心配色方案 (CSS 变量) --- */
 :root {
-  /* 品牌主色 */
-  --app-primary: #07c160;
+  /* 品牌主色（默认靛蓝；运行时由 useUiTheme 按系统深色/用户选择覆盖） */
+  --app-primary: #3a66e0;
 
-  /* 状态色 */
+  /* 状态色（组件背景色，亮色 + 白字） */
   --app-expense: #ff9900;
   --app-income: #07c160;
 
@@ -20,14 +20,21 @@
   --app-font-number: 'DIN Alternate', 'PingFang SC', -apple-system, sans-serif;
 
   /* 全局主题变量 */
-  --theme-primary: #07c160;
-  --theme-primary-light: #e6f9ed;
+  --theme-primary: #3a66e0;
+  --theme-primary-light: #eaf0fd;
+  --theme-primary-grad: #2a4fb8;
   --theme-secondary: #1989fa;
   --theme-secondary-light: #ecf5fe;
   --theme-success: #07c160;
   --theme-warning: #ff976a;
   --theme-danger: #ee0a24;
   --theme-info: #969799;
+
+  /* 状态色文字衍生：保证直接落在底色上的小字可读（对比度） */
+  --theme-success-text: #0a7a45;
+  --theme-warning-text: #b45309;
+  --theme-danger-text: #c0102a;
+  --theme-info-text: #646566;
 
   --theme-bg-primary: #f7f8fa;
   --theme-bg-secondary: #ffffff;
@@ -44,7 +51,7 @@
 
 /* --- 2. 覆盖 Vant 组件的主题色 --- */
 :root {
-  --van-primary-color: #1989fa;
+  --van-primary-color: var(--theme-primary);
   --van-success-color: var(--theme-success);
   --van-warning-color: var(--theme-warning);
   --van-danger-color: var(--theme-danger);
@@ -75,9 +82,79 @@
 
   --van-tag-default-background: var(--theme-bg-tertiary);
   --van-tag-default-color: var(--theme-text-secondary);
+
+  /* 弹窗/对话框（van-popup / van-dialog）背景跟随主题 */
+  --van-popup-background: var(--theme-bg-secondary);
+  --van-dialog-background: var(--theme-bg-secondary);
+  --van-dialog-title-text-color: var(--theme-text-primary);
+  --van-dialog-message-text-color: var(--theme-text-secondary);
+  --van-dialog-confirm-button-text-color: var(--theme-primary);
+  --van-dialog-cancel-button-text-color: var(--theme-text-primary);
+
+  /* 搜索框（van-search）背景跟随主题 */
+  --van-search-background: var(--theme-bg-secondary);
+  --van-search-content-background: var(--theme-bg-primary);
+
+  /* 数字键盘（custom 主题）面板/按键/完成按钮跟随主题 */
+  --van-number-keyboard-background: var(--theme-bg-secondary);
+  --van-number-keyboard-key-background: var(--theme-bg-primary);
+  --van-number-keyboard-key-text-color: var(--theme-text-primary);
+  --van-number-keyboard-button-background: var(--theme-primary);
+  --van-number-keyboard-button-text-color: #fff;
+
+  /* 日历选择器（van-calendar）跟随主题 */
+  --van-calendar-background: var(--theme-bg-secondary);
+  --van-calendar-header-background: var(--theme-bg-secondary);
+  --van-calendar-body-background: var(--theme-bg-secondary);
+  --van-calendar-header-title-color: var(--theme-text-primary);
+  --van-calendar-header-subtitle-color: var(--theme-text-secondary);
+  --van-calendar-header-action-color: var(--theme-text-primary);
+  --van-calendar-weekdays-text-color: var(--theme-text-secondary);
+  --van-calendar-day-text-color: var(--theme-text-primary);
+  --van-calendar-day-disabled-text-color: var(--theme-text-tertiary);
+  --van-calendar-selected-day-background: var(--theme-primary);
+  --van-calendar-selected-day-text-color: var(--theme-button-primary-text, #fff);
+  --van-calendar-range-edge-background: var(--theme-primary);
+  --van-calendar-range-edge-text-color: var(--theme-button-primary-text, #fff);
+  --van-calendar-range-middle-background: var(--theme-bg-tertiary);
+  --van-calendar-range-middle-text-color: var(--theme-text-primary);
+  --van-calendar-month-mark-color: var(--theme-text-tertiary);
+  --van-calendar-month-mark-font-size: 160px;
+  --van-calendar-confirm-button-background: var(--theme-primary);
+  --van-calendar-confirm-button-color: var(--theme-button-primary-text, #fff);
+
+  /* 业务语义色别名，供页面直接引用（跟随主题切换） */
+  --van-green: var(--theme-success);
+  --van-red: var(--theme-danger);
+  --van-blue: var(--theme-primary);
+  --van-danger-grad: var(--theme-danger);
+  --van-orange: #ff976a;
+  --van-purple: #7232dd;
+  --van-gray: #969799;
+  --van-green-bg: #f0f9eb;
+  --van-danger-bg: #fff0f0;
+  --van-orange-bg: rgba(255,151,106,0.12);
+  --van-blue-bg: rgba(25,137,250,0.12);
+
+  /* 语义色补充别名（跟随主题切换） */
+  --theme-success-color: var(--theme-success);
+  --theme-danger-color: var(--theme-danger);
+  --theme-primary-bg: var(--theme-bg-tertiary);
+
+  /* 兼容旧代码使用的 --app-primary 别名 */
+  --app-primary: var(--theme-primary);
+}
+
+/* 数字键盘 custom 删除键默认 #f7f8fa 固定浅底，改为跟随主题层级 */
+.van-number-keyboard .van-key--delete {
+  background: var(--theme-bg-tertiary);
+  color: var(--theme-text-secondary);
 }
 
 /* --- 3. 全局基础样式 --- */
+html {
+  background-color: var(--app-bg);
+}
 body {
   margin: 0;
   padding: 0;
@@ -103,12 +180,12 @@ body {
   font-weight: bold;
 }
 
-/* 支出/收入文字颜色 */
+/* 支出/收入文字颜色（使用文字衍生色，保证白底对比度） */
 .text-expense {
-  color: var(--theme-warning) !important;
+  color: var(--theme-warning-text) !important;
 }
 .text-income {
-  color: var(--theme-success) !important;
+  color: var(--theme-success-text) !important;
 }
 
 /* 文字颜色类 */
@@ -148,4 +225,35 @@ body {
 
 .van-collapse-item__title::after {
   right: 30px !important;
+}
+
+/* --- 5. 主题色一体模式：非默认主题下，分类彩色图标/文字统一为主色 --- */
+/* 默认三套浅色主题（绿/蓝/靛蓝）保留五颜六色 icon；其余（深色/特殊色）统一为主题色 */
+html[data-theme-mono="1"] .blue,
+html[data-theme-mono="1"] .green,
+html[data-theme-mono="1"] .orange,
+html[data-theme-mono="1"] .red,
+html[data-theme-mono="1"] .purple,
+html[data-theme-mono="1"] .cyan,
+html[data-theme-mono="1"] .teal,
+html[data-theme-mono="1"] .pink,
+html[data-theme-mono="1"] .gray,
+html[data-theme-mono="1"] .gold {
+  color: var(--theme-primary) !important;
+}
+html[data-theme-mono="1"] .menu-icon.blue,
+html[data-theme-mono="1"] .menu-icon.green,
+html[data-theme-mono="1"] .menu-icon.orange,
+html[data-theme-mono="1"] .menu-icon.red,
+html[data-theme-mono="1"] .menu-icon.purple,
+html[data-theme-mono="1"] .menu-icon.cyan,
+html[data-theme-mono="1"] .menu-icon.teal,
+html[data-theme-mono="1"] .menu-icon.pink,
+html[data-theme-mono="1"] .menu-icon.gray,
+html[data-theme-mono="1"] .menu-icon.gold {
+  color: var(--theme-primary) !important;
+}
+/* 无彩色子类的功能图标（如"我的卡片"）也统一为主题色 */
+html[data-theme-mono="1"] .func-icon:not([class*=" "]) {
+  color: var(--theme-primary) !important;
 }

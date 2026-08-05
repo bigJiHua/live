@@ -2,24 +2,22 @@
   <div class="page-card-flow">
     <div class="card-selector">
       <div class="selector-label">请选择银行卡</div>
-      <van-cell is-link @click="showCardPicker = true" :border="false">
+      <app-cell is-link @click="showCardPicker = true" :border="false">
         <template #value>
           <span v-if="selectedCard" class="card-value">
-            <van-image
-              v-if="getCardBankIcon(selectedCard)"
-              width="16" height="16"
+            <BankIcon
               :src="getFullUrl(getCardBankIcon(selectedCard))"
-              fit="contain" class="card-value-icon"
+              :name="getCardBankName(selectedCard)"
+              :size="16" class="card-value-icon"
             />
             <span>{{ getCardDisplayText(selectedCard) }}</span>
           </span>
           <span v-else class="placeholder">请选择银行卡</span>
         </template>
-      </van-cell>
-      <van-icon name="search" class="search-btn" @click="showCardPicker = true" />
+      </app-cell>
     </div>
 
-    <van-popup v-model:show="showCardPicker" position="bottom" round>
+    <app-popup v-model:show="showCardPicker" position="bottom" round>
       <div class="card-picker-popup">
         <div class="popup-header">
           <span>选择银行卡或信用卡</span>
@@ -29,15 +27,15 @@
         <div class="card-list">
           <div v-for="card in filteredCards" :key="card.id" class="card-list-item"
             :class="{ active: selectedCard?.id === card.id }" @click="onCardSelect(card)">
-            <van-image v-if="getCardBankIcon(card)" width="20" height="20"
-              :src="getFullUrl(getCardBankIcon(card))" fit="contain" class="card-list-icon" />
+            <BankIcon :src="getFullUrl(getCardBankIcon(card))" :name="getCardBankName(card)"
+              :size="20" class="card-list-icon" />
             <span class="card-list-text">{{ getCardDisplayText(card) }}</span>
-            <van-icon v-if="selectedCard?.id === card.id" name="success" color="#07c160" />
+            <van-icon v-if="selectedCard?.id === card.id" name="success" :color="'var(--theme-success)'" />
           </div>
           <div v-if="filteredCards.length === 0" class="empty-tip">未找到匹配的银行卡</div>
         </div>
       </div>
-    </van-popup>
+    </app-popup>
 
     <template v-if="selectedCard">
       <div class="filter-bar">
@@ -74,7 +72,7 @@
           <div v-for="(group, date) in groupedList" :key="date" class="date-group">
             <div class="date-header">{{ formatDateHeader(date) }}</div>
             <div class="date-items">
-              <div v-for="item in group" :key="item.id" class="flow-item" @click="goDetail(item)">
+              <div v-for="item in group" :key="item.id" class="flow-item" :class="{ repay: item.category_id === 'CATEGORY_REPAY' }" @click="goDetail(item)">
                 <div class="item-left">
                   <div class="category-icon"><van-icon :name="getCategoryIcon(item.category_name)" /></div>
                   <div class="item-info">
@@ -95,10 +93,10 @@
         </van-list>
       </van-pull-refresh>
 
-      <van-popup v-model:show="showDatePicker" position="bottom" round>
+      <app-popup v-model:show="showDatePicker" position="bottom" round>
         <van-picker v-model="selectedValues" title="选择月份" :columns="pickerColumns"
           @confirm="onPickerConfirm" @cancel="showDatePicker = false" />
-      </van-popup>
+      </app-popup>
     </template>
 
     <van-empty v-else description="请选择上方的银行卡或信用卡查看流水" />
@@ -117,6 +115,7 @@ import { getCardList } from '@/utils/api/card'
 import { categoryApi } from '@/utils/api/category'
 import ENV from '@/utils/env'
 import { useFlowSyncStore } from '@/stores/flowSync'
+import BankIcon from '@/components/BankIcon.vue'
 
 dayjs.locale(zhCn)
 const router = useRouter()
@@ -159,6 +158,12 @@ const getCardBankIcon = (card) => {
   const bankId = card.bank_id || card.bankId
   const bank = bankId ? bankList.value.find((b) => b.id === bankId) : null
   return bank?.icon_url || bank?.iconUrl || ''
+}
+const getCardBankName = (card) => {
+  if (!card) return ''
+  const bankId = card.bank_id || card.bankId
+  const bank = bankId ? bankList.value.find((b) => b.id === bankId) : null
+  return bank?.name || bank?.bank_name || card.bank_name || ''
 }
 const getFullUrl = (path) => {
   if (!path) return ''; if (path.startsWith('http')) return path
@@ -315,44 +320,46 @@ onDeactivated(() => {
 </script>
 
 <style scoped>
-.page-card-flow { min-height: 100vh; background: #f7f8fa; }
-.card-selector { background: #fff; padding: 14px 16px 4px; display: flex; align-items: center; gap: 8px; }
-.selector-label { font-size: 13px; color: #969799; white-space: nowrap; }
-.card-value { display: inline-flex; align-items: center; gap: 4px; font-size: 14px; color: #323233; }
+.page-card-flow { min-height: 100vh; background: var(--theme-bg-primary); }
+.card-selector { background: var(--theme-bg-secondary); padding: 14px 16px 4px; display: flex; align-items: center; gap: 8px; }
+.selector-label { font-size: 13px; color: var(--theme-text-tertiary); white-space: nowrap; }
+.card-value { display: inline-flex; align-items: center; gap: 4px; font-size: 14px; color: var(--theme-text-primary); max-width: 100%; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .card-value-icon { border-radius: 2px; flex-shrink: 0; }
-.placeholder { color: #c8c9cc; font-size: 14px; }
-.search-btn { font-size: 20px; color: #1989fa; padding: 4px; cursor: pointer; }
+.placeholder { color: var(--theme-text-tertiary); font-size: 14px; }
 .card-picker-popup { max-height: 70vh; display: flex; flex-direction: column; }
-.popup-header { display: flex; justify-content: space-between; align-items: center; padding: 16px; border-bottom: 1px solid #eee; font-size: 16px; font-weight: 600; }
-.popup-header .van-icon { font-size: 20px; color: #969799; }
+.popup-header { display: flex; justify-content: space-between; align-items: center; padding: 16px; border: 1px solid var(--theme-border); font-size: 16px; font-weight: 600; }
+.popup-header .van-icon { font-size: 20px; color: var(--theme-text-tertiary); }
 .card-list { flex: 1; overflow-y: auto; max-height: 400px; }
-.card-list-item { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid #f5f5f5; cursor: pointer; }
-.card-list-item:active { background: #f7f8fa; }
-.card-list-item.active { background: #f0fff4; }
+.card-list-item { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border: 1px solid var(--theme-border); cursor: pointer; }
+.card-list-item:active { background: var(--theme-bg-primary); }
+.card-list-item.active { background: rgba(7,193,96,0.08); }
 .card-list-icon { border-radius: 3px; flex-shrink: 0; }
-.card-list-text { flex: 1; font-size: 14px; color: #323233; }
-.empty-tip { text-align: center; padding: 30px; color: #969799; font-size: 14px; }
-.filter-bar { background: #fff; padding: 12px 16px; display: flex; align-items: center; gap: 12px; }
-.date-filter { display: flex; align-items: center; gap: 4px; font-size: 13px; color: #646566; padding: 6px 10px; background: #f7f8fa; border-radius: 4px; }
+.card-list-text { flex: 1; min-width: 0; font-size: 14px; color: var(--theme-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.empty-tip { text-align: center; padding: 30px; color: var(--theme-text-tertiary); font-size: 14px; }
+.filter-bar { background: var(--theme-bg-secondary); padding: 12px 16px; display: flex; align-items: center; gap: 12px; }
+.date-filter { display: flex; align-items: center; gap: 4px; font-size: 13px; color: var(--theme-text-secondary); padding: 6px 10px; background: var(--theme-bg-primary); border-radius: 4px; }
 .filter-right { display: flex; align-items: center; gap: 8px; margin-left: auto; }
-.stats-summary { display: flex; justify-content: space-around; padding: 16px; background: #fff; margin: 8px 16px; border-radius: 12px; }
+.stats-summary { display: flex; justify-content: space-around; padding: 16px; background: var(--theme-bg-secondary); margin: 8px 16px; border-radius: 12px; }
 .summary-item { text-align: center; }
-.summary-item .label { font-size: 12px; color: #969799; display: block; margin-bottom: 4px; }
+.summary-item .label { font-size: 12px; color: var(--theme-text-tertiary); display: block; margin-bottom: 4px; }
 .summary-item .value { font-size: 16px; font-weight: bold; font-family: 'DIN Alternate', sans-serif; }
-.summary-item .income { color: #07c160; }
-.summary-item .expense { color: #ee0a24; }
+.summary-item .income { color: var(--van-green, #07c160); }
+.summary-item .expense { color: var(--van-danger-color, #ee0a24); }
 .date-group { margin-top: 8px; }
-.date-header { padding: 8px 16px; font-size: 13px; color: #646566; background: #f7f8fa; }
-.date-items { background: #fff; }
-.flow-item { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; margin-left: 16px; border-bottom: 1px solid #f2f2f2; }
+.date-header { padding: 8px 16px; font-size: 13px; color: var(--theme-text-secondary); background: var(--theme-bg-primary); }
+.date-items { background: var(--theme-bg-secondary); }
+.flow-item { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; margin-left: 16px; border-bottom: 1px solid var(--theme-border); }
 .flow-item:last-child { border-bottom: none; }
+
+/* 信用卡还款：置灰 */
+.flow-item.repay { filter: grayscale(1); opacity: 0.55; }
 .item-left { display: flex; align-items: center; gap: 12px; }
-.category-icon { width: 40px; height: 40px; border-radius: 50%; background: #f7f8fa; display: flex; align-items: center; justify-content: center; font-size: 20px; color: #1989fa; }
-.item-info .item-title { font-size: 15px; color: #323233; font-weight: 500; }
-.item-info .item-desc { font-size: 12px; color: #969799; margin-top: 4px; }
+.category-icon { width: 40px; height: 40px; border-radius: 50%; background: var(--theme-bg-primary); display: flex; align-items: center; justify-content: center; font-size: 20px; color: var(--theme-primary); }
+.item-info .item-title { font-size: 15px; color: var(--theme-text-primary); font-weight: 500; }
+.item-info .item-desc { font-size: 12px; color: var(--theme-text-tertiary); margin-top: 4px; }
 .item-right { text-align: right; }
 .item-right .amount { font-size: 16px; font-weight: bold; font-family: 'DIN Alternate', sans-serif; }
-.currency-tag { font-size: 12px; margin-right: 2px; color: #969799; }
-.item-right .income { color: #07c160; }
-.item-right .expense { color: #323233; }
+.currency-tag { font-size: 12px; margin-right: 2px; color: var(--theme-text-tertiary); }
+.item-right .income { color: var(--van-green, #07c160); }
+.item-right .expense { color: var(--theme-text-primary); }
 </style>

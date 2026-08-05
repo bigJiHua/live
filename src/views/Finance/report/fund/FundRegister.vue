@@ -2,10 +2,10 @@
   <div class="page-fund-register">
     <div class="top-bar">
       <div class="tb-title">基金列表</div>
-      <van-button size="small" type="primary" round @click="openEditor(null)">
+      <app-button size="small" type="primary" round @click="openEditor(null)">
         <template #icon><van-icon name="plus" /></template>
         新增基金
-      </van-button>
+      </app-button>
     </div>
 
     <div class="list" v-if="!loading">
@@ -34,7 +34,7 @@
       <van-empty v-if="fundList.length === 0" description="暂无基金数据" />
     </div>
 
-    <van-popup
+    <app-popup
       v-model:show="showEditor"
       position="bottom"
       round
@@ -44,16 +44,16 @@
         <div class="editor-title">
           {{ editingItem ? "编辑基金" : "新增基金" }}
         </div>
-        <van-form @submit="handleSave" autocomplete="off">
+        <app-form @submit="handleSave" autocomplete="off">
           <input type="text" style="display: none" autocomplete="off" />
-          <van-field
+          <app-field
             v-model="form.fundName"
             label="基金名称"
             placeholder="如：易方达蓝筹精选"
             :rules="[{ required: true, message: '请输入基金名称' }]"
             :input-attr="{ autocomplete: 'off' }"
           />
-          <van-field
+          <app-field
             v-model="form.buyDate"
             is-link
             readonly
@@ -63,7 +63,7 @@
             @click="showDatePicker = true"
             :input-attr="{ autocomplete: 'off' }"
           />
-          <van-field
+          <app-field
             v-model="form.share"
             label="持有份额"
             placeholder="0.00"
@@ -74,7 +74,7 @@
             ]"
             :input-attr="{ autocomplete: 'off' }"
           />
-          <van-field
+          <app-field
             v-model="form.invest"
             label="初始本金"
             placeholder="0.00"
@@ -85,7 +85,7 @@
             ]"
             :input-attr="{ autocomplete: 'off' }"
           />
-          <van-cell
+          <app-cell
             class="optional-toggle"
             title="补充信息"
             :value="showOptionalInfo ? '收起' : '选填'"
@@ -94,19 +94,19 @@
             @click="showOptionalInfo = !showOptionalInfo"
           />
           <template v-if="showOptionalInfo">
-            <van-field
+            <app-field
               v-model="form.fundCompany"
               label="基金公司"
               placeholder="选填，如：易方达基金"
               :input-attr="{ autocomplete: 'off' }"
             />
-            <van-field
+            <app-field
               v-model="form.sellOrg"
               label="销售机构"
               placeholder="选填，如：支付宝"
               :input-attr="{ autocomplete: 'off' }"
             />
-            <van-field
+            <app-field
               v-model="form.fundAccount"
               label="基金账号"
               placeholder="选填，尾号6位"
@@ -115,20 +115,19 @@
             />
           </template>
           <div class="editor-actions">
-            <van-button round block type="primary" native-type="submit">{{
+            <app-button round block type="primary" native-type="submit">{{
               editingItem ? "保存修改" : "确认添加"
-            }}</van-button>
-            <van-button
+            }}</app-button>
+            <app-button
               round
               block
               plain
               style="margin-top: 8px"
               @click="showEditor = false"
-              >取消</van-button
-            >
+              >取消</app-button>
           </div>
-        </van-form>
-        <van-popup
+        </app-form>
+        <app-popup
           v-model:show="showDatePicker"
           position="bottom"
           round
@@ -140,9 +139,9 @@
             @confirm="onDateConfirm"
             @cancel="showDatePicker = false"
           />
-        </van-popup>
+        </app-popup>
       </div>
-    </van-popup>
+    </app-popup>
   </div>
 </template>
 
@@ -298,7 +297,7 @@ onMounted(loadList);
 <style scoped>
 .page-fund-register {
   min-height: 100vh;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   padding: 12px 16px 30px;
 }
 
@@ -312,7 +311,7 @@ onMounted(loadList);
 .tb-title {
   font-size: 16px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
 }
 
 .list {
@@ -322,7 +321,7 @@ onMounted(loadList);
 }
 
 .fund-item {
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 10px;
   padding: 14px 16px;
 }
@@ -337,7 +336,7 @@ onMounted(loadList);
 .fi-name {
   font-size: 14px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
 }
 
 .fi-actions {
@@ -347,25 +346,25 @@ onMounted(loadList);
 
 .fi-btn {
   font-size: 18px;
-  color: #1989fa;
+  color: var(--theme-primary);
   cursor: pointer;
 }
 
 .fi-btn.danger {
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
 }
 .fi-profit.success {
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
 }
 .fi-profit.danger {
-  color: #07c160;
+  color: var(--van-green, #07c160);
 }
 
 .fi-body {
   display: flex;
   gap: 12px;
   font-size: 12px;
-  color: #323233;
+  color: var(--theme-text-primary);
   margin-bottom: 4px;
 }
 
@@ -373,7 +372,7 @@ onMounted(loadList);
   display: flex;
   gap: 12px;
   font-size: 11px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 
 .editor {

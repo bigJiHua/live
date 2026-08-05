@@ -8,7 +8,7 @@
       </div>
 
       <div class="action-section">
-        <van-button
+        <app-button
           type="primary"
           size="large"
           block
@@ -17,36 +17,36 @@
           @click="handleDbCheck"
         >
           开始检查
-        </van-button>
+        </app-button>
       </div>
 
       <div class="result-section" v-if="checkCompleted">
         <div class="section-title">检查结果</div>
         <van-cell-group inset class="app-card">
-          <van-cell title="连接状态">
+          <app-cell title="连接状态">
             <template #value>
-              <van-tag :type="connectionStatus.type" size="large">
+              <app-tag :type="connectionStatus.type" size="large">
                 {{ connectionStatus.text }}
-              </van-tag>
+              </app-tag>
             </template>
-          </van-cell>
-          <van-cell title="数据完整性">
+          </app-cell>
+          <app-cell title="数据完整性">
             <template #value>
-              <van-tag :type="integrityStatus.type" size="large">
+              <app-tag :type="integrityStatus.type" size="large">
                 {{ integrityStatus.text }}
-              </van-tag>
+              </app-tag>
             </template>
-          </van-cell>
-          <van-cell title="总行数">
+          </app-cell>
+          <app-cell title="总行数">
             <template #value>
               <span class="time-text">{{ tableInfo.totalRows.toLocaleString() }} 行</span>
             </template>
-          </van-cell>
-          <van-cell title="检查时间">
+          </app-cell>
+          <app-cell title="检查时间">
             <template #value>
               <span class="time-text">{{ checkTime }}</span>
             </template>
-          </van-cell>
+          </app-cell>
         </van-cell-group>
       </div>
 
@@ -82,16 +82,16 @@
       <div class="info-section">
         <div class="section-title">检查说明</div>
         <van-cell-group inset class="app-card">
-          <van-cell title="连接状态">
+          <app-cell title="连接状态">
             <template #label>
               <span class="label-text">验证数据库服务器是否可达</span>
             </template>
-          </van-cell>
-          <van-cell title="数据完整性">
+          </app-cell>
+          <app-cell title="数据完整性">
             <template #label>
               <span class="label-text">检查数据表是否存在且可正常读写</span>
             </template>
-          </van-cell>
+          </app-cell>
         </van-cell-group>
       </div>
     </div>
@@ -169,7 +169,7 @@ const handleDbCheck = async () => {
 <style scoped>
 .page-db-check {
   min-height: 100vh;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
 }
 
 .page-content {
@@ -180,27 +180,27 @@ const handleDbCheck = async () => {
 .page-header {
   text-align: center;
   padding: 30px 0;
-  background: white;
+  background: var(--theme-bg-secondary);
   border-radius: 16px;
   margin-bottom: 20px;
 }
 
 .header-icon {
   font-size: 48px;
-  color: #1989fa;
+  color: var(--theme-primary);
   margin-bottom: 12px;
 }
 
 .header-title {
   font-size: 20px;
   font-weight: bold;
-  color: #323233;
+  color: var(--theme-text-primary);
   margin-bottom: 8px;
 }
 
 .header-desc {
   font-size: 14px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 
 .action-section {
@@ -210,7 +210,7 @@ const handleDbCheck = async () => {
 .section-title {
   padding: 8px 16px;
   font-size: 13px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   font-weight: 500;
   margin-bottom: 8px;
 }
@@ -241,28 +241,28 @@ const handleDbCheck = async () => {
 }
 
 .db-table thead {
-  background: #f2f3f5;
+  background: var(--theme-bg-tertiary);
 }
 
 .db-table th {
   padding: 10px 8px;
   text-align: left;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
   white-space: nowrap;
-  border-bottom: 1px solid #ebedf0;
+  border: 1px solid var(--theme-border);
 }
 
 .db-table td {
   padding: 9px 8px;
-  color: #646566;
-  border-bottom: 1px solid #f2f3f5;
+  color: var(--theme-text-secondary);
+  border: 1px solid var(--theme-border);
   vertical-align: top;
   word-break: break-all;
 }
 
 .db-table tbody tr:active {
-  background: #f2f3f5;
+  background: var(--theme-bg-tertiary);
 }
 
 .col-name {
@@ -291,7 +291,7 @@ const handleDbCheck = async () => {
 
 .col-comment {
   min-width: 80px;
-  color: #969799 !important;
+  color: var(--theme-text-tertiary) !important;
   font-size: 11px;
 }
 
@@ -301,11 +301,11 @@ const handleDbCheck = async () => {
 
 .label-text {
   font-size: 12px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 
 .time-text {
   font-size: 13px;
-  color: #646566;
+  color: var(--theme-text-secondary);
 }
 </style>

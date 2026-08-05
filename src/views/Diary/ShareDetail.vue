@@ -7,9 +7,9 @@
     <div v-else-if="errorState" class="error-box">
       <van-empty :image="errorState.image" :description="errorState.message">
         <template v-if="errorState.showRetry">
-          <van-button round type="primary" size="small" @click="loadShare">
+          <app-button round type="primary" size="small" @click="loadShare">
             重新获取
-          </van-button>
+          </app-button>
         </template>
       </van-empty>
     </div>
@@ -17,7 +17,7 @@
     <!-- 密码输入模式 -->
     <div v-else-if="mode === 'password' && !data" class="password-box">
       <div class="pw-card">
-        <van-icon name="lock" size="40" color="#7232dd" />
+        <van-icon name="lock" size="40" :color="'var(--theme-primary)'" />
         <h3>需要访问密码</h3>
         <p class="pw-desc">请输入分享者提供的 6 位数字密码</p>
 
@@ -249,7 +249,7 @@ onMounted(() => {
 <style scoped>
 .share-page {
   min-height: 100dvh;
-  background: #fdfdfd;
+  background: var(--theme-bg-primary);
   padding-bottom: 40px;
 }
 
@@ -270,11 +270,11 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
 }
 
 .pw-card {
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 16px;
   padding: 32px 24px 24px;
   width: 100%;
@@ -286,12 +286,12 @@ onMounted(() => {
 .pw-card h3 {
   margin: 12px 0 6px;
   font-size: 18px;
-  color: #333;
+  color: var(--theme-text-primary);
 }
 
 .pw-desc {
   font-size: 13px;
-  color: #999;
+  color: var(--theme-text-tertiary);
   margin-bottom: 24px;
 }
 
@@ -301,18 +301,18 @@ onMounted(() => {
 
 /* 密码未填完 → 红框提示 */
 .pw-incomplete :deep(.van-password-input__security) {
-  border-color: #ee0a24 !important;
+  border-color: var(--van-danger-color, #ee0a24) !important;
 }
 
 .pw-error {
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
   font-size: 13px;
   margin-top: 12px;
 }
 
 /* ── 内容区 ── */
 .content-box {
-  background: #fff;
+  background: var(--theme-bg-secondary);
   min-height: 100dvh;
 }
 
@@ -330,18 +330,18 @@ onMounted(() => {
 .author-name {
   font-size: 15px;
   font-weight: 600;
-  color: #222;
+  color: var(--theme-text-primary);
 }
 
 .time-text {
   font-size: 12px;
-  color: #999;
+  color: var(--theme-text-tertiary);
   margin-top: 2px;
 }
 
 .mood-tag {
-  background: #f3ebff;
-  color: #7232dd;
+  background: var(--theme-primary-light);
+  color: var(--theme-primary);
   padding: 4px 10px;
   border-radius: 100px;
   font-size: 12px;
@@ -354,7 +354,7 @@ onMounted(() => {
   padding: 0 16px 16px;
   font-size: 17px;
   line-height: 1.7;
-  color: #2c3e50;
+  color: var(--theme-text-primary);
   word-break: break-word;
 }
 
@@ -370,11 +370,11 @@ onMounted(() => {
 }
 
 .body-text :deep(blockquote) {
-  border-left: 3px solid #7232dd;
+  border-left: 3px solid var(--theme-primary);
   margin: 8px 0;
   padding: 4px 12px;
-  color: #666;
-  background: #f8f9fb;
+  color: var(--theme-text-secondary);
+  background: var(--theme-bg-tertiary);
 }
 
 .image-grid {
@@ -396,7 +396,7 @@ onMounted(() => {
   gap: 4px;
   padding: 0 16px 16px;
   font-size: 13px;
-  color: #999;
+  color: var(--theme-text-tertiary);
 }
 
 .footer {
@@ -406,6 +406,6 @@ onMounted(() => {
 
 .expire-hint {
   font-size: 12px;
-  color: #bbb;
+  color: var(--theme-text-tertiary);
 }
 </style>

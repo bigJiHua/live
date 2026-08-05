@@ -8,71 +8,39 @@
         <van-icon name="arrow-down" />
       </span>
       <div class="header-actions">
-        <van-icon :name="showAirplane ? 'eye-o' : 'closed-eye'" @click="toggleAirplane" />
         <van-icon name="arrow" @click="nextMonth" />
       </div>
     </div>
 
-    <!-- 提醒横幅 -->
-    <div v-if="calendarReminders.length > 0" class="reminder-banner">
-      <div class="reminder-header">
-        <van-icon name="bell" />
-        <span>{{ currentYear }}年{{ currentMonth + 1 }}月提醒</span>
-        <span class="reminder-count">{{ calendarReminders.length }}个</span>
-      </div>
-      <div class="reminder-list">
-        <div
-          v-for="item in calendarReminders"
-          :key="item.id"
-          class="reminder-item"
-          :class="'reminder-' + getReminderBannerLevel(item)"
-        >
-          <span class="reminder-content">{{ item.content }}</span>
-          <span class="reminder-date">{{ dayjs(item.happen_date).format("MM/DD") }}</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- 星期标题 -->
-    <div class="weekdays">
-      <div v-for="day in weekDays" :key="day" class="weekday">{{ day }}</div>
-    </div>
-
-    <!-- 日历主体 -->
-    <div class="calendar-grid" v-if="!loading">
-      <div
-        v-for="(day, index) in calendarDays"
-        :key="index"
-        class="day-cell"
-        :class="{
-          empty: !day.day,
-          today: day.isToday,
-          selected: day.date === selectedDate,
-          'has-event': day.count > 0,
-          'has-reminder-red': day.reminderFlash?.level === 'red',
-          'has-reminder-yellow': day.reminderFlash?.level === 'yellow',
-          'has-reminder-green': day.reminderFlash?.level === 'green',
-        }"
-        @click="selectDate(day)"
+    <!-- 日历主体（共享 CalendarGrid 组件） -->
+    <div class="calendar-grid-wrap">
+      <CalendarGrid
+        v-if="!loading"
+        :year="currentYear"
+        :month="currentMonth"
+        :selected-date="selectedDate"
+        :primary="'var(--theme-primary)'"
+        variant="todo"
+        :dataset="calendarDataset"
+        :reminder-banner="todoReminderBanner"
+        :card="false"
+        :show-header="false"
+        collapsible
+        :default-expanded="true"
+        @select="onDaySelect"
+        @go-today="goToday"
       >
-        <span class="day-number">{{ day.day }}</span>
-        <div v-if="showAirplane && day.hasAirplane" class="airplane-icon">✈️</div>
-        <div
-          v-else-if="day.hasRealEvent"
-          class="event-dot"
-          :class="{ overdue: day.hasOverdue }"
-        ></div>
+        <template #reminder-action>
+          <van-icon
+            class="dc-eye-btn"
+            :name="showAirplane ? 'eye-o' : 'closed-eye'"
+            @click="toggleAirplane"
+          />
+        </template>
+      </CalendarGrid>
+      <div v-else class="calendar-loading">
+        <van-loading size="32px">加载中...</van-loading>
       </div>
-    </div>
-
-    <!-- 加载中 -->
-    <div class="calendar-loading" v-else>
-      <van-loading size="32px">加载中...</van-loading>
-    </div>
-
-    <!-- 添加按钮 -->
-    <div class="add-btn" @click="goToAddEvent">
-      <van-icon name="plus" />
     </div>
 
     <!-- 选中日期的事件列表 -->
@@ -82,6 +50,10 @@
         <span class="event-count" v-if="selectedEvents.length > 0">
           {{ selectedEvents.length }}个计划
         </span>
+        <button class="add-btn" @click="goToAddEvent">
+          <van-icon name="plus" />
+          <span>添加</span>
+        </button>
       </div>
 
       <van-pull-refresh v-model="refreshing" @refresh="loadSelectedDateEvents">
@@ -97,14 +69,14 @@
         <!-- 消费分期专区 -->
         <div v-else-if="installmentEvents.length > 0" class="event-section">
           <div class="event-section-header">
-            <van-icon name="bill-o" color="#ee0a24" />
+            <van-icon name="bill-o" color="var(--van-danger-color, #ee0a24)" />
             <span>消费分期</span>
           </div>
           <div v-for="event in installmentEvents" :key="event.id" class="event-item inst-item">
             <div class="event-content">
               <div class="event-title">{{ event.content }}</div>
               <div class="event-meta">
-                <van-tag type="danger" size="small">消费分期</van-tag>
+                <app-tag type="danger" size="small">消费分期</app-tag>
                 <span class="event-amount">￥{{ Number(event.amount || 0).toFixed(2) }}</span>
               </div>
             </div>
@@ -114,7 +86,7 @@
         <!-- 其他计划 -->
         <div v-if="otherEvents.length > 0" class="event-section">
           <div class="event-section-header" v-if="installmentEvents.length > 0">
-            <van-icon name="todo-list-o" color="#1989fa" />
+            <van-icon name="todo-list-o" color="var(--van-blue, #1989fa)" />
             <span>计划</span>
           </div>
           <div class="event-items">
@@ -128,18 +100,18 @@
               <div class="event-content">
                 <div class="event-title">{{ event.content }}</div>
                 <div class="event-meta">
-                  <van-tag v-if="event.source === 'recurring' && Number(event.amount) > 0" size="small" type="warning">
+                  <app-tag v-if="event.source === 'recurring' && Number(event.amount) > 0" size="small" type="warning">
                     固定支出
-                  </van-tag>
-                  <van-tag v-else-if="event.source === 'recurring'" size="small" color="#7232dd" text-color="#fff">
+                  </app-tag>
+                  <app-tag v-else-if="event.source === 'recurring'" size="small" :color="'var(--van-purple, #7232dd)'" text-color="#fff">
                     事件提醒
-                  </van-tag>
-                  <van-tag v-if="event.event_type && event.event_type !== 'fixed_expense'" size="small" type="primary">
+                  </app-tag>
+                  <app-tag v-if="event.event_type && event.event_type !== 'fixed_expense'" size="small" type="primary">
                     {{ getEventTypeName(event.event_type) }}
-                  </van-tag>
-                  <van-tag v-if="event.priority === 1" size="small" type="danger">高优</van-tag>
-                  <van-tag v-if="event.source === 'recurring' && event.cycle === 'year'" size="small" type="success">每年</van-tag>
-                  <van-tag v-if="event.source !== 'recurring' && event.is_recurring" size="small" type="success">每年</van-tag>
+                  </app-tag>
+                  <app-tag v-if="event.priority === 1" size="small" type="danger">高优</app-tag>
+                  <app-tag v-if="event.source === 'recurring' && event.cycle === 'year'" size="small" type="success">每年</app-tag>
+                  <app-tag v-if="event.source !== 'recurring' && event.is_recurring" size="small" type="success">每年</app-tag>
                   <span v-if="event.source === 'recurring' && Number(event.amount) > 0" class="event-amount">
                     ￥{{ Number(event.amount || 0).toFixed(2) }}
                   </span>
@@ -165,7 +137,7 @@
     />
 
     <!-- 编辑事件弹窗 -->
-    <van-popup
+    <app-popup
       v-model:show="showEditPopup"
       position="bottom"
       round
@@ -176,70 +148,59 @@
           <span class="popup-title">编辑事件</span>
         </div>
 
-        <van-field
+        <app-field
           v-model="editEvent.content"
           label="事件内容"
           placeholder="请输入事件内容"
           :maxlength="100"
         />
 
-        <van-field
+        <app-field
           v-model="editEvent.remark"
           label="备注"
           placeholder="选填（最多50字）"
           :maxlength="50"
         />
 
-        <van-field name="event_type" label="事件类型">
-          <template #input>
-            <van-radio-group v-model="editEvent.event_type" direction="horizontal">
-              <van-radio name="schedule">日程</van-radio>
-              <van-radio name="birthday">生日</van-radio>
-              <van-radio name="anniversary">纪念日</van-radio>
-              <van-radio name="countdown">倒数日</van-radio>
-            </van-radio-group>
-          </template>
-        </van-field>
+        <app-field name="event_type" label="事件类型">
+          <van-radio-group v-model="editEvent.event_type" direction="horizontal">
+            <van-radio name="schedule">日程</van-radio>
+            <van-radio name="birthday">生日</van-radio>
+            <van-radio name="anniversary">纪念日</van-radio>
+            <van-radio name="countdown">倒数日</van-radio>
+          </van-radio-group>
+        </app-field>
 
-        <van-field name="priority" label="优先级">
-          <template #input>
-            <van-radio-group v-model="editEvent.priority" direction="horizontal">
-              <van-radio :name="1">高</van-radio>
-              <van-radio :name="2">中</van-radio>
-              <van-radio :name="3">低</van-radio>
-            </van-radio-group>
-          </template>
-        </van-field>
+        <app-field name="priority" label="优先级">
+          <van-radio-group v-model="editEvent.priority" direction="horizontal">
+            <van-radio :name="1">高</van-radio>
+            <van-radio :name="2">中</van-radio>
+            <van-radio :name="3">低</van-radio>
+          </van-radio-group>
+        </app-field>
 
-        <van-field name="is_recurring" label="每年重复">
-          <template #input>
-            <van-switch v-model="editEvent.is_recurring" />
-          </template>
-        </van-field>
+        <app-field name="is_recurring" label="每年重复">
+          <van-switch v-model="editEvent.is_recurring" />
+        </app-field>
 
-        <van-field name="need_remind" label="开启提醒">
-          <template #input>
-            <van-switch v-model="editEvent.need_remind" />
-          </template>
-        </van-field>
+        <app-field name="need_remind" label="开启提醒">
+          <van-switch v-model="editEvent.need_remind" />
+        </app-field>
 
-        <van-field
+        <app-field
           v-if="editEvent.need_remind"
           v-model="editEvent.remind_days"
           label="提前天数"
           type="number"
           placeholder="0"
         >
-          <template #input>
-            <van-stepper v-model="editEvent.remind_days" min="0" max="30" />
-          </template>
-        </van-field>
+          <van-stepper v-model="editEvent.remind_days" min="0" max="30" />
+        </app-field>
 
         <div class="popup-actions">
-          <van-button size="large" round @click="showEditPopup = false"
-            >取消</van-button
-          >
-          <van-button
+          <app-button size="large" round @click="showEditPopup = false"
+            >取消</app-button>
+          <app-button
             size="large"
             round
             type="primary"
@@ -247,13 +208,13 @@
             @click="handleEditEvent"
           >
             保存修改
-          </van-button>
+          </app-button>
         </div>
       </div>
-    </van-popup>
+    </app-popup>
 
     <!-- 添加事件弹窗 -->
-    <van-popup
+    <app-popup
       v-model:show="showAddPopup"
       position="bottom"
       round
@@ -265,71 +226,65 @@
           <span class="popup-date">{{ formatSelectedDate }}</span>
         </div>
 
-        <van-field
+        <app-field
           v-model="newEvent.content"
           label="事件内容"
           placeholder="请输入事件内容"
           :maxlength="100"
-        />
-        <van-field
+          required
+        >
+          <template #right-icon>
+            <span class="field-required-tip">必填</span>
+          </template>
+        </app-field>
+        <app-field
           v-model="newEvent.remark"
           label="备注"
           placeholder="选填"
           :maxlength="50"
         />
 
-        <van-field label="事件类型">
-          <template #input>
-            <van-radio-group
-              v-model="newEvent.event_type"
-              direction="horizontal"
-            >
-              <van-radio name="schedule">日程</van-radio>
-              <van-radio name="birthday">生日</van-radio>
-              <van-radio name="anniversary">纪念</van-radio>
-              <van-radio name="countdown">倒数</van-radio>
-            </van-radio-group>
-          </template>
-        </van-field>
+        <app-field label="事件类型">
+          <van-radio-group
+            v-model="newEvent.event_type"
+            direction="horizontal"
+          >
+            <van-radio name="schedule">日程</van-radio>
+            <van-radio name="birthday">生日</van-radio>
+            <van-radio name="anniversary">纪念</van-radio>
+            <van-radio name="countdown">倒数</van-radio>
+          </van-radio-group>
+        </app-field>
 
-        <van-field label="优先级">
-          <template #input>
-            <van-radio-group v-model="newEvent.priority" direction="horizontal">
-              <van-radio :name="1">高</van-radio>
-              <van-radio :name="2">中</van-radio>
-              <van-radio :name="3">低</van-radio>
-            </van-radio-group>
-          </template>
-        </van-field>
+        <app-field label="优先级">
+          <van-radio-group v-model="newEvent.priority" direction="horizontal">
+            <van-radio :name="1">高</van-radio>
+            <van-radio :name="2">中</van-radio>
+            <van-radio :name="3">低</van-radio>
+          </van-radio-group>
+        </app-field>
 
-        <van-field label="每年重复">
-          <template #input>
-            <van-switch v-model="newEvent.is_recurring" />
-          </template>
-        </van-field>
+        <app-field label="每年重复">
+          <van-switch v-model="newEvent.is_recurring" />
+        </app-field>
 
-        <van-field label="开启提醒">
-          <template #input>
-            <van-switch v-model="newEvent.need_remind" />
-          </template>
-        </van-field>
+        <app-field label="开启提醒">
+          <van-switch v-model="newEvent.need_remind" />
+        </app-field>
 
-        <van-field
+        <app-field
           v-if="newEvent.need_remind"
           v-model="newEvent.remind_days"
           label="提前天数"
           type="number"
         >
-          <template #input>
-            <van-stepper v-model="newEvent.remind_days" min="0" max="30" />
-          </template>
-        </van-field>
+          <van-stepper v-model="newEvent.remind_days" min="0" max="30" />
+        </app-field>
 
         <div class="popup-actions">
-          <van-button size="large" round @click="showAddPopup = false"
-            >取消</van-button
-          >
-          <van-button
+          <app-button size="large" round @click="showAddPopup = false"
+            >取消</app-button>
+          <app-button
             size="large"
             round
             type="primary"
@@ -337,13 +292,13 @@
             @click="handleAddEvent"
           >
             确认
-          </van-button>
+          </app-button>
         </div>
       </div>
-    </van-popup>
+    </app-popup>
 
     <!-- 月份选择器 -->
-    <van-popup v-model:show="showMonthPicker" position="bottom" round>
+    <app-popup v-model:show="showMonthPicker" position="bottom" round>
       <van-picker
         title="选择月份"
         v-model="pickerSelectedValues"
@@ -351,7 +306,7 @@
         @confirm="onPickerConfirm"
         @cancel="showMonthPicker = false"
       />
-    </van-popup>
+    </app-popup>
   </div>
 </template>
 
@@ -371,11 +326,10 @@ import {
   getReminders,
 } from "@/utils/api/todo";
 import { updateRecurringMonthStatus } from "@/utils/api/recurring";
+import CalendarGrid from "@/components/calendar/CalendarGrid.vue";
 
 dayjs.locale("zh-cn");
 const router = useRouter();
-
-const weekDays = ["日", "一", "二", "三", "四", "五", "六"];
 
 // 当前年月
 const today = dayjs();
@@ -409,25 +363,6 @@ const otherEvents = computed(() => selectedEvents.value.filter(e => e.category_i
 // 提醒数据
 const reminders = ref([]);
 const reminderLoading = ref(false);
-
-// 过滤掉 content === "1" 的隐蔽标记，只展示真实事项的提醒
-const realReminders = computed(() =>
-  reminders.value.filter((r) => r.content !== "1")
-);
-
-// 当月提醒：从日历数据中提取待完成/未跳过的事件，跟随切换月份
-const calendarReminders = computed(() => {
-  const days = calendarData.value?.days || [];
-  const result = [];
-  days.forEach(day => {
-    (day.list || []).forEach(item => {
-      if (item.content !== '1' && item.status !== '已完成' && item.month_status !== 'done' && item.month_status !== 'skipped') {
-        result.push(item);
-      }
-    });
-  });
-  return result.sort((a, b) => (a.happen_date || '').localeCompare(b.happen_date || ''));
-});
 
 // 计算单个事件的提醒等级
 const calcReminderLevel = (item) => {
@@ -478,13 +413,6 @@ const calcReminderLevel = (item) => {
   return { level: "red", days: daysUntilEvent };
 };
 
-// 获取提醒颜色等级（用于日历格子）
-const getReminderLevel = (happenDate) => {
-  const item = reminders.value.find((r) => r.happen_date === happenDate);
-  if (!item) return null;
-  return calcReminderLevel(item);
-};
-
 // 横幅用：直接返回颜色等级
 const getReminderBannerLevel = (item) => {
   const daysUntil = dayjs(item.happen_date).diff(dayjs().startOf("day"), "day");
@@ -525,52 +453,47 @@ const editEvent = ref({});
 const currentEvent = ref({});
 const actionOptions = ref([]);
 
-// 日历天列表
-const calendarDays = computed(() => {
-  const days = [];
-  const firstDay = dayjs()
-    .year(currentYear.value)
-    .month(currentMonth.value)
-    .date(1);
-  const daysInMonth = firstDay.daysInMonth();
-  const startWeekday = firstDay.day();
-  const monthData = calendarData.value?.days || [];
-  const todayStr = dayjs().format("YYYY-MM-DD");
-
-  // 空白填充
-  for (let i = 0; i < startWeekday; i++) {
-    days.push({ day: null });
-  }
-
-  // 日期
-  for (let d = 1; d <= daysInMonth; d++) {
-    const dateStr = firstDay.date(d).format("YYYY-MM-DD");
-    const dayData = monthData.find((m) => m.date === dateStr);
-    const list = dayData?.list || [];
-    // 判断是否有小飞机：该天有 content === "1" 的记录
-    const hasAirplane = list.some((item) => item?.content === "1");
-    // 判断是否有"真实事项"（排除 content === "1" 的隐蔽标记）
-    const hasRealEvent = list.some((item) => item?.content !== "1");
-    // 检查该日期是否有提醒需要闪烁
-    const reminderItem = reminders.value.find((r) => r.happen_date === dateStr);
-    const reminderFlash = reminderItem ? calcReminderLevel(reminderItem) : null;
-    days.push({
-      day: d,
-      date: dateStr,
-      isToday: dateStr === todayStr,
-      count: dayData?.count || 0,
-      hasOverdue: dayData?.hasOverdue || false,
-      hasAirplane,
-      hasRealEvent,
-      reminderFlash,
+// 后端数据 → CalendarGrid 的 dataset（按 YYYY-MM-DD 索引）
+const calendarDataset = computed(() => {
+  const map = {};
+  const put = (dateStr, patch) => {
+    map[dateStr] = { ...(map[dateStr] || {}), ...patch };
+  };
+  (calendarData.value?.days || []).forEach((d) => {
+    const list = d.list || [];
+    const hasAirplane = showAirplane.value && list.some((i) => i?.content === "1");
+    const hasRealEvent = list.some((i) => i?.content !== "1");
+    put(d.date, {
+      eventCount: hasRealEvent ? d.count || list.length || 1 : 0,
+      overdue: !!(d.hasOverdue || list.some((i) => i?.is_overdue)),
+      airplane: hasAirplane,
     });
-  }
-  return days;
+  });
+  // 临期提醒可能落在无事件的日期，按天取最高级别闪烁（沿用原 need_remind + remind_time 语义）
+  const order = { red: 3, yellow: 2, green: 1 };
+  (reminders.value || []).forEach((r) => {
+    const lv = calcReminderLevel(r)?.level;
+    if (!lv) return;
+    const prev = map[r.happen_date]?.reminder;
+    if (!prev || order[lv] > order[prev]) put(r.happen_date, { reminder: lv });
+  });
+  return map;
 });
+
+// 提醒横幅数据（交给 CalendarGrid 渲染）
+const todoReminderBanner = computed(() =>
+  (reminders.value || [])
+    .filter((r) => r.content !== "1")
+    .map((r) => ({
+      date: r.happen_date,
+      level: getReminderBannerLevel(r),
+      content: r.content,
+    }))
+);
 
 // 选中日期显示
 const formatSelectedDate = computed(() => {
-  return dayjs(selectedDate.value).format("MM月DD日 dddd");
+  return dayjs(selectedDate.value).format("YYYY年M月D日 dddd");
 });
 
 // 事件类型名称
@@ -657,9 +580,17 @@ const nextMonth = () => {
 };
 
 // 选择日期
-const selectDate = (day) => {
-  if (!day?.date) return;
-  selectedDate.value = day.date;
+const onDaySelect = (date) => {
+  selectedDate.value = date;
+  loadSelectedDateEvents();
+};
+
+// 回到今天（「今」圆环按钮）
+const goToday = () => {
+  const now = dayjs();
+  currentYear.value = now.year();
+  currentMonth.value = now.month();
+  selectedDate.value = now.format("YYYY-MM-DD");
   loadSelectedDateEvents();
 };
 
@@ -747,6 +678,18 @@ const showEventActions = (event) => {
     return;
   }
 
+  // 信用卡还款提醒由 card_bill 派生，只读：禁止编辑/删除/标记完成（避免用假 id 操作 todo 表）
+  if (event.source === "card_bill") {
+    actionOptions.value = [
+      {
+        name: "查看账单",
+        callback: () => router.push(`/card/bill/detail?id=${event.bill_id}`),
+      },
+    ];
+    showActions.value = true;
+    return;
+  }
+
   const isCompleted = event.status === "已完成";
   actionOptions.value = [
     {
@@ -759,7 +702,7 @@ const showEventActions = (event) => {
     },
     {
       name: "删除",
-      color: "#ee0a24",
+      color: "var(--van-danger-color, #ee0a24)",
       callback: () => handleDelete(event),
     },
   ];
@@ -855,7 +798,7 @@ const handleDelete = async (event) => {
     await showConfirmDialog({
       title: "确认删除",
       message: "确定要删除这条计划吗？",
-      confirmButtonColor: "#ee0a24",
+      confirmButtonColor: "var(--van-danger-color, #ee0a24)",
     });
     await deleteTodo(event.id);
     showSuccessToast("删除成功");
@@ -880,7 +823,7 @@ onMounted(() => {
 <style scoped>
 .page-calendar {
   min-height: 100vh;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   padding-bottom: 120px;
 }
 
@@ -889,17 +832,17 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 16px;
-  background: #fff;
+  background: var(--theme-bg-secondary);
 }
 .header .van-icon {
   font-size: 18px;
   padding: 6px;
-  color: #07c160;
+  color: var(--van-green, #07c160);
 }
 .month-title {
   font-size: 18px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
   display: flex;
   align-items: center;
   gap: 4px;
@@ -910,12 +853,12 @@ onMounted(() => {
   gap: 4px;
 }
 .header-actions .van-icon {
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 
 /* 提醒横幅 */
 .reminder-banner {
-  background: #fff;
+  background: var(--theme-bg-secondary);
   padding: 12px 16px;
   margin: 8px 0;
 }
@@ -925,16 +868,16 @@ onMounted(() => {
   gap: 6px;
   font-size: 14px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
   margin-bottom: 10px;
 }
 .reminder-header .van-icon {
-  color: #07c160;
+  color: var(--van-green, #07c160);
 }
 .reminder-count {
   font-size: 12px;
   font-weight: 400;
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 .reminder-list {
   display: flex;
@@ -950,18 +893,18 @@ onMounted(() => {
   font-size: 13px;
 }
 .reminder-item.reminder-red {
-  background: rgba(238, 10, 36, 0.1);
-  color: #ee0a24;
+  background: var(--van-danger-bg, rgba(238, 10, 36, 0.1));
+  color: var(--van-danger-color, #ee0a24);
   animation: flash-red 1s infinite;
 }
 .reminder-item.reminder-yellow {
-  background: rgba(255, 151, 106, 0.1);
-  color: #ff976a;
+  background: var(--van-orange-bg, rgba(255, 151, 106, 0.1));
+  color: var(--van-orange, #ff976a);
   animation: flash-orange 1.5s infinite;
 }
 .reminder-item.reminder-green {
-  background: rgba(7, 193, 96, 0.1);
-  color: #07c160;
+  background: var(--van-green-bg, rgba(7, 193, 96, 0.1));
+  color: var(--van-green, #07c160);
   animation: flash-green 2s infinite;
 }
 .reminder-content {
@@ -988,21 +931,25 @@ onMounted(() => {
 
 .weekdays {
   display: flex;
-  background: #fff;
+  background: var(--theme-bg-secondary);
   padding: 12px 0;
-  border-bottom: 1px solid #f2f3f5;
+  border: 1px solid var(--theme-border);
 }
 .weekday {
   flex: 1;
   text-align: center;
   font-size: 13px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 
+.calendar-grid-wrap {
+  background: var(--theme-bg-secondary);
+  border-top: 1px solid var(--theme-border);
+}
 .calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  background: #fff;
+  background: var(--theme-bg-secondary);
   padding: 8px 0 12px;
 }
 .calendar-loading {
@@ -1010,7 +957,7 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   height: 300px;
-  background: #fff;
+  background: var(--theme-bg-secondary);
 }
 
 .day-cell {
@@ -1027,7 +974,7 @@ onMounted(() => {
 }
 .day-number {
   font-size: 15px;
-  color: #323233;
+  color: var(--theme-text-primary);
   width: 32px;
   height: 32px;
   display: flex;
@@ -1035,19 +982,19 @@ onMounted(() => {
   justify-content: center;
 }
 .day-cell.today .day-number {
-  background: #07c160;
+  background: var(--van-green, #07c160);
   color: #fff;
   border-radius: 50%;
 }
 .day-cell.selected {
-  background: #e6f9ed;
+  background: rgba(7, 193, 96, 0.12);
 }
 .day-cell.selected.today .day-number {
-  background: #07c160;
+  background: var(--van-green, #07c160);
   color: #fff;
 }
 .day-cell.selected:not(.today) .day-number {
-  color: #07c160;
+  color: var(--van-green, #07c160);
   font-weight: 600;
 }
 .day-cell.has-reminder-red {
@@ -1076,12 +1023,12 @@ onMounted(() => {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #07c160;
+  background: var(--van-green, #07c160);
   position: absolute;
   bottom: 0px;
 }
 .event-dot.overdue {
-  background: #ee0a24;
+  background: var(--van-danger-color, #ee0a24);
 }
 .airplane-icon {
   position: absolute;
@@ -1090,27 +1037,31 @@ onMounted(() => {
 }
 
 .add-btn {
-  position: fixed;
-  left: 50%;
-  bottom: 70px;
-  transform: translateX(-50%);
-  width: 52px;
-  height: 52px;
-  background: #07c160;
-  color: #fff;
-  border-radius: 50%;
-  display: flex;
+  margin-left: auto;
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  font-size: 24px;
-  box-shadow: 0 4px 12px rgba(7, 193, 96, 0.25);
-  z-index: 99;
+  gap: 3px;
+  border: 1px solid var(--theme-primary);
+  background: rgba(var(--theme-primary-rgb, 7, 193, 96), 0.08);
+  color: var(--theme-primary);
+  border-radius: 16px;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 4px 12px;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+.add-btn:active { opacity: 0.6; }
+.dc-eye-btn {
+  font-size: 16px;
+  color: var(--theme-primary);
+  padding: 2px;
 }
 
 .event-list {
   position: relative;
   margin-top: 8px;
-  background: #fff;
+  background: var(--theme-bg-secondary);
   padding: 16px;
   border-radius: 16px 16px 0 0;
   min-height: 200px;
@@ -1118,16 +1069,16 @@ onMounted(() => {
 }
 .event-list-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
   margin-bottom: 16px;
   font-size: 15px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
 }
 .event-count {
+  margin-left: 8px;
   font-size: 13px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   font-weight: 400;
 }
 
@@ -1140,10 +1091,10 @@ onMounted(() => {
 .event-section { margin-bottom: 14px; }
 .event-section-header {
   display: flex; align-items: center; gap: 6px;
-  font-size: 14px; font-weight: 600; color: #323233;
+  font-size: 14px; font-weight: 600; color: var(--theme-text-primary);
   padding: 4px 0 10px;
 }
-.inst-item { border-left: 3px solid #ee0a24; padding-left: 9px; }
+.inst-item { border-left: 3px solid var(--van-danger-color, #ee0a24); padding-left: 9px; }
 
 .event-items {
   display: flex;
@@ -1155,7 +1106,7 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 12px;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   border-radius: 10px;
   cursor: pointer;
 }
@@ -1166,7 +1117,7 @@ onMounted(() => {
   text-decoration: line-through;
 }
 .arrow-icon {
-  color: #969799;
+  color: var(--theme-text-tertiary);
   font-size: 16px;
   flex-shrink: 0;
 }
@@ -1176,7 +1127,7 @@ onMounted(() => {
 }
 .event-title {
   font-size: 14px;
-  color: #323233;
+  color: var(--theme-text-primary);
   word-break: break-all;
 }
 .event-meta {
@@ -1187,7 +1138,7 @@ onMounted(() => {
 }
 .event-remark {
   font-size: 12px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   margin-top: 4px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1203,6 +1154,10 @@ onMounted(() => {
 .add-event-popup {
   padding: 16px;
 }
+/* 添加弹窗内输入框占位小字：深色主题下加深一档，避免太浅 */
+.add-event-popup :deep(.app-field__input::placeholder) {
+  color: var(--theme-text-secondary);
+}
 .popup-header {
   display: flex;
   justify-content: space-between;
@@ -1212,18 +1167,29 @@ onMounted(() => {
 .popup-title {
   font-size: 16px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
 }
 .popup-date {
   font-size: 14px;
-  color: #969799;
+  color: var(--theme-text-secondary);
 }
 .popup-actions {
   display: flex;
   gap: 12px;
   margin-top: 20px;
 }
-.popup-actions .van-button {
+.popup-actions .app-btn {
   flex: 1;
+}
+.field-required-tip {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.6;
+  padding: 0 8px;
+  border-radius: 4px;
+  color: var(--theme-danger);
+  border: 1px solid currentColor;
+  background: rgba(238, 10, 36, 0.08);
 }
 </style>

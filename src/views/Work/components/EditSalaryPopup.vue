@@ -1,5 +1,5 @@
 <template>
-  <van-popup
+  <app-popup
     :show="show"
     position="bottom"
     round
@@ -21,36 +21,30 @@
       <!-- 正式工作编辑 -->
       <div v-if="activeType === 'fulltime'" class="edit-content">
         <van-cell-group inset>
-          <van-field label="基本日薪" :model-value="'¥' + localFulltime.dailySalary" disabled readonly />
-          <van-field label="补贴合计" :model-value="'¥' + localFulltime.subsidyTotal" disabled readonly />
-          <van-field label="社保扣除" :model-value="'-¥' + localFulltime.socialSecurity" disabled readonly />
-          <van-field label="公积金扣除" :model-value="'-¥' + localFulltime.housingFund" disabled readonly />
-          <van-field label="个税扣除" :model-value="'-¥' + localFulltime.tax" disabled readonly />
+          <app-field label="基本日薪" :model-value="'¥' + localFulltime.dailySalary" disabled readonly />
+          <app-field label="补贴合计" :model-value="'¥' + localFulltime.subsidyTotal" disabled readonly />
+          <app-field label="社保扣除" :model-value="'-¥' + localFulltime.socialSecurity" disabled readonly />
+          <app-field label="公积金扣除" :model-value="'-¥' + localFulltime.housingFund" disabled readonly />
+          <app-field label="个税扣除" :model-value="'-¥' + localFulltime.tax" disabled readonly />
         </van-cell-group>
 
         <van-cell-group inset title="手动调整">
-          <van-field
+          <app-field
             v-model="localFulltime.customSubsidy"
             label="当日补贴"
             type="number"
             placeholder="覆盖自动计算值"
             @update:model-value="calcFulltimeActual"
-          >
-            <template #button>
-              <span class="yuan">元</span>
-            </template>
-          </van-field>
-          <van-field
+            suffix="元"
+          />
+          <app-field
             v-model="localFulltime.customDeduction"
             label="当日扣款"
             type="number"
             placeholder="如罚款、缺勤等"
             @update:model-value="calcFulltimeActual"
-          >
-            <template #button>
-              <span class="yuan">元</span>
-            </template>
-          </van-field>
+            suffix="元"
+          />
         </van-cell-group>
 
         <div class="preview-card">
@@ -62,33 +56,27 @@
       <!-- 兼职工作编辑 -->
       <div v-else class="edit-content">
         <van-cell-group inset>
-          <van-field label="兼职日薪" :model-value="'¥' + localParttime.dailySalary" disabled readonly />
-          <van-field label="补贴合计" :model-value="'¥' + localParttime.subsidyTotal" disabled readonly />
+          <app-field label="兼职日薪" :model-value="'¥' + localParttime.dailySalary" disabled readonly />
+          <app-field label="补贴合计" :model-value="'¥' + localParttime.subsidyTotal" disabled readonly />
         </van-cell-group>
 
         <van-cell-group inset title="手动调整">
-          <van-field
+          <app-field
             v-model="localParttime.customSubsidy"
             label="当日补贴"
             type="number"
             placeholder="覆盖自动计算值"
             @update:model-value="calcParttimeActual"
-          >
-            <template #button>
-              <span class="yuan">元</span>
-            </template>
-          </van-field>
-          <van-field
+            suffix="元"
+          />
+          <app-field
             v-model="localParttime.customDeduction"
             label="当日扣款"
             type="number"
             placeholder="如罚款、缺勤等"
             @update:model-value="calcParttimeActual"
-          >
-            <template #button>
-              <span class="yuan">元</span>
-            </template>
-          </van-field>
+            suffix="元"
+          />
         </van-cell-group>
 
         <div class="preview-card">
@@ -99,13 +87,13 @@
 
       <!-- 按钮 -->
       <div class="popup-actions">
-        <van-button size="large" round @click="handleReset">重置</van-button>
-        <van-button size="large" round type="primary" :loading="saving" @click="handleSave">
+        <app-button size="large" round @click="handleReset">重置</app-button>
+        <app-button size="large" round type="primary" :loading="saving" @click="handleSave">
           保存
-        </van-button>
+        </app-button>
       </div>
     </div>
-  </van-popup>
+  </app-popup>
 </template>
 
 <script setup>
@@ -264,12 +252,12 @@ const handleReset = () => {
 .popup-title {
   font-size: 17px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
 }
 
 .popup-date {
   font-size: 14px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 
 .edit-content {
@@ -277,7 +265,7 @@ const handleReset = () => {
 }
 
 .yuan {
-  color: #969799;
+  color: var(--theme-text-tertiary);
   font-size: 14px;
 }
 
@@ -287,7 +275,7 @@ const handleReset = () => {
   align-items: center;
   margin: 16px 16px;
   padding: 16px;
-  background: linear-gradient(135deg, #07c160, #06ad56);
+  background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-primary-grad) 100%);
   border-radius: 12px;
   color: #fff;
 }

@@ -2,14 +2,14 @@
   <div class="page-app-settings">
     <div class="section-title">分类设置</div>
     <van-cell-group inset class="app-card">
-      <van-cell
+      <app-cell
         title="收支分类"
         label="管理支出/收入的分类"
         icon="orders-o"
         is-link
         @click="$router.push('/user/category-manage')"
       />
-      <van-cell
+      <app-cell
         title="银行分类"
         label="管理银行卡所属银行分类"
         icon="card"
@@ -18,19 +18,50 @@
       />
     </van-cell-group>
 
+    <div class="section-title">UI 主题</div>
+    <div class="theme-section app-card">
+      <div class="theme-grid">
+        <div
+          class="theme-item"
+          :class="{ active: choice === 'system' }"
+          @click="setChoice('system')"
+        >
+          <div class="theme-swatch" :style="{ background: systemThemePreview }"></div>
+          <div class="theme-name">系统默认</div>
+          <van-icon v-if="choice === 'system'" name="success" class="theme-check" :color="themeActiveColor" />
+        </div>
+      </div>
+      <template v-for="group in themeGroups" :key="group.title">
+        <div class="theme-group-title">{{ group.title }}</div>
+        <div class="theme-grid">
+          <div
+            v-for="p in group.items"
+            :key="p.key"
+            class="theme-item"
+            :class="{ active: choice === p.key }"
+            @click="setChoice(p.key)"
+          >
+            <div class="theme-swatch" :style="{ background: p.preview }"></div>
+            <div class="theme-name">{{ p.name }}</div>
+            <van-icon v-if="choice === p.key" name="success" class="theme-check" :color="themeActiveColor" />
+          </div>
+        </div>
+      </template>
+    </div>
+
     <div class="section-title">安装站点应用</div>
     <van-cell-group inset class="app-card">
-      <van-cell title="安装状态">
+      <app-cell title="安装状态">
         <template #value>
-          <van-tag :type="statusTagType">{{ statusText }}</van-tag>
+          <app-tag :type="statusTagType">{{ statusText }}</app-tag>
         </template>
-      </van-cell>
-      <van-cell v-if="!pwaState.installed" title="安装应用" is-link @click="installPWA">
+      </app-cell>
+      <app-cell v-if="!pwaState.installed" title="安装应用" is-link @click="installPWA">
         <template #icon>
           <van-icon name="down" class="install-icon" />
         </template>
-      </van-cell>
-      <van-cell v-if="pwaState.installed" title="已添加到桌面" label="可在桌面直接打开使用" />
+      </app-cell>
+      <app-cell v-if="pwaState.installed" title="已添加到桌面" label="可在桌面直接打开使用" />
 
       <van-collapse v-model="activeCollapse" :border="false">
         <van-collapse-item title="检测详情" name="diagnostics" :border="false">
@@ -41,8 +72,8 @@
             </div>
           </div>
           <div class="diag-actions">
-            <van-button size="small" plain type="primary" @click="refreshPWAStatus">重新检测</van-button>
-            <van-button size="small" plain @click="showPwaLogs">查看日志</van-button>
+            <app-button size="small" plain type="primary" @click="refreshPWAStatus">重新检测</app-button>
+            <app-button size="small" plain @click="showPwaLogs">查看日志</app-button>
           </div>
           <div class="pwa-log-box" v-if="pwaLogs.length > 0">
             <div v-for="item in pwaLogs.slice(-5)" :key="item.id" class="pwa-log-line">
@@ -53,10 +84,26 @@
       </van-collapse>
     </van-cell-group>
 
+    <!-- Demo 预览入口（仅 demo 模式展示，供小伙伴点击预览） -->
+    <template v-if="isDemo">
+      <div class="section-title">Demo 预览</div>
+      <van-cell-group inset class="app-card">
+        <app-cell
+          v-for="d in demoLinks"
+          :key="d.path"
+          :title="d.title"
+          :label="d.label"
+          :icon="d.icon"
+          is-link
+          @click="$router.push(d.path)"
+        />
+      </van-cell-group>
+    </template>
+
     <!-- 更多设置入口可在此添加 -->
     <!-- <div class="section-title">其他设置</div>
     <van-cell-group inset class="app-card">
-      <van-cell title="通知设置" label="即将上线" icon="bell-o" is-link disabled />
+      <app-cell title="通知设置" label="即将上线" icon="bell-o" is-link disabled />
     </van-cell-group> -->
   </div>
 </template>
@@ -64,6 +111,36 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
 import { showToast, showDialog } from 'vant'
+import { useUiTheme } from '@/composables/useUiTheme'
+
+// UI 主题自定义（系统默认 / 各方案），选择后即时应用到全局并保存到 localStorage
+const { presets, activeKey, choice, setChoice } = useUiTheme()
+
+// Demo 模式开关：仅 demo 模式展示 demo 预览入口，供小伙伴点击预览各组件 Demo
+const isDemo = import.meta.env.VITE_APP_DEMO === 'true'
+const demoLinks = [
+  { path: '/demo/ui', title: 'UI 配色展示', label: '主题色板与组件样式预览', icon: 'palette-o' },
+  { path: '/demo/calendar', title: '日历组件 Demo', label: '自研日历网格预览', icon: 'calendar-o' },
+  { path: '/demo/keyboard', title: '键盘组件 Demo', label: '安全键盘交互预览', icon: 'keyboard-o' },
+  { path: '/demo/bank-org', title: '卡组织 Icon Demo', label: '银行卡组织图标预览', icon: 'card' },
+]
+// 系统默认时展示"浅色靛蓝 / 深色黑金"的混合色块
+const systemThemePreview = 'linear-gradient(135deg, #3a66e0, #C9A86A)'
+const themeActiveColor = computed(() => {
+  const key = choice.value === 'system' ? activeKey.value : choice.value
+  const t = presets.find((p) => p.key === key) || presets[2]
+  return t.primary
+})
+
+// 按「白底配色 / 黑底配色」分组，组内按色系（绿→蓝→红→金→中性）排序
+const HUE_ORDER = { green: 0, blue: 1, red: 2, gold: 3, neutral: 4 }
+const themeGroups = computed(() => {
+  const sortByHue = (a, b) => (HUE_ORDER[a.hue] ?? 9) - (HUE_ORDER[b.hue] ?? 9)
+  return [
+    { title: '白底配色', items: presets.filter((p) => p.mode === 'light').sort(sortByHue) },
+    { title: '黑底配色', items: presets.filter((p) => p.mode === 'dark').sort(sortByHue) },
+  ]
+})
 
 const activeCollapse = ref([])
 const pwaLogs = ref([])
@@ -303,14 +380,14 @@ onBeforeUnmount(() => {
 <style scoped>
 .page-app-settings {
   min-height: 100vh;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   padding-top: 12px;
 }
 
 .section-title {
   padding: 20px 20px 10px;
   font-size: 13px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   font-weight: 500;
 }
 
@@ -319,9 +396,82 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 
+.theme-section {
+  margin: 0 16px;
+  padding: 16px 16px 10px;
+  background: var(--theme-bg-secondary);
+  border-radius: 12px;
+}
+
+.theme-group-title {
+  font-size: 12px;
+  color: var(--theme-text-tertiary);
+  margin: 14px 0 8px;
+}
+
+.theme-group-title:first-of-type {
+  margin-top: 0;
+}
+
+.theme-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.theme-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 4px 8px;
+  border-radius: 10px;
+  background: var(--theme-bg-tertiary);
+  border: 1px solid var(--theme-border);
+  cursor: pointer;
+  min-width: 0;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.theme-item.active {
+  border-color: var(--theme-primary);
+  background: var(--theme-primary-light);
+}
+
+.theme-swatch {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+  flex-shrink: 0;
+}
+
+.theme-name {
+  font-size: 11px;
+  color: var(--theme-text-secondary);
+  white-space: nowrap;
+  line-height: 1.2;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.theme-item.active .theme-name {
+  color: var(--theme-text-primary);
+  font-weight: 500;
+}
+
+.theme-check {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  font-size: 14px;
+}
+
 .install-icon {
   margin-right: 6px;
-  color: #1989fa;
+  color: var(--theme-primary);
 }
 
 .diagnostics-list {
@@ -337,7 +487,7 @@ onBeforeUnmount(() => {
 }
 
 .diag-label {
-  color: #646566;
+  color: var(--theme-text-secondary);
 }
 
 .diag-value {
@@ -345,11 +495,11 @@ onBeforeUnmount(() => {
 }
 
 .diag-ok {
-  color: #07c160;
+  color: var(--van-green, #07c160);
 }
 
 .diag-fail {
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
 }
 
 .diag-actions {
@@ -361,7 +511,7 @@ onBeforeUnmount(() => {
 .pwa-log-box {
   margin-top: 8px;
   padding: 8px;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   border-radius: 6px;
   max-height: 120px;
   overflow-y: auto;
@@ -369,7 +519,7 @@ onBeforeUnmount(() => {
 
 .pwa-log-line {
   font-size: 11px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   line-height: 1.6;
   font-family: monospace;
 }

@@ -42,6 +42,10 @@ export function updateFundHistory(id, data) {
   return request.put(`/fund/history/${id}`, data);
 }
 
+export function getMonthlyHistory(fundId, year, month) {
+  return request.get(`/fund/${fundId}/history/monthly`, { params: { year, month } });
+}
+
 export function deleteFundHistory(id) {
   return request.delete(`/fund/history/${id}`);
 }

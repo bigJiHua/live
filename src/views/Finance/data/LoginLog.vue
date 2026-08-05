@@ -3,7 +3,7 @@
     <div class="page-content">
       <div class="list-header">
         <span class="list-title">近期登录记录</span>
-        <van-tag plain size="small">{{ logs.length }} 条</van-tag>
+        <app-tag plain size="small">{{ logs.length }} 条</app-tag>
       </div>
 
       <van-loading v-if="loading" class="loading-center" size="24px">加载中...</van-loading>
@@ -25,12 +25,12 @@
                 <span class="log-type" :class="'type-' + (log.type || 'login')">
                   {{ typeLabel(log.type) }}
                 </span>
-                <van-tag
+                <app-tag
                   v-if="log._suspicious"
                   :type="suspiciousType(log._suspicious)"
                   size="small"
                   class="suspicious-tag"
-                >{{ suspiciousLabel(log._suspicious) }}</van-tag>
+                >{{ suspiciousLabel(log._suspicious) }}</app-tag>
               </div>
               <span class="log-time">{{ formatTime(log.login_time || log.create_time) }}</span>
             </div>
@@ -220,7 +220,7 @@ onMounted(loadLogs);
 <style scoped>
 .page-login-log {
   min-height: 100vh;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
 }
 .page-content {
   padding: 12px 16px 30px;
@@ -234,7 +234,7 @@ onMounted(loadLogs);
 .list-title {
   font-size: 15px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
 }
 .loading-center {
   display: flex;
@@ -247,7 +247,7 @@ onMounted(loadLogs);
   gap: 8px;
 }
 .log-item {
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 8px;
   padding: 10px 12px;
   border-left: 3px solid #07c160;
@@ -277,17 +277,17 @@ onMounted(loadLogs);
   border-radius: 3px;
   color: #fff;
 }
-.log-type.type-login { background: #07c160; }
-.log-type.type-logout { background: #969799; }
-.log-type.type-refresh { background: #1989fa; }
-.log-type.type-failed { background: #ee0a24; }
+.log-type.type-login { background: var(--van-green, #07c160); }
+.log-type.type-logout { background: var(--van-gray, #969799); }
+.log-type.type-refresh { background: var(--theme-primary); }
+.log-type.type-failed { background: var(--van-danger-color, #ee0a24); }
 .log-time {
   font-size: 11px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 .log-body {
   font-size: 12px;
-  color: #323233;
+  color: var(--theme-text-primary);
   line-height: 1.6;
 }
 .info-row, .device-row {
@@ -298,29 +298,29 @@ onMounted(loadLogs);
 }
 .info-icon {
   font-size: 12px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   margin-right: 3px;
   flex-shrink: 0;
 }
 .info-text {
-  color: #323233;
+  color: var(--theme-text-primary);
 }
 .info-text.isp {
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 .info-sep {
-  color: #c8c9cc;
+  color: var(--theme-text-tertiary);
   margin: 0 2px;
 }
 .info-text.device {
-  color: #1989fa;
+  color: var(--theme-primary);
 }
 .ua-row {
   margin-top: 3px;
 }
 .ua-text {
   font-size: 10px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   word-break: break-all;
   display: block;
   line-height: 1.4;
@@ -337,16 +337,16 @@ onMounted(loadLogs);
   gap: 4px;
   margin-top: 4px;
   padding: 4px 8px;
-  background: #fff2f0;
+  background: var(--van-danger-bg);
   border-radius: 4px;
 }
 .error-icon {
   font-size: 12px;
-  color: #ee0a24;
+  color: var(--theme-danger);
   flex-shrink: 0;
 }
 .error-text {
   font-size: 11px;
-  color: #ee0a24;
+  color: var(--theme-danger);
 }
 </style>

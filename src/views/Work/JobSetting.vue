@@ -4,9 +4,9 @@
     <div class="job-section">
       <div class="section-header">
         <span class="section-title">正式工作</span>
-        <van-tag :type="formalJob?.status === 1 ? 'success' : 'danger'">
+        <app-tag :type="formalJob?.status === 1 ? 'success' : 'danger'">
           {{ formalJob?.status === 1 ? '在职' : '已离职' }}
-        </van-tag>
+        </app-tag>
       </div>
 
       <div class="job-card" :class="{ disabled: formalJob?.status !== 1 }">
@@ -39,45 +39,45 @@
             </div>
           </div>
           <div class="job-actions">
-            <van-button size="small" type="primary" @click="editFormal">编辑</van-button>
+            <app-button size="small" type="primary" @click="editFormal">编辑</app-button>
           </div>
         </div>
 
         <!-- 无正式工数据 -->
         <div v-else class="empty-state">
           <van-empty description="暂无正式工作" />
-          <van-button type="primary" size="small" @click="createFormal">创建正式工作</van-button>
+          <app-button type="primary" size="small" @click="createFormal">创建正式工作</app-button>
         </div>
       </div>
 
       <!-- 正式工编辑弹窗 -->
-      <van-popup v-model:show="showFormalPopup" position="bottom" round :close-on-click-overlay="false">
+      <app-popup v-model:show="showFormalPopup" position="bottom" round :close-on-click-overlay="false">
         <div class="edit-popup">
           <div class="popup-header">
             <span class="popup-title">{{ formalJob?.id ? '编辑正式工作' : '创建正式工作' }}</span>
             <van-icon name="cross" @click="closeFormalPopup" />
           </div>
 
-          <van-form ref="formalFormRef">
+          <app-form ref="formalFormRef">
             <van-cell-group inset>
-              <van-field
+              <app-field
                 v-model="formalForm.company"
                 label="公司名称"
                 placeholder="请输入公司名称"
               />
-              <van-field
+              <app-field
                 v-model="formalForm.base_salary"
                 label="月基本工资"
                 type="number"
                 placeholder="请输入月工资"
               />
-              <van-field
+              <app-field
                 v-model="formalForm.base_work_days"
                 label="月应出勤天数"
                 type="number"
                 placeholder="默认22天"
               />
-              <van-field
+              <app-field
                 label="日薪（自动）"
                 :model-value="'¥' + calculatedFormalDaily"
                 disabled
@@ -85,19 +85,19 @@
             </van-cell-group>
 
             <van-cell-group inset title="补贴（元/月）">
-              <van-field v-model="formalForm.subsidy_meal" label="餐补" type="number" />
-              <van-field v-model="formalForm.subsidy_traffic" label="交通补贴" type="number" />
-              <van-field v-model="formalForm.subsidy_post" label="岗位补贴" type="number" />
+              <app-field v-model="formalForm.subsidy_meal" label="餐补" type="number" />
+              <app-field v-model="formalForm.subsidy_traffic" label="交通补贴" type="number" />
+              <app-field v-model="formalForm.subsidy_post" label="岗位补贴" type="number" />
             </van-cell-group>
 
             <van-cell-group inset title="扣除（元/月）">
-              <van-field v-model="formalForm.social" label="个人社保" type="number" />
-              <van-field v-model="formalForm.fund" label="个人公积金" type="number" />
-              <van-field v-model="formalForm.tax_rate" label="个税税率" type="number" suffix="%" />
+              <app-field v-model="formalForm.social" label="个人社保" type="number" />
+              <app-field v-model="formalForm.fund" label="个人公积金" type="number" />
+              <app-field v-model="formalForm.tax_rate" label="个税税率" type="number" suffix="%" />
             </van-cell-group>
 
             <van-cell-group inset>
-              <van-field
+              <app-field
                 v-model="formalForm.join_date"
                 label="入职日期"
                 type="date"
@@ -105,17 +105,17 @@
               />
               <!-- 已离职时显示重新入职按钮 -->
               <div v-if="formalJob?.status === 0" class="leave-btn-wrapper">
-                <van-button
+                <app-button
                   type="primary"
                   block
                   round
                   @click="rejoinJob"
                 >
                   重新入职
-                </van-button>
+                </app-button>
               </div>
               <!-- 在职时显示离职登记 -->
-              <van-field
+              <app-field
                 v-if="formalJob?.status === 1"
                 v-model="formalForm.leave_date"
                 label="离职日期"
@@ -125,33 +125,33 @@
                 :max-date="maxLeaveDate"
               />
               <div v-if="formalJob?.status === 1" class="leave-btn-wrapper">
-                <van-button
+                <app-button
                   type="danger"
                   block
                   round
                   @click="confirmLeave"
                 >
                   登记离职
-                </van-button>
+                </app-button>
               </div>
             </van-cell-group>
-          </van-form>
+          </app-form>
 
           <div class="popup-actions">
-            <van-button size="large" round @click="closeFormalPopup">取消</van-button>
-            <van-button size="large" round type="primary" :loading="saving" @click="saveFormal">保存</van-button>
+            <app-button size="large" round @click="closeFormalPopup">取消</app-button>
+            <app-button size="large" round type="primary" :loading="saving" @click="saveFormal">保存</app-button>
           </div>
         </div>
-      </van-popup>
+      </app-popup>
     </div>
 
     <!-- 兼职工区块 -->
     <div class="job-section">
       <div class="section-header">
         <span class="section-title">兼职工作</span>
-        <van-button size="small" type="primary" plain @click="addParttime">
+        <app-button size="small" type="primary" plain @click="addParttime">
           + 添加兼职
-        </van-button>
+        </app-button>
       </div>
 
       <div v-if="parttimeList.length === 0" class="empty-card">
@@ -184,35 +184,35 @@
             </div>
             <div class="info-item">
               <span class="label">状态</span>
-              <van-tag :type="isParttimeActive(job) ? 'success' : 'warning'" size="small">
+              <app-tag :type="isParttimeActive(job) ? 'success' : 'warning'" size="small">
                 {{ isParttimeActive(job) ? '在职' : '已结束' }}
-              </van-tag>
+              </app-tag>
             </div>
           </div>
           <div class="job-actions">
-            <van-button size="small" @click="editParttime(job)">编辑</van-button>
-            <van-button size="small" type="danger" plain @click="removeParttime(job.id)">删除</van-button>
+            <app-button size="small" @click="editParttime(job)">编辑</app-button>
+            <app-button size="small" type="danger" plain @click="removeParttime(job.id)">删除</app-button>
           </div>
         </div>
       </div>
     </div>
 
     <!-- 兼职编辑弹窗 -->
-    <van-popup v-model:show="showParttimePopup" position="bottom" round :close-on-click-overlay="false">
+    <app-popup v-model:show="showParttimePopup" position="bottom" round :close-on-click-overlay="false">
       <div class="edit-popup">
         <div class="popup-header">
           <span class="popup-title">{{ editingParttimeId ? '编辑兼职' : '添加兼职' }}</span>
           <van-icon name="cross" @click="closeParttimePopup" />
         </div>
 
-        <van-form>
+        <app-form>
           <van-cell-group inset>
-            <van-field
+            <app-field
               v-model="parttimeForm.company"
               label="单位名称"
               placeholder="请输入单位名称"
             />
-            <van-field
+            <app-field
               v-model="parttimeForm.hourly_wage"
               label="时薪"
               type="number"
@@ -221,33 +221,33 @@
           </van-cell-group>
 
           <van-cell-group inset title="补贴（元/天）">
-            <van-field v-model="parttimeForm.subsidy_meal" label="餐补" type="number" />
-            <van-field v-model="parttimeForm.subsidy_traffic" label="交通补贴" type="number" />
-            <van-field v-model="parttimeForm.subsidy_post" label="岗位补贴" type="number" />
+            <app-field v-model="parttimeForm.subsidy_meal" label="餐补" type="number" />
+            <app-field v-model="parttimeForm.subsidy_traffic" label="交通补贴" type="number" />
+            <app-field v-model="parttimeForm.subsidy_post" label="岗位补贴" type="number" />
           </van-cell-group>
 
           <van-cell-group inset>
-            <van-field
+            <app-field
               v-model="parttimeForm.join_date"
               label="开始日期"
               type="date"
               placeholder="请选择"
             />
-            <van-field
+            <app-field
               v-model="parttimeForm.leave_date"
               label="结束日期"
               type="date"
               placeholder="不填表示长期"
             />
           </van-cell-group>
-        </van-form>
+        </app-form>
 
         <div class="popup-actions">
-          <van-button size="large" round @click="closeParttimePopup">取消</van-button>
-          <van-button size="large" round type="primary" :loading="saving" @click="saveParttime">保存</van-button>
+          <app-button size="large" round @click="closeParttimePopup">取消</app-button>
+          <app-button size="large" round type="primary" :loading="saving" @click="saveParttime">保存</app-button>
         </div>
       </div>
-    </van-popup>
+    </app-popup>
   </div>
 </template>
 
@@ -529,7 +529,7 @@ const removeParttime = async (id) => {
     await showConfirmDialog({
       title: '确认删除',
       message: '确定要删除这条兼职记录吗？',
-      confirmButtonColor: '#ee0a24',
+      confirmButtonColor: 'var(--van-danger-color, #ee0a24)',
     })
     await deleteJob(id)
     showToast('删除成功')
@@ -547,7 +547,7 @@ onMounted(() => {
 <style scoped>
 .page-job-setting {
   min-height: 100vh;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   padding: 16px;
   padding-bottom: 40px;
 }
@@ -566,11 +566,11 @@ onMounted(() => {
 .section-title {
   font-size: 16px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
 }
 
 .job-card {
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 12px;
   padding: 16px;
   margin-bottom: 12px;
@@ -581,11 +581,11 @@ onMounted(() => {
 }
 
 .job-card.parttime {
-  border-left: 4px solid #ff976a;
+  border-left: 4px solid var(--van-orange, #ff976a);
 }
 
 .job-card.formal {
-  border-left: 4px solid #1989fa;
+  border-left: 4px solid var(--van-blue, #1989fa);
 }
 
 .job-display {
@@ -609,12 +609,12 @@ onMounted(() => {
 
 .info-item .label {
   font-size: 12px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 
 .info-item .value {
   font-size: 14px;
-  color: #323233;
+  color: var(--theme-text-primary);
   font-weight: 500;
 }
 
@@ -643,7 +643,7 @@ onMounted(() => {
 .popup-title {
   font-size: 17px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
 }
 
 .popup-actions {
@@ -657,7 +657,7 @@ onMounted(() => {
 }
 
 .empty-card {
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 12px;
   padding: 32px;
 }

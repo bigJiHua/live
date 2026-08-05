@@ -131,7 +131,7 @@
     </div>
 
     <!-- 删除确认弹窗 -->
-    <van-dialog
+    <app-dialog
       v-model:show="showDeleteDialog"
       title="确认删除"
       :message="deleteMessage"
@@ -142,7 +142,7 @@
     />
 
     <!-- 分享弹窗 -->
-    <van-popup
+    <app-popup
       v-model:show="showSharePopup"
       position="bottom"
       round
@@ -156,7 +156,7 @@
           <span>分享状态</span>
           <van-switch
             v-model="shareOn"
-            active-color="#07c160"
+            active-color="var(--van-green, #07c160)"
             size="22px"
           />
         </div>
@@ -183,7 +183,7 @@
             <span class="pw-display">{{ detail?.visible_type?.pw || '***' }}</span>
           </div>
           <div class="result-btns" style="margin-top:12px">
-            <van-button
+            <app-button
               round
               block
               plain
@@ -192,8 +192,8 @@
               @click="copyExistingLink('password')"
             >
               密码访问（复制链接）
-            </van-button>
-            <van-button
+            </app-button>
+            <app-button
               round
               block
               type="primary"
@@ -201,16 +201,16 @@
               @click="copyExistingLink('token')"
             >
               公共访问（复制链接）
-            </van-button>
+            </app-button>
           </div>
         </template>
 
         <!-- 按钮 -->
         <div class="share-btns">
-          <van-button round block plain type="default" @click="showSharePopup = false">
+          <app-button round block plain type="default" @click="showSharePopup = false">
             取消
-          </van-button>
-          <van-button
+          </app-button>
+          <app-button
             v-if="shareOn && !isShared"
             round
             block
@@ -219,8 +219,8 @@
             @click="doOpenShare"
           >
             确认并开启分享
-          </van-button>
-          <van-button
+          </app-button>
+          <app-button
             v-if="isShared && !shareOn"
             round
             block
@@ -229,26 +229,26 @@
             @click="doCloseShare"
           >
             确认关闭分享
-          </van-button>
+          </app-button>
         </div>
       </div>
-    </van-popup>
+    </app-popup>
 
     <!-- 分享结果弹窗 -->
-    <van-popup
+    <app-popup
       v-model:show="showShareResult"
       position="bottom"
       round
       :style="{ padding: '24px 16px' }"
     >
       <div class="share-result">
-        <van-icon name="success" size="40" color="#07c160" style="display:block;margin:0 auto 8px" />
+        <van-icon name="success" size="40" color="var(--van-green, #07c160)" style="display:block;margin:0 auto 8px" />
         <h3 class="share-title">分享已开启</h3>
         <p v-if="shareResult.password" class="result-pw">
           密码：<strong>{{ shareResult.password }}</strong>
         </p>
         <div class="result-btns">
-          <van-button
+          <app-button
             round
             block
             plain
@@ -256,17 +256,17 @@
             @click="copyShareLink('password')"
           >
             密码访问（复制链接）
-          </van-button>
-          <van-button
+          </app-button>
+          <app-button
             round
             block
             type="primary"
             @click="copyShareLink('token')"
           >
             公共访问（复制链接）
-          </van-button>
+          </app-button>
         </div>
-        <van-button
+        <app-button
           size="small"
           plain
           type="default"
@@ -274,9 +274,9 @@
           @click="showShareResult = false"
         >
           关闭
-        </van-button>
+        </app-button>
       </div>
-    </van-popup>
+    </app-popup>
   </div>
 </template>
 
@@ -632,7 +632,7 @@ onMounted(() => {
 
 <style scoped>
 .page-diary-detail {
-  background: #fdfdfd;
+  background: var(--theme-bg-primary);
   min-height: 100dvh;
   padding-bottom: 20px;
 }
@@ -645,7 +645,7 @@ onMounted(() => {
 
 /* 主内容 */
 .main-moment {
-  background: #fff;
+  background: var(--theme-bg-secondary);
   padding-bottom: 10px;
 }
 .user-header {
@@ -663,17 +663,17 @@ onMounted(() => {
 .username {
   font-size: 16px;
   font-weight: 600;
-  color: #222;
+  color: var(--theme-text-primary);
 }
 .time-location {
   font-size: 12px;
-  color: #999;
+  color: var(--theme-text-tertiary);
   display: flex;
   align-items: center;
 }
 .main-mood-tag {
-  background: #f3ebff;
-  color: #7232dd;
+  background: var(--theme-primary-light);
+  color: var(--theme-primary);
   padding: 4px 10px;
   border-radius: 100px;
   font-size: 12px;
@@ -682,7 +682,7 @@ onMounted(() => {
   padding: 0 16px 16px;
   font-size: 17px;
   line-height: 1.6;
-  color: #2c3e50;
+  color: var(--theme-text-primary);
   word-break: break-word;
   overflow-wrap: break-word;
 }
@@ -699,11 +699,11 @@ onMounted(() => {
 }
 
 .content-text :deep(blockquote) {
-  border-left: 3px solid #7232dd;
+  border-left: 3px solid var(--theme-primary);
   margin: 8px 0;
   padding: 4px 12px;
-  color: #666;
-  background: #f8f9fb;
+  color: var(--theme-text-secondary);
+  background: var(--theme-bg-tertiary);
 }
 .image-grid {
   display: grid;
@@ -727,8 +727,8 @@ onMounted(() => {
 }
 .share-btn {
   font-size: 13px;
-  color: #666;
-  background: #f5f5f5;
+  color: var(--theme-text-secondary);
+  background: var(--theme-bg-tertiary);
   padding: 6px 12px;
   border-radius: 4px;
   display: flex;
@@ -737,8 +737,8 @@ onMounted(() => {
 }
 .delete-btn {
   font-size: 13px;
-  color: #ee0a24;
-  background: #fff0f0;
+  color: var(--van-danger-color, #ee0a24);
+  background: var(--van-danger-bg, #fff0f0);
   padding: 6px 12px;
   border-radius: 4px;
   display: flex;
@@ -759,11 +759,11 @@ onMounted(() => {
 .append-header .title {
   font-size: 17px;
   font-weight: 600;
-  color: #333;
+  color: var(--theme-text-primary);
 }
 .append-header .count {
   font-size: 12px;
-  color: #999;
+  color: var(--theme-text-tertiary);
 }
 .loading-append {
   text-align: center;
@@ -772,7 +772,7 @@ onMounted(() => {
 .empty-append {
   text-align: center;
   padding: 40px 0;
-  color: #ccc;
+  color: var(--theme-text-secondary);
 }
 
 .append-list {
@@ -796,14 +796,14 @@ onMounted(() => {
 .dot {
   width: 8px;
   height: 8px;
-  background: #7232dd;
+  background: var(--theme-primary);
   border-radius: 50%;
-  border: 2px solid #fff;
-  box-shadow: 0 0 0 2px #f3ebff;
+  border: 2px solid var(--theme-bg-secondary);
+  box-shadow: 0 0 0 2px var(--theme-bg-tertiary);
 }
 .line {
   width: 2px;
-  background: #f0f0f0;
+  background: var(--theme-bg-tertiary);
   flex: 1;
   margin-top: 4px;
 }
@@ -811,7 +811,7 @@ onMounted(() => {
 /* 补充内容块 */
 .append-content-wrap {
   flex: 1;
-  background: #f8f9fb;
+  background: var(--theme-bg-tertiary);
   border-radius: 12px;
   padding: 14px;
   margin-bottom: 10px;
@@ -819,7 +819,7 @@ onMounted(() => {
 .append-content {
   font-size: 15px;
   line-height: 1.6;
-  color: #333;
+  color: var(--theme-text-primary);
   margin-bottom: 10px;
   word-break: break-word;
   overflow-wrap: break-word;
@@ -837,11 +837,11 @@ onMounted(() => {
 }
 
 .append-content :deep(blockquote) {
-  border-left: 3px solid #7232dd;
+  border-left: 3px solid var(--theme-primary);
   margin: 6px 0;
   padding: 3px 10px;
-  color: #666;
-  background: #f8f9fb;
+  color: var(--theme-text-secondary);
+  background: var(--theme-bg-tertiary);
 }
 .append-image-list {
   display: grid;
@@ -859,7 +859,7 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   font-size: 11px;
-  color: #999;
+  color: var(--theme-text-tertiary);
 }
 .append-bottom-left {
   display: flex;
@@ -867,16 +867,16 @@ onMounted(() => {
   gap: 4px;
 }
 .loc-text {
-  color: #999;
+  color: var(--theme-text-tertiary);
 }
 .append-actions {
   display: flex;
   gap: 8px;
 }
 .append-actions .delete-btn {
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
   padding: 2px 6px;
-  background: #fff0f0;
+  background: var(--van-danger-bg, #fff0f0);
   border-radius: 4px;
 }
 .tags {
@@ -889,10 +889,10 @@ onMounted(() => {
   gap: 2px;
 }
 .tag.mood {
-  color: #7232dd;
+  color: var(--theme-primary);
 }
 .tag.location {
-  color: #07c160;
+  color: var(--van-green, #07c160);
 }
 
 /* ── 分享弹窗 ── */
@@ -904,7 +904,7 @@ onMounted(() => {
   font-size: 17px;
   font-weight: 600;
   margin-bottom: 20px;
-  color: #333;
+  color: var(--theme-text-primary);
 }
 
 .share-row {
@@ -912,13 +912,13 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 14px 0;
-  border-bottom: 1px solid #f5f5f5;
+  border: 1px solid var(--theme-border);
   font-size: 15px;
-  color: #333;
+  color: var(--theme-text-primary);
 }
 
 .duration-value {
-  color: #7232dd;
+  color: var(--theme-primary);
   font-size: 14px;
   cursor: pointer;
   display: flex;
@@ -927,7 +927,7 @@ onMounted(() => {
 }
 
 .pw-display {
-  color: #07c160;
+  color: var(--van-green, #07c160);
   font-weight: 600;
   font-size: 18px;
   letter-spacing: 4px;
@@ -935,7 +935,7 @@ onMounted(() => {
 
 .share-hint {
   font-size: 12px;
-  color: #ff976a;
+  color: var(--van-orange, #ff976a);
   text-align: left;
   padding: 8px 0 0;
   margin: 0;
@@ -958,12 +958,12 @@ onMounted(() => {
 
 .result-pw {
   font-size: 15px;
-  color: #666;
+  color: var(--theme-text-secondary);
   margin: 12px 0 20px;
 }
 
 .result-pw strong {
-  color: #07c160;
+  color: var(--van-green, #07c160);
   font-size: 24px;
   letter-spacing: 6px;
 }

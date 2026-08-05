@@ -14,7 +14,7 @@
             基本信息 <span class="required-hint">*为必填</span>
           </div>
           <van-cell-group inset>
-            <van-field
+            <app-field
               v-model="formData.bankName"
               label="银行"
               placeholder="请选择银行"
@@ -23,7 +23,7 @@
               @click="showBankPicker = true"
               :rules="[{ required: true, message: '请选择银行' }]"
             />
-            <van-field
+            <app-field
               v-model="formData.last4No"
               label="卡号后4位"
               placeholder="请输入"
@@ -32,7 +32,7 @@
               @click="openKeyboard('last4No')"
               :rules="[{ required: true, message: '请输入卡号后4位' }]"
             />
-            <van-field
+            <app-field
               v-model="formData.cardBin"
               label="卡BIN"
               placeholder="卡号前6位"
@@ -41,7 +41,7 @@
               @click="openKeyboard('cardBin')"
               :rules="[{ required: true, message: '请输入卡BIN' }]"
             />
-            <van-field
+            <app-field
               v-model="formData.openDate"
               label="开卡日期"
               placeholder="请选择"
@@ -50,7 +50,7 @@
               @click="showOpenDatePicker = true"
               :rules="[{ required: true, message: '请选择开卡日期' }]"
             />
-            <van-field
+            <app-field
               v-model="formData.expireDate"
               label="过期日期"
               placeholder="请选择"
@@ -66,52 +66,48 @@
         <div class="form-section">
           <div class="section-title">卡片外观</div>
           <van-cell-group inset>
-            <van-field label="卡片颜色">
-              <template #input>
-                <div class="color-picker">
-                  <div
-                    v-for="color in colorOptions"
-                    :key="color.value"
-                    class="color-option"
-                    :class="{ active: formData.color === color.value }"
-                    :style="{ background: color.value }"
-                    @click="formData.color = color.value"
-                  >
-                    <van-icon
-                      v-if="formData.color === color.value"
-                      name="success"
-                      color="#fff"
-                    />
-                  </div>
-                  <!-- 自定义颜色 -->
-                  <div class="color-custom">
-                    <input
-                      type="color"
-                      v-model="formData.color"
-                      class="color-input"
-                      title="自定义颜色"
-                    />
-                  </div>
+            <app-field label="卡片颜色">
+              <div class="color-picker">
+                <div
+                  v-for="color in colorOptions"
+                  :key="color.value"
+                  class="color-option"
+                  :class="{ active: formData.color === color.value }"
+                  :style="{ background: color.value }"
+                  @click="formData.color = color.value"
+                >
+                  <van-icon
+                    v-if="formData.color === color.value"
+                    name="success"
+                    color="#fff"
+                  />
                 </div>
-              </template>
-            </van-field>
+                <!-- 自定义颜色 -->
+                <div class="color-custom">
+                  <input
+                    type="color"
+                    v-model="formData.color"
+                    class="color-input"
+                    title="自定义颜色"
+                  />
+                </div>
+              </div>
+            </app-field>
           </van-cell-group>
           <van-cell-group inset>
-            <van-field label="自定义颜色">
-              <template #input>
-                <div class="color-picker">
-                  <!-- 自定义颜色 -->
-                  <div class="color-custom">
-                    <input
-                      type="color"
-                      v-model="formData.color"
-                      class="color-input"
-                      title="自定义颜色"
-                    />
-                  </div>
+            <app-field label="自定义颜色">
+              <div class="color-picker">
+                <!-- 自定义颜色 -->
+                <div class="color-custom">
+                  <input
+                    type="color"
+                    v-model="formData.color"
+                    class="color-input"
+                    title="自定义颜色"
+                  />
                 </div>
-              </template>
-            </van-field>
+              </div>
+            </app-field>
           </van-cell-group>
         </div>
       </div>
@@ -124,7 +120,7 @@
             信用卡专属信息 <span class="required-hint">*为必填</span>
           </div>
           <van-cell-group inset>
-            <van-field
+            <app-field
               v-model="formData.billDay"
               label="账单日"
               placeholder="如：5"
@@ -132,10 +128,9 @@
               clickable
               @click="openKeyboard('billDay')"
               :rules="[{ required: true, message: '请输入账单日（1-31）' }]"
-            >
-              <template #suffix>日</template>
-            </van-field>
-            <van-field
+              suffix="日"
+            />
+            <app-field
               v-model="formData.repayDay"
               label="还款日"
               placeholder="如：25"
@@ -143,10 +138,9 @@
               clickable
               @click="openKeyboard('repayDay')"
               :rules="[{ required: true, message: '请输入还款日（1-31）' }]"
-            >
-              <template #suffix>日</template>
-            </van-field>
-            <van-field
+              suffix="日"
+            />
+            <app-field
               v-model="formData.annualFee"
               label="年费"
               placeholder="如：0"
@@ -154,10 +148,9 @@
               clickable
               @click="openKeyboard('annualFee')"
               :rules="[{ required: true, message: '请输入年费' }]"
-            >
-              <template #button>元</template>
-            </van-field>
-            <van-field
+              suffix="元"
+            />
+            <app-field
               v-model="formData.feeFreeRule"
               label="免年费规则"
               placeholder="如：刷6次免年费"
@@ -173,7 +166,7 @@
             额度信息 <span class="required-hint">*为必填</span>
           </div>
           <van-cell-group inset>
-            <van-field
+            <app-field
               v-model="formData.creditLimit"
               label="信用额度"
               placeholder="请输入信用额度"
@@ -181,10 +174,9 @@
               clickable
               @click="openKeyboard('creditLimit')"
               :rules="[{ required: true, message: '请输入信用额度' }]"
-            >
-              <template #button>元</template>
-            </van-field>
-            <van-field
+              suffix="元"
+            />
+            <app-field
               v-model="formData.tempLimit"
               label="临时额度"
               placeholder="请输入临时额度"
@@ -192,9 +184,8 @@
               clickable
               @click="openKeyboard('tempLimit')"
               :rules="[{ required: true, message: '请输入临时额度' }]"
-            >
-              <template #button>元</template>
-            </van-field>
+              suffix="元"
+            />
           </van-cell-group>
         </div>
 
@@ -202,22 +193,19 @@
         <div class="form-section">
           <div class="section-title">积分与提醒</div>
           <van-cell-group inset>
-            <van-field
+            <app-field
               v-model="formData.pointsRate"
               label="积分倍率"
               placeholder="如: 1"
               readonly
               clickable
               @click="openKeyboard('pointsRate')"
-            >
-              <template #suffix>倍</template>
-            </van-field>
-            <van-field label="还款提醒">
-              <template #input>
-                <van-switch v-model="formData.remindSwitch" size="20" />
-              </template>
-            </van-field>
-            <van-field
+              suffix="倍"
+            />
+            <app-field label="还款提醒">
+              <van-switch v-model="formData.remindSwitch" size="20" />
+            </app-field>
+            <app-field
               v-model="formData.remindDays"
               label="提前提醒"
               placeholder="请输入天数"
@@ -225,9 +213,8 @@
               clickable
               :disabled="!formData.remindSwitch"
               @click="formData.remindSwitch && openKeyboard('remindDays')"
-            >
-              <template #suffix>天</template>
-            </van-field>
+              suffix="天"
+            />
           </van-cell-group>
         </div>
 
@@ -244,7 +231,7 @@
         <div class="form-section">
           <div class="section-title">卡片设置</div>
           <van-cell-group inset>
-            <van-field
+            <app-field
               v-model="formData.cardLevel"
               label="卡等级"
               placeholder="请选择"
@@ -252,21 +239,21 @@
               readonly
               @click="showCardLevelPicker = true"
             />
-            <van-field
+            <app-field
               v-model="formData.mainSub"
               label="主副卡"
               is-link
               readonly
               @click="showMainSubPicker = true"
             />
-            <van-field
+            <app-field
               v-model="formData.cardOrg"
               label="卡组织"
               is-link
               readonly
               @click="showCardOrgPicker = true"
             />
-            <van-field
+            <app-field
               v-model="formData.cardLength"
               label="卡号长度"
               placeholder="默认16位"
@@ -274,7 +261,7 @@
               clickable
               @click="openKeyboard('cardLength')"
             />
-            <van-field
+            <app-field
               v-model="formData.alias"
               label="卡片别名"
               placeholder="如：工资卡、留学卡"
@@ -285,40 +272,36 @@
         <div class="form-section">
           <div class="section-title">状态设置</div>
           <van-cell-group inset>
-            <van-field
+            <app-field
               v-model="formData.currency"
               label="币种"
               placeholder="默认CNY"
             />
-            <van-field
+            <app-field
               v-model="formData.status"
               label="卡片状态"
               is-link
               readonly
               @click="showStatusPicker = true"
             />
-            <van-field name="isDefault" label="设为默认卡">
-              <template #input>
-                <van-switch v-model="formData.isDefault" size="20" />
-              </template>
-            </van-field>
-            <van-field name="isHide" label="隐藏卡片">
-              <template #input>
-                <van-switch v-model="formData.isHide" size="20" />
-              </template>
-            </van-field>
+            <app-field name="isDefault" label="设为默认卡">
+              <van-switch v-model="formData.isDefault" size="20" />
+            </app-field>
+            <app-field name="isHide" label="隐藏卡片">
+              <van-switch v-model="formData.isHide" size="20" />
+            </app-field>
           </van-cell-group>
         </div>
 
         <div class="form-section">
           <div class="section-title">备注</div>
           <van-cell-group inset>
-            <van-field
+            <app-field
               v-model="formData.tag"
               label="标签"
               placeholder="如：日常消费、出国使用"
             />
-            <van-field
+            <app-field
               v-model="formData.remark"
               label="备注"
               type="textarea"
@@ -340,39 +323,39 @@
 
         <!-- 卡片信息确认 -->
         <van-cell-group inset title="卡片信息">
-          <van-cell title="银行" :value="formData.bankName || '-'" />
-          <van-cell
+          <app-cell title="银行" :value="formData.bankName || '-'" />
+          <app-cell
             title="卡号后4位"
             :value="formData.last4No ? '****' + formData.last4No : '-'"
           />
-          <van-cell
+          <app-cell
             title="卡BIN"
             :value="formData.cardBin ? formData.cardBin + '******' : '-'"
           />
-          <van-cell title="开卡日期" :value="formData.openDate || '-'" />
-          <van-cell title="过期日期" :value="formData.expireDate || '-'" />
+          <app-cell title="开卡日期" :value="formData.openDate || '-'" />
+          <app-cell title="过期日期" :value="formData.expireDate || '-'" />
         </van-cell-group>
 
         <!-- 信用卡专属确认 -->
         <van-cell-group inset title="信用卡专属">
-          <van-cell
+          <app-cell
             title="账单日"
             :value="formData.billDay ? '每月' + formData.billDay + '日' : '-'"
           />
-          <van-cell
+          <app-cell
             title="还款日"
             :value="formData.repayDay ? '每月' + formData.repayDay + '日' : '-'"
           />
-          <van-cell
+          <app-cell
             title="年费"
             :value="formData.annualFee ? formData.annualFee + '元' : '-'"
           />
-          <van-cell title="免年费规则" :value="formData.feeFreeRule || '-'" />
-          <van-cell
+          <app-cell title="免年费规则" :value="formData.feeFreeRule || '-'" />
+          <app-cell
             title="信用额度"
             :value="formData.creditLimit ? formData.creditLimit + '元' : '-'"
           />
-          <van-cell
+          <app-cell
             title="临时额度"
             :value="formData.tempLimit ? formData.tempLimit + '元' : '0元'"
           />
@@ -380,9 +363,9 @@
 
         <!-- 卡片设置确认 -->
         <van-cell-group inset title="卡片设置">
-          <van-cell title="卡片别名" :value="formData.alias || '-'" />
-          <van-cell title="卡片状态" :value="formData.status" />
-          <van-cell title="默认卡" :value="formData.isDefault ? '是' : '否'" />
+          <app-cell title="卡片别名" :value="formData.alias || '-'" />
+          <app-cell title="卡片状态" :value="formData.status" />
+          <app-cell title="默认卡" :value="formData.isDefault ? '是' : '否'" />
         </van-cell-group>
 
         <div class="tip-box">
@@ -395,7 +378,7 @@
 
     <!-- 底部按钮 -->
     <div class="footer-bar">
-      <van-button
+      <app-button
         v-if="currentStep > 0"
         plain
         class="prev-btn"
@@ -403,10 +386,10 @@
         @click="prevStep"
       >
         <van-icon name="arrow-left" /> 上一步
-      </van-button>
+      </app-button>
 
       <!-- 步骤1-3: 下一步 -->
-      <van-button
+      <app-button
         v-if="currentStep < 3"
         type="primary"
         class="next-btn"
@@ -414,10 +397,10 @@
         @click="nextStep"
       >
         下一步 <van-icon name="arrow" />
-      </van-button>
+      </app-button>
 
       <!-- 步骤4: 提交卡片 -->
-      <van-button
+      <app-button
         v-if="currentStep === 3"
         type="primary"
         class="submit-btn"
@@ -427,48 +410,60 @@
         @click="submitCard"
       >
         提交卡片
-      </van-button>
+      </app-button>
     </div>
 
     <!-- ========== 选择器弹窗 ========== -->
     <!-- 银行选择 -->
-    <van-popup v-model:show="showBankPicker" position="bottom">
+    <app-popup v-model:show="showBankPicker" position="bottom">
       <van-picker
         :columns="bankColumns"
         @confirm="onBankConfirm"
         @cancel="showBankPicker = false"
       />
-    </van-popup>
+    </app-popup>
 
     <!-- 主副卡选择 -->
-    <van-popup v-model:show="showMainSubPicker" position="bottom">
+    <app-popup v-model:show="showMainSubPicker" position="bottom">
       <van-picker
         :columns="mainSubColumns"
         @confirm="onMainSubConfirm"
         @cancel="showMainSubPicker = false"
       />
-    </van-popup>
+    </app-popup>
 
-    <!-- 卡组织选择 -->
-    <van-popup v-model:show="showCardOrgPicker" position="bottom">
-      <van-picker
-        :columns="cardOrgColumns"
-        @confirm="onCardOrgConfirm"
-        @cancel="showCardOrgPicker = false"
-      />
-    </van-popup>
+    <!-- 卡组织选择（左侧带 org 图标） -->
+    <app-popup v-model:show="showCardOrgPicker" position="bottom" round>
+      <div class="org-picker">
+        <div class="org-picker-title">选择卡组织</div>
+        <div
+          class="org-picker-item"
+          v-for="col in cardOrgColumns"
+          :key="col.value"
+          @click="onCardOrgConfirm(col)"
+        >
+          <CardOrgIcon :org="ORG_NAME_MAP[col.value]" small :filled="true" />
+          <span class="org-picker-label">{{ col.text }}</span>
+          <van-icon
+            v-if="formData.cardOrg === col.value"
+            name="success"
+            class="org-picker-check"
+          />
+        </div>
+      </div>
+    </app-popup>
 
     <!-- 卡片状态选择 -->
-    <van-popup v-model:show="showStatusPicker" position="bottom">
+    <app-popup v-model:show="showStatusPicker" position="bottom">
       <van-picker
         :columns="statusColumns"
         @confirm="onStatusConfirm"
         @cancel="showStatusPicker = false"
       />
-    </van-popup>
+    </app-popup>
 
     <!-- 开卡日期 -->
-    <van-popup v-model:show="showOpenDatePicker" position="bottom">
+    <app-popup v-model:show="showOpenDatePicker" position="bottom">
       <van-date-picker
         v-model="openDate"
         type="date"
@@ -478,10 +473,10 @@
         @confirm="onOpenDateConfirm"
         @cancel="showOpenDatePicker = false"
       />
-    </van-popup>
+    </app-popup>
 
     <!-- 过期日期 -->
-    <van-popup v-model:show="showExpireDatePicker" position="bottom">
+    <app-popup v-model:show="showExpireDatePicker" position="bottom">
       <van-date-picker
         v-model="expireDate"
         type="year-month"
@@ -491,10 +486,10 @@
         @confirm="onExpireDateConfirm"
         @cancel="showExpireDatePicker = false"
       />
-    </van-popup>
+    </app-popup>
 
     <!-- 账单开始日期 -->
-    <van-popup v-model:show="showStartDatePicker" position="bottom">
+    <app-popup v-model:show="showStartDatePicker" position="bottom">
       <van-date-picker
         v-model="startDate"
         type="date"
@@ -502,10 +497,10 @@
         @confirm="onStartDateConfirm"
         @cancel="showStartDatePicker = false"
       />
-    </van-popup>
+    </app-popup>
 
     <!-- 账单结束日期 -->
-    <van-popup v-model:show="showEndDatePicker" position="bottom">
+    <app-popup v-model:show="showEndDatePicker" position="bottom">
       <van-date-picker
         v-model="endDate"
         type="date"
@@ -513,16 +508,16 @@
         @confirm="onEndDateConfirm"
         @cancel="showEndDatePicker = false"
       />
-    </van-popup>
+    </app-popup>
 
     <!-- 卡等级选择 -->
-    <van-popup v-model:show="showCardLevelPicker" position="bottom">
+    <app-popup v-model:show="showCardLevelPicker" position="bottom">
       <van-picker
         :columns="cardLevelColumns"
         @confirm="onCardLevelConfirm"
         @cancel="showCardLevelPicker = false"
       />
-    </van-popup>
+    </app-popup>
 
     <!-- 数字键盘 -->
     <van-number-keyboard
@@ -550,6 +545,8 @@ import {
 import { useRouter } from "vue-router";
 import { createCard } from "@/utils/api/card";
 import { categoryApi } from "@/utils/api/category";
+import CardOrgIcon from "@/components/BankCard/org/CardOrgIcon.vue";
+import { ORG_NAME_MAP } from "@/components/BankCard/org/orgMap.js";
 
 const router = useRouter();
 const loading = ref(false);
@@ -631,9 +628,10 @@ const mainSubColumns = [
 ];
 const cardOrgColumns = [
   { text: "银联", value: "银联" },
+  { text: "万事达", value: "万事达" },
   { text: "Visa", value: "Visa" },
-  { text: "Mastercard", value: "Mastercard" },
-  { text: "American Express", value: "American Express" },
+  { text: "运通", value: "运通" },
+  { text: "大莱", value: "大莱" },
   { text: "JCB", value: "JCB" },
 ];
 const statusColumns = [
@@ -654,7 +652,13 @@ const cardLevelColumns = [
 // ========== 日期配置 ==========
 const minDate = new Date(2000, 0, 1);
 const maxDate = new Date(2050, 11, 31);
-const openDate = reactive(["2024", "01", "01"]);
+// 开卡日期默认今年今日
+const _today = new Date();
+const openDate = reactive([
+  String(_today.getFullYear()),
+  String(_today.getMonth() + 1).padStart(2, "0"),
+  String(_today.getDate()).padStart(2, "0"),
+]);
 const expireDate = reactive(["2030", "12"]);
 const startDate = reactive(["2024", "01", "01"]);
 const endDate = reactive(["2024", "01", "31"]);
@@ -813,8 +817,8 @@ const onMainSubConfirm = ({ selectedOptions }) => {
   showMainSubPicker.value = false;
 };
 
-const onCardOrgConfirm = ({ selectedOptions }) => {
-  formData.cardOrg = selectedOptions[0].value;
+const onCardOrgConfirm = (col) => {
+  formData.cardOrg = col.value;
   showCardOrgPicker.value = false;
 };
 
@@ -1001,12 +1005,12 @@ onMounted(() => {
 <style scoped>
 .page-credit-full {
   min-height: 100vh;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   padding-bottom: 80px;
 }
 
 .steps-wrap {
-  background: #fff;
+  background: var(--theme-bg-secondary);
   padding: 16px;
   display: flex;
   justify-content: center;
@@ -1014,7 +1018,7 @@ onMounted(() => {
 
 .step-indicator {
   font-size: 16px;
-  color: #07c160;
+  color: var(--van-green, #07c160);
   font-weight: 600;
 }
 
@@ -1043,47 +1047,47 @@ onMounted(() => {
 
 .section-title {
   font-size: 14px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   padding: 12px 16px 8px;
   display: flex;
   align-items: center;
 }
 
 .credit-title {
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
 }
 
 .confirm-title {
-  color: #07c160;
+  color: var(--van-green, #07c160);
 }
 
 .required-hint {
   font-size: 12px;
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
   margin-left: 8px;
 }
 
 .tip-box {
   display: flex;
   align-items: flex-start;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   margin: 12px 16px;
   padding: 12px;
   border-radius: 8px;
   font-size: 13px;
-  color: #646566;
+  color: var(--theme-text-secondary);
   line-height: 1.6;
 }
 
 .tip-box .van-icon {
   margin-right: 8px;
   margin-top: 2px;
-  color: #1989fa;
+  color: var(--theme-primary);
 }
 
 .tip-box.tip-highlight {
-  background: #fff7e6;
-  border: 1px solid #ffe1b3;
+  background: var(--van-orange-bg, #fff7e6);
+  border: 1px solid rgba(255, 151, 106, 0.4);
 }
 
 .color-picker {
@@ -1132,7 +1136,7 @@ onMounted(() => {
 }
 
 .color-input::-webkit-color-swatch {
-  border: 2px solid #ebedf0;
+  border: 1px solid var(--theme-border);
   border-radius: 50%;
 }
 
@@ -1142,7 +1146,7 @@ onMounted(() => {
   bottom: 0;
   left: 0;
   right: 0;
-  background: #fff;
+  background: var(--theme-bg-secondary);
   padding: 12px 16px;
   padding-bottom: calc(12px + env(safe-area-inset-bottom));
   display: flex;
@@ -1162,5 +1166,39 @@ onMounted(() => {
 .next-btn,
 .submit-btn {
   flex: 1;
+}
+
+/* 卡组织选择器：左侧 org 图标 + 文字 */
+.org-picker {
+  background: var(--theme-bg-primary);
+  padding: 8px 0 16px;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+.org-picker-title {
+  text-align: center;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--theme-text-primary);
+  padding: 12px 0 8px;
+}
+.org-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 20px;
+  cursor: pointer;
+}
+.org-picker-item:active {
+  background: var(--theme-bg-secondary);
+}
+.org-picker-label {
+  flex: 1;
+  font-size: 15px;
+  color: var(--theme-text-primary);
+}
+.org-picker-check {
+  color: var(--theme-primary);
+  font-size: 18px;
 }
 </style>

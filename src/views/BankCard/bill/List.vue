@@ -1,30 +1,37 @@
 <template>
   <div class="page-bill-list">
 
-    <!-- 卡片选择 -->
+    <!-- 过滤条件：左月份 右卡片 -->
     <div class="filter-section">
       <van-cell-group inset>
-        <van-field
-          v-model="selectedCardName"
-          label="选择卡片"
-          placeholder="全部卡片"
-          is-link
-          readonly
-          @click="showCardPicker = true"
-        />
-        <van-field
-          v-model="monthText"
-          label="代还月份"
-          placeholder="请选择月份"
-          is-link
-          readonly
-          @click="showMonthPicker = true"
-        />
+        <div class="bill-filter-row">
+          <app-field
+            v-model="monthText"
+            label="代还月份"
+            placeholder="请选择月份"
+            is-link
+            readonly
+            borderless
+            class="bill-filter-item"
+            @click="showMonthPicker = true"
+          />
+          <div class="bill-filter-sep"></div>
+          <app-field
+            v-model="selectedCardName"
+            label="选择卡片"
+            placeholder="全部卡片"
+            is-link
+            readonly
+            borderless
+            class="bill-filter-item"
+            @click="showCardPicker = true"
+          />
+        </div>
       </van-cell-group>
     </div>
 
     <!-- 月份选择器 -->
-    <van-popup v-model:show="showMonthPicker" position="bottom" round>
+    <app-popup v-model:show="showMonthPicker" position="bottom" round>
       <van-picker
         v-model="selectedValues"
         title="选择月份"
@@ -32,7 +39,7 @@
         @confirm="onPickerConfirm"
         @cancel="showMonthPicker = false"
       />
-    </van-popup>
+    </app-popup>
 
     <!-- 账单列表 -->
     <div class="bill-list" v-if="billList.length > 0">
@@ -45,14 +52,15 @@
         <div class="bill-header">
           <div class="bill-info">
             <div class="bill-name-row">
-              <img 
-                v-if="getCardBankIcon(item)" 
-                :src="getFullUrl(getCardBankIcon(item))" 
+              <BankIcon
+                :src="getFullUrl(getCardBankIcon(item))"
+                :name="getCardBankName(item)"
+                :size="22"
                 class="bank-icon"
               />
               <span class="bill-card-name">{{ getCardDisplayName(item) }}</span>
               <span class="bill-card-last4" v-if="item.card_last4">**** {{ item.card_last4 }}</span>
-              <van-button size="mini" plain type="primary" class="detail-btn" @click.stop="goToLedger(item)">明细</van-button>
+              <app-button size="mini" plain type="primary" class="detail-btn" @click.stop="goToLedger(item)">明细</app-button>
             </div>
             <div class="bill-fee-info">
               <span>年费 ¥{{ formatMoney(item.annual_fee) }}</span>
@@ -61,9 +69,9 @@
             </div>
           </div>
           <div class="bill-status-col">
-            <van-tag :type="getStatusType(item)" :class="{ 'tag-normal': getStatusType(item) === '' }">
+            <app-tag :type="getStatusType(item)" :class="{ 'tag-normal': getStatusType(item) === '' }">
               {{ getStatusText(item) }}
-            </van-tag>
+            </app-tag>
             <div class="status-extra" v-if="getStatusExtra(item)">
               {{ getStatusExtra(item) }}
             </div>
@@ -101,30 +109,30 @@
           <div class="bill-day-info">
             <div class="limit-row">
               <span>本月账单日</span>
-              <span style="color: red;">{{ item.bill_day }}</span>号
+              <span style="color: var(--van-danger-color);">{{ item.bill_day }}</span>号
             </div>
             <div class="limit-row">
               <span>次月还款日</span>
-              <span style="color: red;">{{ item.repay_day }}</span>号
+              <span style="color: var(--van-danger-color);">{{ item.repay_day }}</span>号
             </div>
           </div>
           <div class="bill-actions">
-            <van-button
+            <app-button
               size="small"
               plain
               round
               @click.stop="refreshBill(item, $event)"
             >
               刷新账单
-            </van-button>
-            <van-button
+            </app-button>
+            <app-button
               size="small"
               type="danger"
               round
               @click.stop="goToRepay(item)"
             >
               立即还款
-            </van-button>
+            </app-button>
           </div>
         </div>
       </div>
@@ -147,13 +155,13 @@
     </van-overlay>
 
     <!-- 卡片选择器 -->
-    <van-popup v-model:show="showCardPicker" position="bottom">
+    <app-popup v-model:show="showCardPicker" position="bottom">
       <van-picker
         :columns="cardColumns"
         @confirm="onCardConfirm"
         @cancel="showCardPicker = false"
       />
-    </van-popup>
+    </app-popup>
   </div>
 </template>
 
@@ -165,6 +173,7 @@ import dayjs from "dayjs";
 import { getBillList, getCardList, rebuildBill } from "@/utils/api/card";
 import { categoryApi } from "@/utils/api/category";
 import ENV from "@/utils/env";
+import BankIcon from "@/components/BankIcon.vue";
 
 const BASE_URL = ENV.FILE_BASE_URL;
 
@@ -349,10 +358,7 @@ const getStatusText = (item) => getBillStatus(item).text
 const getStatusExtra = (item) => getBillStatus(item).extra
 
 // 格式化金额
-const formatMoney = (amount) => {
-  if (amount === null || amount === undefined) return "0.00";
-  return Number(amount).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-};
+import { formatMoney } from "@/utils/money";
 
 // 格式化日期 - 只显示天数
 const formatDay = (date) => {
@@ -383,7 +389,17 @@ const getCardBankIcon = (item) => {
   const bankId = card.bank_id || card.bankId;
   if (!bankId) return "";
   const bank = getBankInfo(bankId);
-  return bank?.icon || bank?.image || "";
+  return bank?.icon_url || bank?.iconUrl || bank?.icon || bank?.image || "";
+};
+
+// 获取卡片关联的银行名称（图标失败时首字兜底）
+const getCardBankName = (item) => {
+  const card = cardList.value.find(c => c.id === item.card_id);
+  if (!card) return "";
+  const bankId = card.bank_id || card.bankId;
+  if (!bankId) return "";
+  const bank = getBankInfo(bankId);
+  return bank?.name || bank?.bank_name || card.bank_name || "";
 };
 
 // 获取卡片显示名称
@@ -464,12 +480,12 @@ onMounted(() => {
 <style scoped>
 .page-bill-list {
   min-height: 100vh;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   padding-bottom: 100px;
 }
 
 .page-header {
-  background: #fff;
+  background: var(--theme-bg-secondary);
 }
 
 .filter-section {
@@ -481,7 +497,7 @@ onMounted(() => {
 }
 
 .bill-card {
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 12px;
   padding: 16px;
   margin-bottom: 12px;
@@ -517,12 +533,12 @@ onMounted(() => {
 .bill-card-name {
   font-size: 16px;
   font-weight: 600;
-  color: #333;
+  color: var(--theme-text-primary);
 }
 
 .bill-card-last4 {
   font-size: 12px;
-  color: #999;
+  color: var(--theme-text-tertiary);
 }
 
 .detail-btn {
@@ -532,7 +548,7 @@ onMounted(() => {
 
 .bill-fee-info {
   font-size: 11px;
-  color: #999;
+  color: var(--theme-text-tertiary);
   margin-top: 4px;
   display: flex;
   align-items: center;
@@ -540,7 +556,7 @@ onMounted(() => {
 }
 
 .fee-divider {
-  color: #ddd;
+  color: var(--theme-text-tertiary);
 }
 
 .bill-body {
@@ -558,22 +574,22 @@ onMounted(() => {
 
 .repay-label {
   font-size: 12px;
-  color: #999;
+  color: var(--theme-text-tertiary);
   margin-bottom: 4px;
 }
 
 .repay-value {
   font-size: 20px;
   font-weight: 600;
-  color: #333;
+  color: var(--theme-text-primary);
 }
 
 .repay-value.overdue {
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
 }
 
 .repay-value.danger {
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
 }
 
 .bill-limit-small {
@@ -583,7 +599,7 @@ onMounted(() => {
   justify-content: center;
   gap: 4px;
   padding-right: 12px;
-  border-right: 1px solid #f0f0f0;
+  border: 1px solid var(--theme-border);
 }
 
 .limit-row {
@@ -591,11 +607,11 @@ onMounted(() => {
   justify-content: space-between;
   gap: 8px;
   font-size: 11px;
-  color: #999;
+  color: var(--theme-text-tertiary);
 }
 
 .limit-row span:last-child {
-  color: #666;
+  color: var(--theme-text-secondary);
 }
 
 .bill-amount-right {
@@ -610,7 +626,7 @@ onMounted(() => {
 }
 
 .tag-normal {
-  background: #1989fa !important;
+  background: var(--theme-primary) !important;
   color: #fff !important;
 }
 
@@ -623,7 +639,7 @@ onMounted(() => {
 
 .status-extra {
   font-size: 10px;
-  color: #999;
+  color: var(--theme-text-tertiary);
   white-space: nowrap;
 }
 
@@ -632,7 +648,7 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   padding-top: 12px;
-  border-top: 1px solid #f5f5f5;
+  border: 1px solid var(--theme-border);
 }
 
 .bill-day-info {
@@ -650,7 +666,21 @@ onMounted(() => {
   display: flex;
   gap: 12px;
   font-size: 12px;
-  color: #999;
+  color: var(--theme-text-tertiary);
+}
+
+.bill-filter-row {
+  display: flex;
+  align-items: stretch;
+}
+.bill-filter-item {
+  flex: 1;
+  min-width: 0;
+}
+.bill-filter-sep {
+  width: 1px;
+  background: var(--theme-border);
+  margin: 12px 0;
 }
 
 .add-btn-wrap {
@@ -664,7 +694,7 @@ onMounted(() => {
 .glass-add-btn {
   width: 100%;
   height: 56px;
-  background: #1989fa;
+  background: var(--theme-primary);
   color: #fff;
   border: none;
   border-radius: 28px;

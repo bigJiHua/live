@@ -6,7 +6,7 @@
           <van-icon
             name="shield-o"
             size="48"
-            :color="hasPinSet ? '#07c160' : '#FC9000'"
+            :color="hasPinSet ? 'var(--van-green, #07c160)' : 'var(--van-orange)'"
           />
         </div>
         <div class="status-info">
@@ -29,7 +29,7 @@
       <div class="action-section">
         <div class="section-title">操作选项</div>
         <van-cell-group inset class="app-card">
-          <van-cell
+          <app-cell
             v-if="!hasPinSet"
             title="设置 PIN 码"
             icon="lock"
@@ -40,8 +40,8 @@
             <template #right-icon>
               <van-icon name="arrow" color="#969799" />
             </template>
-          </van-cell>
-          <van-cell
+          </app-cell>
+          <app-cell
             v-if="hasPinSet"
             title="修改 PIN 码"
             icon="edit"
@@ -52,8 +52,8 @@
             <template #right-icon>
               <van-icon name="arrow" color="#969799" />
             </template>
-          </van-cell>
-          <van-cell
+          </app-cell>
+          <app-cell
             v-if="hasPinSet"
             title="关闭 PIN 码"
             icon="cross"
@@ -64,7 +64,7 @@
             <template #right-icon>
               <van-icon name="arrow" color="#969799" />
             </template>
-          </van-cell>
+          </app-cell>
         </van-cell-group>
       </div>
 
@@ -72,14 +72,14 @@
         <van-notice-bar
           left-icon="info-o"
           text="PIN 码用于保护您的敏感操作，请妥善保管，不要告知他人。"
-          background="#fff7e6"
-          color="#ff9900"
+          :background="'var(--van-orange-bg)'"
+          :color="'var(--van-orange)'"
         />
       </div>
     </div>
 
     <!-- 关闭 PIN 验证弹窗 -->
-    <van-dialog
+    <app-dialog
       v-model:show="showDisableDialog"
       title="关闭 PIN 码"
       show-cancel-button
@@ -97,7 +97,7 @@
         />
         <div v-if="disableError" class="error-text">{{ disableError }}</div>
       </div>
-    </van-dialog>
+    </app-dialog>
 
     <!-- 安全键盘 -->
     <div
@@ -118,7 +118,7 @@ import { ref, watch, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { showToast } from "vant";
 import { securityApi } from "@/utils/api/security";
-import SafeKeyboard from "@/components/Keyboard/index.vue";
+import SafeKeyboard from "@/components/KeyBoard/index.vue";
 
 const router = useRouter();
 
@@ -197,7 +197,7 @@ const onDisableDialogClose = async (action) => {
   // 关闭键盘
   showDisableKeyboard.value = false;
 
-  if (action === "cancel") {
+  if (action === "cancel" || action === "overlay") {
     disablePin.value = "";
     disableError.value = "";
     return true;
@@ -232,7 +232,7 @@ const onDisableDialogClose = async (action) => {
 <style scoped>
 .page-pin-manage {
   min-height: 100vh;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   padding-top: 0;
 }
 
@@ -243,7 +243,7 @@ const onDisableDialogClose = async (action) => {
 
 /* 状态卡片 */
 .status-card {
-  background: white;
+  background: var(--theme-bg-secondary);
   border-radius: 16px;
   padding: 24px;
   display: flex;
@@ -257,7 +257,7 @@ const onDisableDialogClose = async (action) => {
   width: 72px;
   height: 72px;
   border-radius: 50%;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -272,13 +272,13 @@ const onDisableDialogClose = async (action) => {
 .status-title {
   font-size: 18px;
   font-weight: bold;
-  color: #323233;
+  color: var(--theme-text-primary);
   margin-bottom: 8px;
 }
 
 .status-desc {
   font-size: 14px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   line-height: 1.5;
 }
 
@@ -289,14 +289,14 @@ const onDisableDialogClose = async (action) => {
   padding: 4px 12px;
   border-radius: 12px;
   font-size: 12px;
-  background: #f2f3f5;
-  color: #969799;
+  background: var(--theme-bg-tertiary);
+  color: var(--theme-text-tertiary);
   font-weight: 500;
 }
 
 .status-badge.enabled {
-  background: #e8f9f0;
-  color: #07c160;
+  background: var(--van-green-bg, #e8f9f0);
+  color: var(--van-green, #07c160);
 }
 
 /* 操作区域 */
@@ -307,7 +307,7 @@ const onDisableDialogClose = async (action) => {
 .section-title {
   padding: 8px 16px;
   font-size: 13px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   font-weight: 500;
   margin-bottom: 8px;
 }
@@ -324,12 +324,12 @@ const onDisableDialogClose = async (action) => {
 
 .dialog-tip {
   font-size: 14px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   margin-bottom: 16px;
 }
 
 .error-text {
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
   font-size: 12px;
   margin-top: 8px;
 }
@@ -345,8 +345,8 @@ const onDisableDialogClose = async (action) => {
 /* 1. 选中每一个 PIN 码的格子 */
 :deep(.van-password-input__item) {
   /* 基础边框 */
-  border: 1px solid #acabab !important; /* Vant 的标准灰色边框色 */
-  background-color: #ffffff; /* 强制白色背景，防止看不见 */
+  border: 1px solid var(--theme-border) !important; /* 跟随主题边框色 */
+  background-color: var(--theme-bg-secondary); /* 跟随主题背景 */
   border-radius: 6px; /* 让格子稍微圆润一点 */
   transition: all 0.2s; /* 增加过渡动画，更好看 */
   flex: 1; /* 均匀分配空间 */
@@ -357,14 +357,14 @@ const onDisableDialogClose = async (action) => {
 /* 2. 选中“聚焦”状态下的格子（当前正在输入的那个格子） */
 :deep(.van-password-input__item--focus) {
   /* 聚焦时改变边框颜色，提示用户 */
-  border-color: var(--app-primary, #07c160) !important; /* 使用你的主题色 */
+  border-color: var(--app-primary) !important; /* 使用你的主题色 */
   /* 增加一个淡淡的呼吸灯阴影效果 (可选) */
-  box-shadow: 0 0 8px rgba(7, 193, 96, 0.2);
+  box-shadow: 0 0 8px var(--theme-shadow-color, rgba(7, 193, 96, 0.2));
 }
 
 /* 3. 选中格子内部的那个“闪烁光标” */
 :deep(.van-password-input__cursor) {
   /* 确保光标颜色也是主题色 (可选) */
-  background-color: var(--app-primary, #07c160) !important;
+  background-color: var(--app-primary) !important;
 }
 </style>

@@ -13,7 +13,7 @@
           <div class="filter-value">{{ endDate }}</div>
         </div>
       </div>
-      <van-button type="primary" round :loading="searchLoading" @click="handleSearch" class="btn-search">查询</van-button>
+      <app-button type="primary" round :loading="searchLoading" @click="handleSearch" class="btn-search">查询</app-button>
     </div>
 
     <!-- Layer 2: 收支/分类/方式 -->
@@ -42,7 +42,7 @@
         </div>
         <div v-if="quickDate" class="qd-reset" @click="quickDate = null">全部</div>
       </div>
-      <van-button v-if="resultList.length > 0" plain round @click="handleExport" class="btn-export">导出 Excel</van-button>
+      <app-button v-if="resultList.length > 0" plain round @click="handleExport" class="btn-export">导出 Excel</app-button>
     </div>
 
     <!-- 结果 -->
@@ -126,11 +126,11 @@
     </div>
 
     <!-- Pickers -->
-    <van-calendar v-model:show="showCalendar" type="range" :min-date="minDate" :max-date="maxDate" @confirm="onDateConfirm" />
-    <van-popup v-model:show="showDirPicker" position="bottom" round>
+    <van-calendar v-model:show="showCalendar" type="range" :min-date="minDate" :max-date="maxDate" :color="'var(--theme-primary)'" @confirm="onDateConfirm" />
+    <app-popup v-model:show="showDirPicker" position="bottom" round>
       <van-picker :columns="dirOptions" @confirm="onDirConfirm" @cancel="showDirPicker = false" />
-    </van-popup>
-    <van-popup v-model:show="showCatPicker" position="bottom" round>
+    </app-popup>
+    <app-popup v-model:show="showCatPicker" position="bottom" round>
       <div class="category-popup">
         <div class="popup-header">
           <span>选择分类</span>
@@ -139,16 +139,16 @@
         <div class="category-list">
           <div class="category-item" :class="{ active: !selectedCat }" @click="onCatSelect(null)">
             <span class="category-name">不限</span>
-            <van-icon v-if="!selectedCat" name="success" color="#07c160" />
+            <van-icon v-if="!selectedCat" name="success" :color="'var(--theme-success)'" />
           </div>
           <div v-for="cat in displayCategories" :key="cat.id" class="category-item" :class="{ active: selectedCat?.value === cat.id }" @click="onCatSelect(cat)">
             <span class="category-name">{{ cat.name }}</span>
-            <van-icon v-if="selectedCat?.value === cat.id" name="success" color="#07c160" />
+            <van-icon v-if="selectedCat?.value === cat.id" name="success" :color="'var(--theme-success)'" />
           </div>
         </div>
       </div>
-    </van-popup>
-    <van-popup v-model:show="showMethodPicker" position="bottom" round>
+    </app-popup>
+    <app-popup v-model:show="showMethodPicker" position="bottom" round>
       <div class="category-popup">
         <div class="popup-header">
           <span>选择方式</span>
@@ -157,19 +157,19 @@
         <div class="category-list">
           <div v-for="m in methodOptions" :key="m.value" class="category-item" :class="{ active: selectedMethod === m.value }" @click="onMethodSelect(m.value)">
             <span class="category-name">{{ m.text }}</span>
-            <van-icon v-if="selectedMethod === m.value" name="success" color="#07c160" />
+            <van-icon v-if="selectedMethod === m.value" name="success" :color="'var(--theme-success)'" />
           </div>
         </div>
       </div>
-    </van-popup>
+    </app-popup>
 
     <!-- 返回顶部 -->
     <van-icon v-show="showBackTop" name="back-top" class="back-top-btn" @click="scrollToTop" />
 
     <!-- 日期跳段选择器 -->
-    <van-popup v-model:show="showQuickPicker" position="bottom" round>
+    <app-popup v-model:show="showQuickPicker" position="bottom" round>
       <van-picker v-model="quickPickerSelected" title="跳转至" :columns="quickPickerColumns" @confirm="onQuickDateConfirm" @cancel="showQuickPicker = false" />
-    </van-popup>
+    </app-popup>
   </div>
 </template>
 
@@ -818,7 +818,7 @@ onActivated(() => {
 .page-flow-filter {
   height: 90vh;
   overflow: hidden;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   display: flex;
   flex-direction: column;
 }
@@ -837,10 +837,10 @@ onActivated(() => {
   align-items: stretch;
   gap: 0;
   cursor: pointer;
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 12px;
   overflow: hidden;
-  border: 1px solid #f2f3f5;
+  border: 1px solid var(--theme-border);
 }
 
 /* 日期项 */
@@ -850,7 +850,7 @@ onActivated(() => {
   flex-direction: column;
   gap: 1px;
   padding: 4px 8px;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
 }
 
 .date-start {
@@ -869,8 +869,8 @@ onActivated(() => {
   justify-content: center;
   padding: 0 6px;
   font-size: 12px;
-  color: #969799;
-  background: #f7f8fa;
+  color: var(--theme-text-tertiary);
+  background: var(--theme-bg-primary);
 }
 
 /* Layer 2: 收支/分类/方式 */
@@ -888,19 +888,19 @@ onActivated(() => {
   cursor: pointer;
   padding: 4px 2px;
   border-radius: 8px;
-  background: #d0d0d02b;
+  background: var(--theme-bg-tertiary);
   text-align: center;
   align-items: center;
 }
 
 .filter-label {
   font-size: 11px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 
 .filter-value {
   font-size: 13px;
-  color: #323233;
+  color: var(--theme-text-primary);
   font-weight: 500;
 }
 
@@ -937,7 +937,7 @@ onActivated(() => {
   align-items: center;
   padding: 4px 0;
   font-size: 13px;
-  color: #646566;
+  color: var(--theme-text-secondary);
 }
 
 /* Layer 3: 跳至 + 导出 */
@@ -957,7 +957,7 @@ onActivated(() => {
 .qd-label {
   font-size: 15px;
   font-weight: 700;
-  color: #323233;
+  color: var(--theme-text-primary);
   flex-shrink: 0;
 }
 
@@ -967,10 +967,10 @@ onActivated(() => {
   gap: 6px;
   padding: 6px 14px;
   border-radius: 8px;
-  background: #f2f3f5;
+  background: var(--theme-bg-tertiary);
   font-size: 15px;
   font-weight: 700;
-  color: #1989fa;
+  color: var(--theme-primary);
   cursor: pointer;
   flex-shrink: 0;
 }
@@ -978,7 +978,7 @@ onActivated(() => {
 .qd-reset {
   font-size: 15px;
   font-weight: 700;
-  color: #323233;
+  color: var(--theme-text-primary);
   cursor: pointer;
   flex-shrink: 0;
 }
@@ -988,7 +988,7 @@ onActivated(() => {
 }
 
 .summary-amount .sep {
-  color: #c8c9cc;
+  color: var(--theme-text-tertiary);
   margin: 0 6px;
 }
 
@@ -1016,7 +1016,7 @@ onActivated(() => {
   align-items: center;
   gap: 6px;
   padding: 14px 8px;
-  border: 1px solid #f0f0f0;
+  border: 1px solid var(--theme-border);
   border-radius: 10px;
   cursor: pointer;
   position: relative;
@@ -1024,12 +1024,12 @@ onActivated(() => {
 }
 
 .category-item:active {
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
 }
 
 .category-item.active {
-  border-color: #07c160;
-  background: #f0fff5;
+  border-color: var(--van-green, #07c160);
+  background: var(--van-green-bg, #f0fff5);
 }
 
 .category-item .van-icon-success {
@@ -1041,7 +1041,7 @@ onActivated(() => {
 
 .category-name {
   font-size: 12px;
-  color: #323233;
+  color: var(--theme-text-primary);
   text-align: center;
   line-height: 1.3;
 }
@@ -1056,7 +1056,7 @@ onActivated(() => {
 
 .popup-header .van-icon {
   font-size: 20px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   cursor: pointer;
 }
 
@@ -1064,7 +1064,7 @@ onActivated(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: #fff;
+  background: var(--theme-bg-secondary);
   padding: 10px 14px;
   margin-top: 6px;
   border-radius: 8px;
@@ -1078,12 +1078,12 @@ onActivated(() => {
 
 .item-cat {
   font-size: 14px;
-  color: #323233;
+  color: var(--theme-text-primary);
 }
 
 .item-desc {
   font-size: 11px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   margin-top: 2px;
 }
 
@@ -1095,26 +1095,26 @@ onActivated(() => {
 }
 
 .item-amount.income {
-  color: #07c160;
+  color: var(--van-green, #07c160);
 }
 
 .item-amount.expense {
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
 }
 
 .item-date {
   font-size: 11px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   text-align: right;
   margin-top: 4px;
 }
 
 .summary-amount .income {
-  color: #07c160;
+  color: var(--van-green, #07c160);
 }
 
 .summary-amount .expense {
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
 }
 
 /* ── 日隔断 ── */
@@ -1122,25 +1122,25 @@ onActivated(() => {
   padding: 2px;
   font-size: 14px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
   position: sticky;
   top: 0;
   z-index: 5;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
 }
 
 /* ── 转账样式 ── */
 .transfer-row {
   margin-top: 8px;
   padding: 8px 12px;
-  border: 1px dashed #1989fa;
+  border: 1px dashed var(--theme-primary);
   border-radius: 10px;
-  background: #f0f7ff;
+  background: rgba(var(--theme-primary-rgb), 0.06);
 }
 
 .transfer-header {
   font-size: 11px;
-  color: #1989fa;
+  color: var(--theme-primary);
   font-weight: 600;
   text-align: center;
   margin-bottom: 8px;
@@ -1166,21 +1166,21 @@ onActivated(() => {
 }
 
 .transfer-amount.income {
-  color: #07c160;
+  color: var(--van-green, #07c160);
 }
 
 .transfer-amount.expense {
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
 }
 
 .transfer-bank {
   font-size: 12px;
-  color: #323233;
+  color: var(--theme-text-primary);
 }
 
 .transfer-arrow {
   font-size: 18px;
-  color: #1989fa;
+  color: var(--theme-primary);
   padding: 0 10px;
   flex-shrink: 0;
 }
@@ -1189,14 +1189,14 @@ onActivated(() => {
 .withdrawal-row {
   margin-top: 8px;
   padding: 8px 12px;
-  border: 1px solid #c8e6c9;
+  border: 1px solid rgba(7,193,96,0.25);
   border-radius: 10px;
-  background: #e8f5e9;
+  background: rgba(7,193,96,0.06);
 }
 
 .withdrawal-header {
   font-size: 11px;
-  color: #2e7d32;
+  color: var(--van-green);
   font-weight: 600;
   text-align: center;
   margin-bottom: 8px;
@@ -1222,21 +1222,21 @@ onActivated(() => {
 }
 
 .withdrawal-amount.income {
-  color: #2e7d32;
+  color: var(--van-green);
 }
 
 .withdrawal-amount.expense {
-  color: #2e7d32;
+  color: var(--van-green);
 }
 
 .withdrawal-bank {
   font-size: 12px;
-  color: #388e3c;
+  color: var(--van-green);
 }
 
 .withdrawal-arrow {
   font-size: 18px;
-  color: #2e7d32;
+  color: var(--van-green);
   padding: 0 10px;
   flex-shrink: 0;
 }
@@ -1245,15 +1245,15 @@ onActivated(() => {
 .reversal-row {
   margin-top: 8px;
   padding: 8px 12px;
-  border: 1px dashed #c8c9cc;
+  border: 1px dashed var(--theme-border);
   border-radius: 10px;
-  background: #f5f5f5;
+  background: var(--theme-bg-tertiary);
   opacity: 0.72;
 }
 
 .reversal-header {
   font-size: 11px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   font-weight: 600;
   text-align: center;
   margin-bottom: 8px;
@@ -1279,21 +1279,21 @@ onActivated(() => {
 }
 
 .reversal-amount.income {
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 
 .reversal-amount.expense {
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 
 .reversal-bank {
   font-size: 12px;
-  color: #c8c9cc;
+  color: var(--theme-text-tertiary);
 }
 
 .reversal-arrow {
   font-size: 18px;
-  color: #c8c9cc;
+  color: var(--theme-text-tertiary);
   padding: 0 10px;
   flex-shrink: 0;
 }
@@ -1305,14 +1305,14 @@ onActivated(() => {
   bottom: 60px;
   width: 40px;
   height: 40px;
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 50%;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 20px;
-  color: #1989fa;
+  color: var(--theme-primary);
   z-index: 999;
   cursor: pointer;
 }

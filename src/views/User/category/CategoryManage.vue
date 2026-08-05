@@ -10,9 +10,9 @@
     <div class="category-content">
       <div class="action-bar">
         <span class="count">共 {{ currentCategories.length }} 个分类</span>
-        <van-button size="small" type="primary" icon="plus" @click="showAddDialog = true">
+        <app-button size="small" type="primary" icon="plus" @click="showAddDialog = true">
           新增
-        </van-button>
+        </app-button>
       </div>
 
       <div class="category-grid" v-if="currentCategories.length > 0">
@@ -49,7 +49,7 @@
     </van-overlay>
 
     <!-- 新增/编辑弹窗 -->
-    <van-popup
+    <app-popup
       v-model:show="showAddDialog"
       position="bottom"
       round
@@ -61,7 +61,7 @@
         </div>
 
         <div class="dialog-form">
-          <van-field
+          <app-field
             v-model="formData.name"
             label="名称"
             placeholder="请输入分类名称"
@@ -88,7 +88,7 @@
             <div class="icon-tip" v-if="formData.iconUrl">点击更换图标</div>
           </div>
 
-          <van-field
+          <app-field
             v-model="formData.remark"
             label="备注"
             placeholder="选填"
@@ -98,14 +98,14 @@
         </div>
 
         <div class="dialog-actions">
-          <van-button plain size="large" round @click="showAddDialog = false">取消</van-button>
-          <van-button type="primary" size="large" round @click="handleConfirm">保存</van-button>
+          <app-button plain size="large" round @click="showAddDialog = false">取消</app-button>
+          <app-button type="primary" size="large" round @click="handleConfirm">保存</app-button>
         </div>
       </div>
-    </van-popup>
+    </app-popup>
 
     <!-- 图标选择弹窗 -->
-    <van-popup
+    <app-popup
       v-model:show="showIconPicker"
       position="bottom"
       round
@@ -156,7 +156,7 @@
 
         <van-empty v-if="!iconLoading && iconList.length === 0" description="暂无图标，请上传" />
       </div>
-    </van-popup>
+    </app-popup>
   </div>
 </template>
 
@@ -341,7 +341,7 @@ onMounted(() => loadCategories("expense"));
 <style scoped>
 .page-category-manage {
   min-height: 100vh;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
 }
 .category-content {
   padding: 16px;
@@ -354,7 +354,7 @@ onMounted(() => loadCategories("expense"));
 }
 .count {
   font-size: 13px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 .category-grid {
   display: grid;
@@ -362,7 +362,7 @@ onMounted(() => loadCategories("expense"));
   gap: 12px;
 }
 .category-card {
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 12px;
   padding: 14px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.04);
@@ -377,7 +377,7 @@ onMounted(() => loadCategories("expense"));
   right: 10px;
   display: flex;
   gap: 10px;
-  color: #999;
+  color: var(--theme-text-tertiary);
 }
 .card-left { flex-shrink: 0; }
 .card-icon {
@@ -388,18 +388,18 @@ onMounted(() => loadCategories("expense"));
 .card-icon.default {
   width: 36px;
   height: 36px;
-  background: #f2f2f2;
-  color: #999;
+  background: transparent;
+  color: var(--theme-text-tertiary);
 }
 .card-content { flex: 1; min-width: 0; }
 .category-name {
   font-size: 15px;
   font-weight: 600;
-  color: #333;
+  color: var(--theme-text-primary);
 }
 .category-remark {
   font-size: 12px;
-  color: #999;
+  color: var(--theme-text-tertiary);
   margin-top: 2px;
 }
 .flex-center {
@@ -423,10 +423,10 @@ onMounted(() => loadCategories("expense"));
 .dialog-title {
   font-size: 18px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
 }
 .dialog-form {
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   border-radius: 12px;
   padding: 8px 0;
 }
@@ -444,12 +444,12 @@ onMounted(() => loadCategories("expense"));
   display: flex;
   align-items: center;
   padding: 12px 16px;
-  background: #fff;
-  border-bottom: 1px solid #ebedf0;
+  background: var(--theme-bg-secondary);
+  border: 1px solid var(--theme-border);
 }
 .icon-label {
   font-size: 14px;
-  color: #646566;
+  color: var(--theme-text-secondary);
   flex-shrink: 0;
 }
 .icon-preview {
@@ -459,16 +459,16 @@ onMounted(() => loadCategories("expense"));
 .icon-placeholder {
   width: 48px;
   height: 48px;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 .icon-tip {
   font-size: 12px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   margin-left: 8px;
 }
 
@@ -490,25 +490,25 @@ onMounted(() => loadCategories("expense"));
 .picker-title {
   font-size: 16px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
 }
 .upload-section {
   padding-bottom: 16px;
-  border-bottom: 1px solid #ebedf0;
+  border: 1px solid var(--theme-border);
   margin-bottom: 16px;
   flex-shrink: 0;
 }
 .upload-trigger {
   width: 60px;
   height: 60px;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   border-radius: 8px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 4px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   font-size: 11px;
 }
 .icon-loading {
@@ -540,13 +540,13 @@ onMounted(() => loadCategories("expense"));
   transform: scale(0.95);
 }
 .icon-item.active {
-  border-color: #1989fa;
+  border-color: var(--van-blue, #1989fa);
 }
 .icon-item .check-icon {
   position: absolute;
   top: 2px;
   right: 2px;
-  background: #1989fa;
+  background: var(--theme-primary);
   border-radius: 50%;
   padding: 2px;
   color: #fff;

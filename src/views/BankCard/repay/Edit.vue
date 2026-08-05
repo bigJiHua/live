@@ -3,12 +3,12 @@
 
     <van-skeleton title :row="8" v-if="loading" />
 
-    <van-form @submit="onSubmit" ref="formRef" v-if="!loading && repayData.id">
+    <app-form @submit="onSubmit" ref="formRef" v-if="!loading && repayData.id">
       <!-- 还款信息 -->
       <div class="form-section">
         <div class="section-title">还款信息</div>
         <van-cell-group inset>
-          <van-field
+          <app-field
             v-model="formData.repayAmount"
             name="repayAmount"
             label="还款金额"
@@ -16,16 +16,14 @@
             type="number"
             :rules="[{ required: true, message: '请输入还款金额' }]"
           />
-          <van-field name="repayMethod" label="还款方式">
-            <template #input>
-              <van-radio-group v-model="formData.repayMethod" direction="horizontal">
-                <van-radio name="转账">转账</van-radio>
-                <van-radio name="自动扣款">自动扣款</van-radio>
-                <van-radio name="柜台还款">柜台</van-radio>
-              </van-radio-group>
-            </template>
-          </van-field>
-          <van-field
+          <app-field name="repayMethod" label="还款方式">
+            <van-radio-group v-model="formData.repayMethod" direction="horizontal">
+              <van-radio name="转账">转账</van-radio>
+              <van-radio name="自动扣款">自动扣款</van-radio>
+              <van-radio name="柜台还款">柜台</van-radio>
+            </van-radio-group>
+          </app-field>
+          <app-field
             v-model="formData.repayTime"
             name="repayTime"
             label="还款时间"
@@ -42,7 +40,7 @@
       <div class="form-section">
         <div class="section-title">备注</div>
         <van-cell-group inset>
-          <van-field
+          <app-field
             v-model="formData.remark"
             name="remark"
             label="备注"
@@ -54,17 +52,17 @@
       </div>
 
       <div class="submit-btn-wrap">
-        <van-button type="primary" block round native-type="submit" :loading="loading" :disabled="loading">
+        <app-button type="primary" block round native-type="submit" :loading="loading" :disabled="loading">
           保存修改
-        </van-button>
-        <van-button plain block round type="danger" @click="handleDelete">
+        </app-button>
+        <app-button plain block round type="danger" @click="handleDelete">
           删除还款记录
-        </van-button>
+        </app-button>
       </div>
-    </van-form>
+    </app-form>
 
     <!-- 日期时间选择 -->
-    <van-popup v-model:show="showDateTimePicker" position="bottom">
+    <app-popup v-model:show="showDateTimePicker" position="bottom">
       <van-datetime-picker
         v-model="currentDate"
         type="datetime"
@@ -72,7 +70,7 @@
         @confirm="onDateTimeConfirm"
         @cancel="showDateTimePicker = false"
       />
-    </van-popup>
+    </app-popup>
   </div>
 </template>
 
@@ -177,7 +175,7 @@ const handleDelete = async () => {
     await showConfirmDialog({
       title: "删除确认",
       message: "确定要删除这条还款记录吗？",
-      confirmButtonColor: "#ee0a24",
+      confirmButtonColor: "var(--van-danger-color, #ee0a24)",
     });
 
     showLoadingToast({ message: "删除中...", forbidClick: true });
@@ -200,12 +198,12 @@ onMounted(() => {
 <style scoped>
 .page-repay-edit {
   min-height: 100vh;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   padding-bottom: 40px;
 }
 
 .page-header {
-  background: #fff;
+  background: var(--theme-bg-secondary);
 }
 
 .form-section {
@@ -214,7 +212,7 @@ onMounted(() => {
 
 .section-title {
   font-size: 14px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   padding: 16px 16px 8px;
 }
 

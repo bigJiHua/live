@@ -20,22 +20,22 @@
           </div>
         </div>
         <div class="card-actions">
-          <van-button
+          <app-button
             size="small"
             type="primary"
             plain
             @click="handleRestore(item)"
           >
             恢复
-          </van-button>
-          <van-button
+          </app-button>
+          <app-button
             size="small"
             type="danger"
             plain
             @click="handlePermanentDelete(item)"
           >
             永久删除
-          </van-button>
+          </app-button>
         </div>
       </div>
     </div>
@@ -133,17 +133,17 @@ onMounted(() => {
 <style scoped>
 .recycle-bin {
   min-height: 100vh;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   padding: 12px 16px;
 }
 
 .stats-bar {
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 8px;
   padding: 12px 16px;
   margin-bottom: 12px;
   text-align: center;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   font-size: 14px;
 }
 
@@ -156,7 +156,7 @@ onMounted(() => {
 .asset-card {
   display: flex;
   align-items: center;
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 12px;
   padding: 12px;
   gap: 12px;
@@ -177,11 +177,11 @@ onMounted(() => {
 }
 
 .card-image.placeholder {
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   font-size: 20px;
 }
 
@@ -193,7 +193,7 @@ onMounted(() => {
 .card-title {
   font-size: 15px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -201,13 +201,13 @@ onMounted(() => {
 
 .card-tag {
   font-size: 12px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   margin-top: 2px;
 }
 
 .card-info {
   font-size: 12px;
-  color: #646566;
+  color: var(--theme-text-secondary);
   margin-top: 4px;
 }
 
@@ -237,13 +237,13 @@ onMounted(() => {
 }
 
 .empty-icon {
-  color: #c8c9cc; /* 与空状态文字颜色统一，更协调 */
+  color: var(--theme-text-tertiary); /* 与空状态文字颜色统一，更协调 */
   margin-bottom: 16px; /* 图标与文字间距，避免拥挤 */
 }
 
 /* 微调空状态文字样式，确保与图标对齐协调 */
 :deep(.van-empty__description) {
-  color: #969799;
+  color: var(--theme-text-tertiary);
   font-size: 14px;
 }
 </style>

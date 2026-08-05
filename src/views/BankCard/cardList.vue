@@ -64,6 +64,7 @@
 
 <script setup>
 import { ref, computed } from "vue";
+import { showToast } from "vant";
 
 const cardList = ref([
   {
@@ -176,13 +177,18 @@ const handleTouchEnd = () => {
 };
 
 const formatNumber = (n) => n.replace(/(\d{4})(?=\d)/g, "$1 ");
+
+// 添加借记卡：当前为本地演示数据，跳转到正式添加页
+const openAddDialog = () => {
+  showToast("演示数据，请前往「信用卡/借记卡」页面添加");
+};
 </script>
 
 <style scoped>
 .page-card-list {
   height: 50vh;
   /* background: radial-gradient(circle at center, #111 0%, #000 100%); */
-  color: #fff;
+  color: var(--theme-text-primary);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -232,6 +238,8 @@ const formatNumber = (n) => n.replace(/(\d{4})(?=\d)/g, "$1 ");
   box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5);
   position: relative;
   overflow: hidden;
+  /* 深色渐变卡内文字必须用白字，避免继承主题深色文字融合 */
+  color: #fff;
 }
 
 .card-glare {
@@ -263,8 +271,8 @@ const formatNumber = (n) => n.replace(/(\d{4})(?=\d)/g, "$1 ");
 .bank-logo {
   width: 28px;
   height: 28px;
-  background: #fff;
-  color: #000;
+  background: var(--theme-bg-secondary);
+  color: var(--theme-text-primary);
   border-radius: 6px;
   display: flex;
   align-items: center;
@@ -329,15 +337,15 @@ const formatNumber = (n) => n.replace(/(\d{4})(?=\d)/g, "$1 ");
   display: inline-block;
   padding: 4px 12px;
   border-radius: 20px;
-  border: 1px solid #222;
+  border: 1px solid var(--theme-border);
   font-size: 10px;
-  color: #444;
+  color: var(--theme-text-tertiary);
   font-weight: bold;
   margin-bottom: 10px;
 }
 .footer-hint p {
   font-size: 12px;
-  color: #333;
+  color: var(--theme-text-primary);
 }
 
 /* ============================================
@@ -353,10 +361,10 @@ const formatNumber = (n) => n.replace(/(\d{4})(?=\d)/g, "$1 ");
 .glass-add-btn {
   width: 100%;
   height: 54px;
-  background: rgba(255, 255, 255, 0.82);
+  background: var(--theme-bg-secondary);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.5);
+  border: 1px solid var(--theme-border);
   border-radius: 27px;
   display: flex;
   align-items: center;
@@ -364,12 +372,12 @@ const formatNumber = (n) => n.replace(/(\d{4})(?=\d)/g, "$1 ");
   gap: 8px;
   font-size: 16px;
   font-weight: 600;
-  color: #1989fa;
-  box-shadow: 0 10px 30px rgba(25, 137, 250, 0.15);
+  color: var(--theme-primary);
+  box-shadow: 0 10px 30px rgba(var(--theme-primary-rgb), 0.15);
   transition: all 0.3s;
 }
 .glass-add-btn:active {
   transform: scale(0.97);
-  background: rgba(255, 255, 255, 0.95);
+  background: var(--theme-bg-tertiary);
 }
 </style>

@@ -24,7 +24,7 @@
       <div class="card-header">
         <div class="card-title-row">
           <span class="card-title">{{ salaryData.formal.company || '正式工作' }}</span>
-          <van-tag type="primary" v-if="salaryData.formal.status === 1">已确认</van-tag>
+          <app-tag type="primary" v-if="salaryData.formal.status === 1">已确认</app-tag>
         </div>
       </div>
 
@@ -57,7 +57,7 @@
       </div>
 
       <div class="card-actions">
-        <van-button size="small" type="primary" @click="editFormal">编辑</van-button>
+        <app-button size="small" type="primary" @click="editFormal">编辑</app-button>
       </div>
     </div>
 
@@ -70,7 +70,7 @@
       <div class="card-header">
         <div class="card-title-row">
           <span class="card-title">{{ item.company || '兼职' }}</span>
-          <van-tag type="warning" v-if="item.status === 1">已确认</van-tag>
+          <app-tag type="warning" v-if="item.status === 1">已确认</app-tag>
         </div>
       </div>
 
@@ -103,7 +103,7 @@
       </div>
 
       <div class="card-actions">
-        <van-button size="small" type="primary" @click="editParttime(index)">编辑</van-button>
+        <app-button size="small" type="primary" @click="editParttime(index)">编辑</app-button>
       </div>
     </div>
 
@@ -127,7 +127,7 @@
       </div>
       <!-- 提交正式工资按钮 -->
       <div class="submit-formal" v-if="formalJob?.status === 1 && !salaryData.formal?.id">
-        <van-button
+        <app-button
           size="small"
           type="primary"
           block
@@ -135,24 +135,24 @@
           @click="submitFormalSalary"
         >
           提交正式工资
-        </van-button>
+        </app-button>
       </div>
     </div>
 
     <!-- 删除按钮区域 -->
     <div class="delete-section" v-if="salaryData.formal || (salaryData.parttimes && salaryData.parttimes.length > 0)">
-      <van-button
+      <app-button
         size="small"
         type="default"
         :loading="deleting"
         @click="confirmDelete"
       >
         删除今日薪酬
-      </van-button>
+      </app-button>
     </div>
 
     <!-- 编辑正式工弹窗 -->
-    <van-popup :show="showEditFormal" position="bottom" round :close-on-click-overlay="false">
+    <app-popup :show="showEditFormal" position="bottom" round :close-on-click-overlay="false">
       <div class="edit-popup">
         <div class="popup-header">
           <span class="popup-title">编辑正式工资</span>
@@ -160,21 +160,20 @@
         </div>
 
         <van-cell-group inset>
-          <van-field label="日薪" :model-value="'¥' + salaryData.formal?.day_salary" disabled readonly />
-          <van-field label="社保" :model-value="'-¥' + salaryData.formal?.social" disabled readonly />
-          <van-field label="公积金" :model-value="'-¥' + salaryData.formal?.fund" disabled readonly />
-          <van-field label="个税" :model-value="'-¥' + salaryData.formal?.tax" disabled readonly />
+          <app-field label="日薪" :model-value="'¥' + salaryData.formal?.day_salary" disabled readonly />
+          <app-field label="社保" :model-value="'-¥' + salaryData.formal?.social" disabled readonly />
+          <app-field label="公积金" :model-value="'-¥' + salaryData.formal?.fund" disabled readonly />
+          <app-field label="个税" :model-value="'-¥' + salaryData.formal?.tax" disabled readonly />
         </van-cell-group>
 
         <van-cell-group inset title="手动调整">
-          <van-field
+          <app-field
             v-model="editFormalData.cut"
             label="当日扣款"
             type="number"
             placeholder="如迟到、请假等"
-          >
-            <template #button><span class="yuan">元</span></template>
-          </van-field>
+            suffix="元"
+          />
         </van-cell-group>
 
         <div class="preview-card">
@@ -183,14 +182,14 @@
         </div>
 
         <div class="popup-actions">
-          <van-button size="large" round @click="showEditFormal = false">取消</van-button>
-          <van-button size="large" round type="primary" :loading="saving" @click="saveFormal">保存</van-button>
+          <app-button size="large" round @click="showEditFormal = false">取消</app-button>
+          <app-button size="large" round type="primary" :loading="saving" @click="saveFormal">保存</app-button>
         </div>
       </div>
-    </van-popup>
+    </app-popup>
 
     <!-- 编辑兼职弹窗 -->
-    <van-popup :show="showEditParttime" position="bottom" round :close-on-click-overlay="false">
+    <app-popup :show="showEditParttime" position="bottom" round :close-on-click-overlay="false">
       <div class="edit-popup">
         <div class="popup-header">
           <span class="popup-title">编辑兼职 - {{ editingParttimeIndex !== -1 ? salaryData.parttimes[editingParttimeIndex]?.company : '' }}</span>
@@ -198,13 +197,13 @@
         </div>
 
         <van-cell-group inset>
-          <van-field
+          <app-field
             label="时薪"
             :model-value="'¥' + (editingParttimeIndex !== -1 ? salaryData.parttimes[editingParttimeIndex]?.hourly_wage : 0) + '/小时'"
             disabled
             readonly
           />
-          <van-field
+          <app-field
             label="日薪"
             :model-value="'¥' + (editingParttimeIndex !== -1 ? salaryData.parttimes[editingParttimeIndex]?.day_salary : 0)"
             disabled
@@ -213,29 +212,26 @@
         </van-cell-group>
 
         <van-cell-group inset title="手动调整">
-          <van-field
+          <app-field
             v-model="editParttimeData.work_hours"
             label="工作小时"
             type="number"
-          >
-            <template #button><span class="yuan">小时</span></template>
-          </van-field>
-          <van-field
+            suffix="小时"
+          />
+          <app-field
             v-model="editParttimeData.subsidy"
             label="当日补贴"
             type="number"
             placeholder="覆盖自动值"
-          >
-            <template #button><span class="yuan">元</span></template>
-          </van-field>
-          <van-field
+            suffix="元"
+          />
+          <app-field
             v-model="editParttimeData.cut"
             label="当日扣款"
             type="number"
             placeholder="如迟到、请假等"
-          >
-            <template #button><span class="yuan">元</span></template>
-          </van-field>
+            suffix="元"
+          />
         </van-cell-group>
 
         <div class="preview-card">
@@ -244,11 +240,11 @@
         </div>
 
         <div class="popup-actions">
-          <van-button size="large" round @click="showEditParttime = false">取消</van-button>
-          <van-button size="large" round type="primary" :loading="saving" @click="saveEditingParttime">保存</van-button>
+          <app-button size="large" round @click="showEditParttime = false">取消</app-button>
+          <app-button size="large" round type="primary" :loading="saving" @click="saveEditingParttime">保存</app-button>
         </div>
       </div>
-    </van-popup>
+    </app-popup>
   </div>
 </template>
 
@@ -559,7 +555,7 @@ watch(() => route.query.date, (newDate) => {
 <style scoped>
 .page-salary-day {
   min-height: 100vh;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   padding: 16px;
   padding-bottom: 40px;
 }
@@ -568,7 +564,7 @@ watch(() => route.query.date, (newDate) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: #fff;
+  background: var(--theme-bg-secondary);
   padding: 16px;
   border-radius: 12px;
   margin-bottom: 12px;
@@ -576,14 +572,14 @@ watch(() => route.query.date, (newDate) => {
 
 .header .van-icon {
   font-size: 18px;
-  color: #07c160;
+  color: var(--van-green, #07c160);
   padding: 6px;
 }
 
 .date-title {
   font-size: 16px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -594,8 +590,8 @@ watch(() => route.query.date, (newDate) => {
   align-items: center;
   gap: 6px;
   padding: 10px 16px;
-  background: #fff7e6;
-  color: #ff976a;
+  background: var(--van-orange-bg, #fff7e6);
+  color: var(--van-orange, #ff976a);
   font-size: 13px;
   border-radius: 12px;
   margin-bottom: 12px;
@@ -603,18 +599,18 @@ watch(() => route.query.date, (newDate) => {
 
 /* 工资卡片 */
 .salary-card {
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 12px;
   padding: 16px;
   margin-bottom: 12px;
 }
 
 .salary-card.fulltime {
-  border-left: 4px solid #1989fa;
+  border-left: 4px solid var(--van-blue, #1989fa);
 }
 
 .salary-card.parttime {
-  border-left: 4px solid #ff976a;
+  border-left: 4px solid var(--van-orange, #ff976a);
 }
 
 .card-header {
@@ -630,7 +626,7 @@ watch(() => route.query.date, (newDate) => {
 .card-title {
   font-size: 15px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
 }
 
 .salary-items {
@@ -651,22 +647,22 @@ watch(() => route.query.date, (newDate) => {
 
 .item-label {
   font-size: 14px;
-  color: #646566;
+  color: var(--theme-text-secondary);
 }
 
 .item-value {
   font-size: 14px;
-  color: #323233;
+  color: var(--theme-text-primary);
   font-weight: 500;
 }
 
 .item-value.deduction {
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
 }
 
 .item-value.income {
   font-size: 18px;
-  color: #07c160;
+  color: var(--van-green, #07c160);
   font-weight: 700;
 }
 
@@ -676,7 +672,7 @@ watch(() => route.query.date, (newDate) => {
 
 .unit {
   font-size: 14px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 
 .card-actions {
@@ -694,8 +690,8 @@ watch(() => route.query.date, (newDate) => {
   gap: 6px;
   padding: 12px;
   margin: 8px 0;
-  background: #fff7e6;
-  color: #ff976a;
+  background: var(--van-orange-bg, #fff7e6);
+  color: var(--van-orange, #ff976a);
   font-size: 13px;
   border-radius: 8px;
 }
@@ -706,7 +702,7 @@ watch(() => route.query.date, (newDate) => {
 
 /* 总计卡片 */
 .total-card {
-  background: linear-gradient(135deg, #07c160, #06ad56);
+  background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-primary-grad) 100%);
   border-radius: 12px;
   padding: 16px;
   color: #fff;
@@ -734,8 +730,8 @@ watch(() => route.query.date, (newDate) => {
 }
 
 .submit-formal .van-button {
-  background: #fff;
-  color: #07c160;
+  background: var(--theme-bg-secondary);
+  color: var(--van-green, #07c160);
   border: 1px solid #fff;
 }
 
@@ -749,7 +745,7 @@ watch(() => route.query.date, (newDate) => {
 }
 
 .delete-section .van-button {
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
 }
 
 /* 编辑弹窗 */
@@ -767,11 +763,11 @@ watch(() => route.query.date, (newDate) => {
 .popup-title {
   font-size: 17px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
 }
 
 .yuan {
-  color: #969799;
+  color: var(--theme-text-tertiary);
   font-size: 14px;
 }
 
@@ -781,7 +777,7 @@ watch(() => route.query.date, (newDate) => {
   align-items: center;
   margin: 16px;
   padding: 16px;
-  background: linear-gradient(135deg, #07c160, #06ad56);
+  background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-primary-grad) 100%);
   border-radius: 12px;
   color: #fff;
 }

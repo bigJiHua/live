@@ -2,7 +2,7 @@
   <div class="page-fund-trend">
     <div class="filter-bar">
       <div class="fb-row">
-        <van-button
+        <app-button
           v-for="f in fundList"
           :key="f.id"
           size="small"
@@ -12,10 +12,10 @@
           @click="selectFund(f.id)"
         >
           {{ f.fund_name.slice(0, 4) }}
-        </van-button>
+        </app-button>
       </div>
       <div class="fb-row">
-        <van-button
+        <app-button
           v-for="r in ranges"
           :key="r.key"
           size="small"
@@ -25,7 +25,7 @@
           @click="selectRange(r.key)"
         >
           {{ r.label }}
-        </van-button>
+        </app-button>
       </div>
     </div>
 
@@ -35,7 +35,7 @@
       <div class="chart-title">{{ currentFundName }} {{ currentRangeLabel }}收益走势</div>
       <div ref="chartRef1" class="chart-box"></div>
       <div class="chart-refresh">
-        <van-button size="small" plain round icon="replay" @click="refreshChart">刷新</van-button>
+        <app-button size="small" plain round icon="replay" @click="refreshChart">刷新</app-button>
       </div>
     </div>
   </div>
@@ -80,10 +80,10 @@ const toNumber = (value) => {
 }
 
 const buildHistoryParams = () => {
-  if (!currentRange.value.months) return {}
   const endDate = dayjs().format('YYYY-MM-DD')
+  if (!currentRange.value.months) return { endDate, limit: 400 }
   const startDate = dayjs().subtract(currentRange.value.months, 'month').format('YYYY-MM-DD')
-  return { startDate, endDate }
+  return { startDate, endDate, limit: 400 }
 }
 
 const buildRecordPoints = (rows, rangeSummary = {}) => {
@@ -244,14 +244,14 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.page-fund-trend { min-height: 100vh; background: #f7f8fa; padding: 12px 16px 30px; }
+.page-fund-trend { min-height: 100vh; background: var(--theme-bg-primary); padding: 12px 16px 30px; }
 .page-loading { display: flex; justify-content: center; padding: 60px 0; }
 
 .filter-bar { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
 .fb-row { display: flex; gap: 6px; flex-wrap: wrap; }
 
-.chart-card { background: #fff; border-radius: 10px; padding: 14px; margin-bottom: 12px; }
-.chart-title { font-size: 14px; font-weight: 600; color: #323233; margin-bottom: 8px; }
+.chart-card { background: var(--theme-bg-secondary); border-radius: 10px; padding: 14px; margin-bottom: 12px; }
+.chart-title { font-size: 14px; font-weight: 600; color: var(--theme-text-primary); margin-bottom: 8px; }
 .chart-box { width: 100%; height: 300px; }
 .chart-refresh { display: flex; justify-content: center; padding-top: 10px; }
 </style>

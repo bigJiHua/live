@@ -85,7 +85,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, onBeforeUnmount } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import { showToast } from "vant";
 import SafeKeyboard from "@/components/KeyBoard/index.vue";
@@ -152,6 +152,11 @@ onMounted(async () => {
   }, 300);
 });
 
+onBeforeUnmount(() => {
+  // 组件卸载时清除残留定时器，避免触发过期校验
+  clearTimeout(pinCompleteTimer);
+});
+
 const getStepNumber = (step) => {
   if (mode.value === "new") {
     return step;
@@ -198,13 +203,25 @@ const handleKeyInput = (val) => {
 
   // 检查是否输入完成
   if (currentPin.value.length === 6) {
-    setTimeout(() => {
+    // 先取消上一次未执行的延迟校验（防止步骤切换后残留触发空值提交）
+    clearTimeout(pinCompleteTimer);
+    pinCompleteTimer = setTimeout(() => {
       handlePinComplete();
     }, 100);
   }
 };
 
+// 延迟校验定时器句柄
+let pinCompleteTimer = null;
+
 const handlePinComplete = () => {
+  // 强校验：必须为 6 位纯数字，否则拒绝（防止空值/脏数据被提交到后端）
+  if (!/^\d{6}$/.test(currentPin.value)) {
+    errorMessage.value = "请输入完整的 6 位数字 PIN 码";
+    currentPin.value = "";
+    return;
+  }
+
   // 禁止输入6位相同的数字
   if (isRepeatedPin(currentPin.value)) {
     errorMessage.value = "PIN 码不能为6位相同的数字";
@@ -221,7 +238,11 @@ const handlePinComplete = () => {
   }
 };
 
+// 提交锁：防止快速连点重复触发后端请求
+let isSubmitting = false;
+
 const handleNewMode = async () => {
+  clearTimeout(pinCompleteTimer);
   if (currentStep.value === 1) {
     // 第一步：第一次输入
     firstPin.value = currentPin.value;
@@ -231,6 +252,8 @@ const handleNewMode = async () => {
   } else {
     // 第二步：确认输入
     if (currentPin.value === firstPin.value) {
+      if (isSubmitting) return;
+      isSubmitting = true;
       // 调用后端 API 设置 PIN
       try {
         await securityApi.setPin({ pin: firstPin.value });
@@ -245,6 +268,8 @@ const handleNewMode = async () => {
         currentStep.value = 1;
         firstPin.value = "";
         currentPin.value = "";
+      } finally {
+        isSubmitting = false;
       }
     } else {
       // 两次输入不一致
@@ -257,8 +282,11 @@ const handleNewMode = async () => {
 };
 
 const handleModifyMode = async () => {
+  clearTimeout(pinCompleteTimer);
   if (currentStep.value === 1) {
     // 验证旧 PIN - 调用后端 API
+    if (isSubmitting) return;
+    isSubmitting = true;
     try {
       await securityApi.verifyPin({ pin: currentPin.value });
       oldPin.value = currentPin.value;
@@ -268,6 +296,8 @@ const handleModifyMode = async () => {
     } catch (err) {
       errorMessage.value = err.response?.data?.message || "PIN 码错误，请重新输入";
       currentPin.value = "";
+    } finally {
+      isSubmitting = false;
     }
   } else if (currentStep.value === 2) {
     // 输入新 PIN
@@ -278,6 +308,16 @@ const handleModifyMode = async () => {
   } else {
     // 确认新 PIN - 调用后端 API 修改
     if (currentPin.value === firstPin.value) {
+      // 拦截新旧 PIN 相同（关闭 PIN 的 000000 除外）
+      if (currentPin.value === oldPin.value && currentPin.value !== "000000") {
+        errorMessage.value = "新 PIN 码不能与旧 PIN 码相同";
+        currentStep.value = 2;
+        firstPin.value = "";
+        currentPin.value = "";
+        return;
+      }
+      if (isSubmitting) return;
+      isSubmitting = true;
       try {
         await securityApi.changePin({
           oldPin: oldPin.value,
@@ -292,6 +332,8 @@ const handleModifyMode = async () => {
         currentStep.value = 2;
         firstPin.value = "";
         currentPin.value = "";
+      } finally {
+        isSubmitting = false;
       }
     } else {
       // 两次输入不一致
@@ -307,7 +349,7 @@ const handleModifyMode = async () => {
 <style scoped>
 .page-pin-setup {
   height: 60vh;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   display: flex;
   flex-direction: column;
 }
@@ -340,8 +382,8 @@ const handleModifyMode = async () => {
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: #e0e0e0;
-  color: #999;
+  background: var(--theme-bg-tertiary);
+  color: var(--theme-text-tertiary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -351,36 +393,36 @@ const handleModifyMode = async () => {
 }
 
 .step-item.active .step-number {
-  background: var(--app-primary, #07c160);
+  background: var(--app-primary);
   color: white;
-  box-shadow: 0 4px 12px rgba(7, 193, 96, 0.3);
+  box-shadow: 0 4px 12px var(--theme-shadow-color, rgba(7, 193, 96, 0.3));
 }
 
 .step-item.completed .step-number {
-  background: #07c160;
+  background: var(--van-green, #07c160);
   color: white;
 }
 
 .step-text {
   font-size: 12px;
-  color: #999;
+  color: var(--theme-text-tertiary);
   white-space: nowrap;
 }
 
 .step-item.active .step-text {
-  color: var(--app-primary, #07c160);
+  color: var(--app-primary);
   font-weight: 500;
 }
 
 .step-line {
   width: 40px;
   height: 2px;
-  background: #e0e0e0;
+  background: var(--theme-border);
   transition: all 0.3s;
 }
 
 .step-line.active {
-  background: var(--app-primary, #07c160);
+  background: var(--app-primary);
 }
 
 /* 验证区域 */
@@ -392,7 +434,7 @@ const handleModifyMode = async () => {
 .verify-section .section-title {
   font-size: 18px;
   font-weight: bold;
-  color: #323233;
+  color: var(--theme-text-primary);
   margin-bottom: 12px;
 }
 
@@ -407,8 +449,8 @@ const handleModifyMode = async () => {
 /* 1. 选中每一个 PIN 码的格子 */
 :deep(.van-password-input__item) {
   /* 基础边框 */
-  border: 1px solid #acabab !important; /* Vant 的标准灰色边框色 */
-  background-color: #ffffff; /* 强制白色背景，防止看不见 */
+  border: 1px solid var(--theme-border) !important; /* 跟随主题边框色 */
+  background-color: var(--theme-bg-secondary); /* 跟随主题背景 */
   border-radius: 6px; /* 让格子稍微圆润一点 */
   transition: all 0.2s; /* 增加过渡动画，更好看 */
   flex: 1; /* 均匀分配空间 */
@@ -419,15 +461,15 @@ const handleModifyMode = async () => {
 /* 2. 选中“聚焦”状态下的格子（当前正在输入的那个格子） */
 :deep(.van-password-input__item--focus) {
   /* 聚焦时改变边框颜色，提示用户 */
-  border-color: var(--app-primary, #07c160) !important; /* 使用你的主题色 */
+  border-color: var(--app-primary) !important; /* 使用你的主题色 */
   /* 增加一个淡淡的呼吸灯阴影效果 (可选) */
-  box-shadow: 0 0 8px rgba(7, 193, 96, 0.2);
+  box-shadow: 0 0 8px var(--theme-shadow-color, rgba(7, 193, 96, 0.2));
 }
 
 /* 3. 选中格子内部的那个“闪烁光标” */
 :deep(.van-password-input__cursor) {
   /* 确保光标颜色也是主题色 (可选) */
-  background-color: var(--app-primary, #07c160) !important;
+  background-color: var(--app-primary) !important;
 }
 
 /* 提示信息 */
@@ -439,7 +481,7 @@ const handleModifyMode = async () => {
 .normal-tip {
   text-align: center;
   font-size: 14px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   line-height: 1.6;
 }
 

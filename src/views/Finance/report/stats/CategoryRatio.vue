@@ -28,9 +28,9 @@
           <div class="cat-bar-list">
             <div v-for="item in categoryBreakdown" :key="item.name"
               :class="['cat-bar-row', { 'off': !checkedSet.has(item.name) }]"
-              @click="toggleItem(item.name)">
+              @click="showCategoryItems(item.name)">
               <div class="cat-bar-top">
-                <span class="cat-bar-dot" :style="{ background: item.color }"></span>
+                <span class="cat-bar-dot" :style="{ background: item.color }" @click.stop="toggleItem(item.name)"></span>
                 <span class="cat-bar-name">{{ item.name }}</span>
                 <span class="cat-bar-meta">
                   <span class="cat-bar-pct">{{ item.percent }}%</span>
@@ -69,7 +69,7 @@
 
       <van-empty v-if="!loading && categoryBreakdown.length === 0" description="暂无数据" />
 
-      <van-popup v-model:show="showDrawer" position="bottom" round
+      <app-popup v-model:show="showDrawer" position="bottom" round
         :style="{ maxHeight: '75vh', minHeight: '35vh' }">
         <div class="drawer-header">
           <span class="drawer-title">{{ selectedCategoryName }}</span>
@@ -102,7 +102,7 @@
           </div>
           <div v-if="filteredDrawerItems.length === 0" class="drawer-empty">暂无记录</div>
         </div>
-      </van-popup>
+      </app-popup>
     </template>
 
     <van-calendar
@@ -348,11 +348,11 @@ onMounted(async () => {
 <style scoped>
 .page-stats {
   min-height: 100vh;
-  background: #f5f6fa;
+  background: var(--theme-bg-primary);
   padding-bottom: 30px;
 }
 .chart-section {
-  background: #fff;
+  background: var(--theme-bg-secondary);
   margin: 0 16px;
   border-radius: 12px;
   padding: 16px;
@@ -361,7 +361,7 @@ onMounted(async () => {
 .section-title {
   font-size: 14px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
   margin-bottom: 12px;
   display: flex;
   justify-content: space-between;
@@ -370,7 +370,7 @@ onMounted(async () => {
 .section-sub {
   font-size: 11px;
   font-weight: 400;
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 .category-bars { display: flex; flex-direction: column; gap: 0; }
 .cat-bar-list {
@@ -392,7 +392,7 @@ onMounted(async () => {
   cursor: pointer;
   transition: background 0.15s, opacity 0.2s;
 }
-.cat-bar-row:active { background: #f7f8fa; }
+.cat-bar-row:active { background: var(--theme-bg-primary); }
 .cat-bar-row.off {
   opacity: 0.35;
   pointer-events: auto;
@@ -409,15 +409,16 @@ onMounted(async () => {
   min-width: 8px;
   border-radius: 50%;
   flex-shrink: 0;
+  cursor: pointer;
 }
 .cat-bar-row.off .cat-bar-dot {
-  background: #c8c9cc !important;
+  background: var(--theme-text-tertiary) !important;
 }
 .cat-bar-name {
   flex: 1;
   min-width: 0;
   font-size: 13px;
-  color: #323233;
+  color: var(--theme-text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -430,26 +431,26 @@ onMounted(async () => {
 }
 .cat-bar-pct {
   font-size: 11px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   min-width: 26px;
   text-align: right;
 }
 .cat-bar-value {
   font-size: 12px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
   font-family: 'DIN Alternate', sans-serif;
   min-width: 52px;
   text-align: right;
 }
 .cat-bar-track {
   height: 5px;
-  background: #f0f0f0;
+  background: var(--theme-bg-tertiary);
   border-radius: 3px;
   overflow: hidden;
 }
 .cat-bar-row.off .cat-bar-track {
-  background: #f5f6f7;
+  background: var(--theme-bg-tertiary);
 }
 .cat-bar-fill {
   height: 100%;
@@ -463,7 +464,7 @@ onMounted(async () => {
   width: 36px;
   height: 36px;
   flex-shrink: 0;
-  color: #c8c9cc;
+  color: var(--theme-text-tertiary);
 }
 .cat-bar-expand {
   display: flex;
@@ -471,7 +472,7 @@ onMounted(async () => {
   justify-content: center;
   gap: 4px;
   font-size: 12px;
-  color: #1989fa;
+  color: var(--theme-primary);
   padding: 10px 0 4px;
   cursor: pointer;
 }
@@ -485,7 +486,7 @@ onMounted(async () => {
 }
 .drawer-close {
   font-size: 18px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   cursor: pointer;
 }
 .drawer-type-tabs {
@@ -497,12 +498,12 @@ onMounted(async () => {
   font-size: 12px;
   padding: 4px 14px;
   border-radius: 14px;
-  background: #f5f6fa;
-  color: #969799;
+  background: var(--theme-bg-tertiary);
+  color: var(--theme-text-tertiary);
   cursor: pointer;
 }
 .drawer-type-tab.active {
-  background: #1989fa;
+  background: var(--theme-primary);
   color: #fff;
 }
 .drawer-list {
@@ -515,7 +516,7 @@ onMounted(async () => {
   align-items: center;
   gap: 10px;
   padding: 14px 0;
-  border-bottom: 1px solid #f5f6fa;
+  border-bottom: 1px solid var(--theme-border);
 }
 .drawer-item-icon {
   width: 32px;
@@ -527,8 +528,8 @@ onMounted(async () => {
   font-size: 14px;
   flex-shrink: 0;
 }
-.icon-income { background: #f0fff4; color: #07c160; }
-.icon-expense { background: #fff0f0; color: #ee0a24; }
+.icon-income { background: var(--van-green-bg, #f0fff4); color: var(--van-green, #07c160); }
+.icon-expense { background: var(--van-danger-bg, #fff0f0); color: var(--van-danger-color, #ee0a24); }
 .drawer-item-body { flex: 1; min-width: 0; }
 .drawer-item-top {
   display: flex;
@@ -538,30 +539,30 @@ onMounted(async () => {
 .drawer-item-cat {
   font-size: 13px;
   font-weight: 500;
-  color: #323233;
+  color: var(--theme-text-primary);
 }
 .drawer-item-amount {
   font-size: 14px;
   font-weight: 700;
   font-family: 'DIN Alternate', sans-serif;
 }
-.drawer-item-amount.income { color: #07c160; }
-.drawer-item-amount.expense { color: #ee0a24; }
+.drawer-item-amount.income { color: var(--van-green, #07c160); }
+.drawer-item-amount.expense { color: var(--van-danger-color, #ee0a24); }
 .drawer-item-bottom {
   display: flex;
   gap: 10px;
   font-size: 11px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   margin-top: 3px;
 }
 .drawer-empty {
   text-align: center;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   font-size: 13px;
   padding: 30px 0;
 }
 .month-bar {
-  background: #fff;
+  background: var(--theme-bg-secondary);
   padding: 14px 16px;
   display: flex;
   align-items: center;
@@ -571,18 +572,18 @@ onMounted(async () => {
 .month-text {
   font-size: 16px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
   cursor: pointer;
 }
 .month-arrow {
   font-size: 18px;
-  color: #1989fa;
+  color: var(--theme-primary);
   cursor: pointer;
   padding: 4px;
 }
 .type-tabs {
   display: flex;
-  background: #fff;
+  background: var(--theme-bg-secondary);
   padding: 0 16px 12px;
   gap: 8px;
 }
@@ -590,12 +591,12 @@ onMounted(async () => {
   font-size: 12px;
   padding: 4px 14px;
   border-radius: 14px;
-  background: #f5f6fa;
-  color: #969799;
+  background: var(--theme-bg-tertiary);
+  color: var(--theme-text-tertiary);
   cursor: pointer;
 }
 .type-tab.active {
-  background: #1989fa;
+  background: var(--theme-primary);
   color: #fff;
 }
 .page-loading {
@@ -608,7 +609,7 @@ onMounted(async () => {
 .tier-section {
   margin-top: 18px;
   padding-top: 14px;
-  border-top: 1px solid #f0f0f0;
+  border: 1px solid var(--theme-border);
 }
 .tier-swipe {
   border-radius: 10px;
@@ -631,13 +632,13 @@ onMounted(async () => {
 .tier-label {
   font-size: 14px;
   font-weight: 700;
-  color: #323233;
+  color: var(--theme-text-primary);
 }
 .tier-amount {
   font-size: 14px;
   font-weight: 700;
   font-family: 'DIN Alternate', sans-serif;
-  color: #323233;
+  color: var(--theme-text-primary);
 }
 .tier-chart {
   width: 100%;

@@ -54,7 +54,7 @@
               type="password"
               placeholder="请输入管理员密码"
               autocomplete="new-password"
-              maxlength="15"
+              maxlength="30"
               :class="{ 'error-input': !passwordRules.validLength && form.password.length > 0 }"
             />
           </div>
@@ -67,7 +67,7 @@
               type="password"
               placeholder="请再次输入密码"
               autocomplete="new-password"
-              maxlength="15"
+              maxlength="30"
               :class="{ 'error-input': confirmPasswordError }"
             />
           </div>
@@ -88,7 +88,7 @@
                 ✔ 包含特殊字符
               </li>
               <li :class="passwordRules.validLength ? 'valid' : form.password && !passwordRules.validLength ? 'invalid' : ''">
-                ✔ 长度 6-15 位
+                ✔ 长度 6-30 位
               </li>
             </ul>
           </div>
@@ -108,10 +108,10 @@ import { ref, reactive, computed, onMounted } from "vue";
 import { authApi } from "@/utils/api/auth";
 
 const form = reactive({
-  username: "admin",
-  email: "admin@a.com",
-  password: "Admin8888ok.",
-  confirmPassword: "Admin8888ok.",
+  username: "",
+  email: "",
+  password: "",
+  confirmPassword: "",
 });
 
 const loading = ref(false);
@@ -127,7 +127,7 @@ const passwordRules = computed(() => {
     hasLowerCase: /[a-z]/.test(pwd),
     hasNumber: /\d/.test(pwd),
     hasSpecial: /[!@#$%^&*(),.?":{}|<>]/.test(pwd),
-    validLength: pwd.length >= 6 && pwd.length <= 15,
+    validLength: pwd.length >= 6 && pwd.length <= 30,
   };
 });
 
@@ -158,7 +158,7 @@ const handleSubmit = async () => {
   }
 
   if (!passwordRules.value.validLength) {
-    error.value = "密码长度必须在 6-15 位之间";
+    error.value = "密码长度必须在 6-30 位之间";
     return;
   }
 
@@ -218,12 +218,12 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-primary-grad) 100%);
   padding: 20px;
 }
 
 .container {
-  background: white;
+  background: var(--theme-bg-secondary);
   border-radius: 12px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
   max-width: 450px;
@@ -232,7 +232,7 @@ onMounted(() => {
 }
 
 .header {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-primary-grad) 100%);
   color: white;
   padding: 30px;
   text-align: center;
@@ -260,39 +260,41 @@ onMounted(() => {
   display: block;
   margin-bottom: 8px;
   font-weight: 600;
-  color: #2d3748;
+  color: var(--theme-text-primary);
   font-size: 14px;
 }
 
 .form-group input {
   width: 100%;
   padding: 12px 15px;
-  border: 2px solid #e2e8f0;
+  border: 2px solid var(--theme-border);
   border-radius: 8px;
   font-size: 14px;
   transition: all 0.3s;
   box-sizing: border-box;
+  background: var(--theme-bg-secondary);
+  color: var(--theme-text-primary);
 }
 
 .form-group input:focus {
   outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  border-color: var(--theme-primary);
+  box-shadow: 0 0 0 3px rgba(var(--theme-primary-rgb), 0.1);
 }
 
 .form-group input::placeholder {
-  color: #a0aec0;
+  color: var(--theme-text-placeholder);
 }
 
 .form-group input.error-input {
-  border-color: #fc8181;
-  background-color: #fff5f5;
+  border-color: var(--theme-danger);
+  background-color: var(--van-danger-bg);
 }
 
 .btn {
   width: 100%;
   padding: 14px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-primary-grad) 100%);
   color: white;
   border: none;
   border-radius: 8px;
@@ -322,13 +324,13 @@ onMounted(() => {
 }
 
 .info-box {
-  background: #ebf8ff;
-  border-left: 4px solid #4299e1;
+  background: var(--theme-primary-light);
+  border-left: 4px solid var(--theme-primary);
   padding: 15px;
   margin-bottom: 20px;
   border-radius: 4px;
   font-size: 13px;
-  color: #2b6cb0;
+  color: var(--theme-text-secondary);
 }
 
 .info-box strong {
@@ -337,8 +339,8 @@ onMounted(() => {
 }
 
 .error {
-  background: #fed7d7;
-  color: #c53030;
+  background: var(--van-danger-bg);
+  color: var(--theme-danger-text);
   padding: 12px 15px;
   border-radius: 6px;
   margin-bottom: 20px;
@@ -347,8 +349,8 @@ onMounted(() => {
 }
 
 .success {
-  background: #c6f6d5;
-  color: #2f855a;
+  background: var(--van-green-bg);
+  color: var(--theme-success-text);
   padding: 12px 15px;
   border-radius: 6px;
   margin-bottom: 20px;
@@ -380,13 +382,13 @@ onMounted(() => {
 }
 
 .requirements {
-  background: #fff5f5;
-  border-left: 4px solid #fc8181;
+  background: var(--van-danger-bg);
+  border-left: 4px solid var(--theme-danger);
   padding: 12px 15px;
   margin-bottom: 20px;
   border-radius: 4px;
   font-size: 12px;
-  color: #c53030;
+  color: var(--theme-danger-text);
 }
 
 .requirements ul {
@@ -405,12 +407,12 @@ onMounted(() => {
 }
 
 .requirements li.valid {
-  color: #07c160;
+  color: var(--van-green, #07c160);
   font-weight: 500;
 }
 
 .requirements li.invalid {
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 
 .requirements li.invalid::before {

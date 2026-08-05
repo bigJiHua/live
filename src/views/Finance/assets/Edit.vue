@@ -69,7 +69,7 @@
             class="rate-item"
           >
             <span>{{ rate.currency }}</span>
-            <van-field
+            <app-field
               v-model="rate.value"
               type="number"
               placeholder="0.0000"
@@ -171,7 +171,7 @@
 
     <!-- 提交按钮 -->
     <div class="submit-section">
-      <van-button
+      <app-button
         type="primary"
         block
         round
@@ -180,23 +180,23 @@
         @click="handleSubmit"
       >
         确认保存资产登记
-      </van-button>
+      </app-button>
     </div>
 
     <!-- 余额弹窗 -->
-    <van-popup v-model:show="showBalancePopup" position="bottom" round>
+    <app-popup v-model:show="showBalancePopup" position="bottom" round>
       <div class="add-popup">
         <div class="popup-header">
           <span>{{ editBalanceId ? "编辑境内资产" : "添加境内资产" }}</span>
           <van-icon name="cross" @click="showBalancePopup = false" />
         </div>
         <div class="popup-form">
-          <van-field
+          <app-field
             v-model="balanceForm.customName"
             label="自定义名称"
             placeholder="选填"
           />
-          <van-field
+          <app-field
             v-model="balanceForm.type"
             is-link
             readonly
@@ -204,59 +204,56 @@
             placeholder="选择类型"
             @click="showBalanceTypePicker = true"
           />
-          <van-field
+          <app-field
             v-model.number="balanceForm.amount"
             type="number"
             label="金额"
             placeholder="输入人民币金额"
             :formatter="formatAmountInput"
           />
-          <van-field
+          <app-field
             v-model="balanceForm.remark"
             label="备注"
             placeholder="选填"
           />
           <div class="delete-row" v-if="editBalanceId">
-            <van-button block round type="danger" @click="deleteBalance"
-              >删除</van-button
-            >
+            <app-button block round type="danger" @click="deleteBalance"
+              >删除</app-button>
           </div>
         </div>
         <div class="popup-footer">
-          <van-button block round @click="showBalancePopup = false"
-            >取消</van-button
-          >
-          <van-button block round type="primary" @click="handleAddBalance"
-            >确定</van-button
-          >
+          <app-button block round @click="showBalancePopup = false"
+            >取消</app-button>
+          <app-button block round type="primary" @click="handleAddBalance"
+            >确定</app-button>
         </div>
       </div>
-    </van-popup>
+    </app-popup>
 
-    <van-popup v-model:show="showBalanceTypePicker" position="bottom">
+    <app-popup v-model:show="showBalanceTypePicker" position="bottom">
       <van-picker
         title="选择类型"
         :columns="balanceTypeColumns"
         @confirm="onBalanceTypeConfirm"
         @cancel="showBalanceTypePicker = false"
       />
-    </van-popup>
+    </app-popup>
 
     <!-- 添加自定义汇率弹窗 -->
-    <van-popup v-model:show="showAddRatePopup" position="bottom" round>
+    <app-popup v-model:show="showAddRatePopup" position="bottom" round>
       <div class="custom-currency-popup">
         <div class="popup-header">
           <span class="popup-title">添加常用汇率</span>
         </div>
         <van-cell-group inset>
-          <van-field
+          <app-field
             v-model="newCustomRate.code"
             label="币种代码"
             placeholder="如：KRW"
             label-width="70px"
             :formatter="formatCurrencyCode"
           />
-          <van-field
+          <app-field
             v-model="newCustomRate.value"
             label="汇率"
             placeholder="100外币 = ? CNY"
@@ -266,35 +263,35 @@
           />
         </van-cell-group>
         <div class="popup-actions">
-          <van-button block round @click="showAddRatePopup = false">取消</van-button>
-          <van-button block round type="primary" @click="addCustomRate">确定</van-button>
+          <app-button block round @click="showAddRatePopup = false">取消</app-button>
+          <app-button block round type="primary" @click="addCustomRate">确定</app-button>
         </div>
       </div>
-    </van-popup>
+    </app-popup>
 
-    <van-popup v-model:show="showOffshoreTypePicker" position="bottom">
+    <app-popup v-model:show="showOffshoreTypePicker" position="bottom">
       <van-picker
         title="选择境外账户"
         :columns="offshoreTypeColumns"
         @confirm="onOffshoreTypeConfirm"
         @cancel="showOffshoreTypePicker = false"
       />
-    </van-popup>
+    </app-popup>
 
     <!-- 境外资产弹窗 -->
-    <van-popup v-model:show="showOffshorePopup" position="bottom" round>
+    <app-popup v-model:show="showOffshorePopup" position="bottom" round>
       <div class="add-popup">
         <div class="popup-header">
           <span>{{ editOffshoreId ? "编辑境外资产" : "添加境外资产" }}</span>
           <van-icon name="cross" @click="showOffshorePopup = false" />
         </div>
         <div class="popup-form">
-          <van-field
+          <app-field
             v-model="offshoreForm.customName"
             label="自定义名称"
             placeholder="选填"
           />
-          <van-field
+          <app-field
             v-model="offshoreForm.type"
             is-link
             readonly
@@ -302,50 +299,47 @@
             placeholder="选择类型"
             @click="showOffshoreTypePicker = true"
           />
-          <van-field
+          <app-field
             v-model.number="offshoreForm.amount"
             type="number"
             label="金额"
             placeholder="输入外币金额"
             :formatter="formatAmountInput"
           />
-          <van-field
+          <app-field
             v-model="offshoreForm.currency"
             label="币种"
             disabled
             placeholder="自动带出"
           />
           <div v-if="editOffshoreId" class="delete-row">
-            <van-button block round type="danger" @click="deleteOffshore"
-              >删除</van-button
-            >
+            <app-button block round type="danger" @click="deleteOffshore"
+              >删除</app-button>
           </div>
         </div>
         <div class="popup-footer">
-          <van-button block round @click="showOffshorePopup = false"
-            >取消</van-button
-          >
-          <van-button block round type="primary" @click="handleAddOffshore"
-            >确定</van-button
-          >
+          <app-button block round @click="showOffshorePopup = false"
+            >取消</app-button>
+          <app-button block round type="primary" @click="handleAddOffshore"
+            >确定</app-button>
         </div>
       </div>
-    </van-popup>
+    </app-popup>
 
     <!-- 负债弹窗 -->
-    <van-popup v-model:show="showDebtPopup" position="bottom" round>
+    <app-popup v-model:show="showDebtPopup" position="bottom" round>
       <div class="add-popup">
         <div class="popup-header">
           <span>{{ editDebtId ? "编辑负债" : "添加负债" }}</span>
           <van-icon name="cross" @click="showDebtPopup = false" />
         </div>
         <div class="popup-form">
-          <van-field
+          <app-field
             v-model="debtForm.customName"
             label="自定义名称"
             placeholder="选填"
           />
-          <van-field
+          <app-field
             v-model="debtForm.type"
             is-link
             readonly
@@ -353,43 +347,40 @@
             placeholder="选择卡/账户"
             @click="showDebtTypePicker = true"
           />
-          <van-field
+          <app-field
             v-model.number="debtForm.amount"
             type="number"
             label="欠款金额"
             placeholder="请输入金额"
             :formatter="formatAmountInput"
           />
-          <van-field
+          <app-field
             v-model="debtForm.remark"
             label="备注"
             placeholder="选填"
           />
           <div class="delete-row" v-if="editDebtId">
-            <van-button block round type="danger" @click="deleteDebt"
-              >删除</van-button
-            >
+            <app-button block round type="danger" @click="deleteDebt"
+              >删除</app-button>
           </div>
         </div>
         <div class="popup-footer">
-          <van-button block round @click="showDebtPopup = false"
-            >取消</van-button
-          >
-          <van-button block round type="primary" @click="handleAddDebt"
-            >确定</van-button
-          >
+          <app-button block round @click="showDebtPopup = false"
+            >取消</app-button>
+          <app-button block round type="primary" @click="handleAddDebt"
+            >确定</app-button>
         </div>
       </div>
-    </van-popup>
+    </app-popup>
 
-    <van-popup v-model:show="showDebtTypePicker" position="bottom">
+    <app-popup v-model:show="showDebtTypePicker" position="bottom">
       <van-picker
         title="选择负债类型"
         :columns="debtTypeColumns"
         @confirm="onDebtTypeConfirm"
         @cancel="showDebtTypePicker = false"
       />
-    </van-popup>
+    </app-popup>
 
     <!-- 加载状态 -->
     <div v-if="pageLoading" class="page-loading">
@@ -838,12 +829,12 @@ onMounted(() => {
 <style scoped>
 .page-assets-register {
   min-height: 100vh;
-  background: #f5f7fa;
+  background: var(--theme-bg-primary);
   padding-bottom: 100px;
 }
 
 .balance-card {
-  background: linear-gradient(135deg, #07c160 0%, #10b981 100%);
+  background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-primary-grad) 100%);
   color: white;
   padding: 24px 20px;
   margin-bottom: 12px;
@@ -872,7 +863,7 @@ onMounted(() => {
 }
 
 .asset-section {
-  background: white;
+  background: var(--theme-bg-secondary);
   margin-bottom: 12px;
   padding: 16px;
 }
@@ -887,12 +878,12 @@ onMounted(() => {
 .section-title {
   font-size: 16px;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--theme-text-primary);
 }
 
 .add-icon {
   font-size: 20px;
-  color: #07c160;
+  color: var(--theme-success);
   cursor: pointer;
 }
 
@@ -903,7 +894,7 @@ onMounted(() => {
 
 .empty-tip {
   text-align: center;
-  color: #9ca3af;
+  color: var(--theme-text-tertiary);
   font-size: 14px;
   padding: 20px 0;
 }
@@ -919,7 +910,7 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 12px;
-  background: #f9fafb;
+  background: var(--theme-bg-tertiary);
   border-radius: 8px;
   cursor: pointer;
 }
@@ -932,38 +923,38 @@ onMounted(() => {
 
 .item-name {
   font-size: 15px;
-  color: #1f2937;
+  color: var(--theme-text-primary);
   font-weight: 500;
 }
 
 .item-remark {
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--theme-text-tertiary);
 }
 
 .item-currency {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--theme-text-secondary);
 }
 
 .item-currency .convert {
-  color: #07c160;
+  color: var(--theme-success);
   margin-left: 4px;
 }
 
 .item-amount {
   font-size: 15px;
   font-weight: 600;
-  color: #07c160;
+  color: var(--theme-success);
 }
 
 .item-amount.danger {
-  color: #ef4444;
+  color: var(--theme-danger);
 }
 
 .zero-warning {
   font-size: 12px;
-  color: #ef4444;
+  color: var(--theme-danger-text);
   margin-top: 4px;
 }
 
@@ -972,19 +963,19 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   padding-top: 12px;
-  border-top: 1px solid #f3f4f6;
+  border-top: 1px solid var(--theme-border);
   font-size: 14px;
-  color: #6b7280;
+  color: var(--theme-text-secondary);
   margin-top: 12px;
 }
 
 .total-value {
   font-weight: 600;
-  color: #07c160;
+  color: var(--theme-success);
 }
 
 .total-value.danger {
-  color: #ef4444;
+  color: var(--theme-danger);
 }
 
 .submit-section {
@@ -993,20 +984,20 @@ onMounted(() => {
   left: 0;
   right: 0;
   padding: 16px;
-  background: white;
+  background: var(--theme-bg-secondary);
   box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
 }
 
 .exchange-rate-section {
   margin-bottom: 16px;
   padding: 12px;
-  background: #f9fafb;
+  background: var(--theme-bg-tertiary);
   border-radius: 8px;
 }
 
 .rate-title {
   font-size: 13px;
-  color: #6b7280;
+  color: var(--theme-text-secondary);
   margin-bottom: 12px;
 }
 
@@ -1025,17 +1016,17 @@ onMounted(() => {
 .rate-item span {
   width: 40px;
   font-size: 13px;
-  color: #374151;
+  color: var(--theme-text-primary);
 }
 
 .rate-delete {
-  color: #999;
+  color: var(--theme-text-tertiary);
   cursor: pointer;
   font-size: 14px;
 }
 
 .rate-delete:active {
-  color: #ee0a24;
+  color: var(--theme-danger);
 }
 
 .add-rate {
@@ -1043,14 +1034,15 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   height: 32px;
-  background: #f5f5f5;
+  background: var(--theme-bg-tertiary);
   border-radius: 4px;
   cursor: pointer;
-  color: #666;
+  color: var(--theme-text-secondary);
 }
 
 .add-rate:active {
-  background: #eee;
+  background: var(--theme-bg-tertiary);
+  opacity: 0.7;
 }
 
 .add-popup {
@@ -1064,12 +1056,12 @@ onMounted(() => {
   margin-bottom: 20px;
   font-size: 17px;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--theme-text-primary);
 }
 
 .popup-header .van-icon {
   font-size: 20px;
-  color: #9ca3af;
+  color: var(--theme-text-tertiary);
 }
 
 .popup-form {
@@ -1100,7 +1092,7 @@ onMounted(() => {
 .custom-currency-popup .popup-title {
   font-size: 17px;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--theme-text-primary);
 }
 
 .custom-currency-popup .popup-header {
@@ -1126,7 +1118,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--theme-bg-primary);
   z-index: 999;
 }
 </style>

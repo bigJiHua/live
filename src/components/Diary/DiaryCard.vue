@@ -131,13 +131,13 @@ const handleDetail = () => {
 
 <style scoped>
 .diary-item-card {
-  background: white;
+  background: var(--theme-bg-secondary);
   border-radius: 12px;
   overflow: hidden;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
   margin-bottom: 4px;
   animation: slideUp 0.4s ease-out;
-  border: 0.5px solid #f0f0f0;
+  border: 1px solid var(--theme-border);
 }
 
 @keyframes slideUp {
@@ -190,7 +190,7 @@ const handleDetail = () => {
 /* 正文显示两行 */
 .main-text {
   font-size: 13px;
-  color: #2c3e50;
+  color: var(--theme-text-primary);
   line-height: 1.45;
   margin-bottom: 10px;
   display: -webkit-box;
@@ -213,8 +213,8 @@ const handleDetail = () => {
   align-items: center;
   gap: 3px;
   font-size: 10px;
-  color: var(--app-primary);
-  background: #f0f9eb;
+  color: var(--van-green);
+  background: rgba(7, 193, 96, 0.1);
   padding: 2px 6px;
   border-radius: 4px;
 }
@@ -224,8 +224,8 @@ const handleDetail = () => {
   display: inline-flex;
   align-items: center;
   font-size: 10px;
-  color: #7232dd;
-  background: #f2e8ff;
+  color: var(--van-purple, #7232dd);
+  background: rgba(114, 50, 221, 0.1);
   padding: 2px 6px;
   border-radius: 4px;
 }
@@ -236,7 +236,7 @@ const handleDetail = () => {
   justify-content: space-between;
   align-items: center;
   padding-bottom: 8px;
-  border-bottom: 1px solid #f7f8fa;
+  border-bottom: 1px solid var(--theme-border);
   margin-bottom: 6px;
 }
 
@@ -248,7 +248,7 @@ const handleDetail = () => {
 
 .author-info .name {
   font-size: 11px;
-  color: #666;
+  color: var(--theme-text-secondary);
   max-width: 60px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -257,7 +257,7 @@ const handleDetail = () => {
 
 .user-meta .time {
   font-size: 10px;
-  color: #999;
+  color: var(--theme-text-tertiary);
 }
 
 .time-wrap {
@@ -269,8 +269,8 @@ const handleDetail = () => {
 
 .time-wrap .date {
   font-size: 9px;
-  color: #07c160;
-  background: #f0f9eb;
+  color: var(--van-green, #07c160);
+  background: var(--van-green-bg, #f0f9eb);
   padding: 1px 4px;
   border-radius: 3px;
 }
@@ -281,11 +281,11 @@ const handleDetail = () => {
   align-items: center;
   gap: 3px;
   font-size: 10px;
-  color: #bdc3c7;
+  color: var(--theme-text-tertiary);
 }
 
 .diary-item-card:active {
   transform: scale(0.97);
-  background-color: #fafafa;
+  background-color: var(--theme-bg-tertiary);
 }
 </style>

@@ -29,26 +29,24 @@
       </div>
     </div>
 
-    <!-- 星期标题 -->
-    <div class="weekdays">
-      <div v-for="day in weekDays" :key="day" class="weekday">{{ day }}</div>
-    </div>
-
-    <!-- 日历主体 -->
-    <div class="calendar-grid" v-if="!loading">
-      <div v-for="(day, index) in calendarDays" :key="index" class="day-cell" :class="getDayCellClass(day)"
-        @click="selectDate(day)">
-        <span class="day-number">{{ day.day }}</span>
-        <!-- 有收支记录 -->
-        <div v-if="day.hasRecord" class="day-amounts">
-          <span v-if="day.income > 0" class="amount income">+{{ formatAmount(day.income) }}</span>
-          <span v-if="day.expense > 0" class="amount expense">-{{ formatAmount(day.expense) }}</span>
-        </div>
+    <!-- 日历主体（共享 CalendarGrid 组件） -->
+    <div class="calendar-grid-wrap">
+      <CalendarGrid
+        v-if="!loading"
+        :year="currentYear"
+        :month="currentMonth"
+        :selected-date="selectedDate"
+        :primary="'var(--theme-primary)'"
+        variant="flow"
+        :dataset="calendarDataset"
+        :show-stat="false"
+        :card="false"
+        :show-header="false"
+        @select="onFlowSelect"
+      />
+      <div v-else class="calendar-loading">
+        <van-loading size="32px">加载中...</van-loading>
       </div>
-    </div>
-
-    <div class="calendar-loading" v-else>
-      <van-loading size="32px">加载中...</van-loading>
     </div>
 
     <!-- 选中日期的流水列表 -->
@@ -67,7 +65,7 @@
             <div class="col-header expense-header">支出</div>
             <div v-if="dayDetail.expenseItems.length > 0" class="col-items">
               <div v-for="node in dayDetail.expenseItems" :key="node.data.id" class="flow-item flow-item-col"
-                @click="goDetail(node.data)">
+                :class="{ repay: node.data.category_id === 'CATEGORY_REPAY' }" @click="goDetail(node.data)">
                 <div class="fi-line fi-line1">
                   <span>
                     {{ getCategoryName(node.data) }}
@@ -88,7 +86,7 @@
             <div class="col-header income-header">收入</div>
             <div v-if="dayDetail.incomeItems.length > 0" class="col-items">
               <div v-for="node in dayDetail.incomeItems" :key="node.data.id" class="flow-item flow-item-col"
-                @click="goDetail(node.data)">
+                :class="{ repay: node.data.category_id === 'CATEGORY_REPAY' }" @click="goDetail(node.data)">
                 <div class="fi-line fi-line1">
                   <span>
                     {{ getCategoryName(node.data) }}
@@ -173,18 +171,18 @@
 
         <van-empty v-if="dayDetail.displayList.length === 0" description="当日无收支记录" />
         <div v-if="dayDetail.displayList.length === 0" class="add-record-btn">
-          <van-button type="primary" size="small" round @click="goAddRecord">
+          <app-button type="primary" size="small" round @click="goAddRecord">
             <van-icon name="plus" /> 立即记账
-          </van-button>
+          </app-button>
         </div>
       </div>
     </div>
 
     <!-- 月份选择器 -->
-    <van-popup v-model:show="showMonthPicker" position="bottom" round>
+    <app-popup v-model:show="showMonthPicker" position="bottom" round>
       <van-picker title="选择月份" v-model="pickerSelectedValues" :columns="pickerColumns" @confirm="onPickerConfirm"
         @cancel="showMonthPicker = false" />
-    </van-popup>
+    </app-popup>
   </div>
 </template>
 
@@ -197,11 +195,11 @@ import { getAccountList } from "@/utils/api/account";
 import { getCardList } from "@/utils/api/card";
 import { categoryApi } from "@/utils/api/category";
 import ENV from "@/utils/env";
+import CalendarGrid from "@/components/calendar/CalendarGrid.vue";
 
 const BASE_URL = ENV.FILE_BASE_URL;
 
 const router = useRouter();
-const weekDays = ["日", "一", "二", "三", "四", "五", "六"];
 
 // 当前年月
 const today = dayjs();
@@ -524,69 +522,30 @@ const processDailyDisplayList = (items) => {
 };
 
 // 日历天列表
-const calendarDays = computed(() => {
-  const days = [];
-  const firstDay = dayjs()
-    .year(currentYear.value)
-    .month(currentMonth.value)
-    .date(1);
-  const daysInMonth = firstDay.daysInMonth();
-  const startWeekday = firstDay.day();
-  const todayStr = dayjs().format("YYYY-MM-DD");
-
-  // 空白填充
-  for (let i = 0; i < startWeekday; i++) {
-    days.push({ day: null, empty: true });
-  }
-
-  // 日期
-  for (let d = 1; d <= daysInMonth; d++) {
-    const dateStr = firstDay.date(d).format("YYYY-MM-DD");
-    const dayRecord = monthData.value.daily_list.find((item) => item.date === dateStr);
-    const isToday = dateStr === todayStr;
-    const isSelected = dateStr === selectedDate.value;
-
-    // 当日收支
-    const income = dayRecord ? parseFloat(dayRecord.income) || 0 : 0;
-    const expense = dayRecord ? parseFloat(dayRecord.expense) || 0 : 0;
-
-    days.push({
-      day: d,
-      date: dateStr,
-      isToday,
-      isSelected,
-      income,
-      expense,
-      hasRecord: income > 0 || expense > 0,
-    });
-  }
-  return days;
+// 后端数据 → CalendarGrid 的 dataset（按 YYYY-MM-DD 索引）
+const calendarDataset = computed(() => {
+  const map = {};
+  (monthData.value.daily_list || []).forEach((d) => {
+    map[d.date] = {
+      income: parseFloat(d.income) || 0,
+      expense: parseFloat(d.expense) || 0,
+    };
+  });
+  return map;
 });
 
-// 获取日期格子样式
-const getDayCellClass = (day) => {
-  if (!day.day) return "empty";
-  const classes = [];
-
-  if (day.isToday) classes.push("today");
-  if (day.isSelected) classes.push("selected");
-  if (day.hasRecord) {
-    if (day.income > 0 && day.expense > 0) {
-      classes.push("has-both");
-    } else if (day.income > 0) {
-      classes.push("has-income");
-    } else if (day.expense > 0) {
-      classes.push("has-expense");
-    }
-  }
-
-  return classes.join(" ");
+// 选择日期
+const onFlowSelect = (date) => {
+  selectedDate.value = date;
 };
 
-// 选择日期
-const selectDate = (day) => {
-  if (!day?.date || day.empty) return;
-  selectedDate.value = day.date;
+// 回到今天（「今」圆环按钮）
+const goToday = () => {
+  const now = dayjs();
+  currentYear.value = now.year();
+  currentMonth.value = now.month();
+  selectedDate.value = now.format("YYYY-MM-DD");
+  loadMonthData();
 };
 
 // 选中日期的流水详情
@@ -820,7 +779,7 @@ const getCompactBankLabel = (item) => {
 <style scoped>
 .page-flow-calendar {
   min-height: 100vh;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   padding-bottom: 20px;
 }
 
@@ -829,19 +788,19 @@ const getCompactBankLabel = (item) => {
   justify-content: space-between;
   align-items: center;
   padding: 16px;
-  background: #fff;
+  background: var(--theme-bg-secondary);
 }
 
 .header .van-icon {
   font-size: 18px;
   padding: 6px;
-  color: #1989fa;
+  color: var(--theme-primary);
 }
 
 .month-title {
   font-size: 18px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
   display: flex;
   align-items: center;
   gap: 4px;
@@ -851,7 +810,7 @@ const getCompactBankLabel = (item) => {
 .stat-bar {
   display: flex;
   align-items: center;
-  background: #fff;
+  background: var(--theme-bg-secondary);
   padding: 16px;
   margin-bottom: 8px;
   gap: 16px;
@@ -869,49 +828,54 @@ const getCompactBankLabel = (item) => {
 
 .stat-label {
   font-size: 12px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 
 .stat-value {
   font-size: 18px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
 }
 
 .stat-value.income {
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
 }
 
 .stat-value.expense {
-  color: #07c160;
+  color: var(--van-green, #07c160);
 }
 
 .stat-divider {
   width: 1px;
   height: 30px;
-  background: #ebedf0;
+  background: var(--theme-border);
 }
 
 /* 星期 */
 .weekdays {
   display: flex;
-  background: #fff;
+  background: var(--theme-bg-secondary);
   padding: 12px 0;
-  border-bottom: 1px solid #f2f3f5;
+  border: 1px solid var(--theme-border);
 }
 
 .weekday {
   flex: 1;
   text-align: center;
   font-size: 13px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 
 /* 日历 */
+.calendar-grid-wrap {
+  background: var(--theme-bg-secondary);
+  border: 1px solid var(--theme-border);
+  border-top: none;
+}
 .calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  background: #fff;
+  background: var(--theme-bg-secondary);
 }
 
 .day-cell {
@@ -932,7 +896,7 @@ const getCompactBankLabel = (item) => {
   align-items: center;
   justify-content: center;
   height: 300px;
-  background: #fff;
+  background: var(--theme-bg-secondary);
 }
 
 .day-cell.empty {
@@ -941,7 +905,7 @@ const getCompactBankLabel = (item) => {
 
 .day-number {
   font-size: 15px;
-  color: #323233;
+  color: var(--theme-text-primary);
   width: 32px;
   height: 32px;
   display: flex;
@@ -950,14 +914,14 @@ const getCompactBankLabel = (item) => {
 }
 
 .day-cell.today .day-number {
-  background: #e8f4ff;
-  color: #1989fa;
+  background: var(--theme-primary-light);
+  color: var(--theme-primary);
   border-radius: 50%;
 }
 
 .day-cell.selected .day-number {
-  background: rgba(25, 137, 250, 0.2);
-  color: #1989fa;
+  background: rgba(var(--theme-primary-rgb), 0.2);
+  color: var(--theme-primary);
   border-radius: 4px;
 }
 
@@ -978,26 +942,26 @@ const getCompactBankLabel = (item) => {
 }
 
 .amount.income {
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
 }
 
 .amount.expense {
-  color: #07c160;
+  color: var(--van-green, #07c160);
 }
 
 /* 颜色区分 */
 .day-cell.has-income .day-number {
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
 }
 
 .day-cell.has-expense .day-number {
-  color: #07c160;
+  color: var(--van-green, #07c160);
 }
 
 /* 选中日期详情 */
 .day-detail {
   margin: 12px 16px;
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 12px;
   overflow: hidden;
 }
@@ -1007,13 +971,13 @@ const getCompactBankLabel = (item) => {
   justify-content: space-between;
   align-items: center;
   padding: 16px;
-  border-bottom: 1px solid #f2f3f5;
+  border: 1px solid var(--theme-border);
 }
 
 .detail-date {
   font-size: 15px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
 }
 
 .detail-balance {
@@ -1022,11 +986,11 @@ const getCompactBankLabel = (item) => {
 }
 
 .detail-balance.income {
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
 }
 
 .detail-balance.expense {
-  color: #07c160;
+  color: var(--van-green, #07c160);
 }
 
 .detail-content {
@@ -1065,36 +1029,51 @@ const getCompactBankLabel = (item) => {
 }
 
 .expense-header {
-  background: #fff2f0;
-  color: #ee0a24;
+  background: var(--van-danger-bg, #fff2f0);
+  color: var(--van-danger-color, #ee0a24);
 }
 
 .income-header {
-  background: #f0fff5;
-  color: #07c160;
+  background: var(--van-green-bg, #f0fff5);
+  color: var(--van-green, #07c160);
 }
 
 .col-divider {
   width: 1px;
   align-self: stretch;
-  background: #ebedf0;
+  background: var(--theme-border);
   margin: 0 8px;
 }
 
 .col-empty {
   text-align: center;
-  color: #c8c9cc;
+  color: var(--theme-text-tertiary);
   padding: 16px 0;
   font-size: 13px;
 }
 
 /* 列内流水项 */
 .flow-item-col {
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   padding: 6px 10px;
   border-radius: 8px;
   cursor: pointer;
   margin-bottom: 5px;
+}
+
+/* 信用卡还款：置灰 */
+.flow-item-col.repay {
+  filter: grayscale(1);
+  opacity: 0.55;
+}
+/* 非默认（深色）主题：不置灰，改为普通白色文字 */
+html[data-theme-mono="1"] .flow-item-col.repay {
+  filter: none;
+  opacity: 1;
+}
+html[data-theme-mono="1"] .flow-item-col.repay .fi-line1,
+html[data-theme-mono="1"] .flow-item-col.repay .fi-line2 {
+  color: #fff;
 }
 
 .fi-line {
@@ -1104,13 +1083,13 @@ const getCompactBankLabel = (item) => {
 
 .fi-line1 {
   font-size: 12px;
-  color: #323233;
+  color: var(--theme-text-primary);
   justify-content: space-between;
   margin-bottom: 2px;
 }
 
 .fi-time {
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 
 .fi-line2 {
@@ -1121,14 +1100,14 @@ const getCompactBankLabel = (item) => {
 
 .fi-bank {
   font-size: 10px;
-  color: #646566;
+  color: var(--theme-text-secondary);
   flex-shrink: 0;
   text-align: right;
 }
 
 .fi-card-type {
   font-size: 9px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   margin-left: 2px;
 }
 
@@ -1149,11 +1128,11 @@ const getCompactBankLabel = (item) => {
 }
 
 .flow-item-col .item-amount.income {
-  color: #07c160;
+  color: var(--van-green, #07c160);
 }
 
 .flow-item-col .item-amount.expense {
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
 }
 
 /* ── 转账区域 ── */
@@ -1168,7 +1147,7 @@ const getCompactBankLabel = (item) => {
   width: 100%;
   text-align: center;
   font-size: 12px;
-  color: #1989fa;
+  color: var(--theme-primary);
   font-weight: 500;
   margin-bottom: 6px;
   letter-spacing: 2px;
@@ -1178,9 +1157,9 @@ const getCompactBankLabel = (item) => {
   width: calc(50% - 3px);
   margin-top: 0;
   padding: 6px 8px;
-  border: 1px dashed #1989fa;
+  border: 1px dashed var(--van-blue, #1989fa);
   border-radius: 10px;
-  background: #f0f7ff;
+  background: var(--van-blue-bg, #f0f7ff);
   box-sizing: border-box;
 }
 
@@ -1193,13 +1172,13 @@ const getCompactBankLabel = (item) => {
 
 .tf-label {
   font-size: 11px;
-  color: #1989fa;
+  color: var(--theme-primary);
   font-weight: 600;
 }
 
 .tf-time {
   font-size: 10px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 
 .tf-line2 {
@@ -1216,16 +1195,16 @@ const getCompactBankLabel = (item) => {
 }
 
 .tf-amount.expense {
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
 }
 
 .tf-amount.income {
-  color: #07c160;
+  color: var(--van-green, #07c160);
 }
 
 .tf-arrow {
   font-size: 16px;
-  color: #1989fa;
+  color: var(--theme-primary);
   flex-shrink: 0;
 }
 
@@ -1236,7 +1215,7 @@ const getCompactBankLabel = (item) => {
 
 .tf-bank {
   font-size: 10px;
-  color: #646566;
+  color: var(--theme-text-secondary);
   max-width: 45%;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1255,7 +1234,7 @@ const getCompactBankLabel = (item) => {
   width: 100%;
   text-align: center;
   font-size: 12px;
-  color: #2e7d32;
+  color: var(--van-green);
   font-weight: 500;
   margin-bottom: 6px;
   letter-spacing: 2px;
@@ -1265,9 +1244,9 @@ const getCompactBankLabel = (item) => {
   width: calc(50% - 3px);
   margin-top: 0;
   padding: 6px 8px;
-  border: 1px solid #c8e6c9;
+  border: 1px solid rgba(7,193,96,0.25);
   border-radius: 10px;
-  background: #e8f5e9;
+  background: rgba(7,193,96,0.06);
   box-sizing: border-box;
 }
 
@@ -1280,13 +1259,13 @@ const getCompactBankLabel = (item) => {
 
 .wd-label {
   font-size: 11px;
-  color: #2e7d32;
+  color: var(--van-green);
   font-weight: 600;
 }
 
 .wd-time {
   font-size: 10px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 
 .wd-line2 {
@@ -1303,16 +1282,16 @@ const getCompactBankLabel = (item) => {
 }
 
 .wd-amount.expense {
-  color: #2e7d32;
+  color: var(--van-green);
 }
 
 .wd-amount.income {
-  color: #2e7d32;
+  color: var(--van-green);
 }
 
 .wd-arrow {
   font-size: 16px;
-  color: #2e7d32;
+  color: var(--van-green);
   flex-shrink: 0;
 }
 
@@ -1323,7 +1302,7 @@ const getCompactBankLabel = (item) => {
 
 .wd-bank {
   font-size: 10px;
-  color: #388e3c;
+  color: var(--van-green);
   max-width: 45%;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1342,7 +1321,7 @@ const getCompactBankLabel = (item) => {
   width: 100%;
   text-align: center;
   font-size: 12px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   font-weight: 500;
   margin-bottom: 6px;
   letter-spacing: 2px;
@@ -1352,9 +1331,9 @@ const getCompactBankLabel = (item) => {
   width: calc(50% - 3px);
   margin-top: 0;
   padding: 6px 8px;
-  border: 1px dashed #c8c9cc;
+  border: 1px dashed var(--theme-border);
   border-radius: 10px;
-  background: #f5f5f5;
+  background: var(--theme-bg-tertiary);
   box-sizing: border-box;
   opacity: 0.72;
 }
@@ -1368,13 +1347,13 @@ const getCompactBankLabel = (item) => {
 
 .rv-label {
   font-size: 11px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   font-weight: 600;
 }
 
 .rv-time {
   font-size: 10px;
-  color: #c8c9cc;
+  color: var(--theme-text-tertiary);
 }
 
 .rv-line2 {
@@ -1391,16 +1370,16 @@ const getCompactBankLabel = (item) => {
 }
 
 .rv-amount.expense {
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 
 .rv-amount.income {
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 
 .rv-arrow {
   font-size: 16px;
-  color: #c8c9cc;
+  color: var(--theme-text-tertiary);
   flex-shrink: 0;
 }
 
@@ -1411,7 +1390,7 @@ const getCompactBankLabel = (item) => {
 
 .rv-bank {
   font-size: 10px;
-  color: #c8c9cc;
+  color: var(--theme-text-tertiary);
   max-width: 45%;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1426,7 +1405,7 @@ const getCompactBankLabel = (item) => {
 }
 
 .add-record-btn .van-button {
-  background: #1989fa;
+  background: var(--theme-primary);
   border: none;
 }
 

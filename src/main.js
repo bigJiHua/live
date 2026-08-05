@@ -11,12 +11,34 @@ import 'vant/lib/index.css';
 
 import './assets/css/style.css';
 
+// 自写主题化基础组件（深度定制，纯 token 驱动，替代 Vant 原生组件）
+import AppButton from '@/components/base/AppButton.vue'
+import AppTag from '@/components/base/AppTag.vue'
+import AppCell from '@/components/base/AppCell.vue'
+import AppForm from '@/components/base/AppForm.vue'
+import AppField from '@/components/base/AppField.vue'
+import AppPopup from '@/components/base/AppPopup.vue'
+import AppDialog from '@/components/base/AppDialog.vue';
+import AppGrid from '@/components/base/AppGrid.vue'
+import AppGridItem from '@/components/base/AppGridItem.vue';
+
 const app = createApp(App);
 const pinia = createPinia();
 
 app.use(pinia);
 app.use(router);
 app.use(Vant);
+
+// 全局注册自写主题化基础组件（<app-*> / <App*> 均可）
+app.component('AppButton', AppButton);
+app.component('AppTag', AppTag);
+app.component('AppCell', AppCell);
+app.component('AppForm', AppForm);
+app.component('AppField', AppField);
+app.component('AppPopup', AppPopup);
+app.component('AppDialog', AppDialog);
+app.component('AppGrid', AppGrid);
+app.component('AppGridItem', AppGridItem);
 
 // 4. 初始化路由守卫（需在 router 初始化之后）
 import { setupRouterGuard } from "./router/middleware";

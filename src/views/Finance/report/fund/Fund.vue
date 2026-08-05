@@ -30,17 +30,17 @@
             <div class="menu-title">理财登记</div>
             <div class="menu-desc">新增 / 编辑 / 删除持有的基金</div>
           </div>
-          <van-icon name="arrow" color="#c8c9cc" />
+          <van-icon name="arrow" :color="'var(--theme-text-tertiary)'" />
         </div>
         <div class="menu-item" @click="$router.push('/finance/report/fund/daily')">
           <div class="menu-icon">
-            <van-icon name="edit" style="color: #07c160" />
+            <van-icon name="edit" style="color: var(--van-green, #07c160)" />
           </div>
           <div class="menu-info">
             <div class="menu-title">每日收益登记</div>
             <div class="menu-desc">记录今日收益和增持本金</div>
           </div>
-          <van-icon name="arrow" color="#c8c9cc" />
+          <van-icon name="arrow" :color="'var(--theme-text-tertiary)'" />
         </div>
         <div class="menu-item" @click="$router.push('/finance/report/fund/trend')">
           <div class="menu-icon"><van-icon name="chart-trending-o" /></div>
@@ -48,7 +48,7 @@
             <div class="menu-title">变化走势图</div>
             <div class="menu-desc">查看累计收益和当前市值变化</div>
           </div>
-          <van-icon name="arrow" color="#c8c9cc" />
+          <van-icon name="arrow" :color="'var(--theme-text-tertiary)'" />
         </div>
         <div class="menu-item" @click="$router.push('/finance/report/fund/earnings')">
           <div class="menu-icon"><van-icon name="gold-coin-o" /></div>
@@ -56,7 +56,7 @@
             <div class="menu-title">收益明细</div>
             <div class="menu-desc">每支基金的收益详情与回报率</div>
           </div>
-          <van-icon name="arrow" color="#c8c9cc" />
+          <van-icon name="arrow" :color="'var(--theme-text-tertiary)'" />
         </div>
       </div>
     </div>
@@ -157,7 +157,7 @@ onMounted(async () => {
 
 <style scoped>
 .page-fund {
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   padding: 15px;
 }
 
@@ -168,7 +168,7 @@ onMounted(async () => {
   margin-bottom: 20px;
 }
 .sc-item {
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 10px;
   min-width: 0;
   padding: 10px 4px;
@@ -176,7 +176,7 @@ onMounted(async () => {
 }
 .sc-label {
   font-size: 10px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   margin-bottom: 4px;
   white-space: nowrap;
 }
@@ -190,13 +190,13 @@ onMounted(async () => {
   text-overflow: clip;
 }
 .sc-value.primary {
-  color: #1989fa;
+  color: var(--theme-primary);
 }
 .sc-value.success {
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
 }
 .sc-value.danger {
-  color: #07c160;
+  color: var(--van-green, #07c160);
 }
 
 .section {
@@ -205,13 +205,13 @@ onMounted(async () => {
 .section-title {
   font-size: 15px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
   margin-bottom: 10px;
   padding-left: 2px;
 }
 
 .menu-card {
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 10px;
   overflow: hidden;
 }
@@ -220,7 +220,7 @@ onMounted(async () => {
   align-items: center;
   gap: 12px;
   padding: 16px;
-  border-bottom: 1px solid #f5f5f5;
+  border: 1px solid var(--theme-border);
   cursor: pointer;
 }
 .menu-item:last-child {
@@ -230,8 +230,7 @@ onMounted(async () => {
   width: 40px;
   height: 40px;
   border-radius: 10px;
-  background: #f0f5ff;
-  color: #1989fa;
+  color: var(--theme-primary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -244,11 +243,11 @@ onMounted(async () => {
 .menu-title {
   font-size: 14px;
   font-weight: 500;
-  color: #323233;
+  color: var(--theme-text-primary);
 }
 .menu-desc {
   font-size: 11px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   margin-top: 2px;
 }
 
@@ -260,7 +259,7 @@ onMounted(async () => {
   overflow-y: scroll;
 }
 .fund-card {
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 10px;
   padding: 14px 16px;
   cursor: pointer;
@@ -274,7 +273,7 @@ onMounted(async () => {
 .fc-name {
   font-size: 14px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -284,7 +283,7 @@ onMounted(async () => {
 .fc-amount {
   font-size: 16px;
   font-weight: 700;
-  color: #1989fa;
+  color: var(--theme-primary);
   font-family: 'DIN Alternate', sans-serif;
   white-space: nowrap;
 }
@@ -296,7 +295,7 @@ onMounted(async () => {
 }
 .fc-company {
   font-size: 11px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 .fc-rate {
   font-size: 14px;
@@ -304,21 +303,21 @@ onMounted(async () => {
   font-family: 'DIN Alternate', sans-serif;
 }
 .fc-rate.success {
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
 }
 .fc-rate.danger {
-  color: #07c160;
+  color: var(--van-green, #07c160);
 }
 .fc-profit.success {
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
 }
 .fc-profit.danger {
-  color: #07c160;
+  color: var(--van-green, #07c160);
 }
 .fc-bottom {
   display: flex;
   gap: 12px;
   font-size: 11px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 </style>

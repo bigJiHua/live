@@ -72,19 +72,19 @@ const goToPage = (type) => {
 <style scoped>
 .page-data-manage {
   min-height: 100vh;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   padding: 12px 16px 30px;
 }
 .section { margin-bottom: 20px; }
 .section-title {
   font-size: 15px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
   margin-bottom: 10px;
   padding-left: 2px;
 }
 .menu-card {
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 10px;
   overflow: hidden;
 }
@@ -93,7 +93,7 @@ const goToPage = (type) => {
   align-items: center;
   gap: 12px;
   padding: 16px;
-  border-bottom: 1px solid #f5f5f5;
+  border: 1px solid var(--theme-border);
   cursor: pointer;
 }
 .menu-item:last-child { border-bottom: none; }
@@ -107,20 +107,20 @@ const goToPage = (type) => {
   font-size: 20px;
   flex-shrink: 0;
 }
-.menu-icon.blue { background: #f0f5ff; color: #1989fa; }
-.menu-icon.green { background: #f0fff4; color: #07c160; }
-.menu-icon.orange { background: #fff7e6; color: #fa8c16; }
-.menu-icon.teal { background: #e6f7f5; color: #07c160; }
-.menu-icon.red { background: #fff0f0; color: #ee0a24; }
+.menu-icon.blue { color: var(--theme-primary); }
+.menu-icon.green { color: #07c160; }
+.menu-icon.orange { color: #fa8c16; }
+.menu-icon.teal { color: #07c160; }
+.menu-icon.red { color: #ee0a24; }
 .menu-info { flex: 1; }
 .menu-title {
   font-size: 14px;
   font-weight: 500;
-  color: #323233;
+  color: var(--theme-text-primary);
 }
 .menu-desc {
   font-size: 11px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   margin-top: 2px;
 }
 </style>

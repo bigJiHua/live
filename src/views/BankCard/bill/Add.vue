@@ -1,13 +1,13 @@
 <template>
   <div class="page-bill-add">
-    <van-form @submit="onSubmit" ref="formRef">
+    <app-form @submit="onSubmit" ref="formRef">
       <!-- 关联卡片 -->
       <div class="form-section">
         <div class="section-title">
           关联卡片 <span class="required-hint">*必填</span>
         </div>
         <van-cell-group inset>
-          <van-field
+          <app-field
             v-model="selectedCardName"
             name="cardId"
             label="卡片"
@@ -26,7 +26,7 @@
           额度信息 <span class="required-hint">*必填</span>
         </div>
         <van-cell-group inset>
-          <van-field
+          <app-field
             v-model="formData.creditLimit"
             name="creditLimit"
             label="信用额度"
@@ -35,10 +35,9 @@
             clickable
             @click="openKeyboard('creditLimit')"
             :rules="[{ required: true, message: '请输入信用额度' }]"
-          >
-            <template #button>元</template>
-          </van-field>
-          <van-field
+            suffix="元"
+          />
+          <app-field
             v-model="formData.tempLimit"
             name="tempLimit"
             label="临时额度"
@@ -46,9 +45,8 @@
             readonly
             clickable
             @click="openKeyboard('tempLimit')"
-          >
-            <template #button>元</template>
-          </van-field>
+            suffix="元"
+          />
         </van-cell-group>
       </div>
 
@@ -56,7 +54,7 @@
       <div class="form-section">
         <div class="section-title">积分设置</div>
         <van-cell-group inset>
-          <van-field
+          <app-field
             v-model="formData.pointsRate"
             name="pointsRate"
             label="积分倍率"
@@ -64,9 +62,8 @@
             readonly
             clickable
             @click="openKeyboard('pointsRate')"
-          >
-            <template #suffix>倍</template>
-          </van-field>
+            suffix="倍"
+          />
         </van-cell-group>
         <div class="tip-box">
           <van-icon name="info-o" />
@@ -80,12 +77,10 @@
       <div class="form-section">
         <div class="section-title">提醒设置</div>
         <van-cell-group inset>
-          <van-field name="remindSwitch" label="还款提醒">
-            <template #input>
-              <van-switch v-model="formData.remindSwitch" size="20" />
-            </template>
-          </van-field>
-          <van-field
+          <app-field name="remindSwitch" label="还款提醒">
+            <van-switch v-model="formData.remindSwitch" size="20" />
+          </app-field>
+          <app-field
             v-model="formData.remindDays"
             name="remindDays"
             label="提前提醒"
@@ -94,9 +89,8 @@
             clickable
             :disabled="!formData.remindSwitch"
             @click="formData.remindSwitch && openKeyboard('remindDays')"
-          >
-            <template #suffix>天</template>
-          </van-field>
+            suffix="天"
+          />
         </van-cell-group>
       </div>
 
@@ -113,7 +107,7 @@
       </div>
 
       <div class="submit-btn-wrap">
-        <van-button
+        <app-button
           type="primary"
           block
           round
@@ -122,18 +116,18 @@
           :disabled="loading"
         >
           创建账单
-        </van-button>
+        </app-button>
       </div>
-    </van-form>
+    </app-form>
 
     <!-- 卡片选择 -->
-    <van-popup v-model:show="showCardPicker" position="bottom">
+    <app-popup v-model:show="showCardPicker" position="bottom">
       <van-picker
         :columns="cardColumns"
         @confirm="onCardConfirm"
         @cancel="showCardPicker = false"
       />
-    </van-popup>
+    </app-popup>
 
     <!-- 数字键盘 -->
     <van-number-keyboard
@@ -309,7 +303,7 @@ const onSubmit = async () => {
         await showConfirmDialog({
           title: "确认额度",
           message: "信用额度为 0，确定要继续创建吗？",
-          confirmButtonColor: "#ee0a24",
+          confirmButtonColor: "var(--van-danger-color, #ee0a24)",
         });
       } catch {
         // 用户取消
@@ -349,7 +343,7 @@ onMounted(() => {
 <style scoped>
 .page-bill-add {
   min-height: 100vh;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   padding-bottom: 40px;
 }
 
@@ -359,37 +353,37 @@ onMounted(() => {
 
 .section-title {
   font-size: 14px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   padding: 12px 16px 8px;
 }
 
 .required-hint {
   font-size: 12px;
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
   margin-left: 8px;
 }
 
 .tip-box {
   display: flex;
   align-items: flex-start;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   margin: 12px 16px;
   padding: 12px;
   border-radius: 8px;
   font-size: 13px;
-  color: #646566;
+  color: var(--theme-text-secondary);
   line-height: 1.6;
 }
 
 .tip-box .van-icon {
   margin-right: 8px;
   margin-top: 2px;
-  color: #1989fa;
+  color: var(--theme-primary);
 }
 
 .tip-box.tip-highlight {
-  background: #fff7e6;
-  border: 1px solid #ffe1b3;
+  background: var(--van-orange-bg, #fff7e6);
+  border: 1px solid rgba(255, 151, 106, 0.4);
 }
 
 .submit-btn-wrap {

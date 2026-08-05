@@ -8,24 +8,24 @@
 
       <!-- 基本信息 -->
       <van-cell-group inset title="基本信息">
-        <van-cell title="资产名称" :value="asset.info" />
-        <van-cell title="品类" :value="asset.tag || '-'" />
-        <van-cell
+        <app-cell title="资产名称" :value="asset.info" />
+        <app-cell title="品类" :value="asset.tag || '-'" />
+        <app-cell
           title="购买价格"
           :value="'¥' + formatAmount(asset.buy_price)"
         />
-        <van-cell title="购买日期" :value="asset.buy_date" />
+        <app-cell title="购买日期" :value="asset.buy_date" />
       </van-cell-group>
 
       <!-- 折旧信息 -->
       <van-cell-group inset title="折旧信息">
-        <van-cell title="预计使用年限" :value="asset.use_years + '年'" />
-        <van-cell title="残值率" :value="asset.residual_rate + '%'" />
-        <van-cell
+        <app-cell title="预计使用年限" :value="asset.use_years + '年'" />
+        <app-cell title="残值率" :value="asset.residual_rate + '%'" />
+        <app-cell
           title="残值"
           :value="'¥' + formatAmount(asset.residual_val)"
         />
-        <van-cell
+        <app-cell
           title="二手市场价"
           :value="
             asset.secondhand_price
@@ -34,43 +34,43 @@
           "
         />
         <van-divider />
-        <van-cell
+        <app-cell
           title="月折旧"
           :value="'¥' + formatAmount(asset.month_deprec)"
         />
-        <van-cell
+        <app-cell
           title="累计折旧"
           :value="'¥' + formatAmount(asset.total_deprec)"
         />
-        <van-cell
+        <app-cell
           title="当前账面价值"
           value-class="primary-value"
           :value="'¥' + formatAmount(asset.now_val)"
         />
-        <van-cell title="已使用时长" :value="formatUsedTime(asset)" />
-        <van-cell title="上次折旧日期" :value="asset.last_deprec_date || '-'" />
-        <van-cell title="折旧状态">
+        <app-cell title="已使用时长" :value="formatUsedTime(asset)" />
+        <app-cell title="上次折旧日期" :value="asset.last_deprec_date || '-'" />
+        <app-cell title="折旧状态">
           <template #value>
-            <van-tag
+            <app-tag
               :type="asset.deprec_finished === 1 ? 'success' : 'primary'"
               size="small"
             >
               {{ asset.deprec_finished === 1 ? "已折旧完毕" : "未折旧完" }}
-            </van-tag>
+            </app-tag>
           </template>
-        </van-cell>
+        </app-cell>
       </van-cell-group>
 
       <!-- 状态信息 -->
       <van-cell-group inset title="状态信息">
-        <van-cell title="当前状态">
+        <app-cell title="当前状态">
           <template #value>
-            <van-tag :type="getStatusType(asset.status)">{{
+            <app-tag :type="getStatusType(asset.status)">{{
               getStatusText(asset.status)
-            }}</van-tag>
+            }}</app-tag>
           </template>
-        </van-cell>
-        <van-cell
+        </app-cell>
+        <app-cell
           title="结束日期"
           v-if="asset.scrap_date"
           :value="asset.scrap_date"
@@ -79,15 +79,12 @@
 
       <!-- 操作按钮 -->
       <div class="action-buttons">
-        <van-button type="primary" plain block @click="handleEdit"
-          >编辑</van-button
-        >
-        <van-button type="warning" plain block @click="handleChangeStatus"
-          >变更状态</van-button
-        >
-        <van-button type="danger" plain block @click="handleDelete"
-          >删除</van-button
-        >
+        <app-button type="primary" plain block @click="handleEdit"
+          >编辑</app-button>
+        <app-button type="warning" plain block @click="handleChangeStatus"
+          >变更状态</app-button>
+        <app-button type="danger" plain block @click="handleDelete"
+          >删除</app-button>
       </div>
     </div>
 
@@ -96,14 +93,14 @@
     >
 
     <!-- 状态变更弹窗 -->
-    <van-popup v-model:show="showStatusPicker" position="bottom" round>
+    <app-popup v-model:show="showStatusPicker" position="bottom" round>
       <van-picker
         title="选择状态"
         :columns="statusColumns"
         @confirm="onStatusConfirm"
         @cancel="showStatusPicker = false"
       />
-    </van-popup>
+    </app-popup>
   </div>
 </template>
 
@@ -262,14 +259,14 @@ onMounted(() => {
 <style scoped>
 .page-asset-detail {
   min-height: 100vh;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   padding-bottom: 20px;
 }
 
 .detail-image {
   width: 100%;
   height: 250px;
-  background: #fff;
+  background: var(--theme-bg-secondary);
 }
 
 .detail-image img {

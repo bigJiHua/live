@@ -11,12 +11,12 @@
             </p>
             <p>
               <van-icon name="clock-o" />
-              最后更新日期：<span>{{ formatDate(item.create_time) }}</span>
+              最后更新日期：<span>{{ formatDate(item.update_time) }}</span>
             </p>
           </div>
-          <van-tag :type="index === 0 ? 'success' : 'default'">
+          <app-tag :type="index === 0 ? 'success' : 'default'">
             {{ index === 0 ? "最新" : "历史" }}
-          </van-tag>
+          </app-tag>
         </div>
 
         <div class="record-body">
@@ -44,10 +44,13 @@
         <van-collapse v-model="activeNames[index]">
           <van-collapse-item :name="index" title="查看明细" icon="orders-o">
             <div class="detail-content">
-              <!-- 余额明细 -->
-              <template v-if="item.asset_details?.balance">
+              <!-- 境内资产 -->
+              <template v-if="item.asset_details?.balance && item.asset_details.balance.length > 0">
                 <div class="detail-section">
-                  <div class="section-label">余额</div>
+                  <div class="region-header region-domestic">
+                    <span class="region-title">境内资产</span>
+                    <span class="region-total">总计 ¥{{ formatAmount(balanceTotal(item)) }}</span>
+                  </div>
                   <div class="section-items">
                     <div
                       v-for="(val, idx) in item.asset_details.balance"
@@ -61,10 +64,13 @@
                 </div>
               </template>
 
-              <!-- 境外资产明细 -->
-              <template v-if="item.asset_details?.offshore">
+              <!-- 境外资产 -->
+              <template v-if="item.asset_details?.offshore && item.asset_details.offshore.length > 0">
                 <div class="detail-section">
-                  <div class="section-label">境外资产</div>
+                  <div class="region-header region-offshore">
+                    <span class="region-title">境外资产</span>
+                    <span class="region-total">折合 ¥{{ formatAmount(offshoreTotal(item)) }}</span>
+                  </div>
                   <div class="section-items">
                     <div
                       v-for="(val, idx) in item.asset_details.offshore"
@@ -72,19 +78,35 @@
                       class="detail-item"
                     >
                       <span>{{ val.customName || getOffshoreName(val.type || (typeof idx === 'string' ? idx : '')) }}</span>
-                      <span
+                      <span class="offshore-amount"
                         >{{ val.currency || "" }}
-                        {{ formatAmount(val.amount) }}</span
+                        {{ formatAmount(val.amount) }}
+                        <span
+                          v-if="hasValidRate(item.asset_details.exchangeRates, val.currency)"
+                          class="convert"
+                          >≈ ¥{{
+                            formatAmount(
+                              convertToCNY(
+                                item.asset_details.exchangeRates,
+                                val.amount,
+                                val.currency
+                              )
+                            )
+                          }}</span
+                        ></span
                       >
                     </div>
                   </div>
                 </div>
               </template>
 
-              <!-- 信用卡欠款明细 -->
-              <template v-if="item.asset_details?.debt">
+              <!-- 信用卡欠款 -->
+              <template v-if="item.asset_details?.debt && item.asset_details.debt.length > 0">
                 <div class="detail-section">
-                  <div class="section-label">信用卡欠款</div>
+                  <div class="region-header region-debt">
+                    <span class="region-title">信用卡欠款</span>
+                    <span class="region-total danger">欠款 ¥{{ formatAmount(debtTotal(item)) }}</span>
+                  </div>
                   <div class="section-items">
                     <div
                       v-for="(val, idx) in item.asset_details.debt"
@@ -103,20 +125,20 @@
               <!-- 汇率明细 -->
               <template
                 v-if="
-                  item.exchange_rates &&
-                  Object.keys(item.exchange_rates).length > 0
+                  item.asset_details?.exchangeRates &&
+                  Object.keys(item.asset_details.exchangeRates).length > 0
                 "
               >
                 <div class="detail-section">
-                  <div class="section-label">登记汇率</div>
+                  <div class="section-label">登记汇率（100外币 = ? 人民币）</div>
                   <div class="section-items">
                     <div
-                      v-for="(rate, currency) in item.exchange_rates"
+                      v-for="(rate, currency) in item.asset_details.exchangeRates"
                       :key="currency"
                       class="detail-item"
                     >
                       <span>{{ currency }}</span>
-                      <span>{{ rate }}</span>
+                      <span>100 {{ currency }} ≈ ¥{{ formatAmount(rate) }}</span>
                     </div>
                   </div>
                 </div>
@@ -135,21 +157,21 @@
         <div class="record-actions">
           <!-- 最新记录可编辑、可复制、可删除 -->
           <template v-if="index === 0">
-            <van-button type="primary" round @click="goToRegister(item)">
+            <app-button type="primary" round @click="goToRegister(item)">
               编辑
-            </van-button>
-            <van-button plain round type="default" @click="copyToNew(item)">
+            </app-button>
+            <app-button plain round type="default" @click="copyToNew(item)">
               追加
-            </van-button>
-            <van-button plain round type="danger" @click="handleDelete(item)">
+            </app-button>
+            <app-button plain round type="danger" @click="handleDelete(item)">
               删除
-            </van-button>
+            </app-button>
           </template>
           <!-- 历史记录只能复制和查看 -->
           <template v-else>
-            <van-button size="small" plain round @click="copyToNew(item)">
+            <app-button size="small" plain round @click="copyToNew(item)">
               复制继续
-            </van-button>
+            </app-button>
           </template>
         </div>
       </div>
@@ -162,7 +184,7 @@
 
     <!-- 底部新增按钮 -->
     <div class="add-btn-wrap">
-      <button class="add-btn" @click="goToRegister">
+      <button class="add-btn" @click="goToRegister()">
         <van-icon name="plus" />
         <span>新增登记</span>
       </button>
@@ -245,13 +267,59 @@ const getDebtName = (key) => {
   return names[key] || key;
 };
 
-// 格式化金额
+// 格式化金额（大数值缩略为 万/亿/万亿，避免溢出）
 const formatAmount = (amount) => {
   const num = Number(amount) || 0;
+  const abs = Math.abs(num);
+  if (abs >= 1e12) {
+    return (num / 1e12).toFixed(2) + "万亿";
+  }
+  if (abs >= 1e8) {
+    return (num / 1e8).toFixed(2) + "亿";
+  }
+  if (abs >= 1e4) {
+    return (num / 1e4).toFixed(2) + "万";
+  }
   return num.toLocaleString("zh-CN", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
+};
+
+// 是否有有效汇率（rate = 100外币 = ? 人民币）
+const hasValidRate = (rates, currency) => {
+  if (!rates || !currency) return false;
+  const rate = rates[currency];
+  return rate !== null && rate !== undefined && rate !== "";
+};
+
+// 外币折合人民币
+const convertToCNY = (rates, amount, currency) => {
+  if (!hasValidRate(rates, currency)) return Number(amount) || 0;
+  const rate = Number(rates[currency]);
+  return Math.round(((Number(amount) * rate) / 100) * 100) / 100;
+};
+
+// 境外资产折合人民币总计
+const offshoreTotal = (item) => {
+  const rates = item.asset_details?.exchangeRates || {};
+  const arr = item.asset_details?.offshore || [];
+  return arr.reduce(
+    (sum, a) => sum + convertToCNY(rates, a.amount, a.currency),
+    0
+  );
+};
+
+// 境内资产（余额）总计
+const balanceTotal = (item) => {
+  const arr = item.asset_details?.balance || [];
+  return arr.reduce((sum, a) => sum + (Number(a.amount) || 0), 0);
+};
+
+// 信用卡欠款总计
+const debtTotal = (item) => {
+  const arr = item.asset_details?.debt || [];
+  return arr.reduce((sum, a) => sum + (Number(a.amount) || 0), 0);
 };
 import dayjs from "dayjs";
 // 格式化日期
@@ -296,7 +364,7 @@ const goToRegister = (item) => {
 const copyToNew = (item) => {
   sessionStorage.setItem('editAssetData', JSON.stringify({
     asset_details: item.asset_details,
-    exchange_rates: item.exchange_rates || {},
+    exchange_rates: item.asset_details?.exchangeRates || {},
     copy: "1"
   }));
   router.push("/finance/assets/register");
@@ -308,7 +376,7 @@ const handleDelete = async (item) => {
     await showConfirmDialog({
       title: "确认删除",
       message: "确定要删除这条登记记录吗？",
-      confirmButtonColor: "#ee0a24",
+      confirmButtonColor: "var(--theme-danger-color)",
     });
 
     await deleteAssetRegister(item.id);
@@ -329,7 +397,7 @@ onMounted(() => {
 <style scoped>
 .page-assets-list {
   min-height: 100vh;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   padding-bottom: 100px;
 }
 
@@ -337,15 +405,15 @@ onMounted(() => {
   position: fixed;
   left: 0;
   right: 0;
-  bottom: 60px;
+  bottom: 0px;
   padding: 12px 16px;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
 }
 
 .add-btn {
   width: 100%;
   height: 50px;
-  background: #07c160;
+  background: var(--theme-primary);
   color: #fff;
   border: none;
   border-radius: 25px;
@@ -355,7 +423,7 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  box-shadow: 0 4px 12px rgba(7, 193, 96, 0.3);
+  box-shadow: 0 4px 12px var(--theme-shadow-color, rgba(7, 193, 96, 0.3));
 }
 
 .record-list {
@@ -363,7 +431,7 @@ onMounted(() => {
 }
 
 .record-card {
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 12px;
   margin-bottom: 12px;
   overflow: hidden;
@@ -374,14 +442,14 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
-  border-bottom: 1px solid #f0f0f0;
+  border: 1px solid var(--theme-border);
 }
 
 .record-date {
   display: flex;
   align-items: flex-start;
   font-size: 0.8rem;
-  color: #666;
+  color: var(--theme-text-secondary);
   flex-direction: column;
   flex-wrap: nowrap;
   justify-content: space-between;
@@ -391,10 +459,10 @@ onMounted(() => {
 }
 
 .record-date p .van-icon {
-  color: #999;
+  color: var(--theme-text-tertiary);
 }
 .record-date p span {
-  color: #333;
+  color: var(--theme-text-primary);
   font-size: 0.6rem;
 }
 
@@ -411,13 +479,13 @@ onMounted(() => {
 
 .balance-display .label {
   font-size: 14px;
-  color: #666;
+  color: var(--theme-text-secondary);
 }
 
 .balance-display .value {
   font-size: 24px;
   font-weight: bold;
-  color: #333;
+  color: var(--theme-text-primary);
   font-family: "DIN Alternate", -apple-system, sans-serif;
 }
 
@@ -434,17 +502,27 @@ onMounted(() => {
 
 .detail-label {
   font-size: 12px;
-  color: #999;
+  color: var(--theme-text-tertiary);
 }
 
 .detail-value {
   font-size: 14px;
-  color: #333;
+  color: var(--theme-text-primary);
   font-weight: 500;
 }
 
 .detail-value.danger {
-  color: #ee0a24;
+  color: var(--theme-danger-color);
+}
+
+/* 展开明细区跟随主题 */
+:deep(.van-collapse-item__wrapper) {
+  background: var(--theme-bg-secondary);
+}
+:deep(.van-collapse-item__content) {
+  background: var(--theme-bg-secondary);
+  color: var(--theme-text-primary);
+  padding: 0 16px;
 }
 
 .detail-content {
@@ -457,8 +535,43 @@ onMounted(() => {
 
 .section-label {
   font-size: 12px;
-  color: #999;
+  color: var(--theme-text-tertiary);
   margin-bottom: 8px;
+}
+
+.region-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  border-radius: 8px;
+  background: var(--theme-bg-primary);
+  border-left: 4px solid var(--theme-text-tertiary);
+}
+
+.region-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--theme-text-primary);
+}
+
+.region-total {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--theme-text-primary);
+}
+
+.region-domestic {
+  border-left-color: var(--van-green);
+}
+
+.region-offshore {
+  border-left-color: var(--theme-primary);
+}
+
+.region-debt {
+  border-left-color: var(--theme-danger);
 }
 
 .section-items {
@@ -471,32 +584,57 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   font-size: 13px;
-  color: #666;
+  color: var(--theme-text-secondary);
 }
 
 .detail-item .danger {
-  color: #ee0a24;
+  color: var(--theme-danger-color);
 }
 
 .remark-section {
   padding-top: 8px;
-  border-top: 1px dashed #f0f0f0;
+  border: 1px solid var(--theme-border);
   font-size: 12px;
 }
 
 .remark-label {
-  color: #999;
+  color: var(--theme-text-tertiary);
 }
 
 .remark-value {
-  color: #666;
+  color: var(--theme-text-secondary);
+}
+
+.offshore-amount {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.offshore-amount .convert {
+  color: var(--van-green);
+  font-size: 12px;
+}
+
+.section-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 8px;
+  padding-top: 8px;
+  border: 1px solid var(--theme-border);
+  font-size: 13px;
+  color: var(--theme-text-primary);
+  font-weight: 600;
 }
 
 .record-actions {
   display: flex;
   gap: 8px;
   padding: 12px 16px;
-  border-top: 1px solid #f0f0f0;
+  border: 1px solid var(--theme-border);
   justify-content: center;
 }
 

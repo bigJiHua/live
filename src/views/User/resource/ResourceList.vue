@@ -9,10 +9,10 @@
         @search="handleSearch"
         @clear="handleSearchClear"
       />
-      <van-button size="small" type="primary" @click="showUpload = true">
+      <app-button size="small" type="primary" @click="showUpload = true">
         <van-icon name="plus" /> 上传
-      </van-button>
-      <van-button
+      </app-button>
+      <app-button
         v-if="selectedList.length > 0"
         size="small"
         type="danger"
@@ -20,7 +20,7 @@
         @click="handleBatchDelete"
       >
         删除 ({{ selectedList.length }})
-      </van-button>
+      </app-button>
     </div>
 
     <van-checkbox-group v-model="selectedList" shape="square">
@@ -55,17 +55,16 @@
               v-if="Array.isArray(item.tags) && item.tags.length"
               class="resource-tags"
             >
-              <van-tag
+              <app-tag
                 v-for="tag in item.tags"
                 :key="tag"
                 size="small"
                 type="primary"
-                >{{ tag }}</van-tag
-              >
+                >{{ tag }}</app-tag>
             </div>
             <!-- 选中时显示编辑按钮 -->
             <div v-if="selectedList.includes(item.id) && !undeletableIds.includes(item.id)" class="edit-button">
-              <van-button
+              <app-button
                 size="mini"
                 type="primary"
                 icon="edit"
@@ -74,7 +73,7 @@
             </div>
             <!-- 不可删除标签 -->
             <div v-if="undeletableIds.includes(item.id)" class="undeletable-tag">
-              <van-tag type="warning" size="small">使用中</van-tag>
+              <app-tag type="warning" size="small">使用中</app-tag>
             </div>
           </div>
         </div>
@@ -93,7 +92,7 @@
       </div>
     </van-overlay>
 
-    <van-popup
+    <app-popup
       v-model:show="showUpload"
       position="bottom"
       round
@@ -122,7 +121,7 @@
 
         <!-- 图片说明 -->
         <div class="upload-field">
-          <van-field
+          <app-field
             v-model="uploadRemark"
             label="图片说明"
             placeholder="可选，描述这张图片"
@@ -134,7 +133,7 @@
 
         <!-- 标签输入 -->
         <div class="upload-field">
-          <van-field
+          <app-field
             v-model="tagInput"
             label="标签"
             placeholder="输入标签后回车添加"
@@ -142,14 +141,13 @@
             @keyup.enter="addTag"
             clearable
           >
-            <template #button>
-              <van-button size="small" type="primary" @click="addTag"
-                >添加</van-button
-              >
+            <template #right-icon>
+              <app-button size="small" type="primary" @click="addTag"
+                >添加</app-button>
             </template>
-          </van-field>
+          </app-field>
           <div v-if="uploadTags.length > 0" class="tag-list">
-            <van-tag
+            <app-tag
               v-for="(tag, idx) in uploadTags"
               :key="idx"
               size="medium"
@@ -157,13 +155,13 @@
               @close="removeTag(idx)"
             >
               {{ tag }}
-            </van-tag>
+            </app-tag>
           </div>
         </div>
 
         <div class="upload-tips">支持多选，单文件最大 10MB</div>
 
-        <van-button
+        <app-button
           type="primary"
           block
           :loading="uploading"
@@ -171,19 +169,19 @@
           @click="handleSubmit"
         >
           提交上传
-        </van-button>
+        </app-button>
       </div>
-    </van-popup>
+    </app-popup>
 
     <!-- 编辑弹框 -->
-    <van-dialog
+    <app-dialog
       v-model:show="showEditDialog"
       title="编辑图片信息"
       show-cancel-button
       @confirm="handleEditConfirm"
     >
       <div class="edit-form">
-        <van-field
+        <app-field
           v-model="editRemark"
           label="图片说明"
           placeholder="描述这张图片"
@@ -191,20 +189,19 @@
           show-word-limit
           clearable
         />
-        <van-field
+        <app-field
           v-model="editTagInput"
           label="标签"
           placeholder="输入标签后点击添加"
           maxlength="10"
         >
-          <template #button>
-            <van-button size="small" type="primary" @click="addEditTag"
-              >添加</van-button
-            >
+          <template #right-icon>
+            <app-button size="small" type="primary" @click="addEditTag"
+              >添加</app-button>
           </template>
-        </van-field>
+        </app-field>
         <div v-if="editTags.length > 0" class="edit-tags">
-          <van-tag
+          <app-tag
             v-for="(tag, idx) in editTags"
             :key="idx"
             size="medium"
@@ -212,10 +209,10 @@
             @close="removeEditTag(idx)"
           >
             {{ tag }}
-          </van-tag>
+          </app-tag>
         </div>
       </div>
-    </van-dialog>
+    </app-dialog>
 
     <van-image-preview
       v-model:show="showPreview"
@@ -536,7 +533,8 @@ const handleBatchDelete = async () => {
     await uploadApi.batchDelete(selectedList.value);
     showToast("批量删除成功");
     selectedList.value = [];
-    loadResourceList();
+    // 延迟刷新：PIN 验证后重发请求可能尚未完成，等待服务端处理
+    setTimeout(() => loadResourceList(), 600);
   } catch (e) {
     // 处理删除失败（文件正在被使用）
     if (e?.response?.status === 400 && e?.response?.data?.referencedIds) {
@@ -548,7 +546,7 @@ const handleBatchDelete = async () => {
         (id) => !referencedIds.includes(id)
       );
       showToast(e.response.data.message || "部分文件无法删除");
-    } else {
+    } else if (e?.message !== 'PIN 验证已取消') {
       showToast("删除失败");
     }
   }
@@ -575,14 +573,14 @@ onMounted(() => {
 <style scoped>
 .page-resource-list {
   min-height: 100vh;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
 }
 
 .action-bar {
   display: flex;
   align-items: center;
   padding: 12px 16px;
-  background: #fff;
+  background: var(--theme-bg-secondary);
   position: sticky;
   top: 0;
   z-index: 99;
@@ -603,7 +601,7 @@ onMounted(() => {
 }
 
 .resource-item {
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 12px;
   overflow: hidden;
   position: relative;
@@ -648,18 +646,18 @@ onMounted(() => {
 .resource-name {
   display: block;
   font-size: 13px;
-  color: #323233;
+  color: var(--theme-text-primary);
   margin-bottom: 2px;
 }
 
 .resource-size {
   font-size: 11px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 
 .resource-remark {
   font-size: 12px;
-  color: #666;
+  color: var(--theme-text-secondary);
   margin-top: 4px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -707,7 +705,7 @@ onMounted(() => {
 }
 
 .upload-trigger {
-  border: 2px dashed #dcdee0;
+  border: 2px dashed var(--theme-border);
   border-radius: 8px;
   width: 100%;
   height: 150px;
@@ -715,7 +713,7 @@ onMounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 
 .upload-field {

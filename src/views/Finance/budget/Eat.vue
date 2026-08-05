@@ -1,9 +1,9 @@
 <template>
   <div class="page-budget-eat">
-    <van-form ref="formRef">
+    <app-form ref="formRef">
       <!-- 基本信息 -->
       <van-cell-group inset title="本次餐饮">
-        <van-field
+        <app-field
           v-model="formData.title"
           label="标题"
           placeholder="如：周末家庭聚餐"
@@ -11,7 +11,7 @@
           class="field-compact"
         />
         <div class="info-row-grid">
-          <van-field
+          <app-field
             v-model="formData.plan_date"
             label="用餐日期"
             type="date"
@@ -19,7 +19,7 @@
             :rules="[{ required: true, message: '请选择日期' }]"
             class="field-compact"
           />
-          <van-field
+          <app-field
             v-model="formData.cycle"
             label="预算周期"
             readonly
@@ -28,24 +28,23 @@
             class="field-compact"
           >
             <template #right-icon><van-icon name="arrow-down" /></template>
-          </van-field>
+          </app-field>
         </div>
-        <van-field
+        <app-field
           v-model="formData.budget_amount"
           label="本次预算"
           type="number"
           placeholder="0.00"
           :rules="[{ required: true, message: '请输入预算' }]"
           class="field-compact"
-        >
-          <template #button><span class="yuan">元</span></template>
-        </van-field>
+          suffix="元"
+        />
       </van-cell-group>
 
       <!-- 菜单明细 -->
       <div class="section-header">
         <span class="section-title">菜单</span>
-        <van-button size="small" type="primary" plain @click="addDish">添加菜品</van-button>
+        <app-button size="small" type="primary" plain @click="addDish">添加菜品</app-button>
       </div>
 
       <div class="menu-section">
@@ -54,22 +53,21 @@
             <span class="dish-index">{{ index + 1 }}</span>
             <van-icon name="cross" class="delete-icon" @click="removeDish(index)" />
           </div>
-          <van-field
+          <app-field
             v-model="dish.name"
             label="菜品"
             placeholder="如：红烧肉"
           />
           <div class="dish-row-grid">
-            <van-field
+            <app-field
               v-model="dish.price"
               label="价格"
               type="number"
               placeholder="0.00"
               class="field-compact"
-            >
-              <template #button><span class="yuan">元</span></template>
-            </van-field>
-            <van-field
+              suffix="元"
+            />
+            <app-field
               v-model="dish.quantity"
               label="份数"
               type="number"
@@ -77,7 +75,7 @@
               class="field-compact"
             />
           </div>
-          <van-field
+          <app-field
             v-model="dish.notes"
             label="备注"
             placeholder="口味、做法等"
@@ -92,28 +90,28 @@
 
       <!-- 金额汇总 -->
       <van-cell-group inset class="summary-group">
-        <van-cell title="预算">
+        <app-cell title="预算">
           <template #value>
             <span class="budget-amount">¥{{ formatAmount(totalBudget) }}</span>
           </template>
-        </van-cell>
-        <van-cell title="实际">
+        </app-cell>
+        <app-cell title="实际">
           <template #value>
             <span class="actual-amount">¥{{ formatAmount(actualTotal) }}</span>
           </template>
-        </van-cell>
-        <van-cell title="余额">
+        </app-cell>
+        <app-cell title="余额">
           <template #value>
             <span :class="{ 'diff-positive': diff > 0, 'diff-negative': diff < 0 }">
               {{ diff > 0 ? '+' : '' }}{{ formatAmount(diff) }}
             </span>
           </template>
-        </van-cell>
+        </app-cell>
       </van-cell-group>
 
       <!-- 备注 -->
       <van-cell-group inset title="备注">
-        <van-field
+        <app-field
           v-model="formData.notes"
           label="备注"
           type="textarea"
@@ -124,20 +122,20 @@
       </van-cell-group>
 
       <div class="form-actions">
-        <van-button size="large" round type="primary" :loading="saving" @click="submit">
+        <app-button size="large" round type="primary" :loading="saving" @click="submit">
           {{ isEdit ? '保存' : '创建' }}
-        </van-button>
+        </app-button>
       </div>
-    </van-form>
+    </app-form>
 
-    <van-popup v-model:show="showCyclePopup" position="bottom" round>
+    <app-popup v-model:show="showCyclePopup" position="bottom" round>
       <van-picker
         title="选择周期"
         :columns="cycleColumns"
         @confirm="onCycleConfirm"
         @cancel="showCyclePopup = false"
       />
-    </van-popup>
+    </app-popup>
   </div>
 </template>
 
@@ -294,12 +292,12 @@ onMounted(() => {
 <style scoped>
 .page-budget-eat {
   min-height: 100vh;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   padding-bottom: 16px;
 }
 
 .yuan {
-  color: #969799;
+  color: var(--theme-text-tertiary);
   font-size: 14px;
 }
 
@@ -313,7 +311,7 @@ onMounted(() => {
 .section-title {
   font-size: 14px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
 }
 
 .menu-section {
@@ -321,7 +319,7 @@ onMounted(() => {
 }
 
 .dish-card {
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 8px;
   padding: 8px 12px;
   margin-bottom: 8px;
@@ -341,7 +339,7 @@ onMounted(() => {
   justify-content: center;
   width: 20px;
   height: 20px;
-  background: #ee0a24;
+  background: var(--van-danger-color, #ee0a24);
   color: #fff;
   border-radius: 50%;
   font-size: 11px;
@@ -388,7 +386,7 @@ onMounted(() => {
 .dish-subtotal {
   text-align: right;
   font-size: 12px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   padding-top: 4px;
 }
 
@@ -398,7 +396,7 @@ onMounted(() => {
 
 .budget-amount {
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
 }
 
 .actual-amount {

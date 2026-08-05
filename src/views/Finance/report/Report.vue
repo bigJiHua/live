@@ -9,7 +9,7 @@
             <div class="menu-title">流水筛选</div>
             <div class="menu-desc">按时段、分类筛选流水并支持导出 Excel</div>
           </div>
-          <van-icon name="arrow" color="#c8c9cc" />
+          <van-icon name="arrow" :color="'var(--theme-text-tertiary)'" />
         </div>
         <div class="menu-item" @click="$router.push('/finance/report/card-flow')">
           <div class="menu-icon"><van-icon name="credit-pay" /></div>
@@ -17,7 +17,7 @@
             <div class="menu-title">银行卡收支明细</div>
             <div class="menu-desc">按银行卡查询历史收支流水</div>
           </div>
-          <van-icon name="arrow" color="#c8c9cc" />
+          <van-icon name="arrow" :color="'var(--theme-text-tertiary)'" />
         </div>
         <div class="menu-item" @click="$router.push('/finance/report/transfer-list')">
           <div class="menu-icon"><van-icon name="exchange" /></div>
@@ -25,7 +25,7 @@
             <div class="menu-title">转账明细查询</div>
             <div class="menu-desc">查看所有转账记录</div>
           </div>
-          <van-icon name="arrow" color="#c8c9cc" />
+          <van-icon name="arrow" :color="'var(--theme-text-tertiary)'" />
         </div>
       </div>
     </div>
@@ -39,7 +39,7 @@
             <div class="menu-title">收支总额与结余</div>
             <div class="menu-desc">总收入、总支出、净结余速览</div>
           </div>
-          <van-icon name="arrow" color="#c8c9cc" />
+          <van-icon name="arrow" :color="'var(--theme-text-tertiary)'" />
         </div>
         <div class="menu-item" @click="$router.push('/finance/report/category-ratio')">
           <div class="menu-icon"><van-icon name="graphic" /></div>
@@ -47,7 +47,7 @@
             <div class="menu-title">类目消费占比</div>
             <div class="menu-desc">各消费分类占比统计图表</div>
           </div>
-          <van-icon name="arrow" color="#c8c9cc" />
+          <van-icon name="arrow" :color="'var(--theme-text-tertiary)'" />
         </div>
         <div class="menu-item" @click="$router.push('/finance/report/monthly-trend')">
           <div class="menu-icon"><van-icon name="bar-chart-o" /></div>
@@ -55,7 +55,7 @@
             <div class="menu-title">月度收支趋势</div>
             <div class="menu-desc">每月收支变化趋势图表</div>
           </div>
-          <van-icon name="arrow" color="#c8c9cc" />
+          <van-icon name="arrow" :color="'var(--theme-text-tertiary)'" />
         </div>
       </div>
     </div>
@@ -69,7 +69,7 @@
             <div class="menu-title">负债总览</div>
             <div class="menu-desc">卡有效期预警、负债明细、支出类别统计</div>
           </div>
-          <van-icon name="arrow" color="#c8c9cc" />
+          <van-icon name="arrow" :color="'var(--theme-text-tertiary)'" />
         </div>
       </div>
     </div>
@@ -83,7 +83,7 @@
             <div class="menu-title">理财总览</div>
             <div class="menu-desc">基金持仓、市值、收益概览</div>
           </div>
-          <van-icon name="arrow" color="#c8c9cc" />
+          <van-icon name="arrow" :color="'var(--theme-text-tertiary)'" />
         </div>
       </div>
     </div>
@@ -96,7 +96,7 @@
 <style scoped>
 .page-report {
   min-height: 100vh;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   padding: 12px 16px 30px;
 }
 
@@ -107,13 +107,13 @@
 .section-title {
   font-size: 15px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
   margin-bottom: 10px;
   padding-left: 2px;
 }
 
 .menu-card {
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 10px;
   overflow: hidden;
 }
@@ -123,7 +123,7 @@
   align-items: center;
   gap: 12px;
   padding: 16px;
-  border-bottom: 1px solid #f5f5f5;
+  border: 1px solid var(--theme-border);
   cursor: pointer;
 }
 
@@ -133,8 +133,7 @@
   width: 40px;
   height: 40px;
   border-radius: 10px;
-  background: #f0f5ff;
-  color: #1989fa;
+  color: var(--theme-primary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -149,12 +148,12 @@
 .menu-title {
   font-size: 14px;
   font-weight: 500;
-  color: #323233;
+  color: var(--theme-text-primary);
 }
 
 .menu-desc {
   font-size: 11px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   margin-top: 2px;
 }
 </style>

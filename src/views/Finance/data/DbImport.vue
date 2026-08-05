@@ -11,14 +11,14 @@
       <div class="format-section">
         <div class="section-title">导入格式</div>
         <van-cell-group inset class="app-card">
-          <van-cell>
+          <app-cell>
             <template #title>
               <van-radio-group v-model="importFormat" direction="horizontal" class="format-radio">
                 <van-radio name="json" shape="square">JSON (单表)</van-radio>
                 <van-radio name="sql" shape="square">SQL / ZIP (全库)</van-radio>
               </van-radio-group>
             </template>
-          </van-cell>
+          </app-cell>
         </van-cell-group>
       </div>
 
@@ -27,7 +27,7 @@
         <div class="table-section">
           <div class="section-title">选择目标表</div>
           <van-cell-group inset class="app-card">
-            <van-field
+            <app-field
               v-model="searchQuery"
               placeholder="搜索表名..."
               left-icon="search"
@@ -36,7 +36,7 @@
             />
             <div class="table-list">
               <van-radio-group v-model="selectedTable">
-                <van-cell
+                <app-cell
                   v-for="table in filteredTables"
                   :key="table"
                   :title="table"
@@ -46,7 +46,7 @@
                   <template #right-icon>
                     <van-radio :name="table" />
                   </template>
-                </van-cell>
+                </app-cell>
               </van-radio-group>
             </div>
           </van-cell-group>
@@ -55,16 +55,16 @@
         <div class="upload-section">
           <div class="section-title">选择文件</div>
           <van-cell-group inset class="app-card">
-            <van-cell title="支持格式">
+            <app-cell title="支持格式">
               <template #label>
                 <span class="label-text">JSON 文件</span>
               </template>
-            </van-cell>
-            <van-cell title="当前选择表" v-if="selectedTable">
+            </app-cell>
+            <app-cell title="当前选择表" v-if="selectedTable">
               <template #value>
                 <span class="selected-table">{{ selectedTable }}</span>
               </template>
-            </van-cell>
+            </app-cell>
           </van-cell-group>
           <van-uploader
             v-model="jsonFileList"
@@ -75,25 +75,25 @@
             @delete="handleJsonDelete"
             class="uploader"
           >
-            <van-button type="primary" size="small" icon="plus" block>
+            <app-button type="primary" size="small" icon="plus" block>
               选择 JSON 文件
-            </van-button>
+            </app-button>
           </van-uploader>
         </div>
 
         <div class="preview-section" v-if="jsonPreviewData.length > 0">
           <div class="section-title">数据预览 (前{{ Math.min(previewCount, jsonPreviewData.length) }}条)</div>
           <van-cell-group inset class="app-card">
-            <van-cell title="总记录数">
+            <app-cell title="总记录数">
               <template #value>
                 <span class="num-font">{{ jsonPreviewData.length }} 条</span>
               </template>
-            </van-cell>
-            <van-cell title="字段数">
+            </app-cell>
+            <app-cell title="字段数">
               <template #value>
                 <span class="num-font">{{ jsonPreviewFields.length }} 个</span>
               </template>
-            </van-cell>
+            </app-cell>
           </van-cell-group>
           <div class="data-preview">
             <div class="preview-item" v-for="(item, idx) in jsonPreviewData.slice(0, previewCount)" :key="idx">
@@ -109,7 +109,7 @@
         </div>
 
         <div class="validate-section" v-if="jsonPreviewData.length > 0">
-          <van-button
+          <app-button
             type="default"
             size="large"
             block
@@ -118,49 +118,49 @@
             @click="handleValidate"
           >
             校验数据
-          </van-button>
+          </app-button>
         </div>
 
         <div class="validate-result" v-if="validationResult">
           <div class="section-title">校验结果</div>
           <van-cell-group inset class="app-card">
-            <van-cell title="状态">
+            <app-cell title="状态">
               <template #value>
-                <van-tag :type="validationResult.canImport ? 'success' : 'danger'" size="large">
+                <app-tag :type="validationResult.canImport ? 'success' : 'danger'" size="large">
                   {{ validationResult.canImport ? '可导入' : '有问题' }}
-                </van-tag>
+                </app-tag>
               </template>
-            </van-cell>
-            <van-cell title="目标表字段">
+            </app-cell>
+            <app-cell title="目标表字段">
               <template #value>
                 <span class="num-font">{{ validationResult.tableColumns?.length || 0 }} 个</span>
               </template>
-            </van-cell>
-            <van-cell title="有效行数">
+            </app-cell>
+            <app-cell title="有效行数">
               <template #value>
                 <span class="num-font">{{ validationResult.validRows || 0 }} 条</span>
               </template>
-            </van-cell>
-            <van-cell title="无效行数" v-if="validationResult.invalidRows > 0">
+            </app-cell>
+            <app-cell title="无效行数" v-if="validationResult.invalidRows > 0">
               <template #value>
                 <span class="num-font text-danger">{{ validationResult.invalidRows }} 条</span>
               </template>
-            </van-cell>
+            </app-cell>
           </van-cell-group>
         </div>
 
         <div class="import-options">
           <van-cell-group inset class="app-card">
-            <van-cell title="清空后导入">
+            <app-cell title="清空后导入">
               <template #value>
                 <van-switch v-model="forceClear" size="20" />
               </template>
-            </van-cell>
-            <van-cell title="导入前自动备份目标表">
+            </app-cell>
+            <app-cell title="导入前自动备份目标表">
               <template #label>
                 <span class="label-text">启用后导入前会先备份目标表数据</span>
               </template>
-            </van-cell>
+            </app-cell>
           </van-cell-group>
         </div>
       </template>
@@ -170,13 +170,13 @@
         <div class="upload-section">
           <div class="section-title">选择文件</div>
           <van-cell-group inset class="app-card">
-            <van-cell title="支持格式">
+            <app-cell title="支持格式">
               <template #label>
                 <span class="label-text">.sql 文件 或 .zip 压缩包（内含 .sql 文件）</span>
               </template>
-            </van-cell>
-            <van-cell title="导入范围" value="全库导入" />
-            <van-cell title="文件大小限制" value="100MB" />
+            </app-cell>
+            <app-cell title="导入范围" value="全库导入" />
+            <app-cell title="文件大小限制" value="100MB" />
           </van-cell-group>
           <van-uploader
             v-model="sqlFileList"
@@ -187,32 +187,32 @@
             @delete="handleSqlDelete"
             class="uploader"
           >
-            <van-button type="primary" size="small" icon="plus" block>
+            <app-button type="primary" size="small" icon="plus" block>
               选择 SQL / ZIP 文件
-            </van-button>
+            </app-button>
           </van-uploader>
         </div>
 
         <div class="sql-file-info" v-if="sqlFileInfo">
           <div class="section-title">文件信息</div>
           <van-cell-group inset class="app-card">
-            <van-cell title="文件名">
+            <app-cell title="文件名">
               <template #value>
                 <span class="file-name">{{ sqlFileInfo.name }}</span>
               </template>
-            </van-cell>
-            <van-cell title="文件大小">
+            </app-cell>
+            <app-cell title="文件大小">
               <template #value>
                 <span class="num-font">{{ formatFileSize(sqlFileInfo.size) }}</span>
               </template>
-            </van-cell>
+            </app-cell>
           </van-cell-group>
         </div>
 
         <div class="warning-section">
           <van-notice-bar
-            color="#ee0a24"
-            background="#fff7e6"
+            :color="'var(--theme-danger)'"
+            :background="'var(--van-orange-bg)'"
             left-icon="warning-o"
             wrapable
           >
@@ -224,8 +224,8 @@
       <!-- 通用警告 -->
       <div class="warning-section" v-if="importFormat === 'json'">
         <van-notice-bar
-          color="#ff976a"
-          background="#fff7e6"
+          :color="'var(--van-orange)'"
+          :background="'var(--van-orange-bg)'"
           left-icon="warning-o"
         >
           导入数据会修改数据库，请谨慎操作！
@@ -234,7 +234,7 @@
 
       <!-- 导入按钮 -->
       <div class="action-section">
-        <van-button
+        <app-button
           type="primary"
           size="large"
           block
@@ -244,48 +244,48 @@
           @click="handleImport"
         >
           {{ importFormat === 'sql' ? '执行 SQL 导入' : '确认导入' }}
-        </van-button>
+        </app-button>
       </div>
 
       <!-- 导入结果 -->
       <div class="import-result" v-if="importCompleted">
         <div class="section-title">导入结果</div>
         <van-cell-group inset class="app-card">
-          <van-cell title="状态">
+          <app-cell title="状态">
             <template #value>
-              <van-tag :type="importStatus.type" size="large">
+              <app-tag :type="importStatus.type" size="large">
                 {{ importStatus.text }}
-              </van-tag>
+              </app-tag>
             </template>
-          </van-cell>
-          <van-cell title="导入时间">
+          </app-cell>
+          <app-cell title="导入时间">
             <template #value>
               <span class="time-text">{{ importTime }}</span>
             </template>
-          </van-cell>
+          </app-cell>
 
           <!-- JSON 结果 -->
           <template v-if="importFormat === 'json'">
-            <van-cell title="导入记录数" v-if="importStatus.type === 'success'">
+            <app-cell title="导入记录数" v-if="importStatus.type === 'success'">
               <template #value>
                 <span class="num-font">{{ importedCount }} 条</span>
               </template>
-            </van-cell>
+            </app-cell>
           </template>
 
           <!-- SQL 结果 -->
           <template v-if="importFormat === 'sql'">
-            <van-cell title="执行语句">
+            <app-cell title="执行语句">
               <template #value>
                 <span class="num-font">{{ sqlResult.executedCount }} 条</span>
               </template>
-            </van-cell>
-            <van-cell title="失败语句" v-if="sqlResult.errorCount > 0">
+            </app-cell>
+            <app-cell title="失败语句" v-if="sqlResult.errorCount > 0">
               <template #value>
                 <span class="num-font text-danger">{{ sqlResult.errorCount }} 条</span>
               </template>
-            </van-cell>
-            <van-cell title="失败详情" v-if="sqlResult.errors && sqlResult.errors.length > 0">
+            </app-cell>
+            <app-cell title="失败详情" v-if="sqlResult.errors && sqlResult.errors.length > 0">
               <template #label>
                 <div class="error-list">
                   <div v-for="(e, i) in sqlResult.errors" :key="i" class="error-item">
@@ -294,19 +294,19 @@
                   </div>
                 </div>
               </template>
-            </van-cell>
+            </app-cell>
           </template>
 
-          <van-cell title="备份文件">
+          <app-cell title="备份文件">
             <template #value>
               <span class="backup-file">{{ backupFile }}</span>
             </template>
-          </van-cell>
-          <van-cell title="备份时间" v-if="backupTime">
+          </app-cell>
+          <app-cell title="备份时间" v-if="backupTime">
             <template #value>
               <span class="time-text">{{ backupTime }}</span>
             </template>
-          </van-cell>
+          </app-cell>
         </van-cell-group>
       </div>
     </div>
@@ -640,7 +640,7 @@ loadTables();
 <style scoped>
 .page-db-import {
   min-height: 100vh;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
 }
 
 .page-content {
@@ -651,7 +651,7 @@ loadTables();
 .page-header {
   text-align: center;
   padding: 30px 0;
-  background: white;
+  background: var(--theme-bg-secondary);
   border-radius: 16px;
   margin-bottom: 20px;
 }
@@ -665,19 +665,19 @@ loadTables();
 .header-title {
   font-size: 20px;
   font-weight: bold;
-  color: #323233;
+  color: var(--theme-text-primary);
   margin-bottom: 8px;
 }
 
 .header-desc {
   font-size: 14px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 
 .section-title {
   padding: 8px 16px;
   font-size: 13px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   font-weight: 500;
   margin-bottom: 8px;
 }
@@ -706,7 +706,7 @@ loadTables();
 }
 
 .selected-table {
-  color: #1989fa;
+  color: var(--theme-primary);
   font-weight: 500;
 }
 
@@ -723,7 +723,7 @@ loadTables();
 }
 
 .data-preview {
-  background: white;
+  background: var(--theme-bg-secondary);
   border-radius: 12px;
   margin-top: 8px;
   padding: 8px 0;
@@ -732,7 +732,7 @@ loadTables();
 .preview-item {
   display: flex;
   padding: 8px 16px;
-  border-bottom: 1px solid #f5f5f5;
+  border: 1px solid var(--theme-border);
 }
 
 .preview-item:last-child {
@@ -743,7 +743,7 @@ loadTables();
   width: 28px;
   flex-shrink: 0;
   font-size: 12px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   font-family: "DIN Alternate", sans-serif;
 }
 
@@ -760,12 +760,12 @@ loadTables();
 }
 
 .field-key {
-  color: #646566;
+  color: var(--theme-text-secondary);
   white-space: nowrap;
 }
 
 .field-val {
-  color: #323233;
+  color: var(--theme-text-primary);
   word-break: break-all;
 }
 
@@ -778,7 +778,7 @@ loadTables();
 }
 
 .file-name {
-  color: #323233;
+  color: var(--theme-text-primary);
   font-weight: 500;
   font-size: 13px;
 }
@@ -809,11 +809,11 @@ loadTables();
 
 .time-text {
   font-size: 13px;
-  color: #646566;
+  color: var(--theme-text-secondary);
 }
 
 .backup-file {
-  color: #1989fa;
+  color: var(--theme-primary);
   font-size: 12px;
   font-family: "SF Mono", "Fira Code", monospace;
 }
@@ -826,7 +826,7 @@ loadTables();
   font-size: 11px;
   color: #ee0a24;
   padding: 4px 0;
-  border-bottom: 1px solid #f5f5f5;
+  border: 1px solid var(--theme-border);
 }
 
 .error-item:last-child {
@@ -834,7 +834,7 @@ loadTables();
 }
 
 .error-sql {
-  color: #969799;
+  color: var(--theme-text-tertiary);
   font-family: "SF Mono", "Fira Code", monospace;
   font-size: 10px;
   margin-top: 2px;

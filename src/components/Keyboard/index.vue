@@ -4,8 +4,8 @@
       <div class="tool-btn mode-toggle" @click="toggleMode">
         <span :class="['status-dot', { 'is-secure': isSecure }]"></span>
         {{ isSecure ? "安全模式" : "普通模式" }}
+        <van-icon :name="isSecure ? 'shield-o' : 'shield' " class="mode-icon" />
       </div>
-      <div class="tool-btn"></div>
     </div>
 
     <div class="keyboard-grid">
@@ -29,7 +29,7 @@
         </template>
         <template v-else-if="item === 'del'">删除</template>
         <template v-else-if="item === 'close'">
-          <img :src="closeIcon" class="close-icon" alt="收起" />
+          <van-icon name="arrow-down" class="close-icon" />
         </template>
         <template v-else>{{ item }}</template>
       </div>
@@ -40,7 +40,6 @@
 <script setup>
 import { ref, onMounted, nextTick } from "vue";
 import JSEncrypt from "jsencrypt";
-import closeIcon from "@/assets/icon/keyboard.svg";
 
 const props = defineProps({
   publicKey: { type: String, default: "" },
@@ -85,6 +84,11 @@ const drawKeys = () => {
   // 获取设备像素比（核心！解决模糊）
   const dpr = window.devicePixelRatio || 1;
 
+  // 从根节点读取主题文字色（跟随主题切换）
+  const rootStyle = getComputedStyle(document.documentElement);
+  const themeColor =
+    rootStyle.getPropertyValue("--theme-text-primary").trim() || "#323233";
+
   keyConfig.value.forEach((val, idx) => {
     if (typeof val !== "number") return;
     const canvas = document.getElementById(`canvas-${uid}-${idx}`);
@@ -106,10 +110,10 @@ const drawKeys = () => {
 
     // 字体、位置不变
     ctx.font =
-      'bold 26px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+      '600 24px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillStyle = "#111";
+    ctx.fillStyle = themeColor;
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
 
@@ -152,7 +156,7 @@ onMounted(initLayout);
 
 <style scoped>
 .safe-keyboard {
-  background: #e5e6eb;
+  background: var(--theme-bg-tertiary, #eef0f3);
   padding-bottom: env(safe-area-inset-bottom);
   user-select: none;
 }
@@ -163,66 +167,81 @@ onMounted(initLayout);
   justify-content: space-between;
   align-items: center;
   padding: 10px 16px;
-  background: #f7f7f7;
-  border-bottom: 1px solid #d9d9d9;
 }
 
 .tool-btn {
-  font-size: 14px;
-  color: #444;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--theme-text-secondary, #646566);
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
 }
 
 .mode-toggle {
-  color: #333;
+  cursor: pointer;
 }
 
 .status-dot {
   width: 7px;
   height: 7px;
-  background: #999;
+  background: var(--theme-text-tertiary, #c8c9cc);
   border-radius: 50%;
+  transition: background 0.2s, box-shadow 0.2s;
 }
 
 .status-dot.is-secure {
-  background: #009944; /* 农行绿 */
-  box-shadow: 0 0 3px rgba(0, 153, 68, 0.5);
+  background: var(--theme-primary, #07c160);
+  box-shadow: 0 0 6px var(--theme-primary, #07c160);
+}
+
+.mode-icon {
+  font-size: 14px;
+  color: var(--theme-primary, #07c160);
 }
 
 /* 键盘布局网格 */
 .keyboard-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 6px;
-  padding: 6px;
-  background: #e5e6eb;
+  gap: 8px;
+  padding: 4px 12px 12px;
 }
 
 /* 按键样式 */
 .key-item {
-  height: 52px;
-  background: #ffffff;
-  border-radius: 4px;
+  height: 54px;
+  background: var(--theme-bg-secondary, #ffffff);
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 24px;
-  color: #000000;
-  border: 0.5px solid #d0d0d0;
-  transition: background 0.1s ease;
+  font-weight: 500;
+  color: var(--theme-text-primary, #323233);
+  border: none;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1), inset 0 -1px 0 rgba(0, 0, 0, 0.05);
+  transition: transform 0.06s ease, box-shadow 0.06s ease, background 0.1s ease;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* 按下反馈 */
 .key-item:active {
-  background: #d8d8d8 !important;
+  background: var(--theme-bg-tertiary, #e8e9eb);
+  transform: translateY(2px);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
-/* 功能键样式（点和删除） */
+/* 功能键样式（收起和删除） */
 .is-functional {
-  background: #f2f2f2 !important;
+  background: var(--theme-bg-primary, #eef0f3);
   font-size: 16px;
+  color: var(--theme-text-secondary, #646566);
+}
+
+.is-functional:active {
+  background: var(--theme-bg-tertiary, #e2e4e8);
 }
 
 .key-canvas {
@@ -230,7 +249,7 @@ onMounted(initLayout);
 }
 
 .close-icon {
-  width: 50px;
-  height: 38px;
+  font-size: 22px;
+  color: var(--theme-text-secondary, #646566);
 }
 </style>

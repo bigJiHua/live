@@ -4,7 +4,7 @@
     <!-- 筛选 -->
     <div class="filter-section">
       <van-cell-group inset>
-        <van-field
+        <app-field
           v-model="selectedCardName"
           label="选择卡片"
           placeholder="全部卡片"
@@ -12,7 +12,7 @@
           readonly
           @click="showCardPicker = true"
         />
-        <van-field
+        <app-field
           v-model="monthText"
           label="账单月份"
           placeholder="请选择月份"
@@ -24,7 +24,7 @@
     </div>
 
     <!-- 月份选择器 -->
-    <van-popup v-model:show="showMonthPicker" position="bottom" round>
+    <app-popup v-model:show="showMonthPicker" position="bottom" round>
       <van-picker
         v-model="selectedValues"
         title="选择月份"
@@ -32,7 +32,7 @@
         @confirm="onMonthConfirm"
         @cancel="showMonthPicker = false"
       />
-    </van-popup>
+    </app-popup>
 
     <!-- 还款记录列表 -->
     <div class="repay-list" v-if="repayList.length > 0">
@@ -47,7 +47,7 @@
             <span class="repay-card-name">{{ getCardDisplayName(item) }}</span>
             <span class="repay-date">本次记录还款日期 {{ formatDate(item.repay_time) }}</span>
           </div>
-          <van-tag type="success">已还款</van-tag>
+          <app-tag type="success">已还款</app-tag>
         </div>
 
         <div class="repay-body">
@@ -79,22 +79,22 @@
             <span>{{ formatRepayMethod(item.repay_method) }}</span>
           </div>
           <div class="repay-actions">
-            <van-button
+            <app-button
               size="small"
               round
               type="warning"
               @click.stop="handleReverse(item)"
             >
               还款撤销
-            </van-button>
-            <van-button
+            </app-button>
+            <app-button
               size="small"
               round
               plain
               @click.stop="goToRepay(item)"
             >
               再次还款
-            </van-button>
+            </app-button>
           </div>
         </div>
       </div>
@@ -117,13 +117,13 @@
     </van-overlay>
 
     <!-- 卡片选择器 -->
-    <van-popup v-model:show="showCardPicker" position="bottom">
+    <app-popup v-model:show="showCardPicker" position="bottom">
       <van-picker
         :columns="cardColumns"
         @confirm="onCardConfirm"
         @cancel="showCardPicker = false"
       />
-    </van-popup>
+    </app-popup>
   </div>
 </template>
 
@@ -233,10 +233,7 @@ const getCardDisplayName = (item) => {
 };
 
 // 格式化金额
-const formatMoney = (amount) => {
-  if (amount === null || amount === undefined) return "0.00";
-  return Number(amount).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-};
+import { formatMoney } from "@/utils/money";
 
 // 格式化日期 - 显示完整日期
 const formatDate = (date) => {
@@ -304,7 +301,7 @@ onMounted(() => {
 <style scoped>
 .page-repay-list {
   min-height: 100vh;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   padding-bottom: 100px;
 }
 
@@ -317,7 +314,7 @@ onMounted(() => {
 }
 
 .repay-card {
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 12px;
   padding: 16px;
   margin-bottom: 12px;
@@ -339,12 +336,12 @@ onMounted(() => {
 .repay-card-name {
   font-size: 16px;
   font-weight: 600;
-  color: #333;
+  color: var(--theme-text-primary);
 }
 
 .repay-date {
   font-size: 13px;
-  color: #07c160;
+  color: var(--theme-primary);
   font-weight: 500;
   margin-top: 2px;
 }
@@ -372,17 +369,17 @@ onMounted(() => {
 
 .info-label {
   font-size: 13px;
-  color: #999;
+  color: var(--theme-text-tertiary);
 }
 
 .info-value {
   font-size: 14px;
   font-weight: 500;
-  color: #333;
+  color: var(--theme-text-primary);
 }
 
 .info-value.danger {
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
 }
 
 .repay-amount-col {
@@ -391,7 +388,7 @@ onMounted(() => {
   justify-content: center;
   align-items: center;
   padding: 8px 16px;
-  background: linear-gradient(135deg, #07c160 0%, #10b981 100%);
+  background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-primary-grad) 100%);
   border-radius: 8px;
   min-width: 100px;
 }
@@ -413,12 +410,12 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   padding-top: 12px;
-  border-top: 1px solid #f5f5f5;
+  border: 1px solid var(--theme-border);
 }
 
 .repay-method {
   font-size: 12px;
-  color: #999;
+  color: var(--theme-text-tertiary);
   display: flex;
   align-items: center;
   gap: 4px;
@@ -440,7 +437,7 @@ onMounted(() => {
 .glass-add-btn {
   width: 100%;
   height: 56px;
-  background: #07c160;
+  background: var(--theme-primary);
   color: #fff;
   border: none;
   border-radius: 28px;

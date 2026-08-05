@@ -65,18 +65,18 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.page-transfer-list { min-height: 100vh; background: #f7f8fa; }
+.page-transfer-list { min-height: 100vh; background: var(--theme-bg-primary); }
 .page-loading { display: flex; justify-content: center; padding: 60px 0; }
 .stats-summary { display: flex; justify-content: center; padding: 12px 16px; }
 .summary-item { text-align: center; }
-.summary-item .label { font-size: 12px; color: #969799; display: block; }
-.summary-item .value { font-size: 16px; font-weight: 700; color: #323233; }
-.transfer-item { background: #fff; margin: 8px 16px; border-radius: 12px; padding: 14px 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
-.ti-header { display: flex; align-items: center; gap: 8px; font-size: 14px; color: #323233; margin-bottom: 8px; }
-.ti-arrow { font-size: 14px; color: #c8c9cc; }
+.summary-item .label { font-size: 12px; color: var(--theme-text-tertiary); display: block; }
+.summary-item .value { font-size: 16px; font-weight: 700; color: var(--theme-text-primary); }
+.transfer-item { background: var(--theme-bg-secondary); margin: 8px 16px; border-radius: 12px; padding: 14px 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+.ti-header { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--theme-text-primary); margin-bottom: 8px; }
+.ti-arrow { font-size: 14px; color: var(--theme-text-tertiary); }
 .ti-body { display: flex; justify-content: space-between; align-items: center; }
 .ti-amount { font-size: 16px; font-weight: 700; font-family: 'DIN Alternate', sans-serif; }
-.ti-amount.expense { color: #ee0a24; }
-.ti-date { font-size: 12px; color: #969799; }
-.ti-remark { font-size: 11px; color: #969799; margin-top: 6px; }
+.ti-amount.expense { color: var(--van-danger-color, #ee0a24); }
+.ti-date { font-size: 12px; color: var(--theme-text-tertiary); }
+.ti-remark { font-size: 11px; color: var(--theme-text-tertiary); margin-top: 6px; }
 </style>

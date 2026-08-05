@@ -1,9 +1,9 @@
 <template>
   <div class="page-budget-shopping">
-    <van-form ref="formRef">
+    <app-form ref="formRef">
       <!-- 基本信息 -->
       <van-cell-group inset title="购物计划">
-        <van-field
+        <app-field
           v-model="formData.title"
           label="计划标题"
           placeholder="如：618购物清单"
@@ -11,7 +11,7 @@
           class="field-compact"
         />
         <div class="info-row-grid">
-          <van-field
+          <app-field
             v-model="formData.plan_date"
             label="购买日期"
             readonly
@@ -21,7 +21,7 @@
             class="field-compact"
             @click="showPlanDatePicker"
           />
-          <van-field
+          <app-field
             v-model="formData.cycle"
             label="预算周期"
             readonly
@@ -30,24 +30,23 @@
             class="field-compact"
           >
             <template #right-icon><van-icon name="arrow-down" /></template>
-          </van-field>
+          </app-field>
         </div>
-        <van-field
+        <app-field
           v-model="formData.budget_amount"
           label="总预算"
           type="number"
           placeholder="0.00"
           :rules="[{ required: true, message: '请输入总预算' }]"
           class="field-compact"
-        >
-          <template #button><span class="yuan">元</span></template>
-        </van-field>
+          suffix="元"
+        />
       </van-cell-group>
 
       <!-- 购物明细 -->
       <div class="section-header">
         <span class="section-title">购物清单</span>
-        <van-button size="small" type="primary" plain @click="addItem">添加商品</van-button>
+        <app-button size="small" type="primary" plain @click="addItem">添加商品</app-button>
       </div>
 
       <div v-for="(item, index) in formData.items" :key="index" class="item-card">
@@ -56,7 +55,7 @@
           <van-icon name="cross" class="delete-icon" @click="removeItem(index)" />
         </div>
 
-        <van-field
+        <app-field
           v-model="item.name"
           label="商品名称"
           placeholder="如：iPhone 16"
@@ -64,20 +63,20 @@
         />
 
         <div class="item-row-grid">
-          <van-field
+          <app-field
             v-model="item.category"
             label="类别"
             placeholder="电子产品"
             class="field-compact"
           />
-          <van-field
+          <app-field
             v-model="item.quantity"
             label="数量"
             type="number"
             placeholder="1"
             class="field-compact"
           />
-          <van-field
+          <app-field
             v-model="item.priority"
             label="优先级"
             readonly
@@ -88,28 +87,26 @@
         </div>
 
         <div class="item-row-grid">
-          <van-field
+          <app-field
             v-model="item.price"
             label="预计价格"
             type="number"
             placeholder="0.00"
             class="field-compact"
-          >
-            <template #button><span class="yuan">元</span></template>
-          </van-field>
-          <van-field
+            suffix="元"
+          />
+          <app-field
             v-model="item.actual_price"
             label="实际价格"
             type="number"
             placeholder="0.00"
             class="field-compact"
-          >
-            <template #button><span class="yuan">元</span></template>
-          </van-field>
+            suffix="元"
+          />
         </div>
 
         <div class="item-row-grid">
-          <van-field
+          <app-field
             v-model="item.purchase_date"
             label="购买日期"
             readonly
@@ -118,7 +115,7 @@
             class="field-compact"
             @click="showDatePicker(index)"
           />
-          <van-field
+          <app-field
             v-model="item.shop"
             label="店铺"
             placeholder="京东自营"
@@ -126,7 +123,7 @@
           />
         </div>
 
-        <van-field
+        <app-field
           v-model="item.notes"
           label="备注"
           placeholder="颜色、规格等"
@@ -137,31 +134,31 @@
 
       <!-- 预算汇总 -->
       <van-cell-group inset class="summary-group">
-        <van-cell title="预算总额">
+        <app-cell title="预算总额">
           <template #value>
             <span class="budget-amount">¥{{ formatAmount(totalBudget) }}</span>
           </template>
-        </van-cell>
-        <van-cell title="预计总花费">
+        </app-cell>
+        <app-cell title="预计总花费">
           <template #value>
             <span class="estimated-amount">¥{{ formatAmount(estimatedTotal) }}</span>
           </template>
-        </van-cell>
-        <van-cell title="实际总花费">
+        </app-cell>
+        <app-cell title="实际总花费">
           <template #value>
             <span class="actual-amount">¥{{ formatAmount(actualTotal) }}</span>
           </template>
-        </van-cell>
-        <van-cell title="已购/总数">
+        </app-cell>
+        <app-cell title="已购/总数">
           <template #value>
             <span class="progress-text">{{ purchasedCount }} / {{ formData.items.length }}</span>
           </template>
-        </van-cell>
+        </app-cell>
       </van-cell-group>
 
       <!-- 备注 -->
       <van-cell-group inset title="备注说明">
-        <van-field
+        <app-field
           v-model="formData.budget_details.notes"
           label="备注"
           type="textarea"
@@ -172,34 +169,34 @@
       </van-cell-group>
 
       <div class="form-actions">
-        <van-button size="large" round type="primary" :loading="saving" @click="submit">
+        <app-button size="large" round type="primary" :loading="saving" @click="submit">
           {{ isEdit ? '保存修改' : '创建购物计划' }}
-        </van-button>
+        </app-button>
       </div>
-    </van-form>
+    </app-form>
 
     <!-- 优先级选择 -->
-    <van-popup v-model:show="showPriorityPopup" position="bottom" round>
+    <app-popup v-model:show="showPriorityPopup" position="bottom" round>
       <van-picker
         title="选择优先级"
         :columns="priorityColumns"
         @confirm="onPriorityConfirm"
         @cancel="showPriorityPopup = false"
       />
-    </van-popup>
-    <van-popup v-model:show="showCyclePopup" position="bottom" round>
+    </app-popup>
+    <app-popup v-model:show="showCyclePopup" position="bottom" round>
       <van-picker
         title="选择周期"
         :columns="cycleColumns"
         @confirm="onCycleConfirm"
         @cancel="showCyclePopup = false"
       />
-    </van-popup>
+    </app-popup>
     <!-- 日期选择 -->
     <van-calendar
       v-model:show="showDatePopup"
       :default-date="defaultDate"
-      color="#1989fa"
+      :color="'var(--theme-primary)'"
       @confirm="onDateConfirm"
     />
   </div>
@@ -419,12 +416,12 @@ onMounted(() => {
 <style scoped>
 .page-budget-shopping {
   min-height: 100vh;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   padding-bottom: 16px;
 }
 
 .yuan {
-  color: #969799;
+  color: var(--theme-text-tertiary);
   font-size: 14px;
 }
 
@@ -438,11 +435,11 @@ onMounted(() => {
 .section-title {
   font-size: 14px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
 }
 
 .item-card {
-  background: #fff;
+  background: var(--theme-bg-secondary);
   margin: 0 12px 8px;
   border-radius: 8px;
   padding: 8px 12px;
@@ -462,7 +459,7 @@ onMounted(() => {
   justify-content: center;
   width: 20px;
   height: 20px;
-  background: #1989fa;
+  background: var(--theme-primary);
   color: #fff;
   border-radius: 50%;
   font-size: 11px;
@@ -521,12 +518,12 @@ onMounted(() => {
 
 .budget-amount {
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
 }
 
 .estimated-amount {
   font-weight: 600;
-  color: #1989fa;
+  color: var(--theme-primary);
 }
 
 .actual-amount {

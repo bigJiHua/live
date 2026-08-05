@@ -37,13 +37,13 @@
         <!-- ===== 常规收支 ===== -->
         <template v-if="!isTransfer">
           <!-- 分类选择 -->
-          <van-cell title="分类" is-link @click="showCategoryPicker = true">
+          <app-cell title="分类" is-link @click="showCategoryPicker = true">
             <template #value>
               <span :class="{ placeholder: !selectedCategory }">
                 {{ selectedCategory?.name || "请选择分类" }}
               </span>
             </template>
-          </van-cell>
+          </app-cell>
 
           <!-- 支付方式 -->
           <div class="method-row">
@@ -54,7 +54,7 @@
           </div>
 
           <!-- 关联卡片 -->
-          <van-cell
+          <app-cell
             v-if="showCardCell"
             :title="selectedPayMethod"
             is-link
@@ -65,31 +65,28 @@
                 {{ getCardDisplayText(selectedCard) }}
               </span>
             </template>
-          </van-cell>
+          </app-cell>
 
           <!-- 日期选择 -->
-          <van-cell title="日期" is-link @click="showDatePicker = true">
+          <app-cell title="日期" is-link @click="showDatePicker = true">
             <template #value>
               <span>{{ formatDate(selectedDate) }}</span>
             </template>
-          </van-cell>
+          </app-cell>
 
           <!-- 汇率输入（非人民币时显示） -->
-          <van-field
+          <app-field
             v-if="selectedCurrency.code !== 'CNY'"
             v-model="exchangeRate"
             label="汇率"
             type="number"
             placeholder="如: 684.5125"
             @focus="showKeyboard = false"
-          >
-            <template #button>
-              <span style="color: #969799">/100</span>
-            </template>
-          </van-field>
+            suffix="/100"
+          />
 
           <!-- 备注 -->
-          <van-field
+          <app-field
             v-model="remark"
             :label="isExpense ? '备注' : '说明'"
             placeholder="选填"
@@ -119,7 +116,7 @@
           </div>
 
           <!-- 分类（固定为转账） -->
-          <van-cell title="分类" value="转账" />
+          <app-cell title="分类" value="转账" />
 
           <!-- 对外模式 -->
           <template v-if="transferMode === 'external'">
@@ -132,7 +129,7 @@
             </div>
 
             <!-- 关联卡片 -->
-            <van-cell
+            <app-cell
               v-if="showCardCell"
               :title="selectedPayMethod"
               is-link
@@ -143,17 +140,17 @@
                   {{ getCardDisplayText(selectedCard) }}
                 </span>
               </template>
-            </van-cell>
+            </app-cell>
 
             <!-- 日期 -->
-            <van-cell title="日期" is-link @click="showDatePicker = true">
+            <app-cell title="日期" is-link @click="showDatePicker = true">
               <template #value>
                 <span>{{ formatDate(selectedDate) }}</span>
               </template>
-            </van-cell>
+            </app-cell>
 
             <!-- 备注（必填，提示收款人） -->
-            <van-field
+            <app-field
               v-model="remark"
               label="备注"
               placeholder="收款人：xxx"
@@ -163,16 +160,16 @@
           <!-- 自转模式 -->
           <template v-if="transferMode === 'self'">
             <!-- 转出账户 -->
-            <van-cell title="转出账户" is-link @click="showCardPicker = true">
+            <app-cell title="转出账户" is-link @click="showCardPicker = true">
               <template #value>
                 <span :class="{ placeholder: !selectedCard?.id }">
                   {{ getCardDisplayText(selectedCard) || "选择转出卡片" }}
                 </span>
               </template>
-            </van-cell>
+            </app-cell>
 
             <!-- 转入账户 -->
-            <van-cell
+            <app-cell
               title="转入账户"
               is-link
               @click="showIncomeCardPicker = true"
@@ -182,17 +179,17 @@
                   {{ getCardDisplayText(selectedIncomeCard) || "选择转入卡片" }}
                 </span>
               </template>
-            </van-cell>
+            </app-cell>
 
             <!-- 日期 -->
-            <van-cell title="日期" is-link @click="showDatePicker = true">
+            <app-cell title="日期" is-link @click="showDatePicker = true">
               <template #value>
                 <span>{{ formatDate(selectedDate) }}</span>
               </template>
-            </van-cell>
+            </app-cell>
 
             <!-- 备注 -->
-            <van-field
+            <app-field
               v-model="remark"
               label="备注"
               placeholder="选填"
@@ -203,10 +200,10 @@
           <!-- 提现模式 -->
           <template v-if="transferMode === 'withdraw'">
             <!-- 转出账户（固定为余额） -->
-            <van-cell title="转出账户" value="余额" />
+            <app-cell title="转出账户" value="余额" />
 
             <!-- 提现到卡 -->
-            <van-cell
+            <app-cell
               title="提现到卡"
               is-link
               @click="showIncomeCardPicker = true"
@@ -216,17 +213,17 @@
                   {{ getCardDisplayText(selectedIncomeCard) || "选择到账卡片" }}
                 </span>
               </template>
-            </van-cell>
+            </app-cell>
 
             <!-- 日期 -->
-            <van-cell title="日期" is-link @click="showDatePicker = true">
+            <app-cell title="日期" is-link @click="showDatePicker = true">
               <template #value>
                 <span>{{ formatDate(selectedDate) }}</span>
               </template>
-            </van-cell>
+            </app-cell>
 
             <!-- 备注 -->
-            <van-field
+            <app-field
               v-model="remark"
               label="备注"
               placeholder="选填"
@@ -250,7 +247,7 @@
 
     <!-- 提交按钮 -->
     <div class="submit-wrap">
-      <van-button
+      <app-button
         type="primary"
         block
         round
@@ -269,11 +266,11 @@
             ? "确认提现"
             : "登记自转账"
         }}
-      </van-button>
+      </app-button>
     </div>
 
     <!-- 分类选择弹框 -->
-    <van-popup v-model:show="showCategoryPicker" position="bottom" round>
+    <app-popup v-model:show="showCategoryPicker" position="bottom" round>
       <div class="category-popup">
         <div class="popup-header">
           <span>选择分类</span>
@@ -286,10 +283,10 @@
           </div>
         </div>
       </div>
-    </van-popup>
+    </app-popup>
 
     <!-- 卡片选择弹框 -->
-    <van-popup v-model:show="showCardPicker" position="bottom" round>
+    <app-popup v-model:show="showCardPicker" position="bottom" round>
       <div class="card-picker-popup">
         <div class="popup-header">
           <span>选择关联卡片</span>
@@ -320,10 +317,10 @@
           </div>
         </div>
       </div>
-    </van-popup>
+    </app-popup>
 
     <!-- 转入卡片选择弹框 -->
-    <van-popup v-model:show="showIncomeCardPicker" position="bottom" round>
+    <app-popup v-model:show="showIncomeCardPicker" position="bottom" round>
       <div class="card-picker-popup">
         <div class="popup-header">
           <span>选择转入卡片</span>
@@ -354,17 +351,17 @@
           </div>
         </div>
       </div>
-    </van-popup>
+    </app-popup>
 
     <!-- 币种选择弹框 -->
-    <van-popup v-model:show="showCurrencyPicker" position="bottom" round>
+    <app-popup v-model:show="showCurrencyPicker" position="bottom" round>
       <van-picker
         title="选择币种"
         :columns="currencyColumns"
         @confirm="onCurrencyConfirm"
         @cancel="showCurrencyPicker = false"
       />
-    </van-popup>
+    </app-popup>
 
     <!-- 日期日历弹框 -->
     <van-calendar
@@ -712,10 +709,7 @@ const formatDate = (date) => {
 };
 
 // 格式化金额
-const formatMoney = (val) => {
-  const num = Number(val) || 0;
-  return num.toFixed(2);
-};
+import { formatMoney } from "@/utils/money";
 
 // 币种选择
 const onCurrencyConfirm = ({ selectedOptions }) => {
@@ -1037,15 +1031,15 @@ onMounted(async () => {
 <style scoped>
 .page-finance-add {
   max-height: 95vh;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
 }
 
 .amount-card {
   margin: 0;
   padding: 40px 20px 20px;
-  background: #fff;
+  background: var(--theme-bg-secondary);
   text-align: center;
-  border-bottom: 1px solid #eee;
+  border: 1px solid var(--theme-border);
 }
 
 .currency-selector {
@@ -1053,10 +1047,10 @@ onMounted(async () => {
   align-items: center;
   gap: 4px;
   padding: 4px 12px;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   border-radius: 16px;
   font-size: 13px;
-  color: #323233;
+  color: var(--theme-text-primary);
   margin-bottom: 12px;
   cursor: pointer;
 }
@@ -1069,18 +1063,18 @@ onMounted(async () => {
 .exchange-tip {
   margin-top: 8px;
   font-size: 13px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 
 .label {
-  color: #999;
+  color: var(--theme-text-tertiary);
   font-size: 14px;
 }
 
 .value {
   font-size: 48px;
   font-weight: bold;
-  color: #333;
+  color: var(--theme-text-primary);
   margin-top: 15px;
   display: flex;
   justify-content: center;
@@ -1088,11 +1082,11 @@ onMounted(async () => {
 }
 
 .placeholder {
-  color: #999;
+  color: var(--theme-text-tertiary);
 }
 
 .info-section {
-  background: #fff;
+  background: var(--theme-bg-secondary);
   margin-top: 12px;
 }
 
@@ -1102,7 +1096,7 @@ onMounted(async () => {
 
 .submit-wrap {
   padding: 30px 20px;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
 }
 
 .card-picker-popup {
@@ -1116,7 +1110,7 @@ onMounted(async () => {
   justify-content: space-between;
   align-items: center;
   padding: 16px;
-  border-bottom: 1px solid #eee;
+  border: 1px solid var(--theme-border);
   font-size: 16px;
   font-weight: 600;
 }
@@ -1132,23 +1126,23 @@ onMounted(async () => {
   justify-content: space-between;
   align-items: center;
   padding: 14px 16px;
-  border-bottom: 1px solid #f5f5f5;
+  border: 1px solid var(--theme-border);
   cursor: pointer;
 }
 
 .card-item:active {
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
 }
 
 .card-text {
   font-size: 14px;
-  color: #323233;
+  color: var(--theme-text-primary);
 }
 
 .empty-tip {
   text-align: center;
   padding: 30px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   font-size: 14px;
 }
 
@@ -1156,7 +1150,7 @@ onMounted(async () => {
   display: flex;
   gap: 8px;
   padding: 12px 16px;
-  border-bottom: 1px solid #f5f5f5;
+  border: 1px solid var(--theme-border);
 }
 
 .pay-method-toggle {
@@ -1170,10 +1164,10 @@ onMounted(async () => {
   align-items: center;
   gap: 4px;
   padding: 2px 8px;
-  background: #f5f6fa;
+  background: var(--theme-bg-tertiary);
   border-radius: 12px;
   font-size: 12px;
-  color: #323233;
+  color: var(--theme-text-primary);
   white-space: nowrap;
   max-width: 120px;
   overflow: hidden;
@@ -1184,21 +1178,21 @@ onMounted(async () => {
   font-size: 12px;
   padding: 4px 14px;
   border-radius: 14px;
-  background: #f5f6fa;
-  color: #969799;
+  background: var(--theme-bg-tertiary);
+  color: var(--theme-text-tertiary);
   cursor: pointer;
 }
 
 .toggle-btn.active {
-  background: #1989fa;
+  background: var(--theme-primary);
   color: #fff;
 }
 
 .section-divider {
   font-size: 12px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   padding: 10px 16px 4px;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
 }
 
 /* ── 支付方式平铺标签 ── */
@@ -1207,13 +1201,13 @@ onMounted(async () => {
   align-items: center;
   justify-content: space-between;
   padding: 10px 16px;
-  background: #fff;
+  background: var(--theme-bg-secondary);
   gap: 10px;
 }
 
 .method-label {
   font-size: 14px;
-  color: #323233;
+  color: var(--theme-text-primary);
   white-space: nowrap;
 }
 
@@ -1227,15 +1221,15 @@ onMounted(async () => {
   font-size: 0.65rem;
   padding: 8px 15px;
   border-radius: 5px;
-  border: 1px solid #e0e0e0;
-  color: #000000;
-  background: #fff;
+  border: 1px solid var(--theme-border);
+  color: var(--theme-text-primary);
+  background: var(--theme-bg-secondary);
 }
 
 .method-chip.active {
-  border-color: #07c160;
-  background: #f0fff5;
-  color: #07c160;
+  border-color: var(--van-green);
+  background: rgba(7, 193, 96, 0.08);
+  color: var(--van-green);
 }
 
 /* ── 分类平铺弹窗 ── */
@@ -1258,7 +1252,7 @@ onMounted(async () => {
   align-items: center;
   gap: 6px;
   padding: 14px 8px;
-  border: 1px solid #f0f0f0;
+  border: 1px solid var(--theme-border);
   border-radius: 10px;
   cursor: pointer;
   position: relative;
@@ -1266,12 +1260,12 @@ onMounted(async () => {
 }
 
 .category-tile:active {
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
 }
 
 .category-tile.active {
-  border-color: #07c160;
-  background: #f0fff5;
+  border-color: var(--van-green);
+  background: rgba(7, 193, 96, 0.08);
 }
 
 .category-tile .van-icon-success {
@@ -1283,7 +1277,7 @@ onMounted(async () => {
 
 .cat-name {
   font-size: 12px;
-  color: #323233;
+  color: var(--theme-text-primary);
   text-align: center;
   line-height: 1.3;
 }

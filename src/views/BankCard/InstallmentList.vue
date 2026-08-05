@@ -36,9 +36,9 @@
           <div class="ms-title">各期状态</div>
           <div v-for="m in getMonthRecords(item)" :key="m.month" class="ms-row">
             <span class="ms-date">{{ m.month }}</span>
-            <van-tag :type="m.status === 'done' ? 'success' : m.status === 'skipped' ? 'danger' : 'warning'" size="small">
+            <app-tag :type="m.status === 'done' ? 'success' : m.status === 'skipped' ? 'danger' : 'warning'" size="small">
               {{ m.status === 'done' ? '已还' : m.status === 'skipped' ? '跳过' : '待还' }}
-            </van-tag>
+            </app-tag>
             <span class="ms-amount">￥{{ formatAmount(m.amount) }}</span>
           </div>
         </div>
@@ -105,28 +105,28 @@ const handleDelete = async (item) => {
 </script>
 
 <style scoped>
-.page-inst-list { min-height: 100vh; padding: 12px 16px 100px; background: #f7f8fa; }
-.header-card { background: linear-gradient(135deg, #ee0a24 0%, #d91a4a 100%); border-radius: 12px; padding: 20px; margin-bottom: 16px; color: #fff; }
+.page-inst-list { min-height: 100vh; padding: 12px 16px 100px; background: var(--theme-bg-primary); }
+.header-card { background: linear-gradient(135deg, var(--van-danger-color, #ee0a24) 0%, var(--van-danger-grad, #d91a4a) 100%); border-radius: 12px; padding: 20px; margin-bottom: 16px; color: #fff; }
 .header-title { font-size: 20px; font-weight: 700; }
 .header-sub { font-size: 13px; opacity: 0.85; margin-top: 6px; }
 
-.inst-card { background: #fff; border-radius: 8px; padding: 14px; margin-bottom: 8px; }
+.inst-card { background: var(--theme-bg-secondary); border-radius: 8px; padding: 14px; margin-bottom: 8px; }
 .inst-head { display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
-.inst-name { font-size: 15px; font-weight: 600; color: #323233; }
-.inst-meta { font-size: 12px; color: #969799; margin-top: 2px; }
-.inst-amount-row { display: flex; align-items: baseline; gap: 2px; margin-top: 6px; font-size: 13px; color: #323233; }
-.inst-amount { font-size: 16px; font-weight: 700; color: #ee0a24; }
-.inst-fee-tip { font-size: 11px; color: #c8c9cc; }
+.inst-name { font-size: 15px; font-weight: 600; color: var(--theme-text-primary); }
+.inst-meta { font-size: 12px; color: var(--theme-text-tertiary); margin-top: 2px; }
+.inst-amount-row { display: flex; align-items: baseline; gap: 2px; margin-top: 6px; font-size: 13px; color: var(--theme-text-primary); }
+.inst-amount { font-size: 16px; font-weight: 700; color: var(--van-danger-color, #ee0a24); }
+.inst-fee-tip { font-size: 11px; color: var(--theme-text-tertiary); }
 .inst-actions { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
-.del-icon { color: #ee0a24; font-size: 18px; }
-.expand-arrow { color: #969799; }
+.del-icon { color: var(--van-danger-color, #ee0a24); font-size: 18px; }
+.expand-arrow { color: var(--theme-text-tertiary); }
 
 .expand-body { margin-top: 4px; }
-.info-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 14px; color: #646566; }
+.info-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 14px; color: var(--theme-text-secondary); }
 
 .months-section { margin-top: 12px; }
-.ms-title { font-size: 13px; font-weight: 600; color: #646566; margin-bottom: 6px; }
-.ms-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid #f2f3f5; font-size: 13px; }
-.ms-date { color: #323233; font-weight: 500; min-width: 64px; }
-.ms-amount { color: #ee0a24; font-weight: 500; margin-left: auto; }
+.ms-title { font-size: 13px; font-weight: 600; color: var(--theme-text-secondary); margin-bottom: 6px; }
+.ms-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border: 1px solid var(--theme-border); font-size: 13px; }
+.ms-date { color: var(--theme-text-primary); font-weight: 500; min-width: 64px; }
+.ms-amount { color: var(--van-danger-color, #ee0a24); font-weight: 500; margin-left: auto; }
 </style>

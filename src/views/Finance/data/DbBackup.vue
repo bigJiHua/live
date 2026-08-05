@@ -10,9 +10,9 @@
       <div class="sys-backup-section">
         <div class="section-title">系统备份</div>
         <van-cell-group inset class="app-card">
-          <van-cell>
+          <app-cell>
             <template #title>
-              <van-button
+              <app-button
                 type="primary"
                 size="large"
                 block
@@ -22,36 +22,36 @@
                 @click="handleSystemBackup"
               >
                 {{ isBackupRunning ? '备份中...' : '系统性备份数据库' }}
-              </van-button>
+              </app-button>
             </template>
             <template #label>
               <span class="label-text">将自动执行完整备份（含数据）和仅结构备份，保存至日期目录</span>
             </template>
-          </van-cell>
+          </app-cell>
         </van-cell-group>
 
         <!-- 备份进度 -->
         <div class="sys-backup-progress" v-if="isBackupRunning">
           <div class="section-title">备份进度</div>
           <van-cell-group inset class="app-card">
-            <van-cell title="状态">
+            <app-cell title="状态">
               <template #value>
-                <van-tag type="warning" size="large">后台备份中</van-tag>
+                <app-tag type="warning" size="large">后台备份中</app-tag>
               </template>
-            </van-cell>
-            <van-cell title="进度">
+            </app-cell>
+            <app-cell title="进度">
               <template #value>
                 <span class="num-font">{{ backupProgress }}%</span>
               </template>
-            </van-cell>
+            </app-cell>
             <van-progress
               :percentage="backupProgress"
               :show-pivot="true"
               :stroke-width="12"
               color="#07c160"
             />
-            <van-cell>
-              <van-button
+            <app-cell>
+              <app-button
                 type="default"
                 size="small"
                 block
@@ -60,8 +60,8 @@
                 @click="loadSystemBackups"
               >
                 刷新备份列表
-              </van-button>
-            </van-cell>
+              </app-button>
+            </app-cell>
           </van-cell-group>
         </div>
 
@@ -111,7 +111,7 @@
         <div class="section-title">手动导出记录</div>
 
         <div class="action-section">
-          <van-button
+          <app-button
             type="primary"
             size="large"
             block
@@ -121,7 +121,7 @@
             @click="loadManualBackups"
           >
             刷新列表
-          </van-button>
+          </app-button>
         </div>
 
         <van-loading v-if="loading" class="page-loading" size="24px">加载中...</van-loading>
@@ -150,7 +150,7 @@
                 </div>
               </div>
               <div class="bi-right">
-                <van-button
+                <app-button
                   type="primary"
                   size="small"
                   plain
@@ -158,8 +158,8 @@
                   @click="handleDownload(item.filename)"
                 >
                   下载
-                </van-button>
-                <van-button
+                </app-button>
+                <app-button
                   type="danger"
                   size="small"
                   plain
@@ -167,7 +167,7 @@
                   @click="handleDelete(item.filename)"
                 >
                   删除
-                </van-button>
+                </app-button>
               </div>
             </div>
           </div>
@@ -348,7 +348,7 @@ onUnmounted(() => {
 <style scoped>
 .page-db-backup {
   min-height: 100vh;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
 }
 .page-content {
   padding: 16px;
@@ -357,7 +357,7 @@ onUnmounted(() => {
 .page-header {
   text-align: center;
   padding: 30px 0;
-  background: white;
+  background: var(--theme-bg-secondary);
   border-radius: 16px;
   margin-bottom: 20px;
 }
@@ -369,17 +369,17 @@ onUnmounted(() => {
 .header-title {
   font-size: 20px;
   font-weight: bold;
-  color: #323233;
+  color: var(--theme-text-primary);
   margin-bottom: 8px;
 }
 .header-desc {
   font-size: 14px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 .section-title {
   padding: 8px 16px;
   font-size: 13px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 .action-section {
   margin-bottom: 12px;
@@ -394,7 +394,7 @@ onUnmounted(() => {
 }
 .label-text {
   font-size: 12px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 .sys-backup-actions {
   display: flex;
@@ -418,15 +418,15 @@ onUnmounted(() => {
   gap: 6px;
   font-size: 14px;
   font-weight: 500;
-  color: #323233;
+  color: var(--theme-text-primary);
 }
 .collapse-title .van-icon {
-  color: #1989fa;
+  color: var(--theme-primary);
 }
 .collapse-badge {
   margin-left: auto;
   font-size: 11px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   font-weight: 400;
 }
 .sys-files-list {
@@ -451,8 +451,8 @@ onUnmounted(() => {
   font-weight: 700;
   flex-shrink: 0;
 }
-.sfi-icon.full { background: #f0fff4; color: #07c160; }
-.sfi-icon.schema { background: #fff7e6; color: #fa8c16; }
+.sfi-icon.full { background: rgba(7, 193, 96, 0.1); color: var(--van-green); }
+.sfi-icon.schema { background: var(--van-orange-bg); color: var(--van-orange); }
 .sfi-info {
   flex: 1;
   min-width: 0;
@@ -460,7 +460,7 @@ onUnmounted(() => {
 .sfi-name {
   font-size: 12px;
   font-weight: 500;
-  color: #323233;
+  color: var(--theme-text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -471,11 +471,11 @@ onUnmounted(() => {
   gap: 8px;
   margin-top: 2px;
   font-size: 11px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 .sfi-time {
   font-size: 10px;
-  color: #c8c9cc;
+  color: var(--theme-text-tertiary);
 }
 .divider {
   height: 1px;
@@ -491,7 +491,7 @@ onUnmounted(() => {
   gap: 10px;
 }
 .backup-item {
-  background: #fff;
+  background: var(--theme-bg-secondary);
   border-radius: 12px;
   padding: 14px 16px;
   display: flex;
@@ -518,8 +518,8 @@ onUnmounted(() => {
   letter-spacing: 0.5px;
   flex-shrink: 0;
 }
-.bi-icon.sql { background: #f0f5ff; color: #1989fa; }
-.bi-icon.zip { background: #fff7e6; color: #fa8c16; }
+.bi-icon.sql { background: rgba(var(--theme-primary-rgb), 0.1); color: var(--theme-primary); }
+.bi-icon.zip { background: var(--van-orange-bg); color: var(--van-orange); }
 .bi-info {
   flex: 1;
   min-width: 0;
@@ -527,7 +527,7 @@ onUnmounted(() => {
 .bi-name {
   font-size: 13px;
   font-weight: 500;
-  color: #323233;
+  color: var(--theme-text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -538,11 +538,11 @@ onUnmounted(() => {
   gap: 6px;
   margin-top: 3px;
   font-size: 11px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 .bi-time {
   font-size: 10px;
-  color: #c8c9cc;
+  color: var(--theme-text-tertiary);
   margin-top: 1px;
 }
 .bi-right {

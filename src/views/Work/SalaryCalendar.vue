@@ -37,45 +37,27 @@
       </div>
     </div>
 
-    <!-- 星期标题 -->
-    <div class="weekdays">
-      <div v-for="day in weekDays" :key="day" class="weekday">{{ day }}</div>
-    </div>
-
-    <!-- 日历主体 -->
-    <div class="calendar-grid" v-if="!loading">
-      <div
-        v-for="(day, index) in calendarDays"
-        :key="index"
-        class="day-cell"
-        :class="getDayCellClass(day)"
-        @click="selectDate(day)"
-      >
-        <span class="day-number">{{ day.day }}</span>
-        <!-- 有工资记录 -->
-        <div v-if="day.hasRecord" class="day-amounts">
-          <span v-if="day.formalIncome > 0" class="amount fulltime"
-            >¥{{ day.formalIncome }}</span
-          >
-          <span v-if="day.parttimeCount > 0" class="amount parttime"
-            >¥{{ day.parttimeTotal }}</span
-          >
-        </div>
-        <!-- 计薪日但无记录 -->
-        <span
-          v-else-if="day.isWorkingDay && !day.notWorking"
-          class="day-working"
-          >计薪</span
-        >
+    <!-- 日历主体（共享 CalendarGrid 组件） -->
+    <div class="calendar-grid-wrap">
+      <CalendarGrid
+        v-if="!loading"
+        :year="currentYear"
+        :month="currentMonth"
+        :primary="'var(--theme-primary)'"
+        variant="salary"
+        :dataset="calendarDataset"
+        :show-stat="false"
+        :card="false"
+        :show-header="false"
+        @select="onSalarySelect"
+      />
+      <div v-else class="calendar-loading">
+        <van-loading size="32px">加载中...</van-loading>
       </div>
     </div>
 
-    <div class="calendar-loading" v-else>
-      <van-loading size="32px">加载中...</van-loading>
-    </div>
-
     <!-- 月份选择器 -->
-    <van-popup v-model:show="showMonthPicker" position="bottom" round>
+    <app-popup v-model:show="showMonthPicker" position="bottom" round>
       <van-picker
         title="选择月份"
         v-model="pickerSelectedValues"
@@ -83,7 +65,7 @@
         @confirm="onPickerConfirm"
         @cancel="showMonthPicker = false"
       />
-    </van-popup>
+    </app-popup>
   </div>
 </template>
 
@@ -92,9 +74,9 @@ import { ref, computed, onMounted, onActivated } from "vue";
 import { useRouter } from "vue-router";
 import dayjs from "dayjs";
 import { getSalaryMonth, getJobList } from "@/utils/api/work";
+import CalendarGrid from "@/components/calendar/CalendarGrid.vue";
 
 const router = useRouter();
-const weekDays = ["日", "一", "二", "三", "四", "五", "六"];
 
 // 当前年月
 const today = dayjs();
@@ -190,42 +172,27 @@ const isFormalWorking = (dateStr) => {
 };
 
 // 日历天列表
-const calendarDays = computed(() => {
-  const days = [];
+// 后端数据 → CalendarGrid 的 dataset（按 YYYY-MM-DD 索引，含全部日期）
+const calendarDataset = computed(() => {
+  const map = {};
   const firstDay = dayjs()
     .year(currentYear.value)
     .month(currentMonth.value)
     .date(1);
   const daysInMonth = firstDay.daysInMonth();
-  const startWeekday = firstDay.day();
   const dailyList = monthData.value.daily_list || [];
-  const todayStr = dayjs().format("YYYY-MM-DD");
 
-  // 空白填充
-  for (let i = 0; i < startWeekday; i++) {
-    days.push({ day: null, empty: true });
-  }
-
-  // 日期
   for (let d = 1; d <= daysInMonth; d++) {
     const dateStr = firstDay.date(d).format("YYYY-MM-DD");
-    const dayRecord = dailyList.find((item) => item.date === dateStr);
-    const isToday = dateStr === todayStr;
-
-    // 正式工是否在职
     const formalWorking = isFormalWorking(dateStr);
-    // 兼职是否在职
     const parttimeWorking = isParttimeWorking(dateStr);
-    // 不计薪（都不在职）
     const notWorking = !formalWorking && !parttimeWorking;
+    const dayRecord = dailyList.find((item) => item.date === dateStr);
 
-    // 当日收入
     let formalIncome = 0;
     let parttimeTotal = 0;
     let parttimeCount = 0;
-
     if (dayRecord) {
-      // 确保数值转换
       if (dayRecord.formal?.income) {
         formalIncome = parseFloat(dayRecord.formal.income) || 0;
       }
@@ -237,47 +204,22 @@ const calendarDays = computed(() => {
       }
     }
 
-    days.push({
-      day: d,
-      date: dateStr,
-      isToday,
+    map[dateStr] = {
       isWorkingDay: formalWorking || parttimeWorking,
       notWorking,
       formalIncome,
       parttimeTotal,
       parttimeCount,
-      hasRecord: formalIncome > 0 || parttimeTotal > 0,
-    });
+    };
   }
-  return days;
+  return map;
 });
 
-// 获取日期格子样式
-const getDayCellClass = (day) => {
-  if (!day.day) return "empty";
-  const classes = [];
-
-  if (day.isToday) classes.push("today");
-  if (day.notWorking) classes.push("not-working");
-  else if (day.hasRecord) {
-    if (day.formalIncome > 0 && day.parttimeCount > 0) {
-      classes.push("has-both");
-    } else if (day.formalIncome > 0) {
-      classes.push("has-fulltime");
-    } else if (day.parttimeTotal > 0) {
-      classes.push("has-parttime");
-    }
-  } else if (day.isWorkingDay) {
-    classes.push("working-day");
-  }
-
-  return classes.join(" ");
-};
-
 // 选择日期
-const selectDate = (day) => {
-  if (!day?.date || day.empty || day.notWorking) return;
-  router.push(`/work/salary-day?date=${day.date}`);
+const onSalarySelect = (date) => {
+  const cell = calendarDataset.value[date];
+  if (cell && cell.notWorking) return;
+  router.push(`/work/salary-day?date=${date}`);
 };
 
 // 去工作设置
@@ -340,7 +282,7 @@ onActivated(() => {
 <style scoped>
 .page-salary-calendar {
   min-height: 100vh;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
   padding-bottom: 20px;
 }
 
@@ -349,19 +291,19 @@ onActivated(() => {
   justify-content: space-between;
   align-items: center;
   padding: 16px;
-  background: #fff;
+  background: var(--theme-bg-secondary);
 }
 
 .header .van-icon {
   font-size: 18px;
   padding: 6px;
-  color: #07c160;
+  color: var(--van-green, #07c160);
 }
 
 .month-title {
   font-size: 18px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
   display: flex;
   align-items: center;
   gap: 4px;
@@ -374,14 +316,14 @@ onActivated(() => {
 }
 
 .header-actions .van-icon {
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 
 /* 统计栏 */
 .stat-bar {
   display: flex;
   align-items: center;
-  background: #fff;
+  background: var(--theme-bg-secondary);
   padding: 16px;
   margin-bottom: 8px;
   gap: 16px;
@@ -399,53 +341,58 @@ onActivated(() => {
 
 .stat-label {
   font-size: 12px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 
 .stat-value {
   font-size: 18px;
   font-weight: 600;
-  color: #323233;
+  color: var(--theme-text-primary);
 }
 
 .stat-value.income {
-  color: #07c160;
+  color: var(--van-green, #07c160);
 }
 
 .stat-value.blue {
-  color: #1989fa;
+  color: var(--theme-primary);
 }
 
 .stat-value.orange {
-  color: #ff976a;
+  color: var(--van-orange, #ff976a);
 }
 
 .stat-divider {
   width: 1px;
   height: 30px;
-  background: #ebedf0;
+  background: var(--theme-border);
 }
 
 /* 星期 */
 .weekdays {
   display: flex;
-  background: #fff;
+  background: var(--theme-bg-secondary);
   padding: 12px 0;
-  border-bottom: 1px solid #f2f3f5;
+  border: 1px solid var(--theme-border);
 }
 
 .weekday {
   flex: 1;
   text-align: center;
   font-size: 13px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 
 /* 日历 */
+.calendar-grid-wrap {
+  background: var(--theme-bg-secondary);
+  border: 1px solid var(--theme-border);
+  border-top: none;
+}
 .calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  background: #fff;
+  background: var(--theme-bg-secondary);
   padding: 0; /* ❗去掉 padding */
 }
 
@@ -469,7 +416,7 @@ onActivated(() => {
   align-items: center;
   justify-content: center;
   height: 300px;
-  background: #fff;
+  background: var(--theme-bg-secondary);
 }
 
 .day-cell.empty {
@@ -483,7 +430,7 @@ onActivated(() => {
 
 .day-number {
   font-size: 15px;
-  color: #323233;
+  color: var(--theme-text-primary);
   width: 32px;
   height: 32px;
   display: flex;
@@ -492,7 +439,7 @@ onActivated(() => {
 }
 
 .day-cell.today .day-number {
-  background: #07c160;
+  background: var(--van-green, #07c160);
   color: #fff;
   border-radius: 50%;
 }
@@ -510,28 +457,28 @@ onActivated(() => {
 }
 
 .amount.fulltime {
-  color: #1989fa;
+  color: var(--theme-primary);
 }
 
 .amount.parttime {
-  color: #ff976a;
+  color: var(--van-orange, #ff976a);
 }
 
 .day-working {
   font-size: 10px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
 }
 
 /* 颜色区分 */
 .day-cell.has-fulltime .day-number {
-  color: #1989fa;
+  color: var(--theme-primary);
 }
 
 .day-cell.has-parttime .day-number {
-  color: #ff976a;
+  color: var(--van-orange, #ff976a);
 }
 
 /* .day-cell.has-both .day-number {
-  color: #07c160;
+  color: var(--van-green, #07c160);
 } */
 </style>

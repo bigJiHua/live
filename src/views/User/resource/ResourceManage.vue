@@ -3,7 +3,7 @@
     <div class="manage-content">
       <div class="section-title">资源类型</div>
       <van-cell-group inset class="app-card">
-        <van-cell
+        <app-cell
           title="动态图片"
           label="发布的动态图片"
           icon="photo-o"
@@ -14,8 +14,8 @@
           <template #right-icon>
             <van-icon name="arrow" color="#969799" />
           </template>
-        </van-cell>
-        <van-cell
+        </app-cell>
+        <app-cell
           title="资产图片"
           label="资产相关的图片"
           icon="coupon-o"
@@ -26,8 +26,8 @@
           <template #right-icon>
             <van-icon name="arrow" color="#969799" />
           </template>
-        </van-cell>
-        <van-cell
+        </app-cell>
+        <app-cell
           title="银行 Icon"
           label="银行图标资源"
           icon="shop-o"
@@ -38,8 +38,8 @@
           <template #right-icon>
             <van-icon name="arrow" color="#969799" />
           </template>
-        </van-cell>
-        <van-cell
+        </app-cell>
+        <app-cell
           title="其他资源"
           label="其他类型的文件"
           icon="folder-o"
@@ -50,7 +50,7 @@
           <template #right-icon>
             <van-icon name="arrow" color="#969799" />
           </template>
-        </van-cell>
+        </app-cell>
       </van-cell-group>
     </div>
   </div>
@@ -72,7 +72,7 @@ const goToResource = (busType) => {
 <style scoped>
 .page-resource-manage {
   min-height: 100vh;
-  background: #f7f8fa;
+  background: var(--theme-bg-primary);
 }
 
 .manage-content {
@@ -83,7 +83,7 @@ const goToResource = (busType) => {
 .section-title {
   padding: 8px 16px;
   font-size: 13px;
-  color: #969799;
+  color: var(--theme-text-tertiary);
   font-weight: 500;
   margin-bottom: 8px;
 }
