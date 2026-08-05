@@ -50,7 +50,11 @@ async function runFile(conn, filename) {
   // 注意：不在 split 层过滤 -- 注释，因为注释和 ALTER 常在同一片段内
   //       行级注释清理在下方 for 循环中逐行处理
   const statements = sql
-    .split(/;\s*\n/)
+    .replace(/\r\n/g, '\n') // 统一换行符，兼容 Windows CRLF
+    // 以 `;` 后跟换行或文件结尾作为语句分隔
+    // 旧正则 /;\s*\n/ 无法识别"最后一条语句以 ; 结尾但文件无尾随换行"的情况，
+    // 会导致末条语句被静默丢弃却仍被 markApplied（数据丢失且不再重试）。
+    .split(/;\s*(?:\n|$)/)
     .map(s => s.trim())
     .filter(s => s.length > 0);
 
@@ -60,7 +64,8 @@ async function runFile(conn, filename) {
     if (!clean) continue;
 
     try {
-      await conn.execute(clean);
+      // 迁移语句为纯 DDL/DML，无需预编译参数；使用 query 协议更直观，避免对 prepared statement 协议的任何限制误解
+      await conn.query(clean);
     } catch (err) {
       // MySQL 5.7 兼容：重复列/键视为已存在
       const skipped = ['ER_DUP_FIELDNAME', 'ER_DUP_KEYNAME', 'ER_DUP_ENTRY'];

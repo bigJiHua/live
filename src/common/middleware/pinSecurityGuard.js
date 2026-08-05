@@ -325,6 +325,12 @@ const pinSecurityGuard = async (req, res, next) => {
     if (url.includes("/handshake")) return next();
     // lock-system 接口跳过 PIN 验证（锁定操作本身无需 PIN，见 lockSystem 控制器）
     if (url.includes("/lock-system")) return next();
+    // PIN 管理接口（check/verify/set/change/route-verify）跳过全局拦截：
+    // 这些接口自身含完整的验证、错误计数与 3 次锁定逻辑，
+    // 且请求体是 oldPin/newPin 而非 pin，避免被全局中间件误判为"待验证"而返回 8303/8304 阻断。
+    // 注意：pinSecurityGuard 挂载在 /api/v1 路由之前，req.originalUrl 带 /api/v1 前缀，
+    // 必须用 includes（不能 startsWith），否则 changePin/verifyPin 仍会被拦截导致退登。
+    if (url.includes("/security/pin/")) return next();
 
     // 从 JWT Token 中提取 userId
     let userId = null;
@@ -340,6 +346,11 @@ const pinSecurityGuard = async (req, res, next) => {
 
     // 未登录用户直接放行
     if (!userId) return next();
+
+    // 未设置 PIN 的用户直接放行（放在锁定检查之前：
+    // 关闭 PIN 后 pin_code 为空，即使 security_verify_log 残留锁定记录也不再拦截）
+    const userPin = await getUserPin(userId);
+    if (!userPin) return next();
 
     // 查询用户最新一条 PIN 验证记录
     let latest = await getLatestRecord(userId);
@@ -374,6 +385,11 @@ const pinSecurityGuard = async (req, res, next) => {
 
     // ── 分支 1.5：检查路由验证触发的软锁定（无时间限制，验证 PIN 后自动解除）──
     if (latest?.action_type === 'lock' && latest?.pin_status === 0) {
+      // 如果内存中已有验证通过记录（并发请求竞态），直接放行
+      const existingSession = verifiedMap.get(userId);
+      if (existingSession && (Date.now() - existingSession.verifiedAt < 30 * 1000)) {
+        return next();
+      }
       // 风险路由验证目标交给 pinLockGuard 处理，避免通用 8303 覆盖 route_verify 的 challengeId
       if (routeVerifyTarget) {
         return next();
@@ -397,15 +413,17 @@ const pinSecurityGuard = async (req, res, next) => {
       return next();
     }
 
-    // 获取用户 PIN 码（用于判断是否启用了 PIN）
+    // 获取请求体中的 PIN 参数（用于待验证态尝试验证）
     const pin = req.body?.data?.pin;
-    const userPin = await getUserPin(userId);
-
-    // 未设置 PIN 的用户直接放行
-    if (!userPin) return next();
 
     // ── 分支 2：待验证 / 验证失败 / 无记录 ──
     if (!latest || latest.pin_status === 0 || latest.pin_status === 2) {
+
+      // 并发竞态保护：如果内存中已有验证通过记录，直接放行
+      const existingSession2 = verifiedMap.get(userId);
+      if (existingSession2 && (Date.now() - existingSession2.verifiedAt < 30 * 1000)) {
+        return next();
+      }
 
       // 无记录时，先插入一条待验证记录
       if (!latest) {

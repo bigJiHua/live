@@ -27,6 +27,9 @@ router.get('/stats/month', accountController.getMonthStats);
 // 获取全量统计（总资产、卡片数量、欠款等，需在 /:id 之前注册）
 router.get('/stats/all', accountController.getAllStats);
 
+// 所有银行卡近 N 个月支出/收入笔数（按卡聚合，需在 /:id 之前注册）
+router.get('/stats/cards-flow', accountController.getCardsFlowStats);
+
 // 获取单条收支详情
 router.get('/:id', accountController.getById);
 

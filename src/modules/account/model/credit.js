@@ -89,7 +89,7 @@ class CreditAccount {
         now,
         transferGroupId || null
       ]);
-      await CardBill.syncFromExpense(cardId, userId, amount, transDate, conn);
+      await CardBill.syncFromExpense(cardId, userId, amount, transDate, conn, currency || 'CNY', exchangeRate || 1);
       await conn.commit();
     } catch (e) {
       await conn.rollback();
@@ -203,7 +203,9 @@ class CreditAccount {
           oldRecord.card_id, userId,
           oldRecord.amount,
           oldRecord.trans_date,
-          conn
+          conn,
+          oldRecord.currency,
+          oldRecord.exchange_rate
         );
         if (!rollbackResult) {
           throw new Error(
@@ -222,11 +224,15 @@ class CreditAccount {
         );
         const updated = updatedRows[0];
         if (updated) {
+          const newCurrency = currency !== undefined ? currency : oldRecord.currency;
+          const newRate = exchangeRate !== undefined ? exchangeRate : oldRecord.exchange_rate;
           await CardBill.syncFromExpense(
             updated.card_id, userId,
             updated.amount,
             updated.trans_date,
-            conn
+            conn,
+            newCurrency,
+            newRate
           );
         }
 
@@ -333,10 +339,16 @@ class CreditAccount {
     );
 
     if (repayRows.length > 0) {
-      const repay = repayRows[0];
-      throw new Error(
-        `该消费属于 ${billMonth} 账单周期，该周期已有还款记录（${repay.repay_amount}元），请先撤销还款后再冲正此笔交易`
-      );
+      // 仅当该账单已“完全还清”（待还金额≈0）时才禁止冲正。
+      // 若仍有未还欠款(need_repay>0)，说明账单尚未结清，允许冲正本期内的消费
+      // （例如还款后新增的消费、或还款后发生的退款），避免“还过款就一律锁死”的问题。
+      const needRepay = parseFloat(bill.need_repay) || 0;
+      if (needRepay < 0.01) {
+        const repay = repayRows[0];
+        throw new Error(
+          `该消费属于 ${billMonth} 账单周期，该周期已还清（还款 ${repay.repay_amount}元），继续冲正将产生溢缴差额，请先撤销还款后再冲正此笔交易`
+        );
+      }
     }
 
     // ===== 4. 事务执行核心操作 =====
@@ -381,7 +393,8 @@ class CreditAccount {
 
       // 4c. 恢复账单额度（使用事务连接保证一致性）
       const rolledBackBill = await CardBill.rollbackExpense(
-        original.card_id, userId, original.amount, original.trans_date, conn
+        original.card_id, userId, original.amount, original.trans_date, conn,
+        original.currency, original.exchange_rate
       );
       if (!rolledBackBill) {
         throw new Error(`该消费属于 ${billMonth} 账单周期，但账单回滚失败`);

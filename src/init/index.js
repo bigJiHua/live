@@ -397,10 +397,12 @@ async function createAdmin() {
     
     await conn.end();
   } catch (error) {
-    logInit(`查询失败: ${error.message}`, 'error');
-    logInit('无法确认管理员是否存在，跳过创建以避免重复', 'warn');
-    stats.checks.admin = true;
-    return true;
+    // 查询异常（连接/权限等）与"查询为空（可创建）"必须区分：
+    // 这里查询抛错说明无法确认管理员状态，若静默跳过会导致空库部署漏建管理员，
+    // 而本项目不开放注册，用户将永远无法登录。因此异常直接上抛，由 init 终止并报错。
+    logInit(`查询管理员失败: ${error.message}`, 'error');
+    logInit('无法确认管理员是否存在，终止初始化以避免漏建管理员', 'error');
+    throw error;
   }
   
   printDivider();
@@ -466,53 +468,47 @@ function cleanupEnvFile() {
     
     let content = fs.readFileSync(envPath, 'utf-8');
     const originalLength = content.length;
-    
-    // 删除初始化相关的行
-    const linesToRemove = [
-      'INIT_ENABLE=',
-      'INIT_ADMIN_USER=',
-      'INIT_ADMIN_PASS=',
-      'INIT_ADMIN_EMAIL=',
-    ];
-    
-    let removedCount = 0;
-    linesToRemove.forEach(linePrefix => {
-      const regex = new RegExp(`^${linePrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}.*\\n?`, 'gm');
-      const matches = content.match(regex);
-      if (matches) {
-        removedCount += matches.length;
-        content = content.replace(regex, '');
-      }
+
+    // 1) 保留 INIT 开关（INIT_SKIP / INIT_ENABLE），仅改写其值（而非删除）
+    //    - INIT_ENABLE: 深度初始化已完成 → 置 false（下次进入日常增量迁移模式）
+    //    - INIT_SKIP: 恢复跳过 → 置 true（下次启动完全跳过 init，日常快启；
+    //      如需再次初始化再手动改为 false）
+    content = content.replace(/^INIT_ENABLE\s*=.*$/m, 'INIT_ENABLE=false');
+    content = content.replace(/^INIT_SKIP\s*=.*$/m, 'INIT_SKIP=true');
+
+    // 2) 删除初始管理员账户配置（仅在 INIT_ENABLE=true 时生效，初始化后不再需要）
+    ['INIT_ADMIN_USER', 'INIT_ADMIN_PASS', 'INIT_ADMIN_EMAIL'].forEach(key => {
+      const regex = new RegExp(`^${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*=.*\\n?`, 'gm');
+      content = content.replace(regex, '');
     });
-    
-    // 如果有注释掉的初始配置行，也清理掉
-    content = content.replace(/^#.*初始化配置.*\n?/gm, '');
-    content = content.replace(/^#.*INIT_ENABLE.*\n?/gm, '');
+
+    // 3) 删除管理员相关的注释行（保留「系统初始化配置 / INIT_SKIP / INIT_ENABLE」的说明注释）
     content = content.replace(/^#.*初始管理员.*\n?/gm, '');
     content = content.replace(/^#.*INIT_ADMIN.*\n?/gm, '');
-    
-    // 清理连续空行
+    content = content.replace(/^#.*如果不设置.*\n?/gm, '');
+
+    // 4) 清理连续空行
     content = content.replace(/\n{3,}/g, '\n\n');
-    
+
     // 移除末尾空行
     content = content.trim() + '\n';
-    
+
     fs.writeFileSync(envPath, content);
-    
+
     const newLength = content.length;
     const removedBytes = originalLength - newLength;
+
+    logInit('✅ 深度初始化已关闭（INIT_ENABLE=false），并移除管理员初始配置');
+    logSub(`移除内容大小: ${removedBytes} 字节；INIT_SKIP 已恢复为 true（下次启动跳过 init，日常快启）`);
     
-    logInit(`✅ 已清理 ${removedCount} 行配置`);
-    logSub(`移除内容大小: ${removedBytes} 字节`);
-    
-    // 验证清理结果
+    // 验证清理结果（INIT 开关应保留，仅检查管理员配置是否已删除）
     const verifyContent = fs.readFileSync(envPath, 'utf-8');
-    const stillHasInit = verifyContent.includes('INIT_ENABLE') || 
-                         verifyContent.includes('INIT_ADMIN_USER') ||
-                         verifyContent.includes('INIT_ADMIN_PASS');
+    const stillHasAdmin = verifyContent.includes('INIT_ADMIN_USER') ||
+                          verifyContent.includes('INIT_ADMIN_PASS') ||
+                          verifyContent.includes('INIT_ADMIN_EMAIL');
     
-    if (stillHasInit) {
-      logInit('⚠️ 部分配置未清理干净，请手动检查 .env', 'warn');
+    if (stillHasAdmin) {
+      logInit('⚠️ 管理员配置未清理干净，请手动检查 .env', 'warn');
     }
     
     stats.checks.cleanup = true;
@@ -626,6 +622,8 @@ async function init() {
       // 日常启动：只跑增量迁移（不备份，不 sync）
       const conn2 = await getConnectionWithDb();
       try {
+        // 兜底补建缺失的业务表（runMigrations 只做 ALTER/UPDATE，不会建表）
+        await ensureMissingTables(conn2);
         const { runMigrations } = require('./migrationRunner');
         await runMigrations(conn2);
       } finally {
@@ -642,7 +640,7 @@ async function init() {
     logInit('初始化已启用，开始执行检测...\n');
 
     // ========== INIT_ENABLE=true：先备份，再以 live.sql 为唯一真相源同步 ==========
-    const { fullBackup, syncSchema } = require('./schemaSync');
+    const { fullBackup, syncSchema, ensureMissingTables } = require('./schemaSync');
     const dbName = process.env.DB_NAME || 'live';
     const conn2 = await getConnectionWithDb();
 
@@ -656,6 +654,10 @@ async function init() {
       // 2.2 以 live.sql 为基准对齐实际库结构（补列、删列、改类型）
       await syncSchema(conn2);
       stats.checks.sync = true;
+
+      // 2.3 执行增量迁移（如 password_changed_at 等新字段）
+      const { runMigrations } = require('./migrationRunner');
+      await runMigrations(conn2);
 
     } catch (err) {
       console.error(`❌ Schema 同步失败: ${err.message}`);

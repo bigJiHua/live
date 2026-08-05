@@ -33,3 +33,4 @@ build/
 card-api.md
 account-api.md
 card-bill-api.md
+/mysql/backups

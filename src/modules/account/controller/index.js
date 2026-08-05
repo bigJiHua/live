@@ -216,6 +216,20 @@ class AccountController {
   }
 
   /**
+   * 获取所有银行卡近 N 个月支出/收入笔数（按卡聚合）
+   */
+  async getCardsFlowStats(req, res) {
+    try {
+      const months = parseInt(req.query.months) || 6;
+      const data = await Account.getCardsFlowStats(req.userId, months);
+      return res.json({ status: 200, message: "获取成功", data });
+    } catch (error) {
+      console.error("获取卡片近月收支笔数错误:", error);
+      return res.say("获取失败", 500);
+    }
+  }
+
+  /**
    * 获取全量统计
    */
   async getAllStats(req, res) {

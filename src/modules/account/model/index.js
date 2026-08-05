@@ -1,5 +1,9 @@
 const db = require('../../../common/config/db');
 
+// 近月收支笔数缓存：避免每次刷新都做全量聚合查询（按 用户 隔离，TTL 60s）
+const FLOW_STATS_CACHE_TTL = 60 * 1000;
+const flowStatsCache = new Map(); // key: `${userId}:${months}` -> { ts, data }
+
 /**
  * 账务流水模型 - 对应数据库 account 表（公共只读层）
  * 
@@ -544,6 +548,70 @@ class Account {
     });
 
     return { income, expense };
+  }
+
+  /**
+   * 获取所有银行卡近 N 个月「支出/收入笔数」（按卡聚合）。
+   * 转账已在 account 表以方向记录（支出 direction=0 / 收入 direction=1），自然计入出入，无需特殊处理。
+   * 颗粒度严格到每张卡：返回所有非虚拟银行卡（借记+信用）的计数，无动账的卡默认 0 0。
+   * @param {string} userId
+   * @param {number} months 默认 6
+   * @returns {Promise<{start:string, end:string, list:Array<{cardId:string, expenseCount:number, incomeCount:number}>}>}
+   */
+  static async getCardsFlowStats(userId, months = 6) {
+    // 1 分钟内命中缓存直接返回，避免大量聚合查询
+    const cacheKey = `${userId}:${months}`;
+    const cached = flowStatsCache.get(cacheKey);
+    if (cached && Date.now() - cached.ts < FLOW_STATS_CACHE_TTL) {
+      return cached.data;
+    }
+
+    const now = new Date();
+    // 近 N 个月 = 本月 + 往前 (N-1) 个月，起始取该月 1 号，结束取今天（含）
+    const start = new Date(now.getFullYear(), now.getMonth() - (months - 1), 1);
+    const pad = (n) => String(n).padStart(2, '0');
+    const startDate = `${start.getFullYear()}-${pad(start.getMonth() + 1)}-01`;
+    const endDate = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+
+    // 1. 取所有非虚拟银行卡 id（借记 + 信用），保证覆盖页面展示的每一张卡
+    const [cards] = await db.execute(
+      `SELECT id FROM card_base
+       WHERE user_id = ? AND is_deleted = 0
+         AND id NOT IN ('xxxx', 'yyyy')
+         AND card_type IN ('debit', 'credit')`,
+      [userId]
+    );
+    const cardIds = cards.map((c) => c.id);
+
+    // 2. 初始化结果，所有卡默认 0 0
+    const resultMap = {};
+    cardIds.forEach((id) => {
+      resultMap[id] = { cardId: id, expenseCount: 0, incomeCount: 0 };
+    });
+
+    // 3. 按卡 + 方向聚合近 N 个月的笔数
+    if (cardIds.length > 0) {
+      const placeholders = cardIds.map(() => '?').join(',');
+      const [rows] = await db.execute(
+        `SELECT card_id, direction, COUNT(*) as cnt
+         FROM ${this.tableName}
+         WHERE user_id = ? AND is_deleted = 0
+           AND trans_date >= ? AND trans_date <= ?
+           AND card_id IN (${placeholders})
+         GROUP BY card_id, direction`,
+        [userId, startDate, endDate, ...cardIds]
+      );
+      rows.forEach((r) => {
+        const entry = resultMap[r.card_id];
+        if (!entry) return;
+        if (r.direction === 0) entry.expenseCount = r.cnt;
+        else if (r.direction === 1) entry.incomeCount = r.cnt;
+      });
+    }
+
+    const result = { start: startDate, end: endDate, list: Object.values(resultMap) };
+    flowStatsCache.set(cacheKey, { ts: Date.now(), data: result });
+    return result;
   }
 }
 

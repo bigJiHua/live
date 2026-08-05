@@ -12,10 +12,10 @@ const dataSchema = joi.object({
   nameOrEmail: joi.string().min(3).max(50).required(),
   password: joi
     .string()
-    .pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[^]{8,30}$/)
+    .pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>])[^]{6,30}$/)
     .required()
     .messages({
-      "string.pattern.base": "密码必须包含大小写字母和数字，且长度为8-30位",
+      "string.pattern.base": "密码必须包含大小写字母、数字和特殊字符，且长度为6-30位",
     }),
 });
 

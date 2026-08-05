@@ -136,7 +136,7 @@ class FundController {
       const { id } = req.params;
       const { limit, startDate, endDate } = req.query;
       const rows = await Fund.getHistory(id, req.userId, {
-        limit: limit ? parseInt(limit) : undefined,
+        limit: limit ? parseInt(limit) : 400,
         startDate,
         endDate,
       });
@@ -158,6 +158,20 @@ class FundController {
       });
     } catch (e) {
       console.error('获取净值历史错误:', e);
+      res.status(500).json({ status: 500, message: '获取失败', error: e.message });
+    }
+  }
+
+  async getMonthlyHistory(req, res) {
+    try {
+      const { id } = req.params;
+      const { year, month } = req.query;
+      const y = parseInt(year) || new Date().getFullYear();
+      const m = parseInt(month) || (new Date().getMonth() + 1);
+      const data = await Fund.getHistoryMonthly(id, req.userId, y, m);
+      res.json({ status: 200, message: '获取成功', data });
+    } catch (e) {
+      console.error('获取月度历史错误:', e);
       res.status(500).json({ status: 500, message: '获取失败', error: e.message });
     }
   }

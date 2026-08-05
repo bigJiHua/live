@@ -1,5 +1,6 @@
 const Todo = require('../model');
 const RecurringExpense = require('../../recurring/model');
+const CardBill = require('../../card/model/bill');
 
 /**
  * 待办事项控制器
@@ -47,7 +48,7 @@ class TodoController {
   async list(req, res) {
     try {
       const userId = req.userId;
-      const { status, event_type, start_date, end_date, keyword } = req.query;
+      const { status, event_type, start_date, end_date, keyword, happen_date } = req.query;
 
       const filters = {};
       if (status) filters.status = status;
@@ -55,10 +56,18 @@ class TodoController {
       if (start_date) filters.startDate = start_date;
       if (end_date) filters.endDate = end_date;
       if (keyword) filters.keyword = keyword;
+      if (happen_date) { filters.startDate = happen_date; filters.endDate = happen_date; }
 
       const rows = await Todo.findAll(userId, filters);
 
-      return res.json({ status: 200, message: '查询成功', data: rows });
+      // 注入该日的信用卡还款提醒（source=card_bill）
+      let result = rows;
+      if (happen_date) {
+        const cardRows = await CardBill.getRepaymentReminders(userId, { happenDate: happen_date });
+        result = [...rows, ...cardRows];
+      }
+
+      return res.json({ status: 200, message: '查询成功', data: result });
     } catch (error) {
       console.error('获取待办列表错误:', error);
       return res.status(500).json({ status: 500, message: error.message || '查询失败' });
@@ -79,6 +88,7 @@ class TodoController {
 
       const data = await Todo.findByMonth(userId, parseInt(year), parseInt(month));
       const recurringEvents = await RecurringExpense.getCalendarEvents(userId, parseInt(year), parseInt(month));
+      const cardEvents = await CardBill.getRepaymentReminders(userId, { year: parseInt(year), month: parseInt(month) });
 
       // 转换为日历网格格式（补齐该月所有日期）
       const firstDay = new Date(parseInt(year), parseInt(month) - 1, 1);
@@ -102,9 +112,11 @@ class TodoController {
         const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
         const dayData = data.find(item => item.date === dateStr);
         const fixedList = recurringEvents.filter(item => item.happen_date === dateStr);
+        const cardList = cardEvents.filter(item => item.happen_date === dateStr);
         const list = [
           ...(dayData ? dayData.list : []),
-          ...fixedList
+          ...fixedList,
+          ...cardList
         ];
         calendar.days.push({
           day,
@@ -211,11 +223,12 @@ class TodoController {
     try {
       const userId = req.userId;
       const { scope } = req.query;
-      const [todos, recurring] = await Promise.all([
+      const [todos, recurring, cardBills] = await Promise.all([
         Todo.getUpcomingReminders(userId, scope),
-        RecurringExpense.getUpcomingReminders(userId, scope)
+        RecurringExpense.getUpcomingReminders(userId, scope),
+        CardBill.getRepaymentReminders(userId, { scope })
       ]);
-      const rows = [...todos, ...recurring].sort((a, b) => {
+      const rows = [...todos, ...recurring, ...cardBills].sort((a, b) => {
         const left = a.happen_date || '';
         const right = b.happen_date || '';
         return left.localeCompare(right);

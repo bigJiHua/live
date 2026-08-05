@@ -39,8 +39,8 @@ const decryptWithSecurity = async (req, res, next) => {
       return res.say("设备环境异常，请稍后再试", 423);
     }
 
-    // 3. 执行 AES 解密 (CBC 模式)
-    const keyHex = CryptoJS.enc.Utf8.parse(device.aes_key);
+    // 3. 执行 AES 解密 (CBC 模式，Key 使用 Hex.parse)
+    const keyHex = CryptoJS.enc.Hex.parse(device.aes_key);
     const ivHex = CryptoJS.enc.Hex.parse(payload.substring(0, 32));
     const cipherText = payload.substring(32);
 

@@ -1,4 +1,3 @@
-const crypto = require("crypto");
 const net = require("net");
 
 const securityCheck = (req, res, next) => {
@@ -28,7 +27,7 @@ const securityCheck = (req, res, next) => {
     }
 
     /* ================== 3. IP 格式规整化 ================== */
-    const clientIp = h["x-client-ip"] || req.ip;
+    const clientIp = req.ip;
     if (clientIp && net.isIP(clientIp) === 0) {
       console.warn('客户端IP异常')
       return res.say("非法请求！", 400);
@@ -44,21 +43,7 @@ const securityCheck = (req, res, next) => {
       return res.say("非法请求！", 400);
     }
 
-    /* ================== 5. 增强签名校验 (加盐) ================== */
-    const sign = h["x-sign"];
-    if (sign) {
-      const token = (h.authorization || "").replace("Bearer ", "");
-      const salt = process.env.APP_SECURITY_SALT || "jihau_standard_salt";
-      const raw = `${req.method}|${req.originalUrl}|${ts}|${token}|${salt}`;
-      const serverSign = crypto.createHash("md5").update(raw).digest("hex");
-
-      if (sign !== serverSign) {
-        console.warn("安全签名验证失败");
-        return res.say("非法请求！", 400);
-      }
-    }
-
-    /* ================== 6. 挂载安全上下文 ================== */
+    /* ================== 5. 挂载安全上下文 ================== */
     req.security = {
       ip: clientIp,
       fingerprint: fp,

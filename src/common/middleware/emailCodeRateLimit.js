@@ -6,10 +6,26 @@ const db = require("../config/db");
 const emailCodeRateLimit = (req, res, next) => {
   (async () => {
     try {
-      const { email, type } = req.body.data || req.body;
+      const { email: newEmail, type } = req.body.data || req.body;
       const userId = req.body.userId || req.userId;
 
-      if (!email || !userId) {
+      if (!userId) {
+        return next();
+      }
+
+      // 确定目标邮箱（与 controller 逻辑保持一致）
+      let email;
+      if (type === "pwd") {
+        const [rows] = await db.execute(
+          "SELECT email FROM user_info WHERE id = ? AND is_deleted = 0 LIMIT 1",
+          [userId]
+        );
+        email = rows[0]?.email;
+      } else {
+        email = newEmail;
+      }
+
+      if (!email) {
         return next();
       }
 

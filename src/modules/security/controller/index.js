@@ -51,26 +51,69 @@ class SecurityController {
           .json({ status: 400, message: "请先设置 PIN 码" });
       }
 
+      // ── 锁定态前置检查：pin_status=3（含系统硬锁）→ 直接拒绝，不再走验证 ──
+      const [lockRows] = await db.execute(
+        `SELECT id, error_count, create_time
+         FROM security_verify_log
+         WHERE user_id = ? AND pin_status = 3 AND action_type <> 'route_verify'
+         ORDER BY id DESC LIMIT 1`,
+        [req.userId]
+      );
+      const lockRecord = lockRows[0];
+      if (lockRecord) {
+        const lockMinutes =
+          (Number(lockRecord.error_count) || 3) * pinLockGuard.CONFIG.LOCK_MULTIPLIER;
+        const expire =
+          new Date(lockRecord.create_time).getTime() + lockMinutes * 60000;
+        if (Date.now() < expire) {
+          const remainMinutes = Math.ceil((expire - Date.now()) / 60000);
+          return res.status(200).json({
+            code: 8304,
+            status: 200,
+            message: `PIN 已锁定，剩余 ${remainMinutes} 分钟`,
+            data: { locked: true, remainMinutes },
+          });
+        }
+        // 锁定期已过 → 清除锁定状态与错误计数，允许重新验证
+        await db.execute(
+          `UPDATE security_verify_log
+           SET pin_status = 0, error_count = 0, remark = '锁定到期，重新验证'
+           WHERE id = ?`,
+          [lockRecord.id]
+        );
+      }
+
       // 验证 PIN
       const isValid = await UserPin.verify(pin, user.pin_code);
       if (!isValid) {
-        // 同步更新 security_verify_log 的错误次数（与 pinSecurityGuard 保持一致）
-        await db.execute(
-          `UPDATE security_verify_log
-           SET pin_status = 2, error_count = error_count + 1, remark = '验证失败'
-           WHERE user_id = ? AND pin_status IN (0,2) AND action_type <> 'route_verify'
-           ORDER BY id DESC LIMIT 1`,
-          [req.userId]
-        );
-
-        // 检查 security_verify_log 的错误次数是否达阈值
+        // 错误计数：无记录则插入新失败记录，有则对最新一条记录累加（无论 pin_status 是 0/1/2），
+        // 否则"验证成功过"或"无历史"时 error_count 永远为 0，剩余次数恒为 3。
         const [latestRecord] = await db.execute(
-          `SELECT error_count FROM security_verify_log
+          `SELECT id, error_count FROM security_verify_log
            WHERE user_id = ? AND action_type <> 'route_verify'
            ORDER BY id DESC LIMIT 1`,
           [req.userId]
         );
-        const secErrorCount = latestRecord[0]?.error_count || 0;
+        if (latestRecord[0]) {
+          await db.execute(
+            `UPDATE security_verify_log
+             SET pin_status = 2, error_count = error_count + 1, remark = '验证失败'
+             WHERE id = ?`,
+            [latestRecord[0].id]
+          );
+        } else {
+          await db.execute(
+            `INSERT INTO security_verify_log
+             (user_id, request_url, action_type, pin_status, error_count, remark, create_time)
+             VALUES (?, ?, 'verify', 2, 1, '验证失败', NOW())`,
+            [req.userId, req.originalUrl || '/security/pin/verify']
+          );
+        }
+
+        // 检查 security_verify_log 的错误次数是否达阈值
+        const secErrorCount = latestRecord[0]
+          ? latestRecord[0].error_count + 1
+          : 1;
 
         // 检查 user_log 的错误次数
         const logErrorCount = await UserLog.getPinErrorCount(req.userId);
@@ -99,10 +142,10 @@ class SecurityController {
       }
 
       // ✅ PIN 正确 → 同步更新 security_verify_log，解除所有待验证/锁定状态
-      // 1. 标记最近一条待验证/失败记录为成功
+      // 1. 标记最近一条待验证/失败记录为成功，并重置错误计数（防止历史错误累积误锁）
       await db.execute(
         `UPDATE security_verify_log
-         SET pin_status = 1, remark = '验证成功'
+         SET pin_status = 1, error_count = 0, remark = '验证成功'
          WHERE user_id = ? AND pin_status IN (0,2) AND action_type <> 'route_verify'
          ORDER BY id DESC LIMIT 1`,
         [req.userId]
@@ -373,7 +416,50 @@ class SecurityController {
       // 2. 校验旧 PIN
       const isValid = await UserPin.verify(oldPin, user.pin_code);
       if (!isValid) {
-        // 检查错误次数是否超过5次
+        // 错误计数：有记录则对最新一条累加，无记录则插入（与 verifyPin 的 3 次锁定语义一致）
+        const [pinLogRows] = await db.execute(
+          `SELECT id, error_count FROM security_verify_log
+           WHERE user_id = ? AND action_type <> 'route_verify'
+           ORDER BY id DESC LIMIT 1`,
+          [req.userId]
+        );
+        if (pinLogRows[0]) {
+          await db.execute(
+            `UPDATE security_verify_log
+             SET pin_status = 2, error_count = error_count + 1, remark = '验证失败'
+             WHERE id = ?`,
+            [pinLogRows[0].id]
+          );
+        } else {
+          await db.execute(
+            `INSERT INTO security_verify_log
+             (user_id, request_url, action_type, pin_status, error_count, remark, create_time)
+             VALUES (?, ?, 'verify', 2, 1, '验证失败', NOW())`,
+            [req.userId, req.originalUrl || '/security/pin/change']
+          );
+        }
+        const pinErrCount = pinLogRows[0]
+          ? pinLogRows[0].error_count + 1
+          : 1;
+
+        if (pinErrCount >= 3) {
+          // 连续 3 次 PIN 错误 → 锁定 PIN 验证（90 分钟，与 verifyPin 一致）
+          await db.execute(
+            `UPDATE security_verify_log
+             SET pin_status = 3, remark = '锁定90分钟'
+             WHERE user_id = ? AND pin_status = 2 AND action_type <> 'route_verify'
+             ORDER BY id DESC LIMIT 1`,
+            [req.userId]
+          );
+          return res.status(200).json({
+            code: 8304,
+            status: 200,
+            message: "PIN 错误次数过多，已锁定90分钟",
+            data: { locked: true },
+          });
+        }
+
+        // 错误次数未达阈值：同步 user_log 做账户级统计（保持原 5 次锁账户兜底）
         const errorCount = await UserLog.getPinErrorCount(user.id);
         if (errorCount >= 5) {
           // 超过5次，锁定账户并强制退出登录
@@ -397,8 +483,8 @@ class SecurityController {
         return res.status(400).json({
           status: 400,
           message: "原 PIN 码错误",
-          errorCount: errorCount + 1,
-          remainingAttempts: 5 - errorCount - 1
+          errorCount: pinErrCount,
+          remainingAttempts: Math.max(3 - pinErrCount, 0),
         });
       }
 

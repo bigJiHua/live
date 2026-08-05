@@ -107,6 +107,7 @@ class AuthController {
       }
 
       // 5. 生成 Token
+      const now = Math.floor(Date.now() / 1000); // JWT iat 用秒
       const token = jwt.sign(
         {
           userId: user.id,
@@ -114,6 +115,7 @@ class AuthController {
           role: user.identity,
           avatar: user.avatar,
           email: user.email,
+          iat: now,
         },
         process.env.JWT_SECRET,
         { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
@@ -238,7 +240,7 @@ class AuthController {
     }
   }
 
-  // 刷新 Token
+  // 刷新 Token（支持吊销 + 同设备续期）
   async refreshToken(req, res) {
     try {
       const { token } = req.body;
@@ -247,19 +249,88 @@ class AuthController {
         return res.status(400).json({ message: "Token 不能为空" });
       }
 
-      // 验证旧 Token
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      const user = await User.findById(decoded.userId);
+      // 1. 验证旧 Token 签名 + 有效期
+      let decoded;
+      try {
+        decoded = jwt.verify(token, process.env.JWT_SECRET);
+      } catch (err) {
+        if (err.name === 'TokenExpiredError') {
+          // Token 已过期，但允许在过期后 7 天内刷新（宽限期）
+          try {
+            decoded = jwt.verify(token, process.env.JWT_SECRET, { ignoreExpiration: true });
+            const expiredAt = decoded.exp * 1000;
+            const gracePeriod = 7 * 24 * 60 * 60 * 1000; // 7 天宽限
+            if (Date.now() - expiredAt > gracePeriod) {
+              return res.status(401).json({ message: "令牌已失效，请重新登录" });
+            }
+          } catch {
+            return res.status(401).json({ message: "无效的认证令牌" });
+          }
+        } else {
+          return res.status(401).json({ message: "无效的认证令牌" });
+        }
+      }
 
+      // 2. 查询用户（带密码变更时间）
+      let user;
+      try {
+        const [users] = await db.execute(
+          'SELECT id, username, email, avatar, identity, status, password_changed_at FROM user_info WHERE id = ? AND is_deleted = 0 LIMIT 1',
+          [decoded.userId]
+        );
+        user = users[0];
+      } catch {
+        // password_changed_at 字段可能尚未迁移，回退到基础查询
+        const [users] = await db.execute(
+          'SELECT id, username, email, avatar, identity, status FROM user_info WHERE id = ? AND is_deleted = 0 LIMIT 1',
+          [decoded.userId]
+        );
+        user = users[0];
+      }
       if (!user) {
         return res.status(404).json({ message: "用户不存在" });
       }
 
-      // 生成新 Token
+      // 3. 账户锁定检查
+      if (Number(user.status) === 0) {
+        return res.status(403).json({ message: "账户已被锁定" });
+      }
+
+      // 4. 密码变更吊销：token.iat 早于密码变更时间 → 拒绝刷新
+      const pwdChangedAt = user?.password_changed_at;
+      if (pwdChangedAt && decoded.iat) {
+        const iatMs = decoded.iat * 1000; // iat 是秒，转为毫秒
+        if (iatMs < pwdChangedAt) {
+          return res.status(401).json({ message: "密码已变更，请重新登录" });
+        }
+      }
+
+      // 5. N 月强制重登：从 token.iat 算起，超过 N 个月必须重新登录
+      const maxSessionDays = parseInt(process.env.TOKEN_MAX_SESSION_DAYS) || 90; // 默认 90 天
+      if (decoded.iat) {
+        const iatMs = decoded.iat * 1000;
+        const maxSessionMs = maxSessionDays * 24 * 60 * 60 * 1000;
+        if (Date.now() - iatMs > maxSessionMs) {
+          return res.status(401).json({
+            message: `会话已超过 ${maxSessionDays} 天，请重新登录`,
+            code: 'SESSION_EXPIRED',
+          });
+        }
+      }
+
+      // 6. 生成新 Token（保留原始 iat 用于会话期限计算）
+      const originalIat = decoded.iat || Math.floor(Date.now() / 1000);
       const newToken = jwt.sign(
-        { userId: user.id, email: user.email },
+        {
+          userId: user.id,
+          username: user.username,
+          role: user.identity,
+          avatar: user.avatar,
+          email: user.email,
+          iat: originalIat,
+        },
         process.env.JWT_SECRET,
-        { expiresIn: "7d" }
+        { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
       );
 
       res.json({
@@ -268,9 +339,7 @@ class AuthController {
       });
     } catch (error) {
       console.error("刷新 Token 错误:", error);
-      res
-        .status(401)
-        .json({ message: "Token 无效或已过期", error: error.message });
+      res.status(401).json({ message: "Token 无效或已过期", error: error.message });
     }
   }
 
@@ -374,6 +443,11 @@ class AuthController {
       if (existingEmail) {
         return res.status(400).json({ message: "该邮箱已被注册" });
       }
+      // 密码强度统一校验（与前端/登录规则一致：6-30位 + 大小写数字特殊字符）
+      const PWD_PATTERN = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>])[^]{6,30}$/;
+      if (!PWD_PATTERN.test(password || "")) {
+        return res.status(400).json({ message: "密码必须包含大小写字母、数字和特殊字符，且长度为6-30位" });
+      }
       // 加密密码 (使用环境变量配置的 salt rounds)
       const saltRounds = parseInt(process.env.BCRYPT_SALT_ROUNDS) || 10;
       const password_hash = await bcrypt.hash(password, saltRounds);
@@ -457,11 +531,30 @@ class AuthController {
   // 发送邮箱验证码
   async sendEmailCode(req, res) {
     try {
-      const { email, type = "email" } = req.body.data;
+      const { email: newEmail, type = "email" } = req.body.data || {};
       const userId = req.body.userId || req.userId; // 从请求中获取用户ID
 
-      if (!email) return res.say("邮箱不能为空", 400);
       if (!userId) return res.say("用户ID不能为空", 400);
+
+      // 确定发送目标邮箱
+      let email;
+      if (type === "pwd") {
+        // 修改密码场景：从 DB 查用户绑定的邮箱，不信任前端传入
+        const [rows] = await db.execute(
+          "SELECT email FROM user_info WHERE id = ? AND is_deleted = 0 LIMIT 1",
+          [userId]
+        );
+        email = rows[0]?.email;
+        if (!email) return res.say("您的账号未绑定邮箱，无法发送验证码", 400);
+      } else {
+        // 修改邮箱场景：使用前端传入的新邮箱
+        email = newEmail;
+        if (!email) return res.say("邮箱不能为空", 400);
+        // 基本格式校验
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          return res.say("邮箱格式不正确", 400);
+        }
+      }
 
       const now = Date.now();
       // type: "email" → fingerprint = "email_verify_email"
@@ -748,10 +841,20 @@ class AuthController {
         .substring(0, 19); // 格式化为 2026-04-01 21:12:41
 
       // 🔴 不再使用 User.update，直接操作数据库
-      const [updateResult] = await db.execute(
-        `UPDATE user_info SET login_pwd = ?, update_time = ? WHERE id = ? AND is_deleted = 0`,
-        [hashedPwd, updateTime, userId]
-      );
+      const passwordChangedAt = Date.now(); // 毫秒时间戳
+      let updateResult;
+      try {
+        [updateResult] = await db.execute(
+          `UPDATE user_info SET login_pwd = ?, update_time = ?, password_changed_at = ? WHERE id = ? AND is_deleted = 0`,
+          [hashedPwd, updateTime, passwordChangedAt, userId]
+        );
+      } catch {
+        // password_changed_at 字段可能尚未迁移，回退不含该字段
+        [updateResult] = await db.execute(
+          `UPDATE user_info SET login_pwd = ?, update_time = ? WHERE id = ? AND is_deleted = 0`,
+          [hashedPwd, updateTime, userId]
+        );
+      }
 
       if (updateResult.affectedRows === 0) {
         throw new Error("数据库更新失败，受影响行数为 0");

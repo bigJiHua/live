@@ -74,8 +74,8 @@ class CreditController {
       console.error("信用卡消费冲正错误:", error);
       // 简化前端提示，详细信息仅在控制台输出
       let clientMsg = error.message || "冲正失败";
-      if (clientMsg.includes("已有还款记录")) {
-        clientMsg = "该笔订单已完成还款，不允许冲正！";
+      if (clientMsg.includes("已还清") || clientMsg.includes("已有还款记录")) {
+        clientMsg = "该笔消费所在的账单周期已还清，冲正将产生溢缴，请先撤销还款再冲正！";
       }
       return res.status(400).json({
         status: 400,

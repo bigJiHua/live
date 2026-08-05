@@ -3,7 +3,7 @@ const User = require("../../auth/model/user");
 const { verifyShareToken } = require("../../../common/utils/shareToken");
 
 // ── 密码模式防暴力破解（内存滑动窗口） ──
-const pwTracker = new Map(); // key: "ip:diaryId" → { count, resetAt, lockedUntil }
+const pwTracker = new Map(); // key: diaryId → { count, resetAt, lockedUntil }
 
 const PW_LIMIT = {
   maxAttempts: 5,          // 窗口内最大尝试次数
@@ -126,9 +126,8 @@ const verifyPassword = async (req, res) => {
       return res.json({ status: 400, message: "请输入 6 位数字密码" });
     }
 
-    // ── 防爆：速率限制 ──
-    const clientIp = req.ip || req.connection?.remoteAddress || "unknown";
-    const trackerKey = `${clientIp}:${id}`;
+    // ── 防爆：速率限制（全局限流，不依赖 IP） ──
+    const trackerKey = `pw:${id}`;
     const now = Date.now();
 
     let entry = pwTracker.get(trackerKey);

@@ -12,6 +12,7 @@ router.get('/:id', ctrl.getById);
 router.post('/', ctrl.create);
 router.put('/:id', ctrl.update);
 router.delete('/:id', pinLockGuard, ctrl.delete);
+router.get('/:id/history/monthly', ctrl.getMonthlyHistory);
 router.get('/:id/history', ctrl.getHistory);
 router.post('/:id/history', ctrl.addHistory);
 router.put('/history/:id', ctrl.updateHistory);

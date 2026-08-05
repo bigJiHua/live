@@ -343,28 +343,21 @@ class AssetSnapshot {
     const weekAgoStr = this.formatLocalDate(weekAgo);
 
     // 1. 获取一周内收支流水
+    // 排除信用卡还款（category_id = 'CATEGORY_REPAY'）：还款金额在信用卡消费时
+    // 已作为日常支出计入累计，还款本身只是资金从储蓄卡/余额转出清偿欠款，
+    // 若再作为"大额支出"展示会与消费重复计算，故不纳入近期大额流水。
+    // （与余额统计的排除逻辑一致：NOT (direction = 0 AND category_id = 'CATEGORY_REPAY')）
     const [accountRows] = await db.execute(
       `SELECT id, card_id, direction, amount, category_id, pay_type, trans_date, remark, create_time
        FROM account
        WHERE user_id = ? AND is_deleted = 0 AND trans_date >= ?
+         AND NOT (direction = 0 AND category_id = 'CATEGORY_REPAY')
        ORDER BY amount DESC LIMIT ?`,
       [userId, weekAgoStr, limit]
     );
 
-    // 2. 获取一周内信用卡还款记录
-    const [repayRows] = await db.execute(
-      `SELECT id, card_id, repay_amount as amount, repay_time as trans_date, repay_method as pay_type, remark, create_time
-       FROM card_repay
-       WHERE user_id = ? AND is_deleted = 0 AND repay_time >= ?
-       ORDER BY repay_amount DESC LIMIT ?`,
-      [userId, weekAgoStr, limit]
-    );
-
-    // 3. 合并并按金额降序排列，取前 limit 条
-    const allRows = [
-      ...accountRows.map(r => ({ ...r, type: 'account' })),
-      ...repayRows.map(r => ({ ...r, type: 'repay', direction: 0 }))
-    ];
+    // 仅 account 收支流水构成近期大额（信用卡还款不纳入）
+    const allRows = accountRows.map(r => ({ ...r, type: 'account' }));
 
     allRows.sort((a, b) => parseFloat(b.amount) - parseFloat(a.amount));
     return allRows.slice(0, limit);

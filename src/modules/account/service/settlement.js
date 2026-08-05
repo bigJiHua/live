@@ -1,5 +1,6 @@
 const db = require("../../../common/config/db");
 const idUtils = require("../../../common/utils/idUtils");
+const { toCNY } = require("../../../common/utils/currency");
 
 /**
  * 账户清算中心
@@ -29,13 +30,7 @@ class AccountSettlement {
 
     for (const row of rows) {
       const amount = parseFloat(row.amount) || 0;
-      const rate = parseFloat(row.exchange_rate) || 1;
-
-      // 换算成人民币：CNY 直接用，外币用 金额 * 汇率 / 100
-      let cnyAmount = amount;
-      if (row.currency !== "CNY") {
-        cnyAmount = Math.round(((amount * rate) / 100) * 100) / 100;
-      }
+      const cnyAmount = toCNY(amount, row.currency, row.exchange_rate);
 
       if (row.direction === 1) {
         income += cnyAmount;
@@ -105,11 +100,7 @@ class AccountSettlement {
       record;
     // 转换后的金额（人民币）
     const amountNum = parseFloat(amount) || 0;
-    let amountInCNY = amountNum;
-    if (currency !== "CNY") {
-      const rate = parseFloat(exchange_rate) || 1;
-      amountInCNY = Math.round(((amountNum * rate) / 100) * 100) / 100;
-    }
+    const amountInCNY = toCNY(amountNum, currency, exchange_rate);
 
     // 虚拟账户（xxxx=现金，yyyy=余额）
     if (card_id === "xxxx" || card_id === "yyyy") {

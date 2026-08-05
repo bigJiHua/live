@@ -1,5 +1,15 @@
 const db = require('../../../common/config/db');
 
+// 表名白名单校验，防止 SQL 注入
+function safeTableName(tableName) {
+  if (!/^[A-Za-z0-9_]+$/.test(tableName || '')) {
+    const err = new Error('非法表名');
+    err.status = 400;
+    throw err;
+  }
+  return tableName;
+}
+
 class DataManagerModel {
   static async getTableList() {
     const [rows] = await db.execute('SHOW TABLES');
@@ -22,7 +32,8 @@ class DataManagerModel {
   }
 
   static async getTableStructure(tableName) {
-    const [rows] = await db.execute(`DESCRIBE \`${tableName}\``);
+    const safe = safeTableName(tableName);
+    const [rows] = await db.execute(`DESCRIBE \`${safe}\``);
     return rows.map(col => ({
       field: col.Field,
       type: col.Type,
@@ -34,11 +45,12 @@ class DataManagerModel {
   }
 
   static async getTableData(tableName, options = {}) {
+    const safe = safeTableName(tableName);
     const { page = 1, pageSize = 100, where = '', whereParams = [] } = options;
     const offset = (page - 1) * pageSize;
 
-    let query = `SELECT * FROM \`${tableName}\``;
-    let countQuery = `SELECT COUNT(*) as total FROM \`${tableName}\``;
+    let query = `SELECT * FROM \`${safe}\``;
+    let countQuery = `SELECT COUNT(*) as total FROM \`${safe}\``;
     const allParams = [...whereParams];
 
     if (where) {
@@ -61,30 +73,35 @@ class DataManagerModel {
   }
 
   static async getFullTableData(tableName) {
-    const [rows] = await db.execute(`SELECT * FROM \`${tableName}\``);
+    const safe = safeTableName(tableName);
+    const [rows] = await db.execute(`SELECT * FROM \`${safe}\``);
     return rows;
   }
 
   static async getCreateTableSQL(tableName) {
-    const [rows] = await db.execute(`SHOW CREATE TABLE \`${tableName}\``);
+    const safe = safeTableName(tableName);
+    const [rows] = await db.execute(`SHOW CREATE TABLE \`${safe}\``);
     return rows[0]?.['Create Table'] || rows[0]?.['Create View'];
   }
 
   static async truncateTable(tableName) {
-    await db.execute(`TRUNCATE TABLE \`${tableName}\``);
+    const safe = safeTableName(tableName);
+    await db.execute(`TRUNCATE TABLE \`${safe}\``);
   }
 
   static async dropTable(tableName) {
-    await db.execute(`DROP TABLE IF EXISTS \`${tableName}\``);
+    const safe = safeTableName(tableName);
+    await db.execute(`DROP TABLE IF EXISTS \`${safe}\``);
   }
 
   static async insertBatch(tableName, data) {
     if (!data || data.length === 0) return { affectedRows: 0 };
+    const safe = safeTableName(tableName);
 
     const columns = Object.keys(data[0]);
     const placeholders = columns.map(() => '?').join(', ');
     const values = data.map(row => columns.map(col => row[col] === undefined ? null : row[col]));
-    const sql = `INSERT INTO \`${tableName}\` (\`${columns.join('`,`')}\`) VALUES (${placeholders})`;
+    const sql = `INSERT INTO \`${safe}\` (\`${columns.join('`,`')}\`) VALUES (${placeholders})`;
 
     const connection = db.getPool ? (await import('../../../common/config/db.js')).default.getPool().getConnection() : null;
     try {
@@ -110,7 +127,8 @@ class DataManagerModel {
   }
 
   static async getColumnNames(tableName) {
-    const [rows] = await db.execute(`SHOW COLUMNS FROM \`${tableName}\``);
+    const safe = safeTableName(tableName);
+    const [rows] = await db.execute(`SHOW COLUMNS FROM \`${safe}\``);
     return rows.map(row => row.Field);
   }
 }

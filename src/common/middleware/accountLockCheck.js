@@ -15,8 +15,7 @@ async function accountLockCheck(req, res, next) {
       return res.say("非法未知参数请求！", 401);
     }
 
-    const clientIp = req.ip || req.headers["x-forwarded-for"] || "unknown";
-    const trackerKey = `${clientIp}:${nameOrEmail}`;
+    const trackerKey = `login:${nameOrEmail}`;
 
     const now = Date.now();
     let tracker = requestTracker.get(trackerKey);

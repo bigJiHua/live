@@ -217,6 +217,18 @@ class Fund {
     return rows[0] || { profit_sum: 0, capital_sum: 0 };
   }
 
+  static async getHistoryMonthly(fundId, userId, year, month) {
+    const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+    const endDate = `${year}-${String(month).padStart(2, '0')}-31`;
+    const beforeSummary = await this.getHistorySummaryBefore(fundId, userId, startDate);
+    const records = await this.getHistory(fundId, userId, { startDate, endDate, limit: 31 });
+    const [latestRow] = await db.execute(
+      `SELECT MAX(h.record_date) AS record_date FROM ${this.tableHistory} h JOIN ${this.tableName} f ON h.fund_id = f.id WHERE h.fund_id = ? AND f.user_id = ? AND f.is_deleted = 0`,
+      [fundId, userId]
+    );
+    return { records, beforeProfit: Number(beforeSummary.profit_sum), beforeCapital: Number(beforeSummary.capital_sum), latestRecordDate: latestRow[0]?.record_date || null };
+  }
+
   static async getAllHistory(userId, limit = 180) {
     const [rows] = await db.execute(
       `SELECT
@@ -248,8 +260,8 @@ class Fund {
 
   static async updateHistory(id, userId, { netValue, marketVal }) {
     const fields = []; const params = [];
-    if (netValue !== undefined) { fields.push('net_value = ?'); params.push(netValue); }
-    if (marketVal !== undefined) { fields.push('market_val = ?'); params.push(marketVal); }
+    if (netValue !== undefined) { fields.push('h.net_value = ?'); params.push(netValue); }
+    if (marketVal !== undefined) { fields.push('h.market_val = ?'); params.push(marketVal); }
     if (fields.length === 0) return false;
     params.push(id, userId);
     const [result] = await db.execute(

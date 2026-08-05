@@ -208,16 +208,21 @@ async function fullBackup(conn, dbName) {
     sql += `DROP TABLE IF EXISTS ${quoteId(tableName)};\n`;
     sql += createRows[0]['Create Table'] + ';\n\n';
 
-    // 写数据
+    // 写数据（分批写入，避免单条 INSERT 过大超出 max_allowed_packet）
     const [dataRows] = await conn.query(`SELECT * FROM ${quoteId(tableName)}`);
     if (dataRows.length > 0) {
       const colNames = Object.keys(dataRows[0]);
       const cols = colNames.map(quoteId).join(', ');
-      const values = dataRows.map(row => {
-        const vals = colNames.map(c => conn.escape(row[c]));
-        return `(${vals.join(', ')})`;
-      }).join(',\n');
-      sql += `INSERT INTO ${quoteId(tableName)} (${cols}) VALUES\n${values};\n\n`;
+      const BATCH_SIZE = 500; // 每批写入行数，防止单条 INSERT 超 max_allowed_packet
+      for (let i = 0; i < dataRows.length; i += BATCH_SIZE) {
+        const slice = dataRows.slice(i, i + BATCH_SIZE);
+        const values = slice.map(row => {
+          const vals = colNames.map(c => conn.escape(row[c]));
+          return `(${vals.join(', ')})`;
+        }).join(',\n');
+        sql += `INSERT INTO ${quoteId(tableName)} (${cols}) VALUES\n${values};\n`;
+      }
+      sql += '\n';
     }
   }
 
@@ -423,4 +428,43 @@ async function syncSchema(conn) {
   return { creates, alters, drops, warnings };
 }
 
-module.exports = { fullBackup, syncSchema, parseLiveSql };
+/**
+ * 仅补建缺失的表（从 live.sql 读取目标结构）
+ *
+ * 与 syncSchema 的区别：
+ * - syncSchema 是「全量同步」：补列 / 删列 / 改类型 / 删表
+ * - ensureMissingTables 是「最小补建」：只创建 DB 中不存在、但 live.sql 里有的表，
+ *   不动已存在表的结构（表结构演进交给 migrationRunner / schemaSync）
+ *
+ * 用途：日常启动（INIT_ENABLE=false）路径。runMigrations 只会 ALTER/UPDATE，不会建新表，
+ * 若库里缺了某张业务表（如 security_verify_log），这里用 live.sql 兜底补建，避免带病启动。
+ */
+async function ensureMissingTables(conn) {
+  const target = parseLiveSql();
+  const [tableRows] = await conn.query('SHOW TABLES');
+  const existing = new Set(tableRows.map(r => Object.values(r)[0]));
+
+  const missing = Object.keys(target).filter(t => !existing.has(t));
+  if (missing.length === 0) {
+    console.log('  ✅ 数据库表结构完整，无需补表');
+    return { created: 0, missing: [] };
+  }
+
+  console.log(`  ⚠ 检测数据库不完整，数据库缺少 ${missing.length} 张表`);
+  console.log('  🔧 执行补表操作...');
+  for (const tableName of missing) {
+    const def = target[tableName];
+    try {
+      await conn.query(def.createSql);
+      console.log(`     ✓ ${tableName}`);
+      } catch (err) {
+        console.log(`     ✗ ${tableName}: ${err.message}`);
+        throw err;
+      }
+    }
+
+    console.log(`  ✅ 补表完成，补充 ${missing.length} 张表`);
+    return { created: missing.length, missing };
+}
+
+module.exports = { fullBackup, syncSchema, parseLiveSql, ensureMissingTables };

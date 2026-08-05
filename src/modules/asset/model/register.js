@@ -43,6 +43,29 @@ class AssetRegister {
   }
 
   /**
+   * 解析行内 JSON 字段（mysql2 不会自动解析 JSON/TEXT 列）
+   */
+  static parseRow(row) {
+    if (!row) return row;
+    const parsed = { ...row };
+    if (typeof parsed.asset_details === 'string') {
+      try {
+        parsed.asset_details = JSON.parse(parsed.asset_details);
+      } catch (e) {
+        parsed.asset_details = {};
+      }
+    }
+    if (typeof parsed.exchange_rates === 'string') {
+      try {
+        parsed.exchange_rates = JSON.parse(parsed.exchange_rates);
+      } catch (e) {
+        parsed.exchange_rates = {};
+      }
+    }
+    return parsed;
+  }
+
+  /**
    * 根据ID查询
    */
   static async findById(id, userId) {
@@ -50,7 +73,7 @@ class AssetRegister {
       `SELECT * FROM ${this.tableName} WHERE id = ? AND user_id = ? AND is_deleted = 0`,
       [id, userId]
     );
-    return rows[0] || null;
+    return this.parseRow(rows[0] || null);
   }
 
   /**
@@ -76,7 +99,7 @@ class AssetRegister {
     `;
 
     const [rows] = await db.execute(query, params);
-    return rows;
+    return rows.map((row) => this.parseRow(row));
   }
 
   /**
@@ -89,7 +112,7 @@ class AssetRegister {
        ORDER BY register_date DESC, create_time DESC LIMIT 1`,
       [userId]
     );
-    return rows[0] || null;
+    return this.parseRow(rows[0] || null);
   }
 
   /**

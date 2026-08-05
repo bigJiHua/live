@@ -1,6 +1,20 @@
 const db = require('../../../common/config/db');
 const idUtils = require('../../../common/utils/idUtils');
 const AccountSettlement = require('../../account/service/settlement');
+const { toCNY, formatCNY } = require('../../../common/utils/currency');
+
+// ===== 本地日期工具（避免 toISOString 的 UTC 偏移） =====
+function toYMD(date) {
+  const d = date instanceof Date ? date : new Date(date);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+// 将 'YYYY-MM-DD' 解析为本地零点的时间戳
+function ymdToTime(ymd) {
+  return new Date(`${ymd}T00:00:00`).getTime();
+}
 
 /**
  * 卡片账单模型 - 对应数据库 card_bill 表
@@ -172,6 +186,72 @@ class CardBill {
   }
 
   /**
+   * 由 card_bill 派生“信用卡还款提醒”，用于注入到待办/日历系统。
+   * 仅当 remind_switch=1 且 need_repay>0 时生成；提醒落在还款日(happen_date)，
+   * 提前 remind_days 天开始闪烁(remind_time)。
+   * @param {string} userId
+   * @param {object} opts { scope?: 'default'|'all', year?, month?, happenDate? }
+   * @returns {Array} 与 todo/recurring 提醒结构兼容的对象数组
+   */
+  static async getRepaymentReminders(userId, opts = {}) {
+    const { scope, year, month, happenDate } = opts;
+    // 还款日表达式（MySQL 不允许在 WHERE 中引用 SELECT 别名，故 SELECT/WHERE 共用此常量）
+    const REPAY_DATE = `STR_TO_DATE(CONCAT(cb.bill_month, '-', LPAD(c.repay_day, 2, '0')), '%Y-%m-%d')`;
+    let where = `cb.user_id = ? AND cb.is_deleted = 0 AND cb.remind_switch = 1 AND cb.need_repay > 0`;
+    const params = [userId];
+
+    if (happenDate) {
+      where += ` AND ${REPAY_DATE} = ?`;
+      params.push(happenDate);
+    } else if (year && month) {
+      where += ` AND YEAR(${REPAY_DATE}) = ? AND MONTH(${REPAY_DATE}) = ?`;
+      params.push(year, month);
+    } else {
+      // 与 Todo.getUpcomingReminders 保持一致的时间窗（default 3-10 天 / all 0-30 天）
+      let fromDays = 3, toDays = 10;
+      if (scope === "all") { fromDays = 0; toDays = 30; }
+      const fromDate = toYMD(new Date(Date.now() + fromDays * 86400000));
+      const toDate = toYMD(new Date(Date.now() + toDays * 86400000));
+      where += ` AND ${REPAY_DATE} >= CURDATE() AND ${REPAY_DATE} BETWEEN ? AND ?`;
+      params.push(fromDate, toDate);
+    }
+
+    const query = `
+      SELECT cb.id, cb.card_id, cb.bill_month, cb.need_repay, cb.remind_days,
+             c.alias as card_alias, c.last4_no as card_last4, c.repay_day,
+             ${REPAY_DATE} as repay_date_calc,
+             UNIX_TIMESTAMP(DATE_SUB(${REPAY_DATE}, INTERVAL cb.remind_days DAY)) * 1000 as remind_time_ms
+      FROM ${this.tableName} cb
+      LEFT JOIN card_base c ON cb.card_id = c.id
+      WHERE ${where}
+      ORDER BY repay_date_calc ASC
+    `;
+    const [rows] = await db.execute(query, params);
+    const todayYMD = toYMD(new Date());
+    return rows.map((r) => {
+      const repayDate = toYMD(r.repay_date_calc);
+      const needRepay = parseFloat(r.need_repay) || 0;
+      const cardName = (r.card_alias || "").trim() || `****${r.card_last4 || ""}`;
+      const overdue = ymdToTime(repayDate) < ymdToTime(todayYMD);
+      return {
+        id: `cardbill_${r.id}`,
+        source: "card_bill",
+        content: `${cardName} 信用卡还款 ¥${formatCNY(needRepay)}`,
+        happen_date: repayDate,
+        remind_time: r.remind_time_ms != null ? String(r.remind_time_ms) : null,
+        need_remind: 1,
+        priority: 1,
+        status: overdue ? "逾期" : "待完成",
+        event_type: "信用卡还款",
+        remark: `账单月份 ${r.bill_month}`,
+        bill_id: r.id,
+        card_id: r.card_id,
+        remind_days: r.remind_days,
+      };
+    });
+  }
+
+  /**
    * 根据卡片ID获取最新账单
    */
   static async findLatestByCardId(cardId) {
@@ -334,7 +414,7 @@ class CardBill {
   /**
    * 消费实时更新账单
    */
-  static async syncFromExpense(cardId, userId, amount, transDate, executor = db) {
+  static async syncFromExpense(cardId, userId, amount, transDate, executor = db, currency = 'CNY', exchangeRate = 1) {
     const card = await this.getCardInfo(cardId, executor);
     if (!card || card.card_type !== 'credit') return;
 
@@ -343,7 +423,7 @@ class CardBill {
     if (!bill) return;
 
     const now = String(Date.now());
-    const amountNum = parseFloat(amount);
+    const amountNum = toCNY(amount, currency, exchangeRate);
     const creditLimit = parseFloat(card.credit_limit) || 0;
     const tempLimit = parseFloat(card.temp_limit) || 0;
 
@@ -360,8 +440,8 @@ class CardBill {
          repay_status = CASE WHEN ? > 0 THEN '未还款' ELSE '已还款' END,
          update_time = ?
        WHERE id = ? AND is_deleted = 0`,
-      [newBillAmount.toFixed(2), newUsedLimit.toFixed(2), newAvailLimit.toFixed(2),
-       newNeedRepay.toFixed(2), Math.max(0, newBillAmount * 0.1).toFixed(2), newPoints,
+      [newBillAmount.toFixed(4), newUsedLimit.toFixed(4), newAvailLimit.toFixed(4),
+       newNeedRepay.toFixed(4), Math.max(0, newBillAmount * 0.1).toFixed(4), newPoints,
        newNeedRepay, now, bill.id]
     );
 
@@ -371,7 +451,7 @@ class CardBill {
   /**
    * 回滚消费：删除流水时恢复账单额度
    */
-  static async rollbackExpense(cardId, userId, amount, transDate, executor = db) {
+  static async rollbackExpense(cardId, userId, amount, transDate, executor = db, currency = 'CNY', exchangeRate = 1) {
     const card = await this.getCardInfo(cardId, executor);
     if (!card || card.card_type !== 'credit') return;
 
@@ -380,7 +460,7 @@ class CardBill {
     if (!bill) return;
 
     const now = String(Date.now());
-    const amountNum = parseFloat(amount);
+    const amountNum = toCNY(amount, currency, exchangeRate);
     const creditLimit = parseFloat(card.credit_limit) || 0;
     const tempLimit = parseFloat(card.temp_limit) || 0;
 
@@ -397,8 +477,8 @@ class CardBill {
          need_repay = ?, min_repay = ?, points = ?,
          repay_status = ?, update_time = ?
        WHERE id = ? AND is_deleted = 0`,
-      [newBillAmount.toFixed(2), newUsedLimit.toFixed(2), newAvailLimit.toFixed(2),
-       newNeedRepay.toFixed(2), Math.max(0, newBillAmount * 0.1).toFixed(2), newPoints,
+      [newBillAmount.toFixed(4), newUsedLimit.toFixed(4), newAvailLimit.toFixed(4),
+       newNeedRepay.toFixed(4), Math.max(0, newBillAmount * 0.1).toFixed(4), newPoints,
        newNeedRepay <= 0 ? '已还款' : ((parseFloat(bill.repaid) || 0) > 0 ? '部分还款' : '未还款'),
        now, bill.id]
     );
@@ -442,8 +522,8 @@ class CardBill {
          repaid = ?, need_repay = ?, points = ?,
          repay_status = ?, update_time = ?
        WHERE id = ? AND is_deleted = 0`,
-      [newUsedLimit.toFixed(2), newAvailLimit.toFixed(2),
-       newRepaid.toFixed(2), newNeedRepay.toFixed(2), newPoints,
+      [newUsedLimit.toFixed(4), newAvailLimit.toFixed(4),
+       newRepaid.toFixed(4), newNeedRepay.toFixed(4), newPoints,
        repayStatus, now, bill.id]
     );
 
@@ -470,7 +550,7 @@ class CardBill {
       `UPDATE ${this.tableName} SET
          repaid = ?, need_repay = ?, repay_status = ?, update_time = ?
        WHERE id = ? AND is_deleted = 0`,
-      [newRepaid.toFixed(2), newNeedRepay.toFixed(2), repayStatus, now, billId]
+      [newRepaid.toFixed(4), newNeedRepay.toFixed(4), repayStatus, now, billId]
     );
 
     return this.findById(billId, userId);
@@ -544,7 +624,7 @@ class CardBill {
     // 注意：还款流水在 account 表中的 card_id 指向的是还款来源卡（借记卡），不是本信用卡
     // 所以这里只获取 direction=0 的普通消费
     const [expenseRows] = await db.execute(
-      `SELECT id, direction, amount, trans_date, category_id, reversed_id, is_deleted
+      `SELECT id, direction, amount, currency, exchange_rate, trans_date, category_id, reversed_id, is_deleted
        FROM account 
        WHERE card_id = ? AND user_id = ? AND is_deleted = 0
          AND direction = 0 AND (category_id IS NULL OR category_id != 'CATEGORY_REPAY')
@@ -578,7 +658,7 @@ class CardBill {
     const billMonthData = {};
 
     for (const row of expenseRows) {
-      const amount = parseFloat(row.amount) || 0;
+      const amount = toCNY(row.amount, row.currency, row.exchange_rate);
       if (amount <= 0) continue;
 
       // 跳过被冲正的流水（已有 direction=1 的反向记录）
@@ -663,13 +743,13 @@ class CardBill {
            min_repay = ?, repaid = ?, need_repay = ?, points = ?,
            repay_status = ?, update_time = ?
          WHERE id = ? AND is_deleted = 0`,
-        [creditLimit, availLimit.toFixed(2), usedLimit.toFixed(2), tempLimit,
-         billStartDate, billEndDate, totalExpense.toFixed(2),
-         Math.max(0, totalExpense * 0.1).toFixed(2),
-         repaid.toFixed(2), needRepay.toFixed(2), points, repayStatus, now, bill.id]
+        [creditLimit, availLimit.toFixed(4), usedLimit.toFixed(4), tempLimit,
+         billStartDate, billEndDate, totalExpense.toFixed(4),
+         Math.max(0, totalExpense * 0.1).toFixed(4),
+         repaid.toFixed(4), needRepay.toFixed(4), points, repayStatus, now, bill.id]
       );
 
-      results.push({ billMonth, billId: bill.id, totalExpense, repaid, needRepay: needRepay.toFixed(2) });
+      results.push({ billMonth, billId: bill.id, totalExpense, repaid, needRepay: needRepay.toFixed(4) });
     }
 
     // ===== 7. 确保当前月有账单（不覆盖已存在的账单数据） =====

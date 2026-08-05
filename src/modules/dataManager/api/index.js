@@ -13,8 +13,26 @@ const upload = multer({ dest: uploadDir });
 const DataManagerController = require('../controller');
 const authGuard = require('../../../common/middleware/authGuard');
 const pinLockGuard = require('../../../common/middleware/pinLockGuard');
+const db = require('../../../common/config/db');
 
-router.use(authGuard);
+// 复用 database.js 的管理员校验逻辑
+async function requireAdmin(req, res, next) {
+  try {
+    const [rows] = await db.execute(
+      'SELECT identity FROM user_info WHERE id = ? AND is_deleted = 0 LIMIT 1',
+      [req.userId]
+    );
+    if (rows[0]?.identity !== 'admin') {
+      return res.status(403).json({ status: 403, message: '无权限访问数据管理功能' });
+    }
+    next();
+  } catch (error) {
+    console.error('数据管理权限检查失败:', error);
+    return res.status(500).json({ status: 500, message: '权限检查失败' });
+  }
+}
+
+router.use(authGuard, requireAdmin);
 
 router.get('/tables', DataManagerController.getTableList);
 
@@ -32,7 +50,7 @@ router.post('/validate', DataManagerController.validateImportData);
 
 router.post('/import', DataManagerController.importData);
 
-router.post('/import/sql', upload.single('file'), DataManagerController.importSql);
+router.post('/import/sql', upload.single('file'), pinLockGuard, DataManagerController.importSql);
 
 router.get('/backups', DataManagerController.getBackupList);
 
