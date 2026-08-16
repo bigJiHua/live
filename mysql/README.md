@@ -71,6 +71,14 @@
 | `004_alter_bus_recurring.sql` | bus_recurring 表补齐 `remind_days`/`remark`/`month_records`/`update_time`/`is_deleted` |
 | `005_alter_id_varchar50.sql` | 18 张表 id 字段统一从 varchar(32) 加长为 varchar(50) |
 | `006_alter_moment_visible_type.sql` | moment 表 `visible_type` tinyint(4)→varchar(255) JSON + `_migrations` 表补齐 ROW_FORMAT=DYNAMIC |
+| `009_credit_pool.sql` | card_base 补充 `share_pool_id` 列 + 新建 `card_credit_pool` 共享额度池表（信用卡重构补充结构） |
+| `010_card_bill_columns.sql` | card_bill 补充 `bill_day` / `repay_day` 冗余列（CreditCore.syncCardBills 写入所需） |
+| `011_card_foreign_register.sql` | 新建 `card_foreign_register` 外币消费登记/对账表（痛点4，此前仅靠运行时自愈，现改严格迁移） |
+| `012_card_bill_create_time.sql` | card_bill 补充 `create_time` 列（CreditCore.syncCardBills INSERT 写入所需） |
+| `013_card_repay_repay_card_id.sql` | card_repay.repay_card_id varchar(20)→varchar(50) |
+| `014_card_foreign_register_unique.sql` | card_foreign_register 新增唯一键 `uk_account_id`（防重复登记） |
+| `015_card_repay_account_id_nullable.sql` | card_repay.account_id 允许 NULL（本卡还款） |
+| `016_credit_pool_credit_report_merged.sql` | card_credit_pool 新增 `credit_report_merged` 信报合一标记（开启后支持合并还款） |
 
 > 以上迁移变更均已合入 `live.sql`，新环境直接导入 `live.sql` 即可。迁移脚本对已升级环境为幂等（重复执行自动跳过）。
 

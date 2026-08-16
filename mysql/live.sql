@@ -269,6 +269,7 @@ CREATE TABLE IF NOT EXISTS `card_base` (
   `is_hide` tinyint(4) DEFAULT '0' COMMENT '是否隐藏',
   `sort` int(11) DEFAULT '99' COMMENT '排序',
   `tag` varchar(50) DEFAULT '' COMMENT '标签',
+  `share_pool_id` varchar(50) DEFAULT NULL COMMENT '同银行共享额度池ID',
   `remark` varchar(255) DEFAULT '' COMMENT '备注',
   `color` varchar(10) DEFAULT '#0052cc' COMMENT '颜色',
   `annual_fee` decimal(12,2) DEFAULT '0.00' COMMENT '年费',
@@ -294,6 +295,8 @@ CREATE TABLE IF NOT EXISTS `card_bill` (
   `id` varchar(50) NOT NULL COMMENT 'id主键',
   `card_id` varchar(50) NOT NULL COMMENT '关联卡片ID',
   `bill_month` varchar(7) DEFAULT NULL COMMENT '账单月：YYYY-MM',
+  `bill_day` int(11) DEFAULT '0' COMMENT '账单日（冗余自 card_base，便于查询）',
+  `repay_day` int(11) DEFAULT '0' COMMENT '还款日（冗余自 card_base，便于查询）',
   `user_id` varchar(50) NOT NULL COMMENT '用户ID',
   `credit_limit` decimal(12,2) NOT NULL COMMENT '信用额度',
   `avail_limit` decimal(12,2) NOT NULL COMMENT '可用额度',
@@ -313,6 +316,7 @@ CREATE TABLE IF NOT EXISTS `card_bill` (
   `overdue_days` int(11) DEFAULT NULL COMMENT '逾期天数',
   `remind_switch` tinyint(4) DEFAULT NULL COMMENT '提醒开关',
   `remind_days` int(11) DEFAULT NULL COMMENT '提醒天数',
+  `create_time` varchar(20) DEFAULT NULL COMMENT '创建时间',
   `update_time` varchar(20) DEFAULT NULL COMMENT '更新时间',
   `is_deleted` tinyint(4) DEFAULT '0' COMMENT '是否删除',
   PRIMARY KEY (`id`),
@@ -348,13 +352,13 @@ DROP TABLE IF EXISTS `card_repay`;
 CREATE TABLE IF NOT EXISTS `card_repay` (
   `id` varchar(50) NOT NULL COMMENT 'id主键',
   `card_id` varchar(50) NOT NULL COMMENT '卡片ID',
-  `account_id` varchar(50) NOT NULL COMMENT '绑定流水id',
+  `account_id` varchar(50) DEFAULT NULL COMMENT '绑定流水id（card本卡还款为NULL）',
   `user_id` varchar(50) NOT NULL COMMENT '用户ID',
   `bill_id` varchar(50) NOT NULL COMMENT '关联账单ID',
   `bill_month` varchar(7) DEFAULT NULL COMMENT '归属账单月',
   `repay_amount` decimal(12,2) NOT NULL COMMENT '还款金额',
   `repay_method` varchar(20) NOT NULL COMMENT '还款方式',
-  `repay_card_id` varchar(20) NOT NULL COMMENT '还款来源的的id',
+  `repay_card_id` varchar(50) NOT NULL DEFAULT '' COMMENT '还款来源的的id',
   `repay_time` varchar(20) NOT NULL COMMENT '还款时间',
   `remark` varchar(255) DEFAULT NULL COMMENT '备注',
   `create_time` varchar(20) NOT NULL,
@@ -364,6 +368,60 @@ CREATE TABLE IF NOT EXISTS `card_repay` (
   KEY `idx_user_card` (`user_id`,`card_id`),
   KEY `account_id` (`account_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 ROW_FORMAT=DYNAMIC COMMENT='信用卡还款记录表';
+
+-- ============================================================
+-- 信用卡重构补充表（CreditCore Phase 2：痛点1/2/4）
+-- ============================================================
+
+--
+-- 表的结构 `card_credit_pool`（同银行共享额度池）
+--
+DROP TABLE IF EXISTS `card_credit_pool`;
+CREATE TABLE IF NOT EXISTS `card_credit_pool` (
+  `id` varchar(50) NOT NULL COMMENT '主键',
+  `user_id` varchar(50) NOT NULL COMMENT '用户ID',
+  `bank_id` varchar(50) DEFAULT NULL COMMENT '银行标识',
+  `bank_name` varchar(50) DEFAULT NULL COMMENT '银行名称(如农业银行)',
+  `total_credit_limit` decimal(12,2) NOT NULL DEFAULT '0.00' COMMENT '共享固定额度',
+  `total_temp_limit` decimal(12,2) NOT NULL DEFAULT '0.00' COMMENT '共享临时额度',
+  `credit_report_merged` tinyint(1) NOT NULL DEFAULT '0' COMMENT '信报合一标记(0否/1是)',
+  `currency` varchar(10) DEFAULT 'CNY' COMMENT '币种',
+  `remark` varchar(255) DEFAULT NULL COMMENT '备注',
+  `create_time` varchar(20) NOT NULL COMMENT '【保留varchar】创建时间',
+  `update_time` varchar(20) NOT NULL COMMENT '【保留varchar】更新时间',
+  `is_deleted` tinyint(4) DEFAULT '0' COMMENT '是否删除',
+  PRIMARY KEY (`id`),
+  KEY `idx_user` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 ROW_FORMAT=DYNAMIC COMMENT='同银行共享额度池';
+
+--
+-- 表的结构 `card_foreign_register`（外币消费登记/对账表）
+-- 痛点4：外币消费单独登记，还款对账后录入实际汇率/人民币
+--
+DROP TABLE IF EXISTS `card_foreign_register`;
+CREATE TABLE IF NOT EXISTS `card_foreign_register` (
+  `id` varchar(50) NOT NULL COMMENT '主键',
+  `user_id` varchar(50) NOT NULL COMMENT '用户ID',
+  `card_id` varchar(50) NOT NULL COMMENT '信用卡ID',
+  `account_id` varchar(50) NOT NULL COMMENT '关联account流水ID',
+  `currency` varchar(10) NOT NULL COMMENT '原始币种(USD/HKD)',
+  `foreign_amount` decimal(14,4) NOT NULL DEFAULT '0.0000' COMMENT '原始外币金额',
+  `registered_rate` decimal(10,4) NOT NULL DEFAULT '0.0000' COMMENT '登记时汇率(每100外币=人民币)',
+  `registered_rmb` decimal(14,4) NOT NULL DEFAULT '0.0000' COMMENT '登记时折合人民币',
+  `actual_rate` decimal(10,4) DEFAULT NULL COMMENT '实际结算汇率(每100外币=人民币)',
+  `actual_rmb` decimal(14,4) DEFAULT NULL COMMENT '实际结算人民币(入账)',
+  `settle_date` varchar(20) DEFAULT NULL COMMENT '结算日期YYYY-MM-DD',
+  `status` varchar(20) NOT NULL DEFAULT 'pending' COMMENT 'pending|reconciled',
+  `remark` varchar(255) DEFAULT NULL COMMENT '备注',
+  `create_time` varchar(20) NOT NULL COMMENT '【保留varchar】创建时间',
+  `update_time` varchar(20) NOT NULL COMMENT '【保留varchar】更新时间',
+  `is_deleted` tinyint(4) DEFAULT '0' COMMENT '是否删除',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_account_id` (`account_id`),
+  KEY `idx_user` (`user_id`),
+  KEY `idx_account` (`account_id`),
+  KEY `idx_card_status` (`card_id`,`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 ROW_FORMAT=DYNAMIC COMMENT='外币消费登记/对账表';
 
 -- --------------------------------------------------------
 

@@ -1,11 +1,17 @@
 const db = require("../../../common/config/db");
 const idUtils = require("../../../common/utils/idUtils");
+const dayjs = require("dayjs");
+const utc = require("dayjs/plugin/utc");
+const timezone = require("dayjs/plugin/timezone");
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 class RecurringExpense {
   static tableName = "bus_recurring";
 
   static today() {
-    return new Date().toISOString().substring(0, 10);
+    // 北京时间"今天"，避免 UTC 服务器下 toISOString 取错日
+    return dayjs().tz("Asia/Shanghai").format("YYYY-MM-DD");
   }
 
   static now() {
@@ -141,8 +147,14 @@ class RecurringExpense {
       const safeMonth = this.normalizeMonth(month);
       const [, monthNum] = safeMonth.split("-").map(Number);
       filtered = rows.filter(row => {
-        if (row.end_date && row.end_date < this.today()) {
-          return false; // 到期自动隐藏（优先判断，覆盖所有周期类型）
+        // 截止日期（end_date）判断：
+        // 1) 真实已过期（截止日早于今天）→ 隐藏（覆盖所有周期类型）
+        // 2) 被查看的月份已超过截止日期所在月份 → 隐藏
+        //    （例如 end_date=2026-10-31，查看 2026-11 时不应再出现该事件）
+        if (row.end_date) {
+          if (row.end_date < this.today()) return false;
+          const endMonth = row.end_date.substring(0, 7);
+          if (endMonth < safeMonth) return false;
         }
         if (row.cycle === "year" && row.month_of_cycle) {
           return Number(row.month_of_cycle) === monthNum;
@@ -437,11 +449,11 @@ class RecurringExpense {
   }
 
   static async getUpcomingReminders(userId, scope = "default") {
-    const today = new Date();
+    const bjToday = dayjs().tz("Asia/Shanghai");
     const fromDays = scope === "all" ? 0 : 3;
     const toDays = scope === "all" ? 30 : 10;
-    const start = new Date(today.getTime() + fromDays * 24 * 60 * 60 * 1000).toISOString().substring(0, 10);
-    const end = new Date(today.getTime() + toDays * 24 * 60 * 60 * 1000).toISOString().substring(0, 10);
+    const start = bjToday.add(fromDays, "day").format("YYYY-MM-DD");
+    const end = bjToday.add(toDays, "day").format("YYYY-MM-DD");
     const months = new Set([start.substring(0, 7), end.substring(0, 7)]);
     const result = [];
 
@@ -456,6 +468,31 @@ class RecurringExpense {
       });
     }
 
+    return result.sort((a, b) => a.happen_date.localeCompare(b.happen_date));
+  }
+
+  /**
+   * 【日历提醒专用】获取当前自然月的固定支出/事件提醒（V2）。
+   * ⚠️ 不复用 getUpcomingReminders 的 30 天滚动窗口——它会跨月把下个月的
+   *    recurring 数据也带进当前月（例：8月视图出现 9月的固定支出）。
+   * 本函数只返回「发生日期落在当前自然月」且未完成/未跳过的记录。
+   * @param {string} userId
+   * @param {object} opts { month? }  默认当前自然月
+   * @returns {Promise<Array>}
+   */
+  static async getUpcomingRemindersCurrentMonth(userId, opts = {}) {
+    const month = opts.month || dayjs().tz('Asia/Shanghai').format('YYYY-MM');
+    const rows = await this.findAll(userId, { month, includeInactive: false });
+    const result = [];
+    rows.forEach((row) => {
+      const event = this.toCalendarEvent(row, month);
+      if (!event) return;
+      if (event.happen_date >= `${month}-01` && event.happen_date <= `${month}-31`) {
+        if (event.month_status !== "done" && event.month_status !== "skipped") {
+          result.push(event);
+        }
+      }
+    });
     return result.sort((a, b) => a.happen_date.localeCompare(b.happen_date));
   }
 }

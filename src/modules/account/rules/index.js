@@ -20,8 +20,10 @@ exports.create = {
       payMethod: joi.string().required().messages({
         "any.required": "payMethod 支付方式 不能为空",
       }),
-      amount: joi.number().required().messages({
+      amount: joi.number().min(0.01).required().messages({
         "any.required": "amount 金额 不能为空",
+        "number.min": "amount 金额必须大于 0",
+        "number.base": "amount 金额必须是数字",
       }),
       transDate: joi.string().required().messages({
         "any.required": "transDate 收支日期 不能为空",
@@ -46,7 +48,10 @@ exports.update = {
       categoryId: joi.string().allow('', null),
       payType: joi.string().allow('', null),
       payMethod: joi.string().allow('', null),
-      amount: joi.number().allow(null),
+      amount: joi.number().min(0.01).allow(null).messages({
+        "number.min": "amount 金额必须大于 0",
+        "number.base": "amount 金额必须是数字",
+      }),
       currency: joi.string().allow('', null),
       exchangeRate: joi.number().min(0.001).precision(5).allow(null),
       transDate: joi.string().allow('', null),

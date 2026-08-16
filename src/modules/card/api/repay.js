@@ -15,6 +15,9 @@ router.use(authGuard);
 // 获取还款记录列表
 router.get('/', cardRepayController.getList);
 
+// 信报合一合并还款（一次性结清共享池内全部卡欠款；须放在 /:id 之前）
+router.post('/merge', cardRepayController.mergeRepay);
+
 // 获取单个还款记录详情
 router.get('/:id', cardRepayController.getById);
 

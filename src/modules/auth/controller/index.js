@@ -62,7 +62,12 @@ class AuthController {
     // 这里的 req.body 已经是经过 decryptWithSecurity 中间件解密后的完整对象了
     const clientData = req.body;
 
-    const { nameOrEmail, password } = req.body.data;
+    const { nameOrEmail, password: rawPassword } = req.body.data;
+    // 安全键盘字符级 RSA 加密：password 为密文字符数组时解密为明文再校验；
+    // 兼容旧版：普通字符串直接使用
+    const password = require("../../../common/utils/rsaKeys").resolvePassword(
+      rawPassword
+    );
     try {
       // 1. 基本校验
       if (!nameOrEmail || !password) {
@@ -517,7 +522,8 @@ class AuthController {
       ]);
 
       // 这里必须 return，确保响应只发送一次
-      return res.json({ status: 200, key: tempKey, scene });
+      const rsaPublicKey = require("../../../common/utils/rsaKeys").getPublicKey();
+      return res.json({ status: 200, key: tempKey, scene, rsaPublicKey });
     } catch (error) {
       console.error("安全握手异常:", error);
       // 增加防御性判断

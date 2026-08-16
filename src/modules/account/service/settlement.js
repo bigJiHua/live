@@ -1,6 +1,7 @@
 const db = require("../../../common/config/db");
 const idUtils = require("../../../common/utils/idUtils");
 const { toCNY } = require("../../../common/utils/currency");
+const CreditCore = require("../../card/core/CreditCore");
 
 /**
  * 账户清算中心
@@ -13,7 +14,7 @@ class AccountSettlement {
    * 外币：金额 * 汇率 / 100（前端传来的是"100外币兑人民币价格"）
    * 注意：跳过 reversed_id 不为空的流水（已被冲正，不应计入余额）
    */
-  static async calculateBalance(cardId, userId) {
+  static async calculateBalance(cardId, userId, executor = db) {
     const query = `
       SELECT 
         currency,
@@ -23,7 +24,7 @@ class AccountSettlement {
       FROM account
       WHERE card_id = ? AND user_id = ? AND is_deleted = 0 AND reversed_id IS NULL
     `;
-    const [rows] = await db.execute(query, [cardId, userId]);
+    const [rows] = await executor.execute(query, [cardId, userId]);
 
     let income = 0;
     let expense = 0;
@@ -95,8 +96,8 @@ class AccountSettlement {
    * - 虚拟账户（xxxx=现金，yyyy=余额）：需要验证余额
    * - 储蓄卡（debit）：需要验证余额
    */
-  static async validate(record) {
-    const { card_id, user_id, direction, amount, exchange_rate, currency } =
+  static async validate(record, executor = db) {
+    const { card_id, user_id, direction, amount, exchange_rate, currency, excludeAmountCNY = 0 } =
       record;
     // 转换后的金额（人民币）
     const amountNum = parseFloat(amount) || 0;
@@ -104,7 +105,7 @@ class AccountSettlement {
 
     // 虚拟账户（xxxx=现金，yyyy=余额）
     if (card_id === "xxxx" || card_id === "yyyy") {
-      const balanceInfo = await this.calculateBalance(card_id, user_id);
+      const balanceInfo = await this.calculateBalance(card_id, user_id, executor);
       const currentBalance = balanceInfo.balance;
 
       // 收入总是允许
@@ -130,8 +131,8 @@ class AccountSettlement {
       return { valid: true, message: "验证通过", currentBalance };
     }
 
-    // 查询实体卡片类型
-    const [cardRows] = await db.execute(
+    // 查询实体卡片类型（P2-10：使用事务连接，保证锁内读到己写入/最新状态）
+    const [cardRows] = await executor.execute(
       "SELECT card_type, credit_limit, temp_limit FROM card_base WHERE id = ? AND is_deleted = 0",
       [card_id]
     );
@@ -139,14 +140,28 @@ class AccountSettlement {
     const creditLimit = parseFloat(cardRows[0]?.credit_limit) || 0;
     const tempLimit = parseFloat(cardRows[0]?.temp_limit) || 0;
 
-    // 信用卡：验证额度不能超限（额度从 card_base 表获取）
+    // 信用卡：验证额度不能超限（使用权威口径 CreditCore.aggregate，支持共享池/外币登记）
     if (cardType === "credit") {
-      const totalLimit = creditLimit + tempLimit;
+      // CreditCore.aggregate 返回结构：{ totalCreditLimit, ..., cards: [...] }
+      // P2-10：传入 executor（事务连接），锁内校验读到一致账本
+      const agg = await CreditCore.aggregate(user_id, executor);
+      const list = Array.isArray(agg) ? agg : agg.cards || [];
+      // 从聚合结果中找到本卡归属的分组（独立卡 / 共享池）
+      let group = list.find((g) => g.shared === false && g.cardId === card_id);
+      if (!group) {
+        group = list.find(
+          (g) =>
+            g.shared === true &&
+            Array.isArray(g.cards) &&
+            g.cards.some((c) => c.cardId === card_id)
+        );
+      }
 
-      // 计算已用额度 = 消费 - 还款
-      const balanceInfo = await this.calculateBalance(card_id, user_id);
-      const usedLimit = balanceInfo.expense - balanceInfo.income; // 已消费 - 已还款
-      const availLimit = totalLimit - usedLimit;
+      // 兜底：若聚合未命中（极端异常），回退到 card_base 静态额度，避免误拦截
+      const totalLimit = group
+        ? (parseFloat(group.creditLimit) || 0) + (parseFloat(group.tempLimit) || 0)
+        : creditLimit + tempLimit;
+      const availLimit = group ? parseFloat(group.avail) || 0 : totalLimit;
 
       // 收入（还款）总是允许
       if (direction === 1) {
@@ -157,18 +172,22 @@ class AccountSettlement {
         };
       }
 
-      const usedLimitAfter = Number(usedLimit) + Number(amountInCNY);
-      const allTotalLimit = Number(totalLimit);
+      // C4：usedLimitAfter = 当前负债(含原流水) − 原流水折算(同卡修改时) + 新金额折算。
+      //     同卡改金额/币种/汇率时按差额校验，避免把原消费重复计入而错误拒绝；
+      //     换卡时原流水不在目标卡聚合中，excludeAmountCNY 传 0（不抵扣）。
+      const usedLimitAfter = totalLimit - availLimit + Number(amountInCNY) - Number(excludeAmountCNY || 0);
 
       // 检查是否超额度
-      if (usedLimitAfter > allTotalLimit) {
+      if (usedLimitAfter > totalLimit + 1e-9) {
         console.log(
-          `信用卡限额：额度 ${totalLimit}，已用 ${usedLimit}，本次 ${amountInCNY}`
+          `信用卡限额：额度 ${totalLimit}，可用 ${availLimit}，本次 ${amountInCNY}`
         );
 
         return {
           valid: false,
-          message: `登记失败！超过信用卡额度!`,
+          message: `登记失败！超过信用卡额度！可用 ¥${availLimit.toFixed(
+            2
+          )}，本次 ¥${amountInCNY.toFixed(2)}`,
           currentBalance: availLimit,
         };
       }
@@ -177,7 +196,7 @@ class AccountSettlement {
     }
 
     // 储蓄卡
-    const balanceInfo = await this.calculateBalance(card_id, user_id);
+    const balanceInfo = await this.calculateBalance(card_id, user_id, executor);
     const currentBalance = balanceInfo.balance;
 
     // 收入总是允许
@@ -210,9 +229,9 @@ class AccountSettlement {
    * 同步余额快照
    * 跳过信用卡类型（信用卡使用 card_bill 而非 account_balance 记录余额）
    */
-  static async syncBalanceSnapshot(cardId, userId) {
+  static async syncBalanceSnapshot(cardId, userId, executor = db) {
     // 检查是否为信用卡，信用卡不写入 account_balance
-    const [cardRows] = await db.execute(
+    const [cardRows] = await executor.execute(
       "SELECT card_type FROM card_base WHERE id = ? AND is_deleted = 0",
       [cardId]
     );
@@ -221,12 +240,12 @@ class AccountSettlement {
       return null;
     }
 
-    const balanceInfo = await this.calculateBalance(cardId, userId);
+    const balanceInfo = await this.calculateBalance(cardId, userId, executor);
     const now = String(Date.now());
     const id = idUtils.billId();
 
     // 使用 INSERT ... ON DUPLICATE KEY UPDATE 防止重复
-    await db.execute(
+    await executor.execute(
       `INSERT INTO account_balance (id, user_id, card_id, balance, update_time, is_deleted) 
        VALUES (?, ?, ?, ?, ?, 0)
        ON DUPLICATE KEY UPDATE

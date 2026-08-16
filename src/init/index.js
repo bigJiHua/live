@@ -22,8 +22,9 @@ const bcrypt = require('bcryptjs');
 const mysql = require('mysql2/promise');
 const dayjs = require('dayjs');
 
-// 期望的表列表（共 24 张）
-const EXPECTED_TABLES = [
+// 期望的表列表（兜底值）：正常情况下以 live.sql 为唯一真相源动态读取，
+// 仅当解析 live.sql 失败时回退到此处硬编码清单，避免与真实结构脱节。
+const FALLBACK_TABLES = [
   'account',
   'account_balance',
   'account_transfer',
@@ -49,6 +50,22 @@ const EXPECTED_TABLES = [
   'work_salary',
   'security_verify_log',
 ];
+
+/**
+ * 从 live.sql 动态解析期望的表清单（以 live.sql 为唯一真相源）。
+ * 解析失败或为空时回退到 FALLBACK_TABLES。
+ */
+function getExpectedTables() {
+  try {
+    const { parseLiveSql } = require('./schemaSync');
+    const parsed = parseLiveSql();
+    const names = Object.keys(parsed);
+    if (names.length > 0) return names;
+  } catch (err) {
+    logInit(`⚠️ 解析 live.sql 失败，使用内置兜底表清单: ${err.message}`, 'warn');
+  }
+  return FALLBACK_TABLES;
+}
 
 // 关键表的必填字段（表名 -> 字段列表）
 const REQUIRED_FIELDS = {
@@ -239,8 +256,9 @@ async function checkTableCount() {
   console.log('\n📋 [步骤 3/6] 检查数据表');
   printDivider();
   
+  const EXPECTED_TABLES = getExpectedTables();
   const expectedCount = EXPECTED_TABLES.length;
-  logInit(`期望表数量: ${expectedCount}`);
+  logInit(`期望表数量: ${expectedCount}（来自 live.sql）`);
   logInit('正在查询数据库表...');
   
   try {
@@ -620,10 +638,10 @@ async function init() {
     // 检查是否启用完整初始化（创建管理员等）
     if (!isInitEnabled()) {
       // 日常启动：只跑增量迁移（不备份，不 sync）
+      // ⚠️ 不调用 ensureMissingTables：结构变更必须严格走迁移脚本（审计 P9），
+      //    运行时代码自建表会绕过迁移记录且不做备份。
       const conn2 = await getConnectionWithDb();
       try {
-        // 兜底补建缺失的业务表（runMigrations 只做 ALTER/UPDATE，不会建表）
-        await ensureMissingTables(conn2);
         const { runMigrations } = require('./migrationRunner');
         await runMigrations(conn2);
       } finally {
@@ -632,7 +650,7 @@ async function init() {
 
       console.log('\n⏭️ [跳过] 管理员创建未启用 (INIT_ENABLE≠true)');
       logInit('提示: 如需创建管理员，请在 .env 中设置 INIT_ENABLE=true');
-      logInit('数据库和表已自动创建完成 ✓');
+      logInit('数据库结构由迁移脚本保障 ✓');
       printSummary(true);
       return { success: true, skipped: true, reason: 'admin_disabled' };
     }

@@ -1,5 +1,6 @@
 const db = require('../../../common/config/db');
 const idUtils = require('../../../common/utils/idUtils');
+const { toCNY } = require('../../../common/utils/currency');
 const AccountSettlement = require('../service/settlement');
 const AssetSnapshot = require('../../asset/model/snapshot');
 const Account = require('./index'); // 仅用于调用只读查询方法（findById 等），不调用写入方法
@@ -20,14 +21,23 @@ class DebitAccount {
    * 创建借记卡收支记录
    * 独立实现，不与信用卡共用。处理：普通收支、转账、提现、还款支出流水。
    */
-  static async create({ userId, direction, categoryId, payType, payMethod, amount, currency, exchangeRate, transDate, remark, cardId, transferGroupId }) {
+  static async create({ userId, direction, categoryId, payType, payMethod, amount, currency, exchangeRate, transDate, remark, cardId, transferGroupId }, executor = db) {
+    // R5：account.card_id 为 NOT NULL，所有收支必须关联卡片（现金=xxxx / 余额=yyyy / 实体卡）
+    if (!cardId) {
+      throw new Error('缺少卡片ID：收支必须关联一张卡片（现金/余额为虚拟卡）');
+    }
+    // P1-4 审计：金额必须 > 0，否则负支出/负收入会反向篡改账户余额
+    const amt = Number(amount);
+    if (!Number.isFinite(amt) || amt <= 0) {
+      throw new Error('收支金额必须大于 0');
+    }
     const id = idUtils.billId();
     const now = String(Date.now());
 
     // 从 card_base 获取真实的 card_type
     let finalAccountType = '';
     if (cardId) {
-      const [cardRows] = await db.execute(
+      const [cardRows] = await executor.execute(
         'SELECT card_type FROM card_base WHERE id = ? AND is_deleted = 0',
         [cardId]
       );
@@ -55,7 +65,7 @@ class DebitAccount {
         exchange_rate: exchangeRate || 1,
         currency: currency || 'CNY',
         account_type: finalAccountType
-      });
+      }, executor);
 
       if (!settlementResult.valid) {
         throw new Error(settlementResult.message);
@@ -68,7 +78,7 @@ class DebitAccount {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
     `;
 
-    await db.execute(query, [
+    await executor.execute(query, [
       id,
       userId,
       direction,
@@ -89,7 +99,7 @@ class DebitAccount {
 
     // ===== 清算中心同步余额（从收支表实时计算）=====
     if (cardId) {
-      await AccountSettlement.syncBalanceSnapshot(cardId, userId);
+      await AccountSettlement.syncBalanceSnapshot(cardId, userId, executor);
     }
 
     // ===== 转账关联：收入方向时写入 account_transfer =====
@@ -125,6 +135,24 @@ class DebitAccount {
       });
     });
 
+    // ⚠️ 事务内（executor 为事务连接）时，Account.findById 走全局连接读不到未提交记录，
+    //    会返回 null，导致调用方(如还款)无法取得流水 ID。此处直接返回内存对象保证可用。
+    //    非事务（默认连接）保持查库，返回完整记录供接口响应。
+    if (executor !== db) {
+      return {
+        id,
+        user_id: userId,
+        card_id: cardId || null,
+        direction,
+        amount,
+        currency: currency || 'CNY',
+        exchange_rate: exchangeRate || 1,
+        trans_date: transDate || now.substring(0, 10),
+        account_type: finalAccountType,
+        create_time: now,
+        update_time: now,
+      };
+    }
     return Account.findById(id, userId);
   }
 
@@ -135,6 +163,14 @@ class DebitAccount {
    */
   static async update(id, userId, { direction, categoryId, payType, payMethod, amount, currency, exchangeRate, transDate, remark, cardId }) {
     const now = String(Date.now());
+    // P1-4 审计：金额必须 > 0
+    if (amount !== undefined) {
+      const amt = Number(amount);
+      if (!Number.isFinite(amt) || amt <= 0) {
+        throw new Error('收支金额必须大于 0');
+      }
+    }
+    // 构造更新的字段（先不注入 update_time/id/userId，由后续分支统一处理）
     const fields = [];
     const params = [];
 
@@ -184,34 +220,94 @@ class DebitAccount {
       return Account.findById(id, userId);
     }
 
-    fields.push('update_time = ?');
-    params.push(now);
-    params.push(id, userId);
-
-    const query = `
-      UPDATE ${this.tableName} 
-      SET ${fields.join(', ')}
-      WHERE id = ? AND user_id = ? AND is_deleted = 0
-    `;
-
     // 校验：本接口仅处理借记卡流水，信用卡流水应走 credit 模块
     const oldRecord = await Account.findById(id, userId);
-    if (oldRecord && oldRecord.account_type === 'credit') {
+    if (!oldRecord) throw new Error('原流水不存在');
+    if (oldRecord.account_type === 'credit') {
       throw new Error('该流水为信用卡流水，请使用信用卡接口（/account/credit）更新');
     }
-
-    await db.execute(query, params);
-
-    // 同步余额（如果修改了金额、方向或卡片）
-    let updated;
-    if (cardId || amount !== undefined || direction !== undefined) {
-      updated = await Account.findById(id, userId);
-      if (updated?.card_id) {
-        await AccountSettlement.syncBalanceSnapshot(updated.card_id, userId);
-      }
+    if (oldRecord.reversed_id) {
+      throw new Error('该流水已被冲正，无法修改');
     }
 
-    return updated || Account.findById(id, userId);
+    // P1-6 审计：修改金额/方向/卡片时必须重新校验余额，
+    // 否则可先小额通过校验、再改大额/反向，绕过清算中心。
+    const balanceFieldsChanged = amount !== undefined || direction !== undefined || (cardId !== undefined && cardId !== oldRecord.card_id);
+
+    if (!balanceFieldsChanged) {
+      // 不涉及余额的字段（备注/日期/分类等）直接更新
+      const query = `
+        UPDATE ${this.tableName} 
+        SET ${fields.join(', ')}, update_time = ?
+        WHERE id = ? AND user_id = ? AND is_deleted = 0
+      `;
+      await db.execute(query, [...params, now, id, userId]);
+      return Account.findById(id, userId);
+    }
+
+    const targetCardId = cardId !== undefined ? cardId : oldRecord.card_id;
+    const newDirection = direction !== undefined ? direction : oldRecord.direction;
+    const newAmount = amount !== undefined ? amount : oldRecord.amount;
+    const newCurrency = currency !== undefined ? currency : oldRecord.currency;
+    const newRate = exchangeRate !== undefined ? exchangeRate : oldRecord.exchange_rate;
+
+    const conn = await db.getConnection();
+    try {
+      await conn.beginTransaction();
+
+      // 锁目标卡（新卡）+ 旧卡（换卡场景），串行化并发
+      await conn.execute(
+        'SELECT id FROM card_base WHERE id = ? AND user_id = ? AND is_deleted = 0 FOR UPDATE',
+        [targetCardId, userId]
+      );
+      if (oldRecord.card_id && oldRecord.card_id !== targetCardId) {
+        await conn.execute(
+          'SELECT id FROM card_base WHERE id = ? AND user_id = ? AND is_deleted = 0 FOR UPDATE',
+          [oldRecord.card_id, userId]
+        );
+      }
+
+      // P1-6 审计：按新值手动校验余额（不能直接软删原流水再 validate——
+      // 单流水卡会被 totalCount===0 误拒；且须按"原流水贡献 − 新流水贡献"计算改后余额）
+      const origCNY = toCNY(Number(oldRecord.amount || 0), oldRecord.currency || 'CNY', oldRecord.exchange_rate || 1);
+      const newCNY = toCNY(Number(newAmount || 0), newCurrency || 'CNY', newRate || 1);
+      // 原流水对来源余额的贡献（收入 +，支出 −）
+      const origContrib = oldRecord.direction === 1 ? origCNY : -origCNY;
+      const newContrib = newDirection === 1 ? newCNY : -newCNY;
+      const isCardChanged = targetCardId !== oldRecord.card_id;
+      // 目标卡当前余额（事务连接内读取，换卡时不含原流水；同卡时含原流水）
+      const targetBalance = (await AccountSettlement.calculateBalance(targetCardId, userId, conn)).balance;
+      // 改后余额 = 目标卡余额（同卡：− 原流水贡献）+ 新流水贡献
+      const afterBalance = targetBalance + (isCardChanged ? 0 : -origContrib) + newContrib;
+
+      // 收入方向总是允许（转入/退款）；支出方向要求改后余额 >= 0
+      if (newDirection === 0 && afterBalance < -1e-9) {
+        throw new Error(`余额不足！修改后余额将为 ${afterBalance.toFixed(2)}`);
+      }
+
+      // 校验通过：按新值写入
+      const realQuery = `
+        UPDATE ${this.tableName}
+        SET ${fields.join(', ')}, update_time = ?
+        WHERE id = ? AND user_id = ?
+      `;
+      await conn.execute(realQuery, [...params, now, id, userId]);
+
+      await conn.commit();
+    } catch (e) {
+      await conn.rollback();
+      throw e;
+    } finally {
+      conn.release();
+    }
+
+    // 同步余额快照（新卡 + 换卡时的旧卡）
+    await AccountSettlement.syncBalanceSnapshot(targetCardId, userId);
+    if (oldRecord.card_id && oldRecord.card_id !== targetCardId) {
+      await AccountSettlement.syncBalanceSnapshot(oldRecord.card_id, userId);
+    }
+
+    return Account.findById(id, userId);
   }
 
   /**

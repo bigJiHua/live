@@ -1,5 +1,10 @@
 const db = require("../../../common/config/db");
 const idUtils = require("../../../common/utils/idUtils");
+const dayjs = require("dayjs");
+const utc = require("dayjs/plugin/utc");
+const timezone = require("dayjs/plugin/timezone");
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 /**
  * 待办事项模型 - 对应数据库 todo 表
@@ -61,6 +66,47 @@ class Todo {
     ]);
 
     return this.findById(id, userId);
+  }
+
+  /**
+   * 获取用户「未完成」待办（status='待完成'）。
+   * 默认不限时间窗（全量）；传入 year+month 时只取该月（供横幅按月加载）；
+   * 传入 daysAround 时只取「今日 ± N 天」窗口（供首页提醒）。
+   */
+  static async findOpenReminders(userId, opts = {}) {
+    const { year, month, daysAround } = opts;
+    let sql = `SELECT * FROM ${this.tableName} WHERE user_id = ? AND is_deleted = 0 AND status = '待完成'`;
+    const params = [userId];
+    if (year && month) {
+      const m = String(month).padStart(2, "0");
+      const prefix = `${year}-${m}-`;
+      sql += ` AND happen_date >= ? AND happen_date <= ?`;
+      // 该月首日 ~ 下月首日(不含)
+      const next = new Date(Number(year), Number(month), 1);
+      const endY = next.getFullYear();
+      const endM = String(next.getMonth() + 1).padStart(2, "0");
+      params.push(`${prefix}01`, `${endY}-${endM}-01`);
+    } else if (daysAround != null) {
+      // 今日 ± N 天窗口（含今天），统一用「北京时间」计算，避免 UTC 服务器下边界偏移
+      const bjNow = dayjs().tz('Asia/Shanghai');
+      const from = bjNow.subtract(Number(daysAround), 'day').format('YYYY-MM-DD');
+      const to = bjNow.add(Number(daysAround), 'day').format('YYYY-MM-DD');
+      sql += ` AND happen_date >= ? AND happen_date <= ?`;
+      params.push(from, to);
+    } else if (opts.pastOnly) {
+      // 窗口(今日±N天)内无数据时回退：取「当月1号 ~ 今日(含)」的未完成待办
+      // 需要 year+month 定位当月（由 controller 用北京时间传入）；没有则退化为当月1号~今日
+      const bjNow = dayjs().tz('Asia/Shanghai');
+      const y = opts.year || bjNow.get('year');
+      const m = opts.month || bjNow.get('month') + 1;
+      const today = bjNow.format('YYYY-MM-DD');
+      const monthStart = `${y}-${String(m).padStart(2, '0')}-01`;
+      sql += ` AND happen_date >= ? AND happen_date <= ?`;
+      params.push(monthStart, today);
+    }
+    sql += ` ORDER BY happen_date ASC, priority ASC, create_time DESC`;
+    const [rows] = await db.execute(sql, params);
+    return rows;
   }
 
   /**
@@ -260,7 +306,7 @@ class Todo {
    * 获取逾期待办（自动更新状态）
    */
   static async getOverdueItems(userId) {
-    const today = new Date().toISOString().substring(0, 10);
+    const today = dayjs().tz('Asia/Shanghai').format('YYYY-MM-DD');
     
     // 先更新逾期状态
     await db.execute(

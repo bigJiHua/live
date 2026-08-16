@@ -35,11 +35,10 @@ router.get("/", async (req, res) => {
        FROM card_base WHERE user_id = ? AND is_deleted = 0`, [userId]
     );
 
-    const [debtRows] = await execute(
-      `SELECT COALESCE(SUM(need_repay), 0) as total
-       FROM card_bill
-       WHERE user_id = ? AND is_deleted = 0 AND COALESCE(need_repay, 0) > 0`, [userId]
-    );
+    // H10：信用卡待还统一 CreditCore.aggregate 口径（覆盖共享池与全部账单月）
+    const CreditCore = require("../../card/core/CreditCore");
+    const agg = await CreditCore.aggregate(userId);
+    const creditToPay = agg.totalDebt || 0;
 
     const [recentRows] = await execute(
       `SELECT a.*, c.name as category_name FROM account a
@@ -57,7 +56,7 @@ router.get("/", async (req, res) => {
       monthlySurplus: (monthRows[0]?.monthIncome || 0) - (monthRows[0]?.monthExpense || 0),
       debitCardCount: cardRows[0]?.debitCardCount || 0,
       creditCardCount: cardRows[0]?.creditCardCount || 0,
-      creditToPay: debtRows[0]?.total || 0,
+      creditToPay,
       recentRecords: recentRows || []
     }});
   } catch (error) {
@@ -98,11 +97,10 @@ router.get("/v2", async (req, res) => {
        FROM card_base WHERE user_id = ? AND is_deleted = 0`, [userId]
     );
 
-    const [debtRows] = await execute(
-      `SELECT COALESCE(SUM(need_repay), 0) as total
-       FROM card_bill
-       WHERE user_id = ? AND is_deleted = 0 AND COALESCE(need_repay, 0) > 0`, [userId]
-    );
+    // H10：信用卡待还统一 CreditCore.aggregate 口径
+    const CreditCore = require("../../card/core/CreditCore");
+    const agg = await CreditCore.aggregate(userId);
+    const creditToPay = agg.totalDebt || 0;
 
     const [budgetRows] = await execute(
       "SELECT * FROM budget WHERE user_id = ? AND is_deleted = 0 ORDER BY create_time DESC", [userId]
@@ -128,7 +126,7 @@ router.get("/v2", async (req, res) => {
       monthlySurplus: (monthRows[0]?.monthIncome || 0) - (monthRows[0]?.monthExpense || 0),
       debitCardCount: cardRows[0]?.debitCardCount || 0,
       creditCardCount: cardRows[0]?.creditCardCount || 0,
-      creditToPay: debtRows[0]?.total || 0,
+      creditToPay,
       budgets: budgetRows || [],
       todos: todoRows || [],
       recentRecords: recentRows || []

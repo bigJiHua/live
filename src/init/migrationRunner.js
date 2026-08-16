@@ -67,8 +67,10 @@ async function runFile(conn, filename) {
       // 迁移语句为纯 DDL/DML，无需预编译参数；使用 query 协议更直观，避免对 prepared statement 协议的任何限制误解
       await conn.query(clean);
     } catch (err) {
-      // MySQL 5.7 兼容：重复列/键视为已存在
-      const skipped = ['ER_DUP_FIELDNAME', 'ER_DUP_KEYNAME', 'ER_DUP_ENTRY'];
+      // MySQL 5.7 兼容：重复列/键视为已存在（幂等重跑）
+      // ⚠ C7 审计：ER_DUP_ENTRY 不再静默跳过——ADD UNIQUE KEY 若因历史重复数据报 ER_DUP_ENTRY，
+      //   说明唯一约束并未建立；跳过并 markApplied 会永久缺少约束。此时必须抛错暴露，由人工清重后重跑。
+      const skipped = ['ER_DUP_FIELDNAME', 'ER_DUP_KEYNAME'];
       if (skipped.includes(err.code)) {
         console.log(`     ⚠ 已存在，跳过: ${clean.substring(0, 60)}...`);
         continue;

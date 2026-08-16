@@ -46,8 +46,17 @@ async function execute(query, params = []) {
   return pool.execute(query, params);
 }
 
+/**
+ * 获取一个独立连接（用于事务）
+ */
+async function getConnection() {
+  const pool = getPool();
+  return pool.getConnection();
+}
+
 module.exports = {
   initPool,
   getPool,
   execute,
+  getConnection,
 };

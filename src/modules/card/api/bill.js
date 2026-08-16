@@ -25,6 +25,20 @@ router.post("/card/:cardId/rebuild", cardBillController.rebuild);
 // 批量重建所有信用卡账单
 router.post("/rebuild-all", cardBillController.rebuildAll);
 
+// ========== 外币消费登记/对账（痛点4） ==========
+// 待对账外币列表（专用登记页）
+router.get("/foreign/pending", cardBillController.foreignPending);
+// 全部外币登记列表
+router.get("/foreign/list", cardBillController.foreignList);
+// 历史外币消费流水（扫描 account 账本，含未登记，按卡/时间范围筛选）
+router.get("/foreign/history", cardBillController.foreignHistory);
+// 补登记未登记的历史外币消费流水
+router.post("/foreign/register", cardBillController.foreignRegister);
+// 外币对账：录入实际汇率/人民币
+router.put("/foreign/:id/reconcile", cardBillController.foreignReconcile);
+// 删除外币登记
+router.delete("/foreign/:id", pinLockGuard, cardBillController.foreignDelete);
+
 // 获取单个账单详情
 router.get("/:id", cardBillController.getById);
 

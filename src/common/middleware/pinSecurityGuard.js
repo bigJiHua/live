@@ -25,6 +25,10 @@ const jwt = require("jsonwebtoken");
 const db = require("../../common/config/db");
 const bcrypt = require("bcryptjs");
 const pinLockGuard = require("./pinLockGuard");
+const { resolvePassword } = require("../../common/utils/rsaKeys");
+
+/** 读取并解密请求体中的 PIN（支持 RSA 密文数组） */
+const readPin = (req) => resolvePassword(req.body?.data?.pin);
 
 const ROUTE_VERIFY_ACTION = "route_verify";
 const ROUTE_VERIFY_API = "/security/pin/route-verify";
@@ -362,7 +366,7 @@ const pinSecurityGuard = async (req, res, next) => {
         return respond(res, CODE.LOCKED, `锁定中 ${lock.remainMinutes} 分钟`);
       }
       // 锁已过期 → 必须验证 PIN，错误则重新锁定 90 分钟
-      const pin = req.body?.data?.pin;
+      const pin = readPin(req);
       if (!pin) {
         return respond(res, CODE.NEED_VERIFY, "系统已锁定，请验证 PIN");
       }
@@ -394,7 +398,7 @@ const pinSecurityGuard = async (req, res, next) => {
       if (routeVerifyTarget) {
         return next();
       }
-      const pin = req.body?.data?.pin;
+      const pin = readPin(req);
       if (!pin) {
         return respond(res, CODE.NEED_VERIFY, "操作受限，请验证 PIN");
       }
@@ -414,7 +418,7 @@ const pinSecurityGuard = async (req, res, next) => {
     }
 
     // 获取请求体中的 PIN 参数（用于待验证态尝试验证）
-    const pin = req.body?.data?.pin;
+    const pin = readPin(req);
 
     // ── 分支 2：待验证 / 验证失败 / 无记录 ──
     if (!latest || latest.pin_status === 0 || latest.pin_status === 2) {

@@ -1,7 +1,10 @@
 const db = require('../../../common/config/db');
 const idUtils = require('../../../common/utils/idUtils');
+const { toCNY } = require('../../../common/utils/currency');
 const AccountSettlement = require('../service/settlement');
 const CardBill = require('../../card/model/bill');
+const CreditCore = require('../../card/core/CreditCore');
+const ForeignRegister = require('../../card/model/foreignRegister');
 const AssetSnapshot = require('../../asset/model/snapshot');
 const Account = require('./index'); // 仅用于调用只读查询方法（findById 等），不调用写入方法
 
@@ -17,9 +20,28 @@ const Account = require('./index'); // 仅用于调用只读查询方法（findB
 class CreditAccount {
   static tableName = 'account';
 
+  /** 外币消费登记随流水创建/更新/币种切换而同步（痛点4） */
+  static async #syncForeignRegister(id, userId, { cardId, currency, amount, exchangeRate }, executor = db) {
+    // C5 审计：登记失败不允许被吞掉——若登记未建成，pending 占额/对账页将缺失，
+    // 且流水已入事务，会造成"已记账但登记丢失"。失败直接抛出，外层事务回滚。
+    if (currency && currency !== 'CNY') {
+      await ForeignRegister.ensurePending({
+        userId,
+        cardId,
+        accountId: id,
+        currency,
+        foreignAmount: amount,
+        registeredRate: exchangeRate || 0
+      }, executor);
+    } else {
+      // 改为人民币或未知：移除外币登记（使用同一事务连接，跟随外层事务回滚，H4 审计）
+      await ForeignRegister.deleteByAccountId(id, userId, executor);
+    }
+  }
+
   /**
    * 创建信用卡消费记录
-   * 独立实现，仅处理信用卡消费（direction=0），含事务 + CardBill.syncFromExpense
+   * 独立实现，仅处理信用卡消费（direction=0），含事务；账单一律交由 CreditCore.syncCardBills 全量重算
    */
   static async create({ userId, direction, categoryId, payType, payMethod, amount, currency, exchangeRate, transDate, remark, cardId, transferGroupId }) {
     const id = idUtils.billId();
@@ -45,20 +67,14 @@ class CreditAccount {
     if (direction === 1) {
       throw new Error('信用卡不能登记收入，还款请使用储蓄卡');
     }
-
-    // ===== 清算中心验证（额度校验）=====
-    const settlementResult = await AccountSettlement.validate({
-      card_id: cardId,
-      user_id: userId,
-      direction: direction,
-      amount: amount,
-      exchange_rate: exchangeRate || 1,
-      currency: currency || 'CNY',
-      account_type: finalAccountType
-    });
-
-    if (!settlementResult.valid) {
-      throw new Error(settlementResult.message);
+    // P0-1 审计：CATEGORY_REPAY 为还款专用分类，信用卡消费传入会导致该笔不计入账单、额度逃逸。
+    //         金额必须 > 0，负数消费不进账单但会留脏数据。
+    if (categoryId === 'CATEGORY_REPAY') {
+      throw new Error('信用卡消费不允许使用还款分类（CATEGORY_REPAY）');
+    }
+    const amt = Number(amount);
+    if (!Number.isFinite(amt) || amt <= 0) {
+      throw new Error('信用卡消费金额必须大于 0');
     }
 
     const query = `
@@ -71,6 +87,35 @@ class CreditAccount {
     const conn = await db.getPool().getConnection();
     try {
       await conn.beginTransaction();
+
+      // H9 审计：事务内行级锁（锁卡片；若属于共享池则锁池行），串行化并发消费。
+      // 锁后再校验额度（读到的都是已提交的最新账本），避免两笔并发同时通过校验。
+      const [lockedCard] = await conn.execute(
+        'SELECT id, share_pool_id FROM card_base WHERE id = ? AND user_id = ? AND is_deleted = 0 FOR UPDATE',
+        [cardId, userId]
+      );
+      if (!lockedCard[0]) throw new Error('卡片不存在');
+      if (lockedCard[0].share_pool_id) {
+        await conn.execute(
+          'SELECT id FROM card_credit_pool WHERE id = ? AND user_id = ? AND is_deleted = 0 FOR UPDATE',
+          [lockedCard[0].share_pool_id, userId]
+        );
+      }
+
+      // ===== 清算中心验证（额度校验）—— 必须在锁内、事务内执行 =====
+      const settlementResult = await AccountSettlement.validate({
+        card_id: cardId,
+        user_id: userId,
+        direction: direction,
+        amount: amount,
+        exchange_rate: exchangeRate || 1,
+        currency: currency || 'CNY',
+        account_type: finalAccountType
+      }, conn);
+      if (!settlementResult.valid) {
+        throw new Error(settlementResult.message);
+      }
+
       await conn.execute(query, [
         id,
         userId,
@@ -89,7 +134,16 @@ class CreditAccount {
         now,
         transferGroupId || null
       ]);
-      await CardBill.syncFromExpense(cardId, userId, amount, transDate, conn, currency || 'CNY', exchangeRate || 1);
+      // 外币消费：先登记 pending（事务内、重算前），使 syncCardBills 重算时登记已存在
+      // （pending 状态被 CreditCore 跳过计入，对账完成后再重算计入实际汇率，P2 审计修复）
+      await this.#syncForeignRegister(id, userId, {
+        cardId,
+        currency,
+        amount,
+        exchangeRate
+      }, conn);
+      // [CreditCore] 统一重算（账本全量重算，幂等）
+      await CreditCore.syncCardBills(cardId, userId, conn);
       await conn.commit();
     } catch (e) {
       await conn.rollback();
@@ -183,57 +237,90 @@ class CreditAccount {
     if (oldRecord.account_type !== 'credit') {
       throw new Error('该流水为借记卡流水，请使用借记卡接口（/account/debit）更新');
     }
-    // 修复隐患：已冲正的流水不允许 update，防止 rollbackExpense 双重回滚
+    // 修复隐患：已冲正的流水不允许 update，防止重复冲正
     if (oldRecord.reversed_id) {
       throw new Error('该流水已被冲正，无法修改');
     }
 
+    // P0-1 审计：信用卡消费 update 同样禁止改为还款分类；金额必须 > 0
+    if (categoryId !== undefined && categoryId === 'CATEGORY_REPAY') {
+      throw new Error('信用卡消费不允许使用还款分类（CATEGORY_REPAY）');
+    }
+    if (amount !== undefined) {
+      const amt = Number(amount);
+      if (!Number.isFinite(amt) || amt <= 0) {
+        throw new Error('信用卡消费金额必须大于 0');
+      }
+    }
+
+    // H2 审计：重算条件必须覆盖所有影响账单的字段（金额/日期/卡片/币种/汇率/方向/分类），
+    // 此前仅金额/日期变更触发重算，改币种/汇率/方向/分类/换卡会绕过账单同步。
+    const targetCardId = cardId !== undefined ? cardId : oldRecord.card_id;
     const isAmountChanged = amount !== undefined;
     const isDateChanged = transDate !== undefined;
-    const needsBillSync = isAmountChanged || isDateChanged;
+    const isCardChanged = cardId !== undefined && cardId !== oldRecord.card_id;
+    const isCurrencyRateChanged = currency !== undefined || exchangeRate !== undefined;
+    const isDirectionChanged = direction !== undefined && direction !== oldRecord.direction;
+    const isCategoryChanged = categoryId !== undefined && categoryId !== oldRecord.category_id;
+    const needsBillSync = isAmountChanged || isDateChanged || isCardChanged || isCurrencyRateChanged || isDirectionChanged || isCategoryChanged;
 
-    if (needsBillSync && oldRecord.direction === 0) {
-      // 信用卡消费金额/日期变更 → 事务内：回滚旧账单 + 更新流水 + 同步新账单
+    if (needsBillSync) {
+      // 信用卡流水变更 → 事务内：锁卡 + 校验额度 + 更新流水 + 外币登记 + 重算目标卡/旧卡
       const conn = await db.getPool().getConnection();
       try {
         await conn.beginTransaction();
 
-        // 1. 回滚旧的消费金额（账单不存在则回滚整个事务）
-        const rollbackResult = await CardBill.rollbackExpense(
-          oldRecord.card_id, userId,
-          oldRecord.amount,
-          oldRecord.trans_date,
-          conn,
-          oldRecord.currency,
-          oldRecord.exchange_rate
+        // H9：锁目标卡（可能为新卡）+ 若为共享池则锁池行，串行化并发
+        const [lockedCard] = await conn.execute(
+          'SELECT id, share_pool_id FROM card_base WHERE id = ? AND user_id = ? AND is_deleted = 0 FOR UPDATE',
+          [targetCardId, userId]
         );
-        if (!rollbackResult) {
-          throw new Error(
-            `旧账单回滚失败，原消费日期 ${oldRecord.trans_date} 对应账单周期不存在`
+        if (!lockedCard[0]) throw new Error('卡片不存在');
+        if (lockedCard[0].share_pool_id) {
+          await conn.execute(
+            'SELECT id FROM card_credit_pool WHERE id = ? AND user_id = ? AND is_deleted = 0 FOR UPDATE',
+            [lockedCard[0].share_pool_id, userId]
           );
         }
 
-        // 2. 更新流水
+        // C4：无论变更哪类影响账单的字段（金额/币种/汇率/换卡/方向/分类），一律在锁内重新校验额度。
+        //    - 同卡修改：按「差额」校验（excludeAmountCNY = 原流水折算 CNY），避免把原消费重复计入而错误拒绝
+        //    - 换卡：原流水在旧卡聚合中，目标卡不含它 → excludeAmountCNY = 0
+        //    - 改币种/汇率：新 CNY 折算可能超限，必须校验
+        const newDirection = direction !== undefined ? direction : oldRecord.direction;
+        if (newDirection === 1) {
+          throw new Error('信用卡不能登记收入，还款请使用储蓄卡');
+        }
+        const originalCNY = toCNY(Number(oldRecord.amount || 0), oldRecord.currency || 'CNY', oldRecord.exchange_rate || 1);
+        const settlementResult = await AccountSettlement.validate({
+          card_id: targetCardId,
+          user_id: userId,
+          direction: newDirection,
+          amount: amount !== undefined ? amount : oldRecord.amount,
+          exchange_rate: (exchangeRate !== undefined ? exchangeRate : oldRecord.exchange_rate) || 1,
+          currency: (currency !== undefined ? currency : oldRecord.currency) || 'CNY',
+          account_type: 'credit',
+          excludeAmountCNY: isCardChanged ? 0 : originalCNY
+        }, conn);
+        if (!settlementResult.valid) {
+          throw new Error(settlementResult.message);
+        }
+
+        // 更新流水
         await conn.execute(query, params);
 
-        // 3. 重新同步新金额/新日期到账单
-        const [updatedRows] = await conn.execute(
-          `SELECT amount, trans_date, card_id FROM ${this.tableName}
-           WHERE id = ? AND user_id = ? AND is_deleted = 0`,
-          [id, userId]
-        );
-        const updated = updatedRows[0];
-        if (updated) {
-          const newCurrency = currency !== undefined ? currency : oldRecord.currency;
-          const newRate = exchangeRate !== undefined ? exchangeRate : oldRecord.exchange_rate;
-          await CardBill.syncFromExpense(
-            updated.card_id, userId,
-            updated.amount,
-            updated.trans_date,
-            conn,
-            newCurrency,
-            newRate
-          );
+        // 外币登记随消费金额/币种/卡片变更而同步（事务内、重算前；使用目标卡 ID）
+        await this.#syncForeignRegister(id, userId, {
+          cardId: targetCardId,
+          currency: currency !== undefined ? currency : oldRecord.currency,
+          amount: amount !== undefined ? amount : oldRecord.amount,
+          exchangeRate: exchangeRate !== undefined ? exchangeRate : oldRecord.exchange_rate
+        }, conn);
+
+        // 重算目标卡全部账单；换卡时旧卡也一并重算
+        await CreditCore.syncCardBills(targetCardId, userId, conn);
+        if (isCardChanged) {
+          await CreditCore.syncCardBills(oldRecord.card_id, userId, conn);
         }
 
         await conn.commit();
@@ -244,15 +331,16 @@ class CreditAccount {
         conn.release();
       }
 
-      // 事务外：同步余额快照
-      if (oldRecord.card_id) {
+      // 事务外：同步余额快照（目标卡 + 换卡时的旧卡）
+      await AccountSettlement.syncBalanceSnapshot(targetCardId, userId);
+      if (isCardChanged && oldRecord.card_id) {
         await AccountSettlement.syncBalanceSnapshot(oldRecord.card_id, userId);
       }
 
       return Account.findById(id, userId);
     }
 
-    // 非金额/日期变更，或信用卡收入方向（理论上信用卡不能收入，此处防御性处理）
+    // 仅备注/支付方式等不影响账单的字段变更
     await db.execute(query, params);
 
     let updated;
@@ -391,14 +479,12 @@ class CreditAccount {
         [now, id]
       );
 
-      // 4c. 恢复账单额度（使用事务连接保证一致性）
-      const rolledBackBill = await CardBill.rollbackExpense(
-        original.card_id, userId, original.amount, original.trans_date, conn,
-        original.currency, original.exchange_rate
-      );
-      if (!rolledBackBill) {
-        throw new Error(`该消费属于 ${billMonth} 账单周期，但账单回滚失败`);
-      }
+      // 4c2. 冲正连带删除外币登记（同一事务，C5 审计：避免 pending 占额残留/额度快照滞后）
+      //      必须早于 syncCardBills，使 pending 占额在重算时已释放
+      await ForeignRegister.deleteByAccountId(id, userId, conn);
+
+      // 4c. [CreditCore] 重算账单（消费已冲正并标记删除，账本重算即反映额度恢复）
+      await CreditCore.syncCardBills(original.card_id, userId, conn);
 
       await conn.commit();
     } catch (e) {
@@ -493,10 +579,27 @@ class CreditAccount {
       );
 
       // 1d. 查询并软删除 card_repay 记录
-      const [repayRows] = await conn.execute(
-        'SELECT * FROM card_repay WHERE account_id = ? AND is_deleted = 0 LIMIT 1',
-        [id]
-      );
+      // P2-8 审计：本卡还款方式已移除，但历史数据可能存在 account_id IS NULL 的旧记录。
+      //     优先按 account_id 精确匹配；匹配不到时回退按流水 card_id + 金额 + 时间兜底匹配，
+      //     保证撤销路径与 CardRepay.delete 语义一致（都能撤销本卡还款旧数据）。
+      let repayRows;
+      try {
+        [repayRows] = await conn.execute(
+          'SELECT * FROM card_repay WHERE account_id = ? AND is_deleted = 0 LIMIT 1',
+          [id]
+        );
+      } catch (e) {
+        repayRows = [];
+      }
+      if (repayRows.length === 0) {
+        [repayRows] = await conn.execute(
+          `SELECT * FROM card_repay
+           WHERE card_id = ? AND user_id = ? AND account_id IS NULL AND is_deleted = 0
+             AND repay_time = ? AND repay_amount = ?
+           ORDER BY create_time DESC LIMIT 1`,
+          [original.card_id, userId, now.substring(0, 10), original.amount]
+        );
+      }
 
       if (repayRows.length === 0) {
         throw new Error('未找到关联的还款记录');
@@ -510,6 +613,9 @@ class CreditAccount {
         [now, repayRecord.id]
       );
 
+      // [CreditCore] 重建账单（事务内，避免"撤销已提交但重算失败"的半完成态，P3 审计）
+      await CreditCore.syncCardBills(creditCardId, userId, conn);
+
       await conn.commit();
 
       console.log(`[信用卡还款撤销] card_repay ${repayRecord.id} 已软删除，卡片=${creditCardId}`);
@@ -520,9 +626,7 @@ class CreditAccount {
       conn.release();
     }
 
-    // ===== 2. 事务外：重建账单 + 同步快照 =====
-    // 重建信用卡账单（全量从流水聚合，内含信用卡余额快照同步但信用卡会被跳过）
-    await CardBill.rebuildBillFromAccount(creditCardId, userId);
+    // ===== 2. 事务外：同步来源卡余额快照 =====
 
     // 同步来源卡余额快照：还款流水挂在来源卡(original.card_id)上，
     // 冲正后来源卡余额已恢复，必须更新 account_balance 快照，否则前端读快照会显示旧余额。
@@ -537,7 +641,8 @@ class CreditAccount {
       });
     });
 
-    return Account.findById(id, userId);
+    // M3 审计：原流水已软删除，findById(id) 返回 null；应返回新冲正流水
+    return Account.findById(reverseId, userId);
   }
 }
 

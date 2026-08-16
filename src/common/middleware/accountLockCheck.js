@@ -56,7 +56,7 @@ async function accountLockCheck(req, res, next) {
       (await User.findByUsername(nameOrEmail));
 
     if (!user) {
-      return res.say("非法未知参数请求！", 401);
+      return res.say("用户不存在", 401);
     }
 
     if (Number(user.status) === 0) {

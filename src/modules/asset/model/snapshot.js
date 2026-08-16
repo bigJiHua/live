@@ -27,9 +27,6 @@ class AssetSnapshot {
    * 计算当前资产数据
    */
   static async calculateCurrentAssets(userId) {
-    const now = new Date();
-    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-
     // 计算现金类资产总和（account_balance，排除信用卡）
     const [balanceRows] = await db.execute(
       `SELECT COALESCE(SUM(balance), 0) as total 
@@ -40,27 +37,13 @@ class AssetSnapshot {
     );
     const totalBalance = parseFloat(balanceRows[0]?.total) || 0;
 
-    // 计算本月信用卡待还欠款（仅当前账单月）
-    const [debtRows] = await db.execute(
-      `SELECT COALESCE(SUM(cb.need_repay), 0) as total 
-       FROM card_bill cb
-       LEFT JOIN card_base c ON cb.card_id = c.id
-       WHERE cb.user_id = ? AND cb.is_deleted = 0 AND c.card_type = 'credit'
-         AND cb.bill_month = ?`,
-      [userId, currentMonth]
-    );
-    const creditDebt = parseFloat(debtRows[0]?.total) || 0;
-
-    // 计算信用卡溢缴款
-    const [overflowRows] = await db.execute(
-      `SELECT COALESCE(SUM(cb.avail_limit - c.credit_limit - c.temp_limit), 0) as overflow 
-       FROM card_bill cb
-       LEFT JOIN card_base c ON cb.card_id = c.id
-       WHERE cb.user_id = ? AND cb.is_deleted = 0 AND c.card_type = 'credit'
-         AND (cb.avail_limit - c.credit_limit - c.temp_limit) > 0`,
-      [userId]
-    );
-    const creditOverflow = parseFloat(overflowRows[0]?.overflow) || 0;
+    // 信用卡待还/溢缴款：统一 CreditCore.aggregate 口径（H10 审计）
+    // - totalDebt 覆盖全部账单月（含历史逾期），此前只算当前账单月会漏算
+    // - totalOverflow 为全局累计溢缴，共享池不会重复计算
+    const CreditCore = require('../../card/core/CreditCore');
+    const agg = await CreditCore.aggregate(userId);
+    const creditDebt = agg.totalDebt || 0;
+    const creditOverflow = agg.totalOverflow || 0;
 
     // 总资产 = 现金 + 信用卡溢缴款
     const totalAsset = totalBalance + Math.max(0, creditOverflow);
@@ -266,17 +249,10 @@ class AssetSnapshot {
     );
     const creditCardCount = creditRows[0]?.count || 0;
 
-    // 3. 信用卡本月代还金额（仅当前账单月）
-    const currentMonth = `${year}-${String(month).padStart(2, '0')}`;
-    const [debtRows] = await db.execute(
-      `SELECT COALESCE(SUM(cb.need_repay), 0) as total 
-       FROM card_bill cb
-       LEFT JOIN card_base c ON cb.card_id = c.id
-       WHERE cb.user_id = ? AND cb.is_deleted = 0 AND c.card_type = 'credit'
-         AND cb.bill_month = ?`,
-      [userId, currentMonth]
-    );
-    const creditDebt = parseFloat(debtRows[0]?.total) || 0;
+    // 3. 信用卡代还金额（统一 CreditCore 口径，覆盖全部账单月，H10 审计）
+    const CreditCore = require('../../card/core/CreditCore');
+    const agg = await CreditCore.aggregate(userId);
+    const creditDebt = agg.totalDebt || 0;
 
     // 4. 本月统计（收入 - 支出，排除信用卡还款）
     const [monthRows] = await db.execute(

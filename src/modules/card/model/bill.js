@@ -1,7 +1,11 @@
 const db = require('../../../common/config/db');
 const idUtils = require('../../../common/utils/idUtils');
-const AccountSettlement = require('../../account/service/settlement');
-const { toCNY, formatCNY } = require('../../../common/utils/currency');
+const { formatCNY } = require('../../../common/utils/currency');
+const dayjs = require('dayjs');
+const utc = require('dayjs/plugin/utc');
+const timezone = require('dayjs/plugin/timezone');
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 // ===== 本地日期工具（避免 toISOString 的 UTC 偏移） =====
 function toYMD(date) {
@@ -15,6 +19,11 @@ function toYMD(date) {
 function ymdToTime(ymd) {
   return new Date(`${ymd}T00:00:00`).getTime();
 }
+
+// 还款日 SQL 片段：账单月的下一月 + repay_day（P8：原直接用账单月导致早一个月）
+// M2：repay_day 29-31 遇短月 clamp 到目标月最后一天，与 JS calculateRepayDate 口径一致，
+//     避免 MySQL STR_TO_DATE('2026-04-31') 返回 NULL 导致逾期判断失效。
+const REPAY_DATE_SQL = `STR_TO_DATE(CONCAT(DATE_FORMAT(DATE_ADD(CONCAT(cb.bill_month, '-01'), INTERVAL 1 MONTH), '%Y-%m'), '-', LPAD(LEAST(c.repay_day, DAY(LAST_DAY(DATE_ADD(CONCAT(cb.bill_month, '-01'), INTERVAL 1 MONTH)))) , 2, '0')), '%Y-%m-%d')`;
 
 /**
  * 卡片账单模型 - 对应数据库 card_bill 表
@@ -128,8 +137,27 @@ class CardBill {
     // 还款日在账单月的下一个月
     const nextMonth = month === 12 ? 1 : month + 1;
     const nextYear = month === 12 ? year + 1 : year;
-    const repayDate = new Date(nextYear, nextMonth - 1, repayDay);
+    // M2 审计：repayDay 29-31 遇短月（2月/4月/6月/9月/11月）时 JS new Date 会滚入下月、
+    // MySQL STR_TO_DATE 返回 NULL。统一 clamp 到目标月最后一天，保证两端口径一致。
+    const lastDay = new Date(nextYear, nextMonth, 0).getDate();
+    const safeRepayDay = Math.max(1, Math.min(Number(repayDay) || 0, lastDay));
+    const repayDate = new Date(nextYear, nextMonth - 1, safeRepayDay);
     return this.formatDate(repayDate);
+  }
+
+  /**
+   * 账单日（出账日）：账单月的 bill_day
+   * 短月 clamp 与 calculateRepayDate 口径一致（bill_day 29-31 遇短月夹到月末）。
+   * @param {string} billMonth YYYY-MM
+   * @param {number} billDay 几号
+   * @returns {string} YYYY-MM-DD
+   */
+  static calculateBillDate(billMonth, billDay) {
+    const [year, month] = billMonth.split('-').map(Number);
+    const lastDay = new Date(year, month, 0).getDate();
+    const safeBillDay = Math.max(1, Math.min(Number(billDay) || 0, lastDay));
+    const billDate = new Date(year, month - 1, safeBillDay);
+    return this.formatDate(billDate);
   }
 
   /**
@@ -166,14 +194,14 @@ class CardBill {
       SELECT cb.*, c.alias as card_alias, c.last4_no as card_last4,
              c.currency, c.repay_day,
              c.bill_day, c.annual_fee, c.fee_free_rule,
-             STR_TO_DATE(CONCAT(cb.bill_month, '-', LPAD(c.repay_day, 2, '0')), '%Y-%m-%d') as repay_date_calc,
+             ${REPAY_DATE_SQL} as repay_date_calc,
              CASE 
-               WHEN cb.need_repay > 0 AND STR_TO_DATE(CONCAT(cb.bill_month, '-', LPAD(c.repay_day, 2, '0')), '%Y-%m-%d') < CURDATE()
+               WHEN cb.need_repay > 0 AND ${REPAY_DATE_SQL} < CURDATE()
                THEN 1 ELSE 0 
              END as is_overdue_calc,
              CASE 
-               WHEN cb.need_repay > 0 AND STR_TO_DATE(CONCAT(cb.bill_month, '-', LPAD(c.repay_day, 2, '0')), '%Y-%m-%d') < CURDATE()
-               THEN DATEDIFF(CURDATE(), STR_TO_DATE(CONCAT(cb.bill_month, '-', LPAD(c.repay_day, 2, '0')), '%Y-%m-%d'))
+               WHEN cb.need_repay > 0 AND ${REPAY_DATE_SQL} < CURDATE()
+               THEN DATEDIFF(CURDATE(), ${REPAY_DATE_SQL})
                ELSE 0 
              END as overdue_days_calc
       FROM ${this.tableName} cb
@@ -186,82 +214,133 @@ class CardBill {
   }
 
   /**
-   * 由 card_bill 派生“信用卡还款提醒”，用于注入到待办/日历系统。
-   * 仅当 remind_switch=1 且 need_repay>0 时生成；提醒落在还款日(happen_date)，
-   * 提前 remind_days 天开始闪烁(remind_time)。
+   * 【日历提醒专用】获取信用卡还款提醒（V2，新版口径）。
+   * ⚠️ 不复用旧的 REPAY_DATE_SQL（避免 SQL 侧日期异常），改用 JS calculateRepayDate /
+   *    calculateBillDate 计算，统一到新版 CreditCore 的周期口径。
+   * 返回数据（与 todo/recurring 提醒结构兼容）：每个未还清账单产生两条事件——
+   *   A. 账单日出账提醒（happen_date=账单月+bill_day，归位账单月）
+   *      - status：账单日已过且 need_repay>0 判"逾期"（出账但未还），否则"待完成"
+   *      - remind_time：账单日零点 - remind_days*86400000（账单日前 N 天开始闪烁）
+   *      - remark：`账单月份 X（账单日提醒）`
+   *   B. 还款日逾期预警（happen_date=账单月下月+repay_day，归位还款日所在月）
+   *      - status：还款日已过且 need_repay>0 判"逾期"，否则"待完成"
+   *      - remind_time：还款日零点 - remind_days*86400000（还款日前 N 天预警）
+   *      - remark：`账单月份 X（还款日提醒）`
+   * 逻辑：账单在「账单日」就应提醒用户该还款了（A 落在账单月）；若跨月仍未还清，
+   *   则在「还款日」前预警即将逾期（B 天然落在还款日所在月，无需跨月搬运）。
    * @param {string} userId
-   * @param {object} opts { scope?: 'default'|'all', year?, month?, happenDate? }
-   * @returns {Array} 与 todo/recurring 提醒结构兼容的对象数组
+   * @param {object} opts { year?, month?, scope? }
+   *   过滤规则：按目标自然月归集，每个事件只落在各自所属月——
+   *     - 指定 year+month：只返回 happen_date 落在该月的事件（月视图用）；
+   *     - 未指定：只返回 happen_date 落在当前自然月的事件（提醒列表用）。
+   * @returns {Promise<Array>}
    */
-  static async getRepaymentReminders(userId, opts = {}) {
-    const { scope, year, month, happenDate } = opts;
-    // 还款日表达式（MySQL 不允许在 WHERE 中引用 SELECT 别名，故 SELECT/WHERE 共用此常量）
-    const REPAY_DATE = `STR_TO_DATE(CONCAT(cb.bill_month, '-', LPAD(c.repay_day, 2, '0')), '%Y-%m-%d')`;
-    let where = `cb.user_id = ? AND cb.is_deleted = 0 AND cb.remind_switch = 1 AND cb.need_repay > 0`;
-    const params = [userId];
+  static async getRepaymentRemindersV2(userId, opts = {}) {
+    const { year, month, happenDate } = opts;
+    // 用北京时间计算"今天"，避免 UTC 服务器下 toYMD(new Date()) 取错日导致逾期判断偏移
+    const todayYMD = dayjs().tz('Asia/Shanghai').format('YYYY-MM-DD');
+    const todayTime = ymdToTime(todayYMD);
 
+    // 目标月：优先 happenDate / year+month，否则当前自然月
+    let targetMonth;
     if (happenDate) {
-      where += ` AND ${REPAY_DATE} = ?`;
-      params.push(happenDate);
+      targetMonth = String(happenDate).substring(0, 7);
     } else if (year && month) {
-      where += ` AND YEAR(${REPAY_DATE}) = ? AND MONTH(${REPAY_DATE}) = ?`;
-      params.push(year, month);
+      targetMonth = `${year}-${String(month).padStart(2, '0')}`;
     } else {
-      // 与 Todo.getUpcomingReminders 保持一致的时间窗（default 3-10 天 / all 0-30 天）
-      let fromDays = 3, toDays = 10;
-      if (scope === "all") { fromDays = 0; toDays = 30; }
-      const fromDate = toYMD(new Date(Date.now() + fromDays * 86400000));
-      const toDate = toYMD(new Date(Date.now() + toDays * 86400000));
-      where += ` AND ${REPAY_DATE} >= CURDATE() AND ${REPAY_DATE} BETWEEN ? AND ?`;
-      params.push(fromDate, toDate);
+      targetMonth = todayYMD.substring(0, 7);
     }
+    const monthPrefix = `${targetMonth}-`;
 
-    const query = `
-      SELECT cb.id, cb.card_id, cb.bill_month, cb.need_repay, cb.remind_days,
-             c.alias as card_alias, c.last4_no as card_last4, c.repay_day,
-             ${REPAY_DATE} as repay_date_calc,
-             UNIX_TIMESTAMP(DATE_SUB(${REPAY_DATE}, INTERVAL cb.remind_days DAY)) * 1000 as remind_time_ms
-      FROM ${this.tableName} cb
-      LEFT JOIN card_base c ON cb.card_id = c.id
-      WHERE ${where}
-      ORDER BY repay_date_calc ASC
-    `;
-    const [rows] = await db.execute(query, params);
-    const todayYMD = toYMD(new Date());
-    return rows.map((r) => {
-      const repayDate = toYMD(r.repay_date_calc);
+    // 待还>0 且开启提醒 的账单 + 卡
+    const [rows] = await db.execute(
+      `SELECT cb.id, cb.card_id, cb.bill_month, cb.need_repay, cb.remind_days,
+              c.alias AS card_alias, c.last4_no AS card_last4, c.repay_day, c.bill_day
+       FROM ${this.tableName} cb
+       LEFT JOIN card_base c ON cb.card_id = c.id
+       WHERE cb.user_id = ? AND cb.is_deleted = 0
+         AND (cb.remind_switch = 1 OR cb.remind_switch IS NULL)
+         AND cb.need_repay > 0
+       ORDER BY cb.bill_month DESC`,
+      [userId]
+    );
+
+    const result = [];
+    for (const r of rows) {
       const needRepay = parseFloat(r.need_repay) || 0;
-      const cardName = (r.card_alias || "").trim() || `****${r.card_last4 || ""}`;
-      const overdue = ymdToTime(repayDate) < ymdToTime(todayYMD);
-      return {
-        id: `cardbill_${r.id}`,
-        source: "card_bill",
-        content: `${cardName} 信用卡还款 ¥${formatCNY(needRepay)}`,
-        happen_date: repayDate,
-        remind_time: r.remind_time_ms != null ? String(r.remind_time_ms) : null,
-        need_remind: 1,
-        priority: 1,
-        status: overdue ? "逾期" : "待完成",
-        event_type: "信用卡还款",
-        remark: `账单月份 ${r.bill_month}`,
-        bill_id: r.id,
-        card_id: r.card_id,
-        remind_days: r.remind_days,
-      };
-    });
+      if (needRepay <= 0) continue;
+      if (!r.bill_month) continue;
+      const billDay = parseInt(r.bill_day, 10) || 0;
+      const repayDay = parseInt(r.repay_day, 10) || 0;
+      if (!repayDay) continue;
+      let billDateYMD, repayDateYMD;
+      try {
+        if (billDay) billDateYMD = this.calculateBillDate(r.bill_month, billDay);
+        repayDateYMD = this.calculateRepayDate(r.bill_month, repayDay);
+      } catch (e) {
+        continue; // 非法月份等，跳过
+      }
+
+      const remindDays = parseInt(r.remind_days, 10) || 0;
+      const cardName = (r.card_alias || '').trim() || `****${r.card_last4 || ''}`;
+      const content = `${cardName} 信用卡还款 ¥${formatCNY(needRepay)}`;
+
+      // 事件 A：账单日出账提醒（归位账单月）
+      if (billDateYMD && billDateYMD.startsWith(monthPrefix)) {
+        const billTime = ymdToTime(billDateYMD);
+        const billOverdue = billTime < todayTime; // 出账后仍未还 → 逾期
+        result.push({
+          id: `cardbill_billday_${r.id}`,
+          source: 'card_bill',
+          content,
+          happen_date: billDateYMD,
+          remind_time: billTime - remindDays * 86400000, // 毫秒数字（账单日前 N 天开始闪烁）
+          need_remind: 1,
+          priority: 1,
+          status: billOverdue ? '逾期' : '待完成',
+          event_type: '信用卡还款',
+          remark: `账单月份 ${r.bill_month}（账单日提醒）`,
+          bill_id: r.id,
+          card_id: r.card_id,
+          remind_days: remindDays,
+        });
+      }
+
+      // 事件 B：还款日逾期预警（归位还款日所在月，天然即"跨月仍未还清"才出现）
+      if (repayDateYMD.startsWith(monthPrefix)) {
+        const repayTime = ymdToTime(repayDateYMD);
+        const repayOverdue = repayTime < todayTime;
+        result.push({
+          id: `cardbill_repayday_${r.id}`,
+          source: 'card_bill',
+          content,
+          happen_date: repayDateYMD,
+          remind_time: repayTime - remindDays * 86400000, // 毫秒数字（还款日前 N 天预警）
+          need_remind: 1,
+          priority: 1,
+          status: repayOverdue ? '逾期' : '待完成',
+          event_type: '信用卡还款',
+          remark: `账单月份 ${r.bill_month}（还款日提醒）`,
+          bill_id: r.id,
+          card_id: r.card_id,
+          remind_days: remindDays,
+        });
+      }
+    }
+    return result.sort((a, b) => (a.happen_date || '').localeCompare(b.happen_date || ''));
   }
 
   /**
-   * 根据卡片ID获取最新账单
+   * 根据卡片ID获取最新账单（限定 user_id，防止越权读取）
    */
-  static async findLatestByCardId(cardId) {
+  static async findLatestByCardId(cardId, userId) {
     const query = `
       SELECT * FROM ${this.tableName}
-      WHERE card_id = ? AND is_deleted = 0
+      WHERE card_id = ? AND user_id = ? AND is_deleted = 0
       ORDER BY bill_month DESC
       LIMIT 1
     `;
-    const [rows] = await db.execute(query, [cardId]);
+    const [rows] = await db.execute(query, [cardId, userId]);
     return rows[0] || null;
   }
 
@@ -272,14 +351,14 @@ class CardBill {
     const query = `
       SELECT cb.*, c.alias as card_alias, c.last4_no as card_last4, c.currency,
              c.repay_day,
-             STR_TO_DATE(CONCAT(cb.bill_month, '-', LPAD(c.repay_day, 2, '0')), '%Y-%m-%d') as repay_date_calc,
+             ${REPAY_DATE_SQL} as repay_date_calc,
              CASE 
-               WHEN cb.need_repay > 0 AND STR_TO_DATE(CONCAT(cb.bill_month, '-', LPAD(c.repay_day, 2, '0')), '%Y-%m-%d') < CURDATE()
+               WHEN cb.need_repay > 0 AND ${REPAY_DATE_SQL} < CURDATE()
                THEN 1 ELSE 0 
              END as is_overdue_calc,
              CASE 
-               WHEN cb.need_repay > 0 AND STR_TO_DATE(CONCAT(cb.bill_month, '-', LPAD(c.repay_day, 2, '0')), '%Y-%m-%d') < CURDATE()
-               THEN DATEDIFF(CURDATE(), STR_TO_DATE(CONCAT(cb.bill_month, '-', LPAD(c.repay_day, 2, '0')), '%Y-%m-%d'))
+               WHEN cb.need_repay > 0 AND ${REPAY_DATE_SQL} < CURDATE()
+               THEN DATEDIFF(CURDATE(), ${REPAY_DATE_SQL})
                ELSE 0 
              END as overdue_days_calc
       FROM ${this.tableName} cb
@@ -320,240 +399,77 @@ class CardBill {
   }
 
   /**
-   * 创建账单（幂等：如果存在则更新额度）
+   * 创建账单（H8 审计：统一由 CreditCore.syncCardBills 全量重算生成快照）。
+   * ⚠️ 额度(creditLimit/tempLimit/availLimit)一律由 CreditCore 计算（唯一真相源），
+   *    前端传入的额度字段被忽略；本方法不再手工拼接额度快照，避免破坏共享池/溢缴款口径。
+   *    仅处理 remindSwitch/remindDays/pointsRate 元数据。
    */
-  static async create({ userId, cardId, billMonth, creditLimit, tempLimit, pointsRate, remindSwitch, remindDays }, executor = db) {
-    const id = idUtils.billId();
+  static async create({ userId, cardId, billMonth, pointsRate, remindSwitch, remindDays }, executor = db) {
     const now = String(Date.now());
 
     const card = await this.getCardInfo(cardId, executor);
     if (!card) throw new Error('卡片不存在');
+    if (card.card_type !== 'credit') throw new Error('只有信用卡才需要账单');
 
     const month = billMonth || this.getCurrentBillMonth();
+
+    // 已有账单：仅同步提醒/积分元数据，额度一律不动（交由 CreditCore 重算）
     const existing = await this.findByCardAndMonth(cardId, month, executor);
-
-    // 确定最终额度：优先使用传入值，其次 card_base 值
-    const finalCreditLimit = (creditLimit !== undefined && creditLimit !== null) 
-      ? creditLimit 
-      : (parseFloat(card.credit_limit) || 0);
-    const finalTempLimit = (tempLimit !== undefined && tempLimit !== null) 
-      ? tempLimit 
-      : (parseFloat(card.temp_limit) || 0);
-
     if (existing) {
-      // 账单已存在：更新额度，同时重新计算 avail_limit
-      const currentUsedLimit = parseFloat(existing.used_limit) || 0;
-      const newAvailLimit = finalCreditLimit + finalTempLimit - currentUsedLimit;
+      const sets = ['update_time = ?'];
+      const params = [now];
+      if (remindSwitch !== undefined && remindSwitch !== null) { sets.push('remind_switch = ?'); params.push(remindSwitch ? 1 : 0); }
+      if (remindDays !== undefined && remindDays !== null) { sets.push('remind_days = ?'); params.push(remindDays); }
+      if (pointsRate !== undefined && pointsRate !== null) { sets.push('points_rate = ?'); params.push(pointsRate); }
       await executor.execute(
-        `UPDATE ${this.tableName} SET
-           credit_limit = ?, temp_limit = ?, avail_limit = ?,
-           update_time = ?
-         WHERE id = ? AND is_deleted = 0`,
-        [finalCreditLimit, finalTempLimit, newAvailLimit, now, existing.id]
+        `UPDATE ${this.tableName} SET ${sets.join(', ')} WHERE id = ?`,
+        [...params, existing.id]
       );
-      // 注意：不再反向更新 card_base，账单应该从 card_base 读取额度，而不是反向写入
       return this.findById(existing.id, userId, executor);
     }
 
-    // 新建账单（幂等处理，防止并发重复插入）
-    const { billStartDate, billEndDate } = this.calculateBillPeriod(month, card.bill_day);
+    // 不存在：先由 CreditCore 全量重算（生成所有有流水月份的快照，口径统一、含共享池）
+    // C8 审计：重算失败必须向上抛出，不得吞错后建"零消费、零待还"空壳——否则会把真实流水暂时显示为零负债。
+    const CreditCore = require('../core/CreditCore');
+    await CreditCore.syncCardBills(cardId, userId, executor);
 
-    const finalPointsRate = (pointsRate !== undefined && pointsRate !== null) 
-      ? pointsRate 
-      : (parseFloat(card.points_rate) || 1);
-    const finalRemindSwitch = (remindSwitch !== undefined && remindSwitch !== null) 
-      ? (remindSwitch ? 1 : 0) 
-      : 1;
-    const finalRemindDays = (remindDays !== undefined && remindDays !== null) 
-      ? remindDays 
-      : 3;
-
-    try {
-      const query = `
-        INSERT INTO ${this.tableName} (
-          id, card_id, bill_month, user_id, credit_limit, avail_limit, used_limit,
-          temp_limit, bill_start_date, bill_end_date, bill_amount,
-          min_repay, repaid, need_repay, points, points_rate,
-          remind_switch, remind_days, update_time, is_deleted
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
-      `;
-
-      await executor.execute(query, [
-        id, cardId, month, userId,
-        finalCreditLimit, finalCreditLimit + finalTempLimit, 0,
-        finalTempLimit, billStartDate, billEndDate, 0,
-        0, 0, 0, 0, finalPointsRate,
-        finalRemindSwitch, finalRemindDays, now,
-      ]);
-    } catch (error) {
-      // 如果是重复键错误，说明有被软删除的旧账单，先恢复它
-      if (error.code === 'ER_DUP_ENTRY') {
-        // 先检查是否有被软删除的账单
-        const [deletedRows] = await executor.execute(
-          'SELECT id FROM card_bill WHERE card_id = ? AND bill_month = ? AND is_deleted = 1',
-          [cardId, month]
+    // 若目标月份仍无账单（该月无消费/还款流水），创建空壳快照（额度占位，后续 syncCardBills 覆盖）
+    let bill = await this.findByCardAndMonth(cardId, month, executor);
+    if (!bill) {
+      const id = idUtils.billId();
+      const { billStartDate, billEndDate } = this.calculateBillPeriod(month, card.bill_day);
+      const finalCreditLimit = parseFloat(card.credit_limit) || 0;
+      const finalTempLimit = parseFloat(card.temp_limit) || 0;
+      const finalPointsRate = (pointsRate !== undefined && pointsRate !== null)
+        ? pointsRate
+        : (parseFloat(card.points_rate) || 1);
+      try {
+        await executor.execute(
+          `INSERT INTO ${this.tableName} (
+            id, card_id, bill_month, user_id, credit_limit, avail_limit, used_limit,
+            temp_limit, bill_start_date, bill_end_date, bill_amount,
+            min_repay, repaid, need_repay, points, points_rate,
+            remind_switch, remind_days, create_time, update_time, is_deleted
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+          [id, cardId, month, userId,
+           finalCreditLimit, finalCreditLimit + finalTempLimit, 0,
+           finalTempLimit, billStartDate, billEndDate, 0,
+           0, 0, 0, 0, finalPointsRate,
+           (remindSwitch !== undefined && remindSwitch !== null) ? (remindSwitch ? 1 : 0) : 1,
+           (remindDays !== undefined && remindDays !== null) ? remindDays : 3,
+           now, now]
         );
-        if (deletedRows.length > 0) {
-          // 恢复被软删除的账单
-          await executor.execute(
-            'UPDATE card_bill SET is_deleted = 0, update_time = ? WHERE id = ?',
-            [now, deletedRows[0].id]
-          );
-          return this.findById(deletedRows[0].id, userId, executor);
+        // 空壳快照也交由 CreditCore 规范化一次（共享池卡会把 avail_limit 覆盖为池口径）
+        // C8：规范化失败同样抛出，不允许返回未经核算的空账单
+        await CreditCore.syncCardBills(cardId, userId, executor);
+      } catch (error) {
+        if (error.code === 'ER_DUP_ENTRY') {
+          return this.findByCardAndMonth(cardId, month, executor);
         }
-        // 如果没有软删除记录，查询现有记录
-        return this.findByCardAndMonth(cardId, month, executor);
+        throw error;
       }
-      throw error;
     }
-
-    // 注意：不再反向更新 card_base，账单应该从 card_base 读取额度，而不是反向写入
-    return this.findById(id, userId, executor);
-  }
-
-  /**
-   * 消费实时更新账单
-   */
-  static async syncFromExpense(cardId, userId, amount, transDate, executor = db, currency = 'CNY', exchangeRate = 1) {
-    const card = await this.getCardInfo(cardId, executor);
-    if (!card || card.card_type !== 'credit') return;
-
-    const billMonth = this.getBillMonthByDate(transDate, card.bill_day);
-    const bill = await this.getOrCreateBill(cardId, userId, billMonth, executor);
-    if (!bill) return;
-
-    const now = String(Date.now());
-    const amountNum = toCNY(amount, currency, exchangeRate);
-    const creditLimit = parseFloat(card.credit_limit) || 0;
-    const tempLimit = parseFloat(card.temp_limit) || 0;
-
-    const newBillAmount = (parseFloat(bill.bill_amount) || 0) + amountNum;
-    const newUsedLimit = (parseFloat(bill.used_limit) || 0) + amountNum;
-    const newAvailLimit = creditLimit + tempLimit - newUsedLimit;
-    const newNeedRepay = newBillAmount - (parseFloat(bill.repaid) || 0);
-    const newPoints = Math.round(newUsedLimit * (card.points_rate || 1));
-
-    await executor.execute(
-      `UPDATE ${this.tableName} SET
-         bill_amount = ?, used_limit = ?, avail_limit = ?,
-         need_repay = ?, min_repay = ?, points = ?,
-         repay_status = CASE WHEN ? > 0 THEN '未还款' ELSE '已还款' END,
-         update_time = ?
-       WHERE id = ? AND is_deleted = 0`,
-      [newBillAmount.toFixed(4), newUsedLimit.toFixed(4), newAvailLimit.toFixed(4),
-       newNeedRepay.toFixed(4), Math.max(0, newBillAmount * 0.1).toFixed(4), newPoints,
-       newNeedRepay, now, bill.id]
-    );
-
-    return this.findById(bill.id, userId, executor);
-  }
-
-  /**
-   * 回滚消费：删除流水时恢复账单额度
-   */
-  static async rollbackExpense(cardId, userId, amount, transDate, executor = db, currency = 'CNY', exchangeRate = 1) {
-    const card = await this.getCardInfo(cardId, executor);
-    if (!card || card.card_type !== 'credit') return;
-
-    const billMonth = this.getBillMonthByDate(transDate, card.bill_day);
-    const bill = await this.findByCardAndMonth(cardId, billMonth, executor);
-    if (!bill) return;
-
-    const now = String(Date.now());
-    const amountNum = toCNY(amount, currency, exchangeRate);
-    const creditLimit = parseFloat(card.credit_limit) || 0;
-    const tempLimit = parseFloat(card.temp_limit) || 0;
-
-    // 计算撤销消费后的状态
-    const newBillAmount = Math.max(0, (parseFloat(bill.bill_amount) || 0) - amountNum);
-    const newUsedLimit = Math.max(0, (parseFloat(bill.used_limit) || 0) - amountNum);
-    const newNeedRepay = Math.max(0, newBillAmount - (parseFloat(bill.repaid) || 0));
-    const newAvailLimit = creditLimit + tempLimit - newUsedLimit;
-    const newPoints = Math.round(newUsedLimit * (card.points_rate || 1));
-
-    await executor.execute(
-      `UPDATE ${this.tableName} SET
-         bill_amount = ?, used_limit = ?, avail_limit = ?,
-         need_repay = ?, min_repay = ?, points = ?,
-         repay_status = ?, update_time = ?
-       WHERE id = ? AND is_deleted = 0`,
-      [newBillAmount.toFixed(4), newUsedLimit.toFixed(4), newAvailLimit.toFixed(4),
-       newNeedRepay.toFixed(4), Math.max(0, newBillAmount * 0.1).toFixed(4), newPoints,
-       newNeedRepay <= 0 ? '已还款' : ((parseFloat(bill.repaid) || 0) > 0 ? '部分还款' : '未还款'),
-       now, bill.id]
-    );
-
-    console.log(`[撤销消费] billMonth=${billMonth}, 撤销=${amountNum}, 新账单=${newBillAmount}`);
-
-    return this.findById(bill.id, userId, executor);
-  }
-
-  /**
-   * 回滚还款：删除还款流水时恢复账单已用额度
-   * 效果：增加已用额度，减少已还金额
-   */
-  static async rollbackRepay(cardId, userId, repayAmount, transDate, executor = db) {
-    const card = await this.getCardInfo(cardId, executor);
-    if (!card || card.card_type !== 'credit') return;
-
-    const billMonth = this.getBillMonthByDate(transDate, card.bill_day);
-    const bill = await this.findByCardAndMonth(cardId, billMonth, executor);
-    if (!bill) return;
-
-    const now = String(Date.now());
-    const amountNum = parseFloat(repayAmount);
-    const creditLimit = parseFloat(card.credit_limit) || 0;
-    const tempLimit = parseFloat(card.temp_limit) || 0;
-
-    // 回滚还款：bill_amount 不变（消费记录还在），used_limit += amount, 已还金额 -= amount
-    const newUsedLimit = (parseFloat(bill.used_limit) || 0) + amountNum;
-    const newAvailLimit = creditLimit + tempLimit - newUsedLimit;
-    const newRepaid = Math.max(0, (parseFloat(bill.repaid) || 0) - amountNum);
-    const newNeedRepay = Math.max(0, (parseFloat(bill.bill_amount) || 0) - newRepaid);
-    const newPoints = Math.round(newUsedLimit * (card.points_rate || 1));
-
-    let repayStatus = '未还款';
-    if (newNeedRepay <= 0) repayStatus = '已还清';
-    else if (newRepaid > 0) repayStatus = '部分还款';
-
-    await executor.execute(
-      `UPDATE ${this.tableName} SET
-         used_limit = ?, avail_limit = ?,
-         repaid = ?, need_repay = ?, points = ?,
-         repay_status = ?, update_time = ?
-       WHERE id = ? AND is_deleted = 0`,
-      [newUsedLimit.toFixed(4), newAvailLimit.toFixed(4),
-       newRepaid.toFixed(4), newNeedRepay.toFixed(4), newPoints,
-       repayStatus, now, bill.id]
-    );
-
-    return this.findById(bill.id, userId, executor);
-  }
-
-  /**
-   * 还款实时冲减账单
-   */
-  static async syncFromRepay(cardId, billId, userId, repayAmount) {
-    const bill = await this.findById(billId, userId);
-    if (!bill) return;
-
-    const now = String(Date.now());
-    const amountNum = parseFloat(repayAmount);
-    const newRepaid = (parseFloat(bill.repaid) || 0) + amountNum;
-    const newNeedRepay = Math.max(0, (parseFloat(bill.bill_amount) || 0) - newRepaid);
-
-    let repayStatus = '未还款';
-    if (newNeedRepay <= 0) repayStatus = '已还清';
-    else if (newRepaid > 0) repayStatus = '部分还款';
-
-    await db.execute(
-      `UPDATE ${this.tableName} SET
-         repaid = ?, need_repay = ?, repay_status = ?, update_time = ?
-       WHERE id = ? AND is_deleted = 0`,
-      [newRepaid.toFixed(4), newNeedRepay.toFixed(4), repayStatus, now, billId]
-    );
-
-    return this.findById(billId, userId);
+    return this.findByCardAndMonth(cardId, month, executor);
   }
 
   /**
@@ -594,187 +510,29 @@ class CardBill {
 
   /**
    * 删除账单（软删除）
+   * H8 审计：删除后必须重算——若该卡该月仍有账本流水，CreditCore 会按账本重建快照，
+   * 避免「删除快照暂时隐藏负债/放大共享池可用额度」。
    */
   static async delete(id, userId) {
+    const bill = await this.findById(id, userId);
+    if (!bill) return false;
     const now = String(Date.now());
     const [result] = await db.execute(
       `UPDATE ${this.tableName} SET is_deleted = 1, update_time = ? WHERE id = ? AND user_id = ?`,
       [now, id, userId]
     );
+    if (result.affectedRows > 0 && bill.card_id) {
+      try {
+        const CreditCore = require('../core/CreditCore');
+        await CreditCore.syncCardBills(bill.card_id, userId);
+      } catch (e) {
+        console.error('[删除账单] 重算失败:', e.message);
+      }
+    }
     return result.affectedRows > 0;
   }
 
 
-  /**
-   * 根据历史流水重建账单
-   * 遍历所有流水（含冲正），根据交易方向和金额计算净消费和净还款
-   * 自动检测并修复旧数据异常（还款冲正方向错误导致余额丢失）
-   */
-  static async rebuildBillFromAccount(cardId, userId) {
-    console.log(`[重建账单] ========== cardId=${cardId}, userId=${userId}`);
-    const card = await this.getCardInfo(cardId);
-    if (!card || card.card_type !== 'credit') {
-      console.log(`[重建账单] 非信用卡，退出`);
-      return null;
-    }
-
-    const now = String(Date.now());
-
-    // ===== 1. 获取该信用卡的所有消费流水（account 表） =====
-    // 注意：还款流水在 account 表中的 card_id 指向的是还款来源卡（借记卡），不是本信用卡
-    // 所以这里只获取 direction=0 的普通消费
-    const [expenseRows] = await db.execute(
-      `SELECT id, direction, amount, currency, exchange_rate, trans_date, category_id, reversed_id, is_deleted
-       FROM account 
-       WHERE card_id = ? AND user_id = ? AND is_deleted = 0
-         AND direction = 0 AND (category_id IS NULL OR category_id != 'CATEGORY_REPAY')
-       ORDER BY trans_date ASC`,
-      [cardId, userId]
-    );
-
-    // ===== 2. 获取该信用卡的还款记录（card_repay 表） =====
-    // 注：需要验证 account_id 对应的流水未被删除，避免脏数据
-    const [repayRows] = await db.execute(
-      `SELECT r.id, r.repay_amount, r.bill_month, r.bill_id,
-              COALESCE(r.bill_month, b.bill_month) AS target_bill_month
-       FROM card_repay r
-       LEFT JOIN card_bill b ON r.bill_id = b.id AND b.is_deleted = 0
-       LEFT JOIN account a ON r.account_id = a.id
-       WHERE r.card_id = ? AND r.is_deleted = 0
-         AND (r.account_id IS NULL OR a.is_deleted = 0)`,
-      [cardId]
-    );
-
-    // ===== 3. 查找并记录被撤销的消费流水ID（避免被重复计入） =====
-    const [reversalFlows] = await db.execute(
-      `SELECT id, reversed_id, direction FROM account
-       WHERE card_id = ? AND user_id = ? AND is_deleted = 0
-         AND reversed_id IS NOT NULL AND direction = 1`,
-      [cardId, userId]
-    );
-    const reversedExpenseIds = new Set(reversalFlows.map(r => r.reversed_id));
-
-    // ===== 4. 按账单月聚合消费 =====
-    const billMonthData = {};
-
-    for (const row of expenseRows) {
-      const amount = toCNY(row.amount, row.currency, row.exchange_rate);
-      if (amount <= 0) continue;
-
-      // 跳过被冲正的流水（已有 direction=1 的反向记录）
-      if (row.reversed_id || reversedExpenseIds.has(row.id)) continue;
-
-      const billMonth = this.getBillMonthByDate(row.trans_date, card.bill_day);
-      if (!billMonthData[billMonth]) {
-        billMonthData[billMonth] = { totalExpense: 0, repayments: [] };
-      }
-      billMonthData[billMonth].totalExpense += amount;
-    }
-
-    // ===== 5. 按账单月聚合还款 =====
-    for (const repay of repayRows) {
-      const amount = parseFloat(repay.repay_amount) || 0;
-      if (amount <= 0) continue;
-
-      // 优先使用 card_bill 表的 bill_month（通过 bill_id 关联），更准确
-      // 其次使用 card_repay 自身记录的 bill_month
-      const billMonth = repay.target_bill_month || repay.bill_month || this.getCurrentBillMonth();
-      if (!billMonthData[billMonth]) {
-        billMonthData[billMonth] = { totalExpense: 0, repayments: [] };
-      }
-      billMonthData[billMonth].repayments.push(amount);
-    }
-
-    // ===== 5. 按账单月从旧到新处理：消费统计 + 溢缴款顺延 =====
-    const sortedMonths = Object.keys(billMonthData).sort();
-    let carryOver = 0; // 溢缴款（多还部分）顺延到下一期
-
-    for (const billMonth of sortedMonths) {
-      const data = billMonthData[billMonth];
-      const totalExpense = data.totalExpense;
-      
-      // 本账单收到的还款总额
-      const totalRepaidThisMonth = data.repayments.reduce((a, b) => a + b, 0);
-      
-      // 实际可抵金额 = 本期还款 + 上期溢缴款
-      const availableRepaid = totalRepaidThisMonth + carryOver;
-      
-      // 本期应还 = 消费总额
-      const billAmount = totalExpense;
-      
-      // 实际用于本期还款的金额（不超过应还金额）
-      const appliedToThisBill = Math.min(availableRepaid, billAmount);
-      
-      // 溢缴款 = 可用还款 - 实际用于本期还款
-      carryOver = Math.max(0, availableRepaid - billAmount);
-      
-      data.repaid = appliedToThisBill;
-      data.needRepay = billAmount - appliedToThisBill;
-    }
-
-    // ===== 6. 更新或创建账单 =====
-    const results = [];
-    const creditLimit = parseFloat(card.credit_limit) || 0;
-    const tempLimit = parseFloat(card.temp_limit) || 0;
-
-    for (const billMonth of sortedMonths) {
-      const data = billMonthData[billMonth];
-      const { totalExpense, repaid, needRepay } = data;
-
-      let bill = await this.findByCardAndMonth(cardId, billMonth);
-      if (!bill) {
-        bill = await this.create({ userId, cardId, billMonth });
-      }
-      if (!bill) continue;
-
-      const { billStartDate, billEndDate } = this.calculateBillPeriod(billMonth, card.bill_day);
-      const usedLimit = totalExpense;
-      const availLimit = Math.max(0, creditLimit + tempLimit - usedLimit);
-      const points = Math.round(usedLimit * (card.points_rate || 1));
-
-      let repayStatus = '未还款';
-      if (needRepay <= 0) repayStatus = '已还清';
-      else if (repaid > 0) repayStatus = '部分还款';
-
-      await db.execute(
-        `UPDATE ${this.tableName} SET
-           credit_limit = ?, avail_limit = ?, used_limit = ?, temp_limit = ?,
-           bill_start_date = ?, bill_end_date = ?, bill_amount = ?,
-           min_repay = ?, repaid = ?, need_repay = ?, points = ?,
-           repay_status = ?, update_time = ?
-         WHERE id = ? AND is_deleted = 0`,
-        [creditLimit, availLimit.toFixed(4), usedLimit.toFixed(4), tempLimit,
-         billStartDate, billEndDate, totalExpense.toFixed(4),
-         Math.max(0, totalExpense * 0.1).toFixed(4),
-         repaid.toFixed(4), needRepay.toFixed(4), points, repayStatus, now, bill.id]
-      );
-
-      results.push({ billMonth, billId: bill.id, totalExpense, repaid, needRepay: needRepay.toFixed(4) });
-    }
-
-    // ===== 7. 确保当前月有账单（不覆盖已存在的账单数据） =====
-    const currentBillMonth = this.getCurrentBillMonth();
-    const existingCurrentBill = await this.findByCardAndMonth(cardId, currentBillMonth);
-
-    if (!existingCurrentBill) {
-      const newBill = await this.create({ userId, cardId, billMonth: currentBillMonth });
-      if (newBill) {
-        results.push({ billMonth: currentBillMonth, billId: newBill.id, totalExpense: 0, repaid: 0, needRepay: '0.00', created: true });
-      }
-    } else if (!billMonthData[currentBillMonth]) {
-      // 当前月有账单但不在本次重建范围内，只更新周期
-      const { billStartDate, billEndDate } = this.calculateBillPeriod(currentBillMonth, card.bill_day);
-      await db.execute(
-        `UPDATE ${this.tableName} SET bill_start_date = ?, bill_end_date = ?, update_time = ? WHERE id = ? AND is_deleted = 0`,
-        [billStartDate, billEndDate, now, existingCurrentBill.id]
-      );
-      results.push({ billMonth: currentBillMonth, billId: existingCurrentBill.id, totalExpense: 0, repaid: 0, needRepay: '0.00', updatedPeriod: true });
-    }
-
-    await AccountSettlement.syncBalanceSnapshot(cardId, userId);
-    console.log(`[重建账单] 完成:`, JSON.stringify(results));
-    return results;
-  }
 }
 
 module.exports = CardBill;

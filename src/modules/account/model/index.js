@@ -431,15 +431,11 @@ class Account {
     );
     const totalBalance = parseFloat(balanceRows[0]?.total) || 0;
 
-    // 从 card_bill 统计信用卡溢缴款（溢缴款 = 可用额度 - 额度）
-    const [creditBillRows] = await db.execute(
-      `SELECT COALESCE(SUM(avail_limit - credit_limit - temp_limit), 0) as overflow 
-       FROM card_bill cb
-       LEFT JOIN card_base c ON cb.card_id = c.id
-       WHERE cb.user_id = ? AND cb.is_deleted = 0 AND c.card_type = 'credit'`,
-      [userId]
-    );
-    const creditOverflow = parseFloat(creditBillRows[0]?.overflow) || 0;
+    // 信用卡溢缴款 / 代还金额：统一 CreditCore.aggregate 口径（H10 审计），
+    // 避免共享池每张卡存池额度导致溢缴重复计算、负债口径不一致
+    const CreditCore = require('../../card/core/CreditCore');
+    const agg = await CreditCore.aggregate(userId);
+    const creditOverflow = agg.totalOverflow || 0;
     const totalAsset = totalBalance + Math.max(0, creditOverflow);
 
     // 2. 银行卡数量（排除虚拟账户）
@@ -460,15 +456,8 @@ class Account {
       }
     });
 
-    // 3. 信用卡代还金额（所有未还账单汇总）
-    const [repayRows] = await db.execute(
-      `SELECT COALESCE(SUM(need_repay), 0) as total 
-       FROM card_bill cb
-       LEFT JOIN card_base c ON cb.card_id = c.id
-       WHERE cb.user_id = ? AND cb.is_deleted = 0 AND c.card_type = 'credit'`,
-      [userId]
-    );
-    const creditCardDebt = parseFloat(repayRows[0]?.total) || 0;
+    // 3. 信用卡代还金额（CreditCore 统一口径，覆盖全部账单月）
+    const creditCardDebt = agg.totalDebt || 0;
 
     // 4. 本月收支统计
     const [monthStatsRows] = await db.execute(

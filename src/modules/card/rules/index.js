@@ -42,15 +42,21 @@ exports.createCard = {
       tempLimit: joi.number().default(0),
       billDay: joi.number().when('cardType', {
         is: 'credit',
-        then: joi.number().required().messages({
+        then: joi.number().integer().min(1).max(31).required().messages({
           "any.required": "billDay 账单日（信用卡必填）不能为空",
+          "number.integer": "billDay 账单日必须是整数",
+          "number.min": "billDay 账单日必须在 1-31 之间",
+          "number.max": "billDay 账单日必须在 1-31 之间",
         }),
         otherwise: joi.number().default(0),
       }),
       repayDay: joi.number().when('cardType', {
         is: 'credit',
-        then: joi.number().required().messages({
+        then: joi.number().integer().min(1).max(31).required().messages({
           "any.required": "repayDay 还款日（信用卡必填）不能为空",
+          "number.integer": "repayDay 还款日必须是整数",
+          "number.min": "repayDay 还款日必须在 1-31 之间",
+          "number.max": "repayDay 还款日必须在 1-31 之间",
         }),
         otherwise: joi.number().default(0),
       }),
@@ -103,8 +109,8 @@ exports.updateCard = {
       cardImg: joi.string().allow('', null),
       openDate: joi.string().allow('', null),
       expireDate: joi.string().allow('', null),
-      billDay: joi.number().allow(null),
-      repayDay: joi.number().allow(null),
+      billDay: joi.number().integer().min(1).max(31).allow(null),
+      repayDay: joi.number().integer().min(1).max(31).allow(null),
       currency: joi.string().allow('', null),
       status: joi.string().allow('', null),
       isDefault: joi.boolean(),
@@ -130,9 +136,8 @@ exports.createBill = {
       cardId: joi.string().required().messages({
         "any.required": "cardId 卡片ID 不能为空",
       }),
-      creditLimit: joi.number().required().messages({
-        "any.required": "creditLimit 信用额度 不能为空",
-      }),
+      // R3：额度以 card_base / CreditCore 为准，模型已忽略前端传入（P4），不再 required
+      creditLimit: joi.number(),
       tempLimit: joi.number().default(0),
       pointsRate: joi.number().default(1),
       // 【可选】
@@ -176,9 +181,9 @@ exports.createRepay = {
         "any.required": "repayAmount 还款金额 不能为空",
         "number.min": "还款金额必须大于 0",
       }),
-      repayMethod: joi.string().required().valid('card', 'balance', 'bank_card', 'cash').messages({
+      repayMethod: joi.string().required().valid('balance', 'bank_card', 'cash').messages({
         "any.required": "repayMethod 还款方式 不能为空",
-        "any.only": "repayMethod 只支持: card/balance/bank_card/cash",
+        "any.only": "repayMethod 只支持: balance/bank_card/cash",
       }),
       repayMethodCardId: joi.string().when('repayMethod', {
         is: 'bank_card',
@@ -200,7 +205,10 @@ exports.createRepay = {
 exports.updateRepay = {
   body: joi.object({
     data: joi.object({
-      repayAmount: joi.number(),
+      repayAmount: joi.number().min(0.01).messages({
+        "number.min": "还款金额必须大于 0",
+        "number.base": "还款金额必须是数字",
+      }),
       repayMethod: joi.string(),
       repayTime: joi.string(),
       remark: joi.string(),

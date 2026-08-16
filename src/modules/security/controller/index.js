@@ -3,6 +3,10 @@ const UserLog = require("../../auth/model/log");
 const User = require("../../auth/model/user");
 const db = require("../../../common/config/db");
 const pinLockGuard = require("../../../common/middleware/pinLockGuard");
+const { resolvePassword } = require("../../../common/utils/rsaKeys");
+
+/** 解密 PIN（支持 RSA 密文数组，安全键盘 secureOnly 输入） */
+const resolvePin = (raw) => resolvePassword(raw);
 
 /**
  * 安全控制器 - PIN 码管理
@@ -34,7 +38,8 @@ class SecurityController {
    */
   async verifyPin(req, res) {
     try {
-      const { pin } = req.body.data;
+      const { pin: rawPin } = req.body.data;
+      const pin = resolvePin(rawPin); // 支持 RSA 密文数组解密
 
       // 校验 PIN 格式
       if (!pin || pin.length !== 6 || !/^\d+$/.test(pin)) {
@@ -171,7 +176,8 @@ class SecurityController {
    */
   async verifyRoutePin(req, res) {
     try {
-      const { pin, challengeId, requestUrl, method } = req.body.data || {};
+      const { pin: rawPin, challengeId, requestUrl, method } = req.body.data || {};
+      const pin = resolvePin(rawPin); // 支持 RSA 密文数组解密
       const normalizedMethod = String(method || "").toUpperCase();
 
       if (!pin || pin.length !== 6 || !/^\d+$/.test(pin)) {
@@ -357,7 +363,8 @@ class SecurityController {
    */
   async setPin(req, res) {
     try {
-      const { pin } = req.body.data;
+      const { pin: rawPin } = req.body.data;
+      const pin = resolvePin(rawPin); // 支持 RSA 密文数组解密
 
       // 校验 PIN 格式
       if (!pin || pin.length !== 6 || !/^\d+$/.test(pin)) {
@@ -388,7 +395,9 @@ class SecurityController {
   async changePin(req, res) {
     const clientData = req.body;
     try {
-      const { oldPin, newPin } = req.body.data;
+      const { oldPin: rawOldPin, newPin: rawNewPin } = req.body.data;
+      const oldPin = resolvePin(rawOldPin); // 支持 RSA 密文数组解密
+      const newPin = resolvePin(rawNewPin);
 
       // 格式校验（6 位纯数字强制校验）
       if (!oldPin || oldPin.length !== 6 || !/^\d+$/.test(oldPin)) {
@@ -515,7 +524,8 @@ class SecurityController {
    */
   async resetPin(req, res) {
     try {
-      const { verificationCode, newPin } = req.body.data;
+      const { verificationCode, newPin: rawNewPin } = req.body.data;
+      const newPin = resolvePin(rawNewPin); // 支持 RSA 密文数组解密
 
       // 新 PIN 格式校验
       if (!newPin || newPin.length !== 6 || !/^\d+$/.test(newPin)) {

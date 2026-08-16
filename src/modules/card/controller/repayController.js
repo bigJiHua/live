@@ -93,6 +93,52 @@ class CardRepayController {
   }
 
   /**
+   * 信报合一合并还款：一次性结清共享池内全部卡的欠款
+   * 前提：共享池已标记 credit_report_merged=1
+   */
+  async mergeRepay(req, res) {
+    try {
+      const {
+        poolId,
+        repayMethod,
+        repayMethodCardId,
+        repayTime,
+        remark
+      } = req.body.data || req.body;
+
+      if (!poolId) return res.say("共享池ID不能为空", 400);
+      if (!repayMethod) return res.say("请选择还款方式", 400);
+
+      const result = await CardRepay.executeMergeRepay({
+        userId: req.userId,
+        poolId,
+        repayMethod,
+        repayMethodCardId,
+        repayTime,
+        remark
+      });
+
+      // 记录操作日志：card_log.card_id NOT NULL，用池内首张卡 id；
+      // 日志失败不得让已成功的还款返回 500（否则前端误判失败可能重复提交）
+      try {
+        const logCardId = (result.cardIds && result.cardIds[0]) || poolId;
+        await CardLog.log(logCardId, req.userId, `信报合一合并还款 ${result.totalAmount}元`, req.ip);
+      } catch (logErr) {
+        console.warn('[信报合一合并还款] 日志写入失败（不影响还款结果）:', logErr.message);
+      }
+
+      return res.status(200).json({
+        status: 200,
+        message: `合并还款成功，共还清 ${result.count} 笔欠款`,
+        data: result
+      });
+    } catch (error) {
+      console.error('信报合一合并还款错误:', error);
+      return res.say(error.message || "合并还款失败", 500);
+    }
+  }
+
+  /**
    * 更新还款记录
    */
   async update(req, res) {

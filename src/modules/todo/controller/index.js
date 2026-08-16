@@ -1,3 +1,8 @@
+const dayjs = require('dayjs');
+const utc = require('dayjs/plugin/utc');
+const timezone = require('dayjs/plugin/timezone');
+dayjs.extend(utc);
+dayjs.extend(timezone);
 const Todo = require('../model');
 const RecurringExpense = require('../../recurring/model');
 const CardBill = require('../../card/model/bill');
@@ -60,10 +65,10 @@ class TodoController {
 
       const rows = await Todo.findAll(userId, filters);
 
-      // 注入该日的信用卡还款提醒（source=card_bill）
+      // 注入该日的信用卡还款提醒（source=card_bill，V2：账单日+还款日双事件口径）
       let result = rows;
       if (happen_date) {
-        const cardRows = await CardBill.getRepaymentReminders(userId, { happenDate: happen_date });
+        const cardRows = await CardBill.getRepaymentRemindersV2(userId, { happenDate: happen_date });
         result = [...rows, ...cardRows];
       }
 
@@ -88,7 +93,7 @@ class TodoController {
 
       const data = await Todo.findByMonth(userId, parseInt(year), parseInt(month));
       const recurringEvents = await RecurringExpense.getCalendarEvents(userId, parseInt(year), parseInt(month));
-      const cardEvents = await CardBill.getRepaymentReminders(userId, { year: parseInt(year), month: parseInt(month) });
+      const cardEvents = await CardBill.getRepaymentRemindersV2(userId, { year: parseInt(year), month: parseInt(month) });
 
       // 转换为日历网格格式（补齐该月所有日期）
       const firstDay = new Date(parseInt(year), parseInt(month) - 1, 1);
@@ -222,11 +227,32 @@ class TodoController {
   async reminders(req, res) {
     try {
       const userId = req.userId;
-      const { scope } = req.query;
-      const [todos, recurring, cardBills] = await Promise.all([
-        Todo.getUpcomingReminders(userId, scope),
-        RecurringExpense.getUpcomingReminders(userId, scope),
-        CardBill.getRepaymentReminders(userId, { scope })
+      const { year, month, days, scope } = req.query;
+      // ⚠️ 统一用「北京时间」取当前年月，避免 UTC 服务器下 now.getFullYear()/getMonth() 取错月导致数据丢失
+      const bjNow = dayjs().tz('Asia/Shanghai');
+      const now = new Date();
+      const y = year ? parseInt(year, 10) : bjNow.get('year');
+      const m = month ? parseInt(month, 10) : bjNow.get('month') + 1;
+      const daysAround = days != null ? parseInt(days, 10) : undefined;
+      // 横幅按月加载「未完成」待办：普通待办/信用卡/recurring 全部按当前查看月过滤（切到哪月显示哪月）。
+      // 首页提醒传 days（今日±N天窗口）：普通待办按窗口过滤，信用卡/recurring 仍按月（窗口外的不展示）。
+      let todos;
+      if (daysAround != null) {
+        // 首页提醒：优先今日±N天窗口；窗口内无「有效」数据则回退「当月1号~今日」的未完成待办
+        // 注意：content==='1' 为飞机模式占位行，不计入有效数据，避免误判有数据而跳过回退
+        const inWindow = await Todo.findOpenReminders(userId, { daysAround });
+        const validInWindow = inWindow.filter(r => r.content && r.content !== "1");
+        todos = validInWindow.length
+          ? inWindow
+          : await Todo.findOpenReminders(userId, { pastOnly: true, year: y, month: m });
+      } else {
+        todos = await Todo.findOpenReminders(userId, { year: y, month: m });
+      }
+      const [recurring, cardBills] = await Promise.all([
+        RecurringExpense.getUpcomingRemindersCurrentMonth(userId, {
+          month: y && m ? `${y}-${String(m).padStart(2, "0")}` : undefined,
+        }),
+        CardBill.getRepaymentRemindersV2(userId, { year: y, month: m })
       ]);
       const rows = [...todos, ...recurring, ...cardBills].sort((a, b) => {
         const left = a.happen_date || '';
