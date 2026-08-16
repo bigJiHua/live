@@ -552,6 +552,16 @@ onBeforeUnmount(() => {
   font-family: monospace;
 }
 
+/* 安装站点应用：collpase 内容区适配主题（默认白底需覆盖） */
+.page-app-settings :deep(.van-collapse-item__content) {
+  background: var(--theme-bg-secondary);
+  color: var(--theme-text-primary);
+}
+.page-app-settings :deep(.van-collapse-item__title) {
+  background: var(--theme-bg-secondary);
+  color: var(--theme-text-primary);
+}
+
 /* 收支颜色分组：预览（左）与下拉框（右）左右并排 */
 .money-color-group {
   display: flex !important;

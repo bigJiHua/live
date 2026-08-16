@@ -28,7 +28,8 @@
             left-icon="user-o"
             maxlength="50"
             readonly
-            @click="activeField = 'username'"
+            autocomplete="username"
+            @click="onFieldClick('username')"
           />
           <span
             class="field-cursor"
@@ -40,20 +41,20 @@
           />
           <span class="field-measure" ref="mUser">{{ username || " " }}</span>
         </div>
-        <div class="field-wrap" :class="{ active: activeField === 'password' }">
-          <!-- 安全界面：input 只显示 ● 遮罩串（pwdMask），真实密码仅存于 JS ref，避免 F12 读到明文 -->
+        <div class="field-wrap pwd-canvas-field" :class="{ active: activeField === 'password' }">
+          <!-- 安全界面：input 值仅为 ● 掩码串（DOM 无明文）；真实明文仅由 canvas 像素绘制，F12 不可读 -->
           <app-field
-            :model-value="pwdMask"
+            :model-value="'●'.repeat((pwdEncrypted.value?.length) || (password.value?.length) || 0)"
             type="password"
             name="password"
             label="密码"
             placeholder="请输入密码"
             left-icon="lock"
-            autocomplete="off"
+            autocomplete="current-password"
             maxlength="30"
-            :password-visible="passwordReveal"
+            :password-visible="false"
             readonly
-            @click="activeField = 'password'"
+            @click="onFieldClick('password')"
           >
             <template #right-icon>
               <van-icon
@@ -63,20 +64,11 @@
               />
             </template>
           </app-field>
-          <span
-            class="field-cursor"
-            :style="{
-              left: curPwd + 'px',
-              top: curPwdTop + 'px',
-              transform: 'translateY(-50%)',
-            }"
-          />
-          <span v-if="passwordReveal" class="field-measure" ref="mPwd">{{
-            password || " "
-          }}</span>
-          <span v-else class="field-measure field-measure-pwd" ref="mPwd">{{
-            password ? "*".repeat(password.length) : " "
-          }}</span>
+          <!-- canvas 覆盖输入文字区绘制掩码/明文 + 光标；pointer-events:none 让点击穿透到 input -->
+          <canvas ref="pwdCanvas" class="pwd-canvas" />
+          <p v-if="passwordReveal" class="pwd-reveal-tip">
+            为了您的安全，请勿在公共场合下显示密码
+          </p>
         </div>
       </van-cell-group>
       <!-- 
@@ -184,7 +176,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick, onMounted } from "vue";
+import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from "vue";
 import { useRouter } from "vue-router";
 import { authApi } from "@/utils/api/auth";
 import FullKeyboard from "@/components/KeyBoard/FullKeyboard.vue";
@@ -203,12 +195,42 @@ const password = ref(
     ? import.meta.env.VITE_LOGIN_PASSWORD || ""
     : "",
 );
+// 安全键盘 RSA 密文字符数组（secureOnly 下密码仅以密文形式存在，明文不经过事件/ref）
+const pwdEncrypted = ref([]);
+// 眼睛预览用的明文字符数组：仅本地内存，由 secure 事件的 char 重建，不上网络、不进 DOM 输入框
+const pwdPlain = ref([]);
 
 const loading = ref(false);
 const activeField = ref(null);
+const pendingField = ref(null);
 const publicKey = ref("");
-// 安全键盘 RSA 密文字符数组（secureOnly 下密码仅以密文形式存在，明文不经过事件/ref）
-const pwdEncrypted = ref([]);
+// 点击字段：弹键盘前确保 RSA 公钥已就绪，避免公钥异步未到达时 FullKeyboard 误判降级
+const ensurePublicKey = async () => {
+  if (publicKey.value) return;
+  try {
+    const deviceData = await getClientContext();
+    const pk = await getRsaPublicKey(deviceData);
+    if (pk) publicKey.value = pk;
+  } catch (e) {
+    console.warn("[Login] 获取 RSA 公钥失败，安全键盘将降级为普通模式", e);
+  }
+};
+const onFieldClick = (field) => {
+  // 公钥就绪前不弹键盘，避免 activeField 在 await 期间错位导致输入路由到错误的字段
+  if (!publicKey.value) {
+    pendingField.value = field;
+    ensurePublicKey();
+    return;
+  }
+  activeField.value = field;
+};
+// 公钥异步到达后，若点击时正处于等待，立即弹出对应字段的键盘
+watch(publicKey, (pk) => {
+  if (pk && pendingField.value) {
+    activeField.value = pendingField.value;
+    pendingField.value = null;
+  }
+});
 // 键盘唤起适配：记录键盘弹层实际高度，用于收缩容器高度把输入框顶到键盘上方
 const kbSheet = ref(null);
 const kbHeight = ref(0);
@@ -227,28 +249,18 @@ watch(activeField, async (v) => {
 });
 // 密码明文显示开关（眼睛按钮）——仅本地展示，不影响 readonly + 安全键盘输入逻辑
 const passwordReveal = ref(false);
+const pwdCanvas = ref(null);
+const cursorOn = ref(true); // 密码框 canvas 光标闪烁
 const toggleReveal = () => {
   passwordReveal.value = !passwordReveal.value;
-  nextTick(() =>
-    syncCursorCaret(
-      mPwd.value,
-      (v) => (curPwd.value = v),
-      (v) => (curPwdTop.value = v),
-      !passwordReveal.value,
-    ),
-  );
+  nextTick(drawPwdCanvas);
 };
 
-// 光标跟随位置
+// 光标跟随位置（用户名框仍用 DOM measure 模拟；密码框改为 canvas 内绘制）
 // 注意：安全界面——字段为 readonly，输入经由 FullKeyboard 安全键盘，密码以 ● 圆点显示。
-// 光标/测量元素均为只读模拟层，必须与实际 .app-field__input 的文字精确对齐，
-// 故改用 JS 动态读取输入框真实位置，避免硬编码 top 导致的光标与文字错位。
 const mUser = ref(null);
-const mPwd = ref(null);
 const curUser = ref(8);
-const curPwd = ref(8);
 const curUserTop = ref(42);
-const curPwdTop = ref(42);
 
 // 通过克隆输入框精确测量密码宽度
 function measurePasswordWidth(inputEl) {
@@ -323,14 +335,10 @@ watch(username, () =>
     );
   }),
 );
-onMounted(async () => {
-  // 获取 RSA 公钥（安全键盘字符级加密）；失败则键盘自动降级为普通模式
-  try {
-    const deviceData = await getClientContext();
-    publicKey.value = (await getRsaPublicKey(deviceData)) || "";
-  } catch (e) {
-    console.warn("[Login] 获取 RSA 公钥失败，安全键盘将降级为普通模式", e);
-  }
+let themeObserver = null;
+let cursorTimer = null;
+onMounted(() => {
+  // 立即绘制 canvas（占位符/掩码），不依赖异步公钥，避免占位符延迟卡顿出现
   nextTick(() => {
     syncCursorCaret(
       mUser.value,
@@ -338,13 +346,34 @@ onMounted(async () => {
       (v) => (curUserTop.value = v),
       false,
     );
-    syncCursorCaret(
-      mPwd.value,
-      (v) => (curPwd.value = v),
-      (v) => (curPwdTop.value = v),
-      true,
-    );
+    drawPwdCanvas();
   });
+  // 密码框 canvas 光标闪烁
+  cursorTimer = setInterval(() => {
+    cursorOn.value = !cursorOn.value;
+    if (activeField.value === "password") drawPwdCanvas();
+  }, 530);
+  // 主题/暗色切换时（:root 变量或 html class 变化）重绘 canvas，保持颜色适配
+  themeObserver = new MutationObserver(() => drawPwdCanvas());
+  themeObserver.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ["style", "class"],
+  });
+
+  // 异步获取 RSA 公钥（安全键盘字符级加密）；失败则键盘自动降级为普通模式
+  // 独立异步执行，不阻塞占位符/canvas 的首次绘制
+  (async () => {
+    try {
+      const deviceData = await getClientContext();
+      publicKey.value = (await getRsaPublicKey(deviceData)) || "";
+    } catch (e) {
+      console.warn("[Login] 获取 RSA 公钥失败，安全键盘将降级为普通模式", e);
+    }
+  })();
+});
+onBeforeUnmount(() => {
+  themeObserver?.disconnect();
+  if (cursorTimer) clearInterval(cursorTimer);
 });
 const currentYear = new Date().getFullYear();
 const showDemoInfo = import.meta.env.VITE_APP_DEMO === "true";
@@ -358,22 +387,17 @@ const copyrightStart = import.meta.env.VITE_COPYRIGHT_START;
 // 密码显示遮罩：input 不持有明文，仅渲染掩码
 // secureOnly 下明文不落 ref/事件，掩码长度 = RSA 密文数组长度
 const pwdMask = computed(() => {
-  if (passwordReveal.value && !pwdEncrypted.value.length && password.value) {
-    // 仅演示预填/明文切换时展示明文（键盘未输入密文时）
-    return password.value;
+  if (passwordReveal.value) {
+    // 眼睛打开：展示明文（安全键盘走本地明文缓存 pwdPlain，普通模式走 password ref）
+    if (pwdEncrypted.value?.length) return pwdPlain.value.join("");
+    if (password.value) return password.value;
   }
-  return "*".repeat(pwdEncrypted.value.length || password.value.length);
+  return "*".repeat((pwdEncrypted.value?.length) || (password.value?.length) || 0);
 });
 
-watch(pwdMask, () =>
-  nextTick(() => {
-    syncCursorCaret(
-      mPwd.value,
-      (v) => (curPwd.value = v),
-      (v) => (curPwdTop.value = v),
-      true,
-    );
-  }),
+// 密码框由 canvas 绘制（掩码/明文/光标），下列变化均需重绘
+watch([pwdMask, passwordReveal, pwdEncrypted, pwdPlain, activeField], () =>
+  nextTick(drawPwdCanvas),
 );
 
 const activeValue = computed(() => {
@@ -383,32 +407,105 @@ const activeValue = computed(() => {
 });
 // 输入上限与后端统一（api/src/modules/auth/rules：nameOrEmail max 50，password 6-30）
 const onKeyInput = (val) => {
+  if (!activeField.value) return;
   if (activeField.value === "username") username.value = val.slice(0, 50);
   else if (activeField.value === "password") password.value = val.slice(0, 30);
 };
 
-// secure 事件：secureOnly 下密码只以密文数组存在，删除键 pop 密文
+// secure 事件：密码以密文数组提交；明文仅本地缓存用于眼睛预览（不上网络、不进 DOM 输入框）
 const onSecureKey = (payload) => {
-  if (!payload) return;
+  if (!payload || activeField.value !== "password") return;
   if (payload.type === "char") {
     if (payload.encrypted) pwdEncrypted.value.push(payload.encrypted);
     if (pwdEncrypted.value.length > 30) pwdEncrypted.value.pop();
+    if (payload.char) {
+      pwdPlain.value.push(payload.char);
+      if (pwdPlain.value.length > 30) pwdPlain.value.pop();
+    }
   } else if (payload.type === "del") {
     pwdEncrypted.value.pop();
+    pwdPlain.value.pop();
   }
-  nextTick(() =>
-    syncCursorCaret(
-      mPwd.value,
-      (v) => (curPwd.value = v),
-      (v) => (curPwdTop.value = v),
-      true,
-    ),
-  );
+  nextTick(drawPwdCanvas);
 };
 
-// 密码校验规则（实时）：secureOnly 下以密文长度近似明文长度（每字符一密文）
+// canvas 绘制密码框：DOM 的 input 文字已设为透明且值仅为 ● 掩码，明文只在此处像素绘制
+function drawPwdCanvas() {
+  const cv = pwdCanvas.value;
+  if (!cv) return;
+  const wrap = cv.closest(".field-wrap");
+  const input = wrap && wrap.querySelector(".app-field__input");
+  if (!input) return;
+  const dpr = window.devicePixelRatio || 1;
+  const r = wrap.getBoundingClientRect();
+  const W = r.width;
+  const H = r.height;
+  if (cv.width !== Math.round(W * dpr)) {
+    cv.width = Math.round(W * dpr);
+    cv.height = Math.round(H * dpr);
+    cv.style.width = W + "px";
+    cv.style.height = H + "px";
+  }
+  const ctx = cv.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+
+  const ir = input.getBoundingClientRect();
+  const paddingLeft = parseFloat(getComputedStyle(input).paddingLeft) || 0;
+  const x0 = ir.left - r.left + paddingLeft;
+  const yMid = ir.top - r.top + ir.height / 2;
+
+  const fontStack =
+    '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+  ctx.font = "14px " + fontStack;
+  ctx.textBaseline = "middle";
+
+  // 颜色跟随主题变量（暗色背景下也能看清），不硬编码
+  const readVar = (name, fb) =>
+    (getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fb);
+  const inputColor = readVar("--van-field-input-text-color", "#323233");
+  const placeholderColor = readVar("--van-field-placeholder-text-color", "#c8c9cc");
+
+  const maskLen = (pwdEncrypted.value?.length) || (password.value?.length) || 0;
+  const plain = pwdPlain.value.join("");
+  const revealed = passwordReveal.value && plain.length;
+  const text = revealed ? plain : "*".repeat(maskLen);
+  const empty = !text;
+
+  if (empty) {
+    // 空态绘制占位提示（主题占位色，始终可见）
+    ctx.fillStyle = placeholderColor;
+    ctx.fillText(input.getAttribute("placeholder") || "", x0, yMid);
+    return;
+  }
+
+  // 超宽滚动：取已输入前缀宽度，超出 clientWidth 则向左偏移
+  const fullW = ctx.measureText(text).width;
+  const clientW = ir.width - paddingLeft;
+  let offset = 0;
+  if (fullW > clientW) offset = clientW - fullW;
+
+  ctx.fillStyle = inputColor;
+  ctx.fillText(text, x0 + offset, yMid);
+
+  // 光标（仅在密码框激活时，画在末尾；闪烁由 cursorOn 控制）
+  if (activeField.value === "password" && cursorOn.value) {
+    const prefix = revealed ? plain : "*".repeat(maskLen);
+    const caretW = ctx.measureText(prefix).width;
+    const cx = x0 + offset + caretW;
+    const h = Math.min(18, ir.height - 6);
+    const primary = readVar("--theme-primary", "#07c160");
+    ctx.fillStyle = primary;
+    ctx.fillRect(cx, yMid - h / 2, 2, h);
+  }
+}
+
+// 窗口尺寸变化时重绘，避免 canvas 错位
+window.addEventListener("resize", () => drawPwdCanvas());
+
+
 const passwordRulesComputed = computed(() => {
-  const len = pwdEncrypted.value.length || password.value.length;
+  const len = (pwdEncrypted.value?.length) || (password.value?.length) || 0;
   return {
     hasUpperCase: /[A-Z]/.test(password.value),
     hasLowerCase: /[a-z]/.test(password.value),
@@ -425,11 +522,11 @@ const onSubmit = async (values) => {
     // 调用登录 API
     // secureOnly 输入：提交 RSA 密文字符数组，后端用私钥解密还原明文
     // 兼容兜底：若未走安全键盘（无密文）则回退明文 ref（如演示预填）
-    const payloadPwd = pwdEncrypted.value.length
+    const payloadPwd = pwdEncrypted.value?.length
       ? pwdEncrypted.value
       : password.value;
     const res = await authApi.login({
-      nameOrEmail: values.username,
+      nameOrEmail: username.value,
       password: payloadPwd,
     });
     // 存储返回的 Token
@@ -690,6 +787,27 @@ const goToRegister = () => {
   font-family:
     -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   letter-spacing: 0;
+}
+.pwd-reveal-tip {
+  margin: 6px 2px 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #ee0a24;
+}
+/* 密码框：DOM input 文字透明（值仅为 ● 掩码，F12 无明文），真实明文由 canvas 绘制 */
+.pwd-canvas-field :deep(.app-field__input) {
+  /* 整块输入（含原生占位符）完全隐藏，仅由 canvas 像素绘制掩码/明文/占位符 */
+  opacity: 0;
+  caret-color: transparent;
+}
+.pwd-canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none; /* 点击穿透到 input，触发 onFieldClick */
+  z-index: 2;
 }
 .field-cursor {
   display: none;

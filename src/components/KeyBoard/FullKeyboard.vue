@@ -2,7 +2,7 @@
   <div class="full-kb" @selectstart.prevent>
     <!-- 工具栏：安全/普通模式切换 -->
     <div class="kb-toolbar">
-      <div class="tool-btn" @click="isSecure = !isSecure">
+      <div class="tool-btn" @click="toggleSecure">
         <span class="status-dot" :class="{ on: isSecure }" />
         {{ isSecure ? "安全模式" : "普通模式" }}
       </div>
@@ -64,10 +64,18 @@ const props = defineProps({
 });
 const emit = defineEmits(["update:modelValue", "login", "secure", "input"]);
 
+// 工具栏手动切换安全/普通模式：标记用户意图，避免被 publicKey 的响应式 watch 覆盖
+const toggleSecure = () => {
+  isSecure.value = !isSecure.value;
+  userToggledSecure.value = true;
+};
+
 const page = ref("abc");
 const shifted = ref(false);
 const uid = Math.random().toString(36).substring(2, 8);
 const isSecure = ref(props.defaultSecure);
+// 记录用户是否手动切换过模式；手动切换后不再被 publicKey 的响应式 watch 强制覆盖
+const userToggledSecure = ref(false);
 
 let encryptor = null;
 const getEnc = () => {
@@ -220,14 +228,25 @@ onMounted(() => {
   window.addEventListener("resize", drawKeys);
   document.addEventListener("visibilitychange", onVisibility);
   window.addEventListener("blur", onWindowBlur);
-  // 防御：secure 模式却无公钥 → 静默降级 + 警告，避免父组件忘传 publicKey 导致"假安全"
+  // 初始：secure 模式却无公钥 → 暂时降级（仅告警一次，待公钥异步到达后由 watch 自动恢复）
   if (props.defaultSecure && !props.publicKey) {
     console.warn(
-      "[FullKeyboard] 安全模式已开启但未提供 publicKey，已自动降级为普通模式，请检查父组件是否传入 :public-key",
+      "[FullKeyboard] 安全模式已开启但 publicKey 尚未就绪，暂降级为普通模式，公钥到达后将自动恢复",
     );
     isSecure.value = false;
   }
 });
+
+// 公钥异步到达（父组件握手完成后传入）时自动切回安全模式；
+// 仅当 defaultSecure 且用户未手动切回普通模式时才自动恢复，避免覆盖用户意图
+watch(
+  () => props.publicKey,
+  (pk) => {
+    if (pk && props.defaultSecure && !userToggledSecure.value) {
+      isSecure.value = true;
+    }
+  },
+);
 onBeforeUnmount(() => {
   themeObserver?.disconnect();
   window.removeEventListener("resize", drawKeys);
@@ -268,8 +287,10 @@ const onKey = (k) => {
     }
     emit("secure", {
       type: "char",
-      // secureOnly 下不发明文（防 hook 截获），普通模式保留 char 兼容旧调用
-      char: suppressPlain ? null : displayKey(k),
+      // secure 事件为组件本地协议（不进网络，网络仅用 encrypted 密文）。
+      // 故无论 secureOnly 与否都带明文 char，供父组件「眼睛预览」重建明文；
+      // 真实提交只取 encrypted，明文不落请求体/不进 DOM 输入框。
+      char: displayKey(k),
       encrypted,
     });
   }

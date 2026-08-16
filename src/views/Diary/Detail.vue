@@ -17,9 +17,6 @@
             <span class="username">{{ authorName }}</span>
             <div class="time-location">
               <span class="time">{{ formatTime(detail.create_time) }}</span>
-              <span v-if="detail.location?.name" class="loc-text">
-                · {{ detail.location.name }}</span
-              >
             </div>
           </div>
           <div v-if="detail.mood" class="main-mood-tag">
@@ -47,10 +44,13 @@
         </div>
 
         <div class="main-footer">
+          <span v-if="detail.location?.name" class="loc-text footer-loc">
+            <van-icon name="location-o" /> {{ detail.location.name }}</span
+          >
           <div class="action-btns">
             <div class="share-btn" @click="handleShare">
               <van-icon :name="isShared ? 'share-o' : 'share-o'" />
-              {{ isShared ? '关闭分享' : '分享给好友' }}
+              {{ isShared ? '关闭分享' : '分享' }}
             </div>
             <div class="delete-btn" @click="openDeleteDialog('main', null, '确定要删除这条动态吗？')">
               <van-icon name="delete-o" /> 删除
@@ -152,7 +152,7 @@
         <h3 class="share-title">{{ isShared ? '管理分享' : '开启分享' }}</h3>
 
         <!-- 开关 -->
-        <div class="share-row">
+        <div class="share-row share-row-status">
           <span>分享状态</span>
           <van-switch
             v-model="shareOn"
@@ -723,7 +723,22 @@ onMounted(() => {
 .main-footer {
   padding: 0 16px 16px;
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
+}
+.footer-loc {
+  flex: 1;
+  font-size: 12px;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.footer-loc :deep(.van-icon) {
+  flex-shrink: 0;
 }
 .action-btns {
   display: flex;
@@ -919,6 +934,11 @@ onMounted(() => {
   border: 1px solid var(--theme-border);
   font-size: 15px;
   color: var(--theme-text-primary);
+}
+
+.share-row-status {
+  border: none;
+  padding-bottom: 4px;
 }
 
 .duration-value {
