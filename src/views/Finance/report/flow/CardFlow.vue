@@ -343,8 +343,8 @@ onDeactivated(() => {
 .summary-item { text-align: center; }
 .summary-item .label { font-size: 12px; color: var(--theme-text-tertiary); display: block; margin-bottom: 4px; }
 .summary-item .value { font-size: 16px; font-weight: bold; font-family: 'DIN Alternate', sans-serif; }
-.summary-item .income { color: var(--van-green, #07c160); }
-.summary-item .expense { color: var(--van-danger-color, #ee0a24); }
+.summary-item .income { color: var(--money-income); }
+.summary-item .expense { color: var(--money-expense); }
 .date-group { margin-top: 8px; }
 .date-header { padding: 8px 16px; font-size: 13px; color: var(--theme-text-secondary); background: var(--theme-bg-primary); }
 .date-items { background: var(--theme-bg-secondary); }
@@ -360,6 +360,6 @@ onDeactivated(() => {
 .item-right { text-align: right; }
 .item-right .amount { font-size: 16px; font-weight: bold; font-family: 'DIN Alternate', sans-serif; }
 .currency-tag { font-size: 12px; margin-right: 2px; color: var(--theme-text-tertiary); }
-.item-right .income { color: var(--van-green, #07c160); }
+.item-right .income { color: var(--money-income); }
 .item-right .expense { color: var(--theme-text-primary); }
 </style>

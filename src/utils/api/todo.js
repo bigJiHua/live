@@ -42,7 +42,10 @@ export function getCalendarYear(params) {
  * @param {object} params - { scope? } scope=all 获取30天周期
  */
 export function getReminders(params) {
-  return request.get('/todo/reminders', { params })
+  return request.get('/todo/reminders', {
+    params,
+    headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' },
+  })
 }
 
 /**

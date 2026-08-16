@@ -12,7 +12,7 @@
       />
 
       <!-- 瀑布流列表 -->
-      <van-list v-else v-model:loading="loadingMore" :finished="noMore" finished-text="没有更多了" @load="onLoad">
+      <van-list v-else v-model:loading="loadingMore" :finished="noMore" finished-text="没有更多了" :immediate-check="false" @load="onLoad">
         <div class="waterfall-container">
           <div class="waterfall-column">
             <DiaryCard v-for="item in leftList" :key="item.id" :data="item" />
@@ -27,7 +27,11 @@
       <div style="height: 100px"></div>
     </van-pull-refresh>
 
-    <div class="add-diary-btn" @click="$router.push('/diary/add')">
+    <div
+      class="add-diary-btn"
+      :class="{ 'bar-hidden': !bottomBarVisible }"
+      @click="$router.push('/diary/add')"
+    >
       <van-icon name="plus" />
     </div>
   </div>
@@ -42,8 +46,23 @@ import { momentApi } from '@/utils/api/moment'
 const refreshing = ref(false)
 const loading = ref(false)
 const showBackTop = ref(false)
+const bottomBarVisible = ref(true)
+let lastScrollY = 0
 const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' })
-const onWindowScroll = () => { showBackTop.value = window.scrollY > 400 }
+const onWindowScroll = () => {
+  const y = window.scrollY
+  showBackTop.value = y > 400
+  const delta = y - lastScrollY
+  // 向下滑（浏览下方）收起底部 bar；向上滑（回看上方）弹起
+  if (Math.abs(delta) > 6) {
+    if (delta > 0) {
+      bottomBarVisible.value = false
+    } else if (y > 0) {
+      bottomBarVisible.value = true
+    }
+    lastScrollY = y
+  }
+}
 const diaryList = ref([])
 
 // 分页
@@ -52,6 +71,7 @@ const pageSize = ref(10);
 const total = ref(0);
 const totalPages = ref(0);
 const loadingMore = ref(false);
+const requesting = ref(false); // 独立防重标志（避免 van-list 与手动加载并发）
 const noMore = computed(() => diaryList.value.length >= total.value);
 
 // 基础 URL
@@ -76,6 +96,8 @@ const processImageUrl = (item) => {
 
 // 加载动态列表
 const loadList = async (append = false) => {
+  if (requesting.value) return; // 防重：van-list 与手动加载并发时跳过
+  requesting.value = true;
   if (append) {
     loadingMore.value = true;
   } else {
@@ -106,6 +128,7 @@ const loadList = async (append = false) => {
     console.error("加载动态列表失败:", err);
     showToast("加载失败");
   } finally {
+    requesting.value = false;
     loading.value = false;
     loadingMore.value = false;
   }
@@ -183,6 +206,13 @@ onUnmounted(() => {
   font-size: 24px;
   box-shadow: 0 4px 12px rgba(0,0,0,0.15);
   z-index: 100;
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.add-diary-btn.bar-hidden {
+  transform: translateX(-50%) translateY(100px);
+  opacity: 0;
+  pointer-events: none;
 }
 
 .back-top {

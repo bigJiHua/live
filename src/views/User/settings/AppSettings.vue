@@ -49,6 +49,25 @@
       </template>
     </div>
 
+    <div class="section-title">收支颜色</div>
+    <div class="app-card money-color-group">
+      <div class="money-color-preview">
+        <span
+          class="mc-char"
+          :class="{ active: moneyMode === 'red-in' }"
+          :style="{ color: 'var(--money-income)' }"
+        >收</span>
+        <span
+          class="mc-char"
+          :class="{ active: moneyMode === 'red-out' }"
+          :style="{ color: 'var(--money-expense)' }"
+        >支</span>
+      </div>
+      <div class="money-color-control">
+        <van-button size="small" type="primary" @click="toggleMoneyMode">切换</van-button>
+      </div>
+    </div>
+
     <div class="section-title">安装站点应用</div>
     <van-cell-group inset class="app-card">
       <app-cell title="安装状态">
@@ -112,6 +131,7 @@
 import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
 import { showToast, showDialog } from 'vant'
 import { useUiTheme } from '@/composables/useUiTheme'
+import { useMoneyColor } from '@/composables/useMoneyColor'
 
 // UI 主题自定义（系统默认 / 各方案），选择后即时应用到全局并保存到 localStorage
 const { presets, activeKey, choice, setChoice } = useUiTheme()
@@ -126,6 +146,14 @@ const demoLinks = [
 ]
 // 系统默认时展示"浅色靛蓝 / 深色黑金"的混合色块
 const systemThemePreview = 'linear-gradient(135deg, #3a66e0, #C9A86A)'
+
+// 收支金额颜色（红出绿收 / 红收绿支），切换后即时应用并保存到 localStorage
+const { mode: moneyMode, setMode: setMoneyMode } = useMoneyColor()
+const toggleMoneyMode = () => setMoneyMode(moneyMode.value === 'red-in' ? 'red-out' : 'red-in')
+const moneyColorOptions = [
+  { value: 'red-out', text: '红出绿收', desc: '支出为红，收入为绿', in: '#07c160', out: '#ee0a24' },
+  { value: 'red-in', text: '红收绿支', desc: '收入为红，支出为绿（默认）', in: '#ee0a24', out: '#07c160' },
+]
 const themeActiveColor = computed(() => {
   const key = choice.value === 'system' ? activeKey.value : choice.value
   const t = presets.find((p) => p.key === key) || presets[2]
@@ -522,5 +550,38 @@ onBeforeUnmount(() => {
   color: var(--theme-text-tertiary);
   line-height: 1.6;
   font-family: monospace;
+}
+
+/* 收支颜色分组：预览（左）与下拉框（右）左右并排 */
+.money-color-group {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 16px;
+  padding: 12px 16px;
+  background: var(--theme-bg-secondary);
+  border-radius: 12px;
+}
+/* 收支颜色预览：选中的字（收/支）放大，不加粗，两字靠拢 */
+.money-color-preview {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+}
+.money-color-preview .mc-char {
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1;
+  transition: font-size 0.18s ease;
+}
+.money-color-preview .mc-char.active {
+  font-size: 30px;
+  font-weight: 400;
+}
+.money-color-control {
+  flex: none;
+  display: flex;
+  justify-content: flex-end;
 }
 </style>

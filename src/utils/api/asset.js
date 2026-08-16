@@ -15,7 +15,7 @@ import request from '@/utils/request'
  *   record_time: string,          // 快照记录时间
  *   debitCardCount: number,       // 借记卡数量
  *   creditCardCount: number,      // 信用卡数量
- *   creditDebt: number,           // 实时信用卡代还金额
+ *   creditDebt: number,           // 实时信用卡待还金额
  *   monthIncome: number,          // 本月收入
  *   monthExpense: number,         // 本月支出
  *   monthBalance: number,         // 本月结余

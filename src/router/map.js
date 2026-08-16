@@ -101,6 +101,12 @@ const RouterMap = [
         meta: { title: "系统账户余额", hideTabbar: true },
       },
       {
+        path: "finance/balance-flow",
+        name: "BalanceFlow",
+        component: () => import("../views/Finance/account/BalanceFlow.vue"),
+        meta: { title: "余额流水明细", hideTabbar: true },
+      },
+      {
         path: "finance/assets/register",
         name: "FinanceAssetsRegister",
         component: () => import("../views/Finance/assets/Register.vue"),
@@ -117,6 +123,12 @@ const RouterMap = [
         name: "FinanceAssetsList",
         component: () => import("../views/Finance/assets/List.vue"),
         meta: { title: "资产登记记录", hideTabbar: true },
+      },
+      {
+        path: "finance/assets/trend",
+        name: "FinanceAssetsTrend",
+        component: () => import("../views/Finance/assets/Trend.vue"),
+        meta: { title: "资产走势", hideTabbar: true },
       },
       {
         path: "finance/flow",
@@ -443,11 +455,13 @@ const RouterMap = [
             path: "debit",
             name: "BankCardDebit",
             component: () => import("../views/BankCard/debit.vue"),
+            meta: { keepAlive: true },
           },
           {
             path: "credit",
             name: "BankCardCredit",
             component: () => import("../views/BankCard/credit.vue"),
+            meta: { keepAlive: true },
           },
         ],
       },
@@ -477,6 +491,20 @@ const RouterMap = [
         component: () => import("../views/BankCard/credit/AddFull.vue"),
         meta: { title: "信用卡全功能录入", hideTabbar: true },
       },
+      // 额度独立管理 + 同银行共享额度池（痛点1 / 痛点2）
+      {
+        path: "credit/limit-manage",
+        name: "CreditLimitManage",
+        component: () => import("../views/BankCard/credit/LimitManage.vue"),
+        meta: { title: "额度与共享池管理", hideTabbar: true },
+      },
+      // 外币消费登记 / 对账（痛点4）
+      {
+        path: "credit/foreign-register",
+        name: "CreditForeignRegister",
+        component: () => import("../views/BankCard/credit/ForeignRegister.vue"),
+        meta: { title: "外币消费登记对账", hideTabbar: true },
+      },
       {
         path: "card/add",
         name: "BankCardAdd",
@@ -500,7 +528,7 @@ const RouterMap = [
         path: "card/bill/list",
         name: "BillList",
         component: () => import("../views/BankCard/bill/List.vue"),
-        meta: { title: "信用卡账单列表", hideTabbar: true },
+        meta: { title: "信用卡账单列表", hideTabbar: true, keepAlive: true },
       },
       {
         path: "card/bill/detail",

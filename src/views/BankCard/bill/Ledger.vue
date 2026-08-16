@@ -48,7 +48,7 @@
     </div>
 
     <van-pull-refresh v-model="refreshing" @refresh="onRefresh">
-      <van-list v-model:loading="loading" :finished="finished" finished-text="没有更多了" @load="loadData">
+      <van-list v-model:loading="loading" :finished="finished" finished-text="没有更多了" :immediate-check="false" @load="loadData">
         <div v-for="(group, date) in groupedList" :key="date" class="date-group">
           <div class="date-header">{{ formatDateHeader(date) }}</div>
           <div class="date-items">
@@ -201,6 +201,10 @@ const loadBillDetail = async () => {
           cardBankName.value = bank.name || bank.bank_name || ''
         }
       }
+      // 银行名兜底：查不到银行时用卡别名或通用占位，避免图标块空白/问号
+      if (!cardBankName.value) {
+        cardBankName.value = data.card_alias || '银行'
+      }
     }
   } catch (e) {
     showToast('账单加载失败')
@@ -236,8 +240,12 @@ const loadSummary = async () => {
   }
 }
 
+// 独立的防重标志：与 van-list 的 loading 分离，避免 van-list 预置 loading=true 导致卡加载
+const requesting = ref(false)
 const loadData = async () => {
   if (!billData.value.card_id) return
+  if (requesting.value) return // 防重：并发触发同一请求时跳过
+  requesting.value = true
   loading.value = true
   try {
     const startDate = formatDate(billData.value.bill_start_date)
@@ -260,6 +268,7 @@ const loadData = async () => {
     finished.value = true
     showToast('加载失败')
   } finally {
+    requesting.value = false
     loading.value = false
   }
 }
@@ -289,7 +298,14 @@ onDeactivated(() => {
   savedScrollY.value = window.scrollY || document.documentElement.scrollTop
 })
 
+// keep-alive 首次挂载时 onActivated 也会触发，与 onMounted 重复加载。
+// 用首次标志跳过（首次已由 onMounted 负责），仅处理后续返回/切换。
+let firstActivated = true
 onActivated(() => {
+  if (firstActivated) {
+    firstActivated = false
+    return
+  }
   // keep-alive 下切换不同 ?id 时组件复用，需重新加载
   const currentId = route.query.id
   if (currentId && currentId !== billData.value.id) {
@@ -511,7 +527,7 @@ onActivated(() => {
 }
 
 .item-right .income {
-  color: var(--van-green, #07c160);
+  color: var(--money-income);
 }
 
 .item-right .expense {

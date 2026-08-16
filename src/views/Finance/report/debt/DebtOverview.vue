@@ -456,7 +456,7 @@ onActivated(() => {
   font-family: 'DIN Alternate', sans-serif;
   color: var(--theme-text-primary);
 }
-.sw-value.expense { color: var(--van-danger-color, #ee0a24); }
+.sw-value.expense { color: var(--money-expense); }
 .sw-value.warning { color: var(--van-orange, #fa8c16); }
 .sw-right {
   display: flex;
@@ -673,5 +673,5 @@ onActivated(() => {
 .ci-title { font-size: 14px; color: var(--theme-text-primary); }
 .ci-desc { font-size: 11px; color: var(--theme-text-tertiary); margin-top: 2px; }
 .ci-right { font-size: 14px; font-weight: 600; font-family: 'DIN Alternate', sans-serif; }
-.ci-right.expense { color: var(--van-danger-color, #ee0a24); }
+.ci-right.expense { color: var(--money-expense); }
 </style>

@@ -5,7 +5,7 @@
       <div class="stats-summary" v-if="list.length > 0">
         <div class="summary-item"><span class="label">笔数</span><span class="value">{{ total }}</span></div>
       </div>
-      <van-list v-model:loading="listLoading" :finished="finished" finished-text="没有更多了" @load="loadData">
+      <van-list v-model:loading="listLoading" :finished="finished" finished-text="没有更多了" :immediate-check="false" @load="loadData">
         <div v-for="item in list" :key="item.id" class="transfer-item">
           <div class="ti-header">
             <span class="ti-from">{{ getCardText(item.from_card_id) }}</span>
@@ -32,6 +32,7 @@ import { categoryApi } from '@/utils/api/category'
 
 const loading = ref(true)
 const listLoading = ref(false)
+const requesting = ref(false) // 独立防重标志（区分 van-list 的 listLoading）
 const finished = ref(false)
 const list = ref([])
 const total = ref(0)
@@ -51,12 +52,14 @@ const getCardText = (cardId) => {
   return card.alias || card.bank_name || cardId
 }
 const loadData = async () => {
+  if (requesting.value) return // 防重：van-list 首帧与手动加载并发时跳过
+  requesting.value = true
   if (page.value === 1) listLoading.value = true
   try {
     const res = await getTransferList({ page: page.value, limit }); const data = res.data || {}; const rows = data.list || []
     if (page.value === 1) list.value = rows; else list.value.push(...rows)
     total.value = data.total || rows.length; finished.value = rows.length < limit; if (!finished.value) page.value++
-  } catch (e) { finished.value = true } finally { listLoading.value = false; loading.value = false }
+  } catch (e) { finished.value = true } finally { requesting.value = false; listLoading.value = false; loading.value = false }
 }
 onMounted(async () => {
   const [cardRes, bankRes] = await Promise.all([getCardList().catch(() => ({ data: [] })), categoryApi.list('bank').catch(() => ({ data: [] }))])
@@ -76,7 +79,7 @@ onMounted(async () => {
 .ti-arrow { font-size: 14px; color: var(--theme-text-tertiary); }
 .ti-body { display: flex; justify-content: space-between; align-items: center; }
 .ti-amount { font-size: 16px; font-weight: 700; font-family: 'DIN Alternate', sans-serif; }
-.ti-amount.expense { color: var(--van-danger-color, #ee0a24); }
+.ti-amount.expense { color: var(--money-expense); }
 .ti-date { font-size: 12px; color: var(--theme-text-tertiary); }
 .ti-remark { font-size: 11px; color: var(--theme-text-tertiary); margin-top: 6px; }
 </style>

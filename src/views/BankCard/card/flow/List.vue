@@ -325,8 +325,8 @@ onDeactivated(() => {
   font-weight: 600;
 }
 
-.text-income { color: var(--van-green, #07c160); }
-.text-expense { color: var(--van-danger-color, #ee0a24); }
+.text-income { color: var(--money-income); }
+.text-expense { color: var(--money-expense); }
 
 .skeleton-item {
   padding: 16px;

@@ -175,6 +175,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onActivated, onDeactivated, nextTick } from 'vue'
+import { getMoneyColors } from '@/composables/useMoneyColor'
 defineOptions({ name: 'FinanceReportFlowFilter' })
 import { useRouter, useRoute } from 'vue-router'
 import { showToast } from 'vant'
@@ -720,8 +721,11 @@ const handleExport = async () => {
   if (resultList.value.length === 0) return
   const XLSX = await import('xlsx-js-style')
 
-  const green = { font: { color: { rgb: '07c160' }, bold: true } }
-  const red = { font: { color: { rgb: 'ee0a24' }, bold: true } }
+  const mc = getMoneyColors()
+  const incomeRgb = mc['--money-income'].replace('#', '')
+  const expenseRgb = mc['--money-expense'].replace('#', '')
+  const green = { font: { color: { rgb: incomeRgb }, bold: true } }
+  const red = { font: { color: { rgb: expenseRgb }, bold: true } }
   const headerStyle = { font: { bold: true, sz: 12 }, fill: { fgColor: { rgb: 'f0f0f0' } } }
 
   const makeSheet = (records, sheetName) => {
@@ -1095,11 +1099,11 @@ onActivated(() => {
 }
 
 .item-amount.income {
-  color: var(--van-green, #07c160);
+  color: var(--money-income);
 }
 
 .item-amount.expense {
-  color: var(--van-danger-color, #ee0a24);
+  color: var(--money-expense);
 }
 
 .item-date {
@@ -1110,11 +1114,11 @@ onActivated(() => {
 }
 
 .summary-amount .income {
-  color: var(--van-green, #07c160);
+  color: var(--money-income);
 }
 
 .summary-amount .expense {
-  color: var(--van-danger-color, #ee0a24);
+  color: var(--money-expense);
 }
 
 /* ── 日隔断 ── */
@@ -1166,11 +1170,11 @@ onActivated(() => {
 }
 
 .transfer-amount.income {
-  color: var(--van-green, #07c160);
+  color: var(--money-income);
 }
 
 .transfer-amount.expense {
-  color: var(--van-danger-color, #ee0a24);
+  color: var(--money-expense);
 }
 
 .transfer-bank {
@@ -1222,11 +1226,11 @@ onActivated(() => {
 }
 
 .withdrawal-amount.income {
-  color: var(--van-green);
+  color: var(--money-income);
 }
 
 .withdrawal-amount.expense {
-  color: var(--van-green);
+  color: var(--money-expense);
 }
 
 .withdrawal-bank {

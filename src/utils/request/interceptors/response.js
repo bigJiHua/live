@@ -47,7 +47,7 @@ export function createResponseInterceptor() {
 
       // 🚨 手机端关键：业务401也拦
       if (res.status === 401) {
-        forceLogin();
+        forceLogin(res.message);
         return Promise.reject(res);
       }
 
@@ -86,7 +86,7 @@ export function createResponseInterceptor() {
 
       // 🚨 真401（非 PIN 相关）
       if (status === 401) {
-        forceLogin();
+        forceLogin(resData?.message);
         return;
       }
 

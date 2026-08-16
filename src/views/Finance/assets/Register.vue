@@ -68,12 +68,14 @@
             class="rate-item"
           >
             <span>{{ rate.currency }}</span>
-            <app-field
-              v-model="rate.value"
+            <van-field
+              :model-value="rate.value"
               type="number"
               placeholder="0.0000"
-              :formatter="formatRate"
-              @input="onRateChange"
+              readonly
+              class="rate-input"
+              input-align="right"
+              @click="openRateKeyboard(rate)"
             />
             <van-icon 
               v-if="rate.currency !== 'HKD'"
@@ -86,6 +88,17 @@
             <van-icon name="plus" />
           </div>
         </div>
+
+        <van-number-keyboard
+          v-if="activeRate"
+          v-model="activeRate.value"
+          :show="showRateKeyboard"
+          theme="custom"
+          extra-key="."
+          close-button-text="完成"
+          :maxlength="9"
+          @blur="onRateKeyboardBlur"
+        />
       </div>
 
       <div class="section-content">
@@ -385,7 +398,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, watch, onMounted } from "vue";
 import {
   showToast,
   showSuccessToast,
@@ -435,6 +448,34 @@ const convertToCNY = (amount, currency) => {
 };
 
 const onRateChange = () => {};
+
+// ========== 汇率数字键盘（应用内 Vant 键盘）==========
+const showRateKeyboard = ref(false)
+const activeRate = ref(null)
+const openRateKeyboard = (rate) => {
+  activeRate.value = rate
+  showRateKeyboard.value = true
+}
+
+const RATE_MAX = 9999.9999
+
+// 汇率上限截断：输入过程中一旦超过 9999.9999 立即固定为该值
+// 注意：Vant 数字键盘先 emit input 后 update:modelValue，故不能在 @input 里赋值
+// （会被紧接着的 update 覆盖），改用 watch 在值落定后统一截断。
+watch(
+  () => activeRate.value && activeRate.value.value,
+  (val) => {
+    if (val == null) return
+    const num = Number(val)
+    if (!isNaN(num) && num > RATE_MAX) {
+      activeRate.value.value = RATE_MAX.toFixed(4)
+    }
+  }
+)
+
+const onRateKeyboardBlur = () => {
+  showRateKeyboard.value = false
+}
 
 const deleteRate = (currency) => {
   if (currency === "HKD") {
@@ -939,18 +980,30 @@ onMounted(() => {
 }
 .rate-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, 150px);
   gap: 10px;
 }
 .rate-item {
   display: flex;
   align-items: center;
   gap: 8px;
+  width: 150px;
 }
 .rate-item span {
   width: 40px;
+  flex: none;
   font-size: 13px;
   color: var(--theme-text-regular);
+}
+.rate-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0 8px;
+  background: var(--theme-bg-tertiary);
+  border-radius: 4px;
+}
+.rate-input :deep(.van-field__control) {
+  cursor: pointer;
 }
 .rate-delete {
   color: var(--theme-text-tertiary);

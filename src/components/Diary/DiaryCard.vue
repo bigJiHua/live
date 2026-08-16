@@ -20,10 +20,6 @@
         <div v-if="childrenCount > 0" class="sub-record-tag">
           <van-icon name="chat-o" /> {{ childrenCount }} 笔追文
         </div>
-        <!-- 无图时的评分 -->
-        <div v-else-if="!coverImage" class="star-static">
-          <van-rate :model-value="starValue" readonly size="8px" color="#ffd21e" />
-        </div>
       </div>
 
       <div class="user-meta">
@@ -32,8 +28,8 @@
           <span class="name">{{ authorName }}</span>
         </div>
         <div class="time-wrap">
-          <span class="time">{{ displayTime }}</span>
           <span v-if="displayDate" class="date">{{ displayDate }}</span>
+          <span class="time">{{ displayTime }}</span>
         </div>
       </div>
 
@@ -71,11 +67,6 @@ const imageCount = computed(() => {
 // 追文数量
 const childrenCount = computed(() => {
   return props.data.children?.length || props.data.comments || 0;
-});
-
-// 评分
-const starValue = computed(() => {
-  return props.data.star || 5;
 });
 
 // 作者信息 - 优先从 store 获取当前用户信息
@@ -151,21 +142,6 @@ const handleDetail = () => {
   width: 100%;
   max-height: 200px;
   overflow: hidden;
-}
-
-.floating-rate {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  background: rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(4px);
-  color: white;
-  padding: 2px 6px;
-  border-radius: 10px;
-  font-size: 10px;
-  display: flex;
-  align-items: center;
-  gap: 2px;
 }
 
 /* 多图数量标记 */
@@ -262,9 +238,10 @@ const handleDetail = () => {
 
 .time-wrap {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 2px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .time-wrap .date {

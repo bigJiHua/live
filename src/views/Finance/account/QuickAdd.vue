@@ -1423,9 +1423,9 @@ const onSubmit = async () => {
   gap: 4px;
   font-size: 13px;
   font-weight: 600;
-  color: var(--theme-danger);
+  color: var(--money-expense);
 }
-.side-label.in { color: var(--van-green); justify-content: flex-end; }
+.side-label.in { color: var(--money-income); justify-content: flex-end; }
 .side-label .van-icon { font-size: 14px; }
 .side-fixed {
   display: grid;

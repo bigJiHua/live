@@ -34,7 +34,7 @@
           <van-icon
             class="dc-eye-btn"
             :name="showAirplane ? 'eye-o' : 'closed-eye'"
-            @click="toggleAirplane"
+            @click.stop="toggleAirplane"
           />
         </template>
       </CalendarGrid>
@@ -378,21 +378,20 @@ const calcReminderLevel = (item) => {
 
   // 计算提醒开始日期
   let reminderStartDate;
-  let useCustomRemind = false;
 
+  // 后端已按 remind_days 算出 remind_time（还款日/事件日 - remind_days 天）。
+  // 只要存在 remind_time 就用它作为提醒开始日（尊重用户设置的提前天数），
+  // 避免"提前3天却按默认10天提前闪烁"的问题。
   if (item.remind_time) {
-    const customRemindDate = dayjs(item.remind_time).startOf("day");
-    // 计算 remind_time 距离事件的天数
-    const daysFromRemindToEvent = eventDate.diff(customRemindDate, "day");
-    // 如果 remind_time 距离事件 >= 10天，使用自定义提醒时间
-    if (daysFromRemindToEvent >= 10) {
+    const customRemindDate = dayjs(Number(item.remind_time)).startOf("day");
+    // 防御：remind_time 晚于事件日（异常数据）时不采用
+    if (!customRemindDate.isAfter(eventDate)) {
       reminderStartDate = customRemindDate;
-      useCustomRemind = true;
     }
   }
 
-  // 如果没有自定义 remind_time 或 时间 < 10天，使用系统默认（事件前10天）
-  if (!useCustomRemind) {
+  // 没有 remind_time 或异常时，回退到系统默认（事件前10天）
+  if (!reminderStartDate) {
     reminderStartDate = eventDate.subtract(10, "day");
   }
 
@@ -413,20 +412,25 @@ const calcReminderLevel = (item) => {
   return { level: "red", days: daysUntilEvent };
 };
 
-// 横幅用：直接返回颜色等级
+// 横幅用：全量展示未完成待办（含今天及以前未完成/逾期 + 今天之后）。
+// 着色基于 happen_date 与今天的关系：今天及以前未完成→红（紧迫/逾期）；
+// 今天之后按距离 daysUntil 分级（>=10绿 / >=5黄 / <5红）。
 const getReminderBannerLevel = (item) => {
-  const daysUntil = dayjs(item.happen_date).diff(dayjs().startOf("day"), "day");
+  const daysUntil = dayjs(item.happen_date).startOf("day").diff(dayjs().startOf("day"), "day");
+  if (daysUntil < 0 || daysUntil === 0) return "red"; // 今天及以前未完成
   if (daysUntil >= 10) return "green";
   if (daysUntil >= 5) return "yellow";
   return "red";
 };
 
-// 加载提醒数据
+// 加载提醒数据（按月：只取当前查看月的未完成事项）
 const loadReminders = async () => {
   reminderLoading.value = true;
   try {
-    // 使用 scope=all 获取 30 天周期的提醒，保证显示即时准确
-    const res = await getReminders({ scope: "all" });
+    const res = await getReminders({
+      year: currentYear.value,
+      month: currentMonth.value + 1,
+    });
     reminders.value = res.data || [];
   } catch {
     reminders.value = [];
@@ -480,7 +484,7 @@ const calendarDataset = computed(() => {
   return map;
 });
 
-// 提醒横幅数据（交给 CalendarGrid 渲染）
+// 提醒横幅数据（交给 CalendarGrid 渲染）：全量未完成待办逐条列出
 const todoReminderBanner = computed(() =>
   (reminders.value || [])
     .filter((r) => r.content !== "1")
@@ -810,8 +814,11 @@ const handleDelete = async (event) => {
   }
 };
 
-// 监听月份
-watch([currentYear, currentMonth], loadCalendarMonth);
+// 监听月份：切到哪月，日历网格 + 横幅提醒都按该月重载
+watch([currentYear, currentMonth], () => {
+  loadCalendarMonth();
+  loadReminders();
+});
 
 onMounted(() => {
   loadCalendarMonth();

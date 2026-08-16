@@ -47,7 +47,7 @@
     <!-- ====== 时间线列表 ====== -->
     <div ref="listScrollRef" class="timeline-scroll" @scroll="onScroll">
       <van-pull-refresh v-model="refreshing" :disabled="!isCurrentMonth" @refresh="onRefresh">
-        <van-list v-model:loading="loading" :finished="finished" finished-text="— 已经看到底了 —" @load="loadData">
+        <van-list v-model:loading="loading" :finished="finished" finished-text="— 已经看到底了 —" :immediate-check="false" @load="loadData">
 
           <div v-for="(group, date) in groupedList" :key="date" class="day-block">
 
@@ -296,6 +296,7 @@ const list = ref([]);
 const loading = ref(false);
 const finished = ref(false);
 const refreshing = ref(false);
+const requesting = ref(false); // 独立防重标志（区分 van-list 的 loading）
 const page = ref(1);
 const limit = 20;
 const summaryData = ref(null);
@@ -781,6 +782,8 @@ const loadSummary = async () => {
 // 守卫：若正在下拉刷新（refreshing=true）则跳过，避免与下拉刷新产生请求竞态
 const loadData = async () => {
   if (refreshing.value) return;
+  if (requesting.value) return; // 防重：van-list 首帧自动加载与手动加载并发时跳过
+  requesting.value = true;
   loading.value = true;
 
   try {
@@ -817,6 +820,7 @@ const loadData = async () => {
     finished.value = true;
     showToast("加载失败");
   } finally {
+    requesting.value = false;
     loading.value = false;
   }
 };
@@ -975,8 +979,8 @@ const goCalendar = () => router.push("/finance/flow/calendar");
   color: var(--theme-text-primary);
   font-family: "DIN Alternate", "SF Mono", monospace;
 }
-.sk-val.in { color: var(--van-green, #07c160); }
-.sk-val.out { color: var(--van-danger-color, #ee0a24); }
+.sk-val.in { color: var(--money-income); }
+.sk-val.out { color: var(--money-expense); }
 .stat-divider {
   width: 1px;
   height: 32px;
@@ -1085,8 +1089,8 @@ const goCalendar = () => router.push("/finance/flow/calendar");
   font-size: 12px;
   font-weight: 600;
 }
-.ds-in { color: var(--van-green, #07c160); }
-.ds-out { color: var(--van-danger-color, #ee0a24); }
+.ds-in { color: var(--money-income); }
+.ds-out { color: var(--money-expense); }
 
 /* ── 条目卡片容器 ── */
 .day-cards {
@@ -1136,8 +1140,8 @@ html[data-theme-mono="1"] .flow-card.fc-repay .fc-bank-chip {
   width: 22px;
   text-align: center;
 }
-.fc-arrow.in { color: var(--van-green, #07c160); }
-.fc-arrow.out { color: var(--van-danger-color, #ee0a24); }
+.fc-arrow.in { color: var(--money-income); }
+.fc-arrow.out { color: var(--money-expense); }
 
 .fc-body {
   flex: 1;
@@ -1181,8 +1185,8 @@ html[data-theme-mono="1"] .flow-card.fc-repay .fc-bank-chip {
   white-space: nowrap;
   font-family: "DIN Alternate", "SF Mono", monospace;
 }
-.fc-amount.in { color: var(--van-green, #07c160); }
-.fc-amount.out { color: var(--van-danger-color, #ee0a24); }
+.fc-amount.in { color: var(--money-income); }
+.fc-amount.out { color: var(--money-expense); }
 .fc-time {
   font-size: 10px;
   color: var(--theme-text-tertiary);
@@ -1262,8 +1266,8 @@ html[data-theme-mono="1"] .flow-card.fc-repay .fc-bank-chip {
   font-weight: 700;
   font-family: "DIN Alternate", "SF Mono", monospace;
 }
-.tf-amt.out { color: var(--van-danger-color, #ee0a24); }
-.tf-amt.in { color: var(--van-green, #07c160); }
+.tf-amt.out { color: var(--money-expense); }
+.tf-amt.in { color: var(--money-income); }
 .tf-exchange-icon {
   font-size: 18px;
   color: var(--theme-primary);
@@ -1318,8 +1322,8 @@ html[data-theme-mono="1"] .flow-card.fc-repay .fc-bank-chip {
   margin-left: 8px;
   white-space: nowrap;
 }
-.tfd-amt.out { color: var(--van-danger-color, #ee0a24); }
-.tfd-amt.in { color: var(--van-green, #07c160); }
+.tfd-amt.out { color: var(--money-expense); }
+.tfd-amt.in { color: var(--money-income); }
 
 /* ── 返回顶部 ── */
 .back-top {

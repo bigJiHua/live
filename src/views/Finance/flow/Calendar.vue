@@ -42,7 +42,10 @@
         :show-stat="false"
         :card="false"
         :show-header="false"
+        :collapsible="true"
+        :default-expanded="true"
         @select="onFlowSelect"
+        @go-today="goToday"
       />
       <div v-else class="calendar-loading">
         <van-loading size="32px">加载中...</van-loading>
@@ -542,10 +545,16 @@ const onFlowSelect = (date) => {
 // 回到今天（「今」圆环按钮）
 const goToday = () => {
   const now = dayjs();
+  // 若当前已显示「今天」所在月份，无需重新拉取数据，仅定位选中，
+  // 避免 loading 切走导致整个 CalendarGrid 重挂载（表现为“页面刷新”）。
+  const alreadyThisMonth =
+    currentYear.value === now.year() && currentMonth.value === now.month();
   currentYear.value = now.year();
   currentMonth.value = now.month();
   selectedDate.value = now.format("YYYY-MM-DD");
-  loadMonthData();
+  if (!alreadyThisMonth) {
+    loadMonthData();
+  }
 };
 
 // 选中日期的流水详情
@@ -838,11 +847,11 @@ const getCompactBankLabel = (item) => {
 }
 
 .stat-value.income {
-  color: var(--van-danger-color, #ee0a24);
+  color: var(--money-income);
 }
 
 .stat-value.expense {
-  color: var(--van-green, #07c160);
+  color: var(--money-expense);
 }
 
 .stat-divider {
@@ -942,20 +951,20 @@ const getCompactBankLabel = (item) => {
 }
 
 .amount.income {
-  color: var(--van-danger-color, #ee0a24);
+  color: var(--money-income);
 }
 
 .amount.expense {
-  color: var(--van-green, #07c160);
+  color: var(--money-expense);
 }
 
 /* 颜色区分 */
 .day-cell.has-income .day-number {
-  color: var(--van-danger-color, #ee0a24);
+  color: var(--money-income);
 }
 
 .day-cell.has-expense .day-number {
-  color: var(--van-green, #07c160);
+  color: var(--money-expense);
 }
 
 /* 选中日期详情 */
@@ -1030,12 +1039,12 @@ const getCompactBankLabel = (item) => {
 
 .expense-header {
   background: var(--van-danger-bg, #fff2f0);
-  color: var(--van-danger-color, #ee0a24);
+  color: var(--money-expense);
 }
 
 .income-header {
   background: var(--van-green-bg, #f0fff5);
-  color: var(--van-green, #07c160);
+  color: var(--money-income);
 }
 
 .col-divider {
@@ -1128,11 +1137,11 @@ html[data-theme-mono="1"] .flow-item-col.repay .fi-line2 {
 }
 
 .flow-item-col .item-amount.income {
-  color: var(--van-green, #07c160);
+  color: var(--money-income);
 }
 
 .flow-item-col .item-amount.expense {
-  color: var(--van-danger-color, #ee0a24);
+  color: var(--money-expense);
 }
 
 /* ── 转账区域 ── */
@@ -1195,11 +1204,11 @@ html[data-theme-mono="1"] .flow-item-col.repay .fi-line2 {
 }
 
 .tf-amount.expense {
-  color: var(--van-danger-color, #ee0a24);
+  color: var(--money-expense);
 }
 
 .tf-amount.income {
-  color: var(--van-green, #07c160);
+  color: var(--money-income);
 }
 
 .tf-arrow {
@@ -1282,11 +1291,11 @@ html[data-theme-mono="1"] .flow-item-col.repay .fi-line2 {
 }
 
 .wd-amount.expense {
-  color: var(--van-green);
+  color: var(--money-expense);
 }
 
 .wd-amount.income {
-  color: var(--van-green);
+  color: var(--money-income);
 }
 
 .wd-arrow {

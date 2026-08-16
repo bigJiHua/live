@@ -85,6 +85,7 @@
 
 <script setup>
 import { ref, computed, nextTick, onMounted, onActivated, onDeactivated, onUnmounted, watch } from 'vue'
+import { getMoneyColors } from '@/composables/useMoneyColor'
 defineOptions({ name: 'FinanceReportMonthlyTrend' })
 import { useRouter } from 'vue-router'
 import dayjs from 'dayjs'
@@ -309,19 +310,20 @@ const getDailyChartOption = () => {
   const makeSeries = (name, key, color) =>
     isLine ? seriesLine(name, key, color) : seriesBar(name, key, color)
 
+  const mc = getMoneyColors()
   const series = isSingle
     ? [makeSeries(
         activeType.value === 'income' ? '收入' : '支出',
         activeType.value === 'income' ? 'income' : 'expense',
-        activeType.value === 'income' ? '#07c160' : '#ee0a24'
+        activeType.value === 'income' ? mc['--money-income'] : mc['--money-expense']
       )]
     : [
-        makeSeries('收入', 'income', '#07c160'),
-        makeSeries('支出', 'expense', '#ee0a24'),
+        makeSeries('收入', 'income', mc['--money-income']),
+        makeSeries('支出', 'expense', mc['--money-expense']),
       ]
 
   return {
-    color: ['#07c160', '#ee0a24'],
+    color: [mc['--money-income'], mc['--money-expense']],
     tooltip: {
       trigger: 'axis',
       enterable: true,
@@ -596,8 +598,8 @@ onUnmounted(() => {
   height: 8px;
   border-radius: 2px;
 }
-.legend-income { background: var(--van-green, #07c160); }
-.legend-expense { background: var(--van-danger-color, #ee0a24); }
+.legend-income { background: var(--money-income); }
+.legend-expense { background: var(--money-expense); }
 .daily-chart {
   width: 100%;
   height: 290px;
@@ -657,8 +659,8 @@ onUnmounted(() => {
   font-family: 'DIN Alternate', sans-serif;
   line-height: 1;
 }
-.di-amount.income { color: var(--van-green, #07c160); }
-.di-amount.expense { color: var(--van-danger-color, #ee0a24); }
+.di-amount.income { color: var(--money-income); }
+.di-amount.expense { color: var(--money-expense); }
 .di-time {
   font-size: 10px;
   color: var(--theme-text-tertiary);

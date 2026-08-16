@@ -145,6 +145,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { getMoneyColors } from '@/composables/useMoneyColor'
 import dayjs from 'dayjs'
 import zhCn from 'dayjs/locale/zh-cn'
 import * as echarts from 'echarts/core'
@@ -297,9 +298,10 @@ const donutData = computed(() => {
   const exp = summary.value.expense
   const total = inc + exp
   if (total === 0) return []
+  const mc = getMoneyColors()
   return [
-    { value: inc, name: '收入', itemStyle: { color: '#07c160' } },
-    { value: exp, name: '支出', itemStyle: { color: '#ee0a24' } },
+    { value: inc, name: '收入', itemStyle: { color: mc['--money-income'] } },
+    { value: exp, name: '支出', itemStyle: { color: mc['--money-expense'] } },
   ]
 })
 
@@ -479,8 +481,8 @@ onUnmounted(() => {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.sc-value.income { color: var(--van-green, #07c160); }
-.sc-value.expense { color: var(--van-danger-color, #ee0a24); }
+.sc-value.income { color: var(--money-income); }
+.sc-value.expense { color: var(--money-expense); }
 .sc-value.count { color: var(--theme-primary); }
 .extra-cards {
   display: grid;
@@ -497,8 +499,8 @@ onUnmounted(() => {
 }
 .ec-label { font-size: 11px; color: var(--theme-text-tertiary); margin-bottom: 4px; }
 .ec-value { font-size: 15px; font-weight: 700; font-family: 'DIN Alternate', sans-serif; }
-.ec-value.income { color: var(--van-green, #07c160); }
-.ec-value.expense { color: var(--van-danger-color, #ee0a24); }
+.ec-value.income { color: var(--money-income); }
+.ec-value.expense { color: var(--money-expense); }
 .chart-section {
   background: var(--theme-bg-secondary);
   margin: 10px 16px 0;
@@ -633,8 +635,8 @@ onUnmounted(() => {
   font-weight: 700;
   font-family: 'DIN Alternate', sans-serif;
 }
-.drawer-item-amount.income { color: var(--van-green, #07c160); }
-.drawer-item-amount.expense { color: var(--van-danger-color, #ee0a24); }
+.drawer-item-amount.income { color: var(--money-income); }
+.drawer-item-amount.expense { color: var(--money-expense); }
 .drawer-item-bottom {
   display: flex;
   gap: 10px;

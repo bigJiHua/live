@@ -36,6 +36,12 @@
   --theme-danger-text: #c0102a;
   --theme-info-text: #646566;
 
+  /* 收支金额文字颜色（默认红收绿支；由 useMoneyColor 按用户设置覆盖） */
+  --money-income: #ee0a24;
+  --money-income-text: #c0102a;
+  --money-expense: #07c160;
+  --money-expense-text: #0a7a45;
+
   --theme-bg-primary: #f7f8fa;
   --theme-bg-secondary: #ffffff;
   --theme-bg-tertiary: #f2f3f5;
@@ -123,6 +129,25 @@
   --van-calendar-confirm-button-background: var(--theme-primary);
   --van-calendar-confirm-button-color: var(--theme-button-primary-text, #fff);
 
+  /* 选择器（van-picker）跟随主题。
+     注意：Vant 的 --van-picker-mask-color 是「上下两段渐变逗号分隔」（background-image 用 top,bottom 定位），
+     且深色主题必须用暗色 rgba 才能穿透，否则滚轮上下露出一层白色雾。 */
+  --van-picker-background: var(--theme-bg-secondary);
+  --van-picker-toolbar-background: var(--theme-bg-secondary);
+  --van-picker-title-text-color: var(--theme-text-primary);
+  --van-picker-confirm-action-color: var(--theme-primary);
+  --van-picker-cancel-action-color: var(--theme-text-secondary);
+  --van-picker-option-text-color: var(--theme-text-primary);
+  --van-picker-option-disabled-text-color: var(--theme-text-tertiary);
+  --van-picker-loading-mask-color: var(--theme-bg-secondary);
+  --van-picker-mask-color: linear-gradient(180deg, var(--theme-bg-primary), transparent), linear-gradient(0deg, var(--theme-bg-primary), transparent);
+}
+
+/* 深色主题（data-theme-mode=dark）下 picker 遮罩用深色背景穿透 */
+[data-theme-mode="dark"] {
+  --van-picker-loading-mask-color: var(--theme-bg-primary);
+  --van-picker-mask-color: linear-gradient(180deg, var(--theme-bg-primary), transparent), linear-gradient(0deg, var(--theme-bg-primary), transparent);
+
   /* 业务语义色别名，供页面直接引用（跟随主题切换） */
   --van-green: var(--theme-success);
   --van-red: var(--theme-danger);
@@ -180,12 +205,12 @@ body {
   font-weight: bold;
 }
 
-/* 支出/收入文字颜色（使用文字衍生色，保证白底对比度） */
+/* 支出/收入文字颜色（统一由收支颜色设置驱动；默认红出绿收） */
 .text-expense {
-  color: var(--theme-warning-text) !important;
+  color: var(--money-expense) !important;
 }
 .text-income {
-  color: var(--theme-success-text) !important;
+  color: var(--money-income) !important;
 }
 
 /* 文字颜色类 */

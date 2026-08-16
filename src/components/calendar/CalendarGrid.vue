@@ -10,18 +10,34 @@
       <button class="dc-nav" @click="$emit('next')"><van-icon name="arrow" /></button>
     </div>
 
-    <!-- 待办：提醒横幅 -->
-    <div v-if="variant === 'todo' && reminderBanner.length" class="dc-reminder">
-      <div class="dc-reminder-head">
-        <van-icon name="bell" />
-        <span>{{ year }}年{{ month + 1 }}月提醒</span>
-        <span class="dc-reminder-count">{{ reminderBanner.length }}个</span>
-        <div class="dc-reminder-actions"><slot name="reminder-action" /></div>
+    <!-- 待办：提醒横幅（可折叠，默认展开） -->
+    <div v-if="variant === 'todo' && reminderBanner.length" class="dc-reminder" :class="{ collapsed: !reminderExpanded }">
+      <div class="dc-reminder-head" @click="reminderExpanded = !reminderExpanded">
+        <template v-if="reminderExpanded">
+          <van-icon name="bell" />
+          <span class="dc-reminder-title">{{ year }}年{{ month + 1 }}月提醒</span>
+          <span class="dc-reminder-count">{{ reminderBanner.length }}个</span>
+        </template>
+        <template v-else>
+          <van-icon name="bell" />
+          <span class="dc-reminder-title">本月提醒：</span>
+          <van-notice-bar class="dc-reminder-scroll" left-icon="" :scrollable="false" @click.stop>
+            <van-swipe vertical class="dc-reminder-swipe" :autoplay="3500" :touchable="false" :show-indicators="false">
+              <van-swipe-item v-for="r in reminderBanner" :key="r.date + r.content">
+                <span class="dc-reminder-chip" :class="'lv-' + r.level">{{ r.content }} <b>{{ r.date.slice(5) }}</b></span>
+              </van-swipe-item>
+            </van-swipe>
+          </van-notice-bar>
+        </template>
+        <div class="dc-reminder-actions">
+          <slot name="reminder-action" />
+          <van-icon :name="reminderExpanded ? 'arrow-up' : 'arrow-down'" class="dc-reminder-toggle" />
+        </div>
       </div>
-      <div class="dc-reminder-list">
+      <div v-if="reminderExpanded" class="dc-reminder-list">
         <span
           v-for="r in reminderBanner"
-          :key="r.date"
+          :key="r.date + r.content"
           class="dc-reminder-chip"
           :class="'lv-' + r.level"
         >{{ r.content }} <b>{{ r.date.slice(5) }}</b></span>
@@ -96,6 +112,17 @@
               <span v-if="cell.isWorkingDay && !cell.notWorking && !cell.formalIncome && !cell.parttimeTotal" class="dc-working">计薪</span>
             </span>
           </template>
+
+          <!-- 信用卡账单日/还款日标记 -->
+          <span v-if="cell.credit && cell.credit.length" class="dc-credit">
+            <span
+              v-for="(m, idx) in cell.credit.slice(0, 3)"
+              :key="idx"
+              class="dc-credit-tag"
+              :class="'c-' + m.type"
+            >{{ m.type === 'bill' ? '账' : '还' }}</span>
+            <span v-if="cell.credit.length > 3" class="dc-credit-more">+{{ cell.credit.length - 3 }}</span>
+          </span>
         </div>
       </div>
     </div>
@@ -143,6 +170,8 @@ const props = defineProps({
 const weekDays = ['日', '一', '二', '三', '四', '五', '六']
 
 const expanded = ref(props.defaultExpanded)
+// 待办提醒横幅折叠状态（默认展开）
+const reminderExpanded = ref(true)
 
 // 选中了非今天日期 → 右下角显示「今」，点击由父组件回到今天
 const todayStr = dayjs().format('YYYY-MM-DD')
@@ -191,6 +220,7 @@ const cells = computed(() => {
       overdue: false,
       reminder: null,
       airplane: false,
+      credit: [],
       income: 0,
       expense: 0,
       formalIncome: 0,
@@ -336,32 +366,62 @@ const fmt = abbrMoney
   display: flex;
   align-items: center;
   gap: 6px;
+  height: 28px;
   font-size: 14px;
+  line-height: 28px;
   font-weight: 600;
   color: var(--theme-text-primary, #323233);
   margin-bottom: 8px;
+  cursor: pointer;
+  user-select: none;
 }
-.dc-reminder-head .van-icon { color: var(--dc-primary); }
+.dc-reminder-head .van-icon { color: var(--dc-primary); font-size: 18px; }
+.dc-reminder-title { white-space: nowrap; line-height: 28px; }
 .dc-reminder-count {
   font-size: 12px;
   font-weight: 400;
   color: var(--theme-text-tertiary, #969799);
+  line-height: 28px;
+}
+.dc-reminder-scroll { flex: 1; min-width: 0; padding: 0; background: transparent; --van-notice-bar-background: transparent; --van-notice-bar-padding: 0; height: 28px; }
+.dc-reminder-swipe { height: 28px; line-height: 28px; }
+.dc-reminder-toggle {
+  color: var(--theme-text-tertiary, #969799);
+  margin-left: 4px;
+  font-size: 20px;
+  padding: 0 4px;
+  line-height: 28px;
+  border-radius: 6px;
+  box-sizing: content-box;
 }
 .dc-reminder-actions {
   margin-left: auto;
   display: flex;
   align-items: center;
+  gap: 2px;
+  height: 28px;
 }
+.dc-reminder-actions :deep(.van-icon) {
+  font-size: 20px;
+  padding: 0 4px;
+  line-height: 28px;
+  border-radius: 6px;
+  box-sizing: content-box;
+  color: var(--theme-text-tertiary, #969799);
+}
+.dc-reminder.collapsed .dc-reminder-actions { margin-left: 0; }
 .dc-reminder-list {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  margin-top: 8px;
 }
 .dc-reminder-chip {
   font-size: 12px;
   padding: 4px 10px;
   border-radius: 14px;
   font-weight: 500;
+  flex: 0 0 auto;
 }
 .dc-reminder-chip b { font-weight: 700; }
 .dc-reminder-chip.lv-red { background: var(--van-danger-bg, rgba(238,10,36,0.1)); color: var(--van-danger-color, #ee0a24); }
@@ -390,8 +450,8 @@ const fmt = abbrMoney
   font-weight: 600;
   color: var(--theme-text-primary, #323233);
 }
-.dc-stat-value.income { color: var(--van-danger-color, #ee0a24); }
-.dc-stat-value.expense { color: var(--van-green, #07c160); }
+.dc-stat-value.income { color: var(--money-income); }
+.dc-stat-value.expense { color: var(--money-expense); }
 .dc-stat-value.blue { color: var(--dc-primary); }
 .dc-stat-value.orange { color: var(--van-orange, #ff976a); }
 .dc-stat-divider {
@@ -418,7 +478,11 @@ const fmt = abbrMoney
 .dc-body {
   overflow: hidden;
   transition: height 0.36s cubic-bezier(0.4,0,0.2,1);
-  padding: 0 8px;
+  padding: 5px 8px;
+}
+.dc-body.collapsed {
+  padding-top: 0;
+  padding-bottom: 0;
 }
 .dc-grid {
   display: grid;
@@ -512,6 +576,26 @@ const fmt = abbrMoney
   filter: saturate(0.55);
 }
 
+/* 信用卡账单日/还款日标记（账=账单日 还=还款日） */
+.dc-credit {
+  display: flex;
+  gap: 2px;
+  margin-top: 3px;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+}
+.dc-credit-tag {
+  font-size: 9px;
+  line-height: 1;
+  padding: 1px 3px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+.dc-credit-tag.c-bill { background: rgba(var(--dc-primary-rgb), 0.14); color: var(--dc-primary); }
+.dc-credit-tag.c-repay { background: rgba(238, 10, 36, 0.12); color: var(--van-danger-color, #ee0a24); }
+.dc-credit-more { font-size: 9px; color: var(--theme-text-tertiary, #969799); }
+
 /* ── FLOW 金额（收+红 / 支-绿，日历数字本身保持原色，仅选中日变白） ── */
 .dc-amt {
   font-size: 11px;
@@ -535,8 +619,8 @@ const fmt = abbrMoney
   min-width: 0;
   line-height: 1.15;
 }
-.dc-amt.flow-income { color: var(--van-danger-color, #ee0a24); }
-.dc-amt.flow-expense { color: var(--van-green, #07c160); }
+.dc-amt.flow-income { color: var(--money-income); }
+.dc-amt.flow-expense { color: var(--money-expense); }
 
 /* ── SALARY 金额 / 计薪（日期数字保持默认白色，不染色） ── */
 .dc-amt.formal { color: var(--dc-primary); }

@@ -44,7 +44,10 @@ export function deleteJob(id) {
  * @param {object} params - { work_date: 'YYYY-MM-DD', work_hours?: JSON字符串 }
  */
 export function getSalaryDay(params) {
-  return request.get("/work/salary/day", { params });
+  return request.get("/work/salary/day", {
+    params,
+    headers: { "Cache-Control": "no-cache", Pragma: "no-cache" },
+  });
 }
 
 /**

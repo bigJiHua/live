@@ -964,7 +964,7 @@ const onBeforePasswordClose = async (action) => {
   z-index: 2002;
   background: var(--theme-bg-secondary, #fff);
   border-radius: 18px 18px 0 0;
-  padding: 12px 10px calc(16px + env(safe-area-inset-bottom));
+  padding: 10px;
   box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.12);
 }
 .kb-up-enter-active,

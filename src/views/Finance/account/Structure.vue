@@ -25,6 +25,8 @@
           v-for="account in virtualAccounts"
           :key="account.card_id"
           class="account-item"
+          :class="{ 'clickable-account': account.card_id === 'yyyy' }"
+          @click="goToBalanceFlow(account)"
         >
           <div class="account-left">
             <div class="account-icon" :style="{ background: getAccountColor(account) }">
@@ -39,6 +41,7 @@
             <div class="account-balance" :class="{ 'is-zero': Number(account.balance) === 0, 'is-negative': Number(account.balance) < 0 }">
               {{ showAmount ? '¥' + formatMoney(account.balance) : '******' }}
             </div>
+            <van-icon v-if="account.card_id === 'yyyy'" name="arrow" color="#c8c9cc" class="arrow-icon" />
           </div>
         </div>
       </div>
@@ -274,6 +277,12 @@ const goToFinance = () => {
 
 const goToCardFlow = (account) => {
   router.push(`/finance/report/card-flow?cardId=${account.card_id}`);
+};
+
+// 余额账户（yyyy）→ 独立的余额流水明细页
+const goToBalanceFlow = (account) => {
+  if (account.card_id !== "yyyy") return;
+  router.push({ name: "BalanceFlow" });
 };
 
 // 消费预览状态：点击后拉取所有银行卡近6个月支出/收入笔数，并就地切换余额展示为笔数

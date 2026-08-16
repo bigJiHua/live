@@ -152,7 +152,7 @@ export function requestPinVerify(originalRequest, verifyData = {}) {
 
 /**
  * 提交 PIN 码验证
- * @param {string} pin - 6位 PIN 码
+ * @param {string|object} pin - 6位 PIN 码字符串；或 { pin: <6位字符串|RSA密文数组> } 对象
  */
 export async function submitPin(pin) {
   if (!pinDialogInstance) return
@@ -162,14 +162,15 @@ export async function submitPin(pin) {
 
   try {
     const isRouteVerify = verifyContext?.action_type === ROUTE_VERIFY_ACTION
+    const pinValue = typeof pin === 'object' && pin !== null ? pin.pin : pin
     const payload = isRouteVerify
       ? {
-          pin,
+          pin: pinValue,
           challengeId: verifyContext.challengeId,
           requestUrl: verifyContext.requestUrl,
           method: verifyContext.method,
         }
-      : { pin }
+      : { pin: pinValue }
 
     const res = isRouteVerify
       ? await securityApi.verifyRoutePin(payload)

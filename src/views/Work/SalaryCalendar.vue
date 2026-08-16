@@ -272,8 +272,14 @@ onMounted(() => {
   loadMonthData();
 });
 
-// 每次页面激活时重新加载数据（从其他页面返回时）
+// 每次页面激活时重新加载数据（从其他页面返回时）。
+// keep-alive 首次挂载时 onActivated 也会触发，与 onMounted 重复，用首次标志跳过。
+let firstActivated = true;
 onActivated(() => {
+  if (firstActivated) {
+    firstActivated = false;
+    return;
+  }
   loadJobInfo();
   loadMonthData();
 });
@@ -351,7 +357,7 @@ onActivated(() => {
 }
 
 .stat-value.income {
-  color: var(--van-green, #07c160);
+  color: var(--money-income);
 }
 
 .stat-value.blue {

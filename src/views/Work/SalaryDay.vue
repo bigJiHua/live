@@ -657,12 +657,12 @@ watch(() => route.query.date, (newDate) => {
 }
 
 .item-value.deduction {
-  color: var(--van-danger-color, #ee0a24);
+  color: var(--money-expense);
 }
 
 .item-value.income {
   font-size: 18px;
-  color: var(--van-green, #07c160);
+  color: var(--money-income);
   font-weight: 700;
 }
 

@@ -36,7 +36,7 @@
               <img :src="item.bankIconUrl" :alt="item.bankName" @error="emit('bank-icon-error', item.id)" />
             </div>
             <div class="bank-icon-mock" v-else>
-              {{ item.bankName?.charAt(0) || "?" }}
+              {{ bankInitial(item.bankName) }}
             </div>
             <div class="bank-name">
               {{ item.bankName || "未知银行" }}
@@ -191,6 +191,15 @@ const handleCardClick = (item) => {
   } else {
     emit("update:selectedId", item.id);
   }
+};
+
+// 银行名取首字：去"中国"前缀（中国银行→中白名单），空名不显示 "?"
+const bankInitial = (name) => {
+  const n = (name || "").trim();
+  if (!n) return "";
+  if (n === "中国银行" || n.startsWith("中国银行")) return "中";
+  if (n.startsWith("中国")) return n.slice(2).charAt(0) || "";
+  return n.charAt(0);
 };
 
 const getCardStyle = (item, index) => {

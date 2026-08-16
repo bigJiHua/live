@@ -949,8 +949,8 @@ section {
 }
 .fs-col span { font-size: 12px; color: var(--theme-text-tertiary, #969799); }
 .fs-col b { font-size: 16px; font-weight: 700; }
-.fs-col.income b { color: var(--van-danger-color, #ee0a24); }
-.fs-col.expense b { color: var(--van-green, #07c160); }
+.fs-col.income b { color: var(--money-income); }
+.fs-col.expense b { color: var(--money-expense); }
 .fs-divider { width: 1px; height: 28px; background: var(--theme-border, #ebedf0); margin: 0 16px; }
 .flow-cols {
   display: grid;
@@ -971,8 +971,8 @@ section {
   color: var(--theme-text-primary, #323233);
   padding: 4px 0;
 }
-.flow-row .ex { color: var(--van-green, #07c160); font-weight: 600; }
-.flow-row .in { color: var(--van-danger-color, #ee0a24); font-weight: 600; }
+.flow-row .ex { color: var(--money-expense); font-weight: 600; }
+.flow-row .in { color: var(--money-income); font-weight: 600; }
 
 /* 工资明细 */
 .sal-head {

@@ -1,19 +1,27 @@
 <template>
   <div class="page-repay-add">
     <app-form @submit="onSubmit" ref="formRef">
+      <!-- 信报合一合并还款提示 -->
+      <div class="form-section" v-if="isMergeMode">
+        <div class="merge-notice">
+          <van-icon name="warning-o" />
+          <span>信报合一共享池：本次还款将一次性结清该银行共享池内全部卡的欠款</span>
+        </div>
+      </div>
+
       <!-- 关联信息（只读展示） -->
       <div class="form-section">
         <div class="section-title">关联信息</div>
         <van-cell-group inset>
           <app-field
-            v-model="selectedCardName"
-            label="信用卡"
+            :model-value="isMergeMode ? selectedCardName : selectedCardName"
+            :label="isMergeMode ? '共享池（信报合一）' : '信用卡'"
             readonly
             class="readonly-field"
           />
           <app-field
-            v-model="selectedBillName"
-            label="账单"
+            :model-value="selectedBillName"
+            :label="isMergeMode ? '共享额度' : '账单'"
             readonly
             class="readonly-field"
           />
@@ -33,18 +41,18 @@
         <div class="section-title">还款信息</div>
         <van-cell-group inset>
           <app-field
-            v-model="formData.repayAmount"
+            :model-value="isMergeMode ? formatMoney(oweAmount) : formData.repayAmount"
             name="repayAmount"
             label="还款金额"
-            placeholder="请输入"
+            :placeholder="isMergeMode ? '共享额度待还' : '请输入'"
             readonly
-            clickable
-            @click="openKeyboard('repayAmount')"
-            :rules="[{ required: true, message: '请输入还款金额' }]"
+            :clickable="!isMergeMode"
+            @click="!isMergeMode && openKeyboard('repayAmount')"
+            :rules="isMergeMode ? [] : [{ required: true, message: '请输入还款金额' }]"
           >
             <template #right-icon>
               <span class="repay-amount-actions">
-                <app-button size="small" type="primary" plain @click.stop="fillFullAmount">
+                <app-button v-if="!isMergeMode" size="small" type="primary" plain @click.stop="fillFullAmount">
                   全额还款
                 </app-button>
                 <span>元</span>
@@ -104,7 +112,7 @@
 
       <div class="submit-btn-wrap" v-if="oweAmount > 0">
         <app-button type="primary" block round native-type="submit" :loading="loading" :disabled="loading">
-          立即还款
+          {{ isMergeMode ? '合并还款' : '立即还款' }}
         </app-button>
       </div>
     </app-form>
@@ -175,7 +183,7 @@
 import { ref, reactive, computed, onMounted } from "vue";
 import { showToast, showLoadingToast, closeToast } from "vant";
 import { useRouter, useRoute } from "vue-router";
-import { createRepay, getBillDetail, getBillList, getCardList } from "@/utils/api/card";
+import { createRepay, getBillDetail, getBillList, getCardList, getCreditPools, mergeRepay } from "@/utils/api/card";
 import { categoryApi } from "@/utils/api/category";
 import { formatMoney } from "@/utils/money";
 import { useUiTheme } from "@/composables/useUiTheme";
@@ -283,6 +291,11 @@ const formData = reactive({
 // 欠款金额
 const oweAmount = ref(0);
 
+// ===== 信报合一合并还款模式 =====
+// 由 /card/repay/add?billId=xxx&mergePoolId=yyy 进入，提交走 mergeRepay 接口
+const isMergeMode = computed(() => !!route.query.mergePoolId);
+const mergePool = ref(null);
+
 // 打开数字键盘
 const openKeyboard = (field) => {
   currentField.value = field;
@@ -369,8 +382,48 @@ const loadBankCategories = async () => {
 const loadBillData = async () => {
   try {
     const billIdParam = route.query.billId;
+    const poolIdParam = route.query.mergePoolId;
 
-    // 直接通过billId获取账单详情
+    // ===== 信报合一合并还款模式：汇总共享池内全部卡欠款 =====
+    if (poolIdParam) {
+      const poolRes = await getCreditPools();
+      const pools = poolRes.data || poolRes || [];
+      mergePool.value = pools.find((p) => p.id === poolIdParam) || null;
+      if (mergePool.value) {
+        selectedCardName.value = `${mergePool.value.bank_name || '共享池'}（信报合一）`;
+      } else {
+        selectedCardName.value = "共享池（信报合一）";
+      }
+
+      // 汇总池内全部信用卡的所有未结清账单（逐卡拉取求和）
+      const cardRes = await getCardList({ cardType: 'credit' });
+      const cards = (cardRes.data || cardRes || []).filter((c) => c.share_pool_id === poolIdParam);
+      let total = 0;
+      let entryBill = null;
+      for (const card of cards) {
+        const billRes = await getBillList({ cardId: card.id });
+        const bills = billRes.data || billRes || [];
+        bills.forEach((b) => {
+          const amt = Number(b.need_repay) || 0;
+          if (amt > 0) {
+            total += amt;
+            if (!entryBill) entryBill = b;
+          }
+        });
+      }
+      oweAmount.value = total;
+      formData.repayAmount = formatMoney(total);
+      // 沿用入口账单的卡片信息展示（信息参考）
+      if (entryBill) {
+        formData.billId = entryBill.id;
+        formData.cardId = entryBill.card_id;
+        formData.billMonth = entryBill.bill_month || "";
+      }
+      selectedBillName.value = `共享额度待还 ¥${formatMoney(total)}`;
+      return;
+    }
+
+    // ===== 单卡还款模式：通过billId获取账单详情 =====
     if (billIdParam) {
       const res = await getBillDetail(billIdParam);
       const bill = res.data || res;
@@ -420,15 +473,18 @@ const onSubmit = async () => {
   try {
     // 验证欠款
     if (oweAmount.value <= 0) {
-      return showToast("该账单无欠款，无需还款");
+      return showToast(isMergeMode.value ? "共享池内无欠款，无需还款" : "该账单无欠款，无需还款");
     }
 
-    const repayAmount = Number(formData.repayAmount) || 0;
-    if (repayAmount <= 0) {
-      return showToast("请输入还款金额");
-    }
-    if (repayAmount > oweAmount.value) {
-      return showToast(`还款金额不能超过欠款 ¥${formatMoney(oweAmount.value)}`);
+    // 合并还款模式：金额由后端按池内全部卡待还总额一次性结清，无需前端金额输入
+    if (!isMergeMode.value) {
+      const repayAmount = Number(formData.repayAmount) || 0;
+      if (repayAmount <= 0) {
+        return showToast("请输入还款金额");
+      }
+      if (repayAmount > oweAmount.value) {
+        return showToast(`还款金额不能超过欠款 ¥${formatMoney(oweAmount.value)}`);
+      }
     }
 
     if (formData.repayMethod === "bank_card" && !formData.repayMethodCardId) {
@@ -437,6 +493,25 @@ const onSubmit = async () => {
 
     loading.value = true;
     showLoadingToast({ message: "保存中...", forbidClick: true });
+
+    // 信报合一合并还款：提交 poolId + 还款方式，后端一次性结清池内全部卡欠款
+    if (isMergeMode.value) {
+      const mergeData = {
+        poolId: route.query.mergePoolId,
+        repayMethod: formData.repayMethod,
+        repayTime: formData.repayTime,
+      };
+      if (formData.repayMethod === "bank_card") {
+        mergeData.repayMethodCardId = formData.repayMethodCardId;
+      }
+      if (formData.remark) {
+        mergeData.remark = formData.remark;
+      }
+      await mergeRepay(mergeData);
+      closeToast();
+      showToast({ message: "合并还款成功", onClose: () => router.back() });
+      return;
+    }
 
     const submitData = {
       cardId: formData.cardId,
@@ -571,5 +646,18 @@ onMounted(() => {
   text-align: center;
   font-size: 15px;
   color: var(--theme-primary);
+}
+
+.merge-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 16px;
+  padding: 12px;
+  border-radius: 10px;
+  background: rgba(255, 170, 0, 0.1);
+  color: #ed6a0c;
+  font-size: 13px;
+  line-height: 1.5;
 }
 </style>

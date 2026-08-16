@@ -249,13 +249,13 @@ onMounted(() => loadMonthStats());
   font-weight: bold;
 }
 
-/* 总收支金额：固定红绿，不跟随主题 */
+/* 总收支金额：跟随收支颜色设置联动 */
 .info-item .amount.total-expense {
-  color: #ee0a24;
+  color: var(--money-expense);
 }
 
 .info-item .amount.total-income {
-  color: #07c160;
+  color: var(--money-income);
 }
 
 .header-footer {
@@ -354,10 +354,10 @@ onMounted(() => loadMonthStats());
 }
 
 .text-income {
-  color: var(--van-green, #07c160);
+  color: var(--money-income);
 }
 
 .text-expense {
-  color: var(--van-danger-color, #ee0a24);
+  color: var(--money-expense);
 }
 </style>

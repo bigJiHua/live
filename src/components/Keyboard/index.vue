@@ -38,11 +38,13 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick } from "vue";
+import { ref, onMounted, onBeforeUnmount, nextTick } from "vue";
 import JSEncrypt from "jsencrypt";
 
 const props = defineProps({
   publicKey: { type: String, default: "" },
+  // secureOnly: true 时 secure 模式不 emit input 明文，仅通过 secure-payload 推送加密值
+  secureOnly: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(["input", "secure-payload", "confirm"]);
@@ -118,9 +120,26 @@ const drawKeys = () => {
     ctx.imageSmoothingQuality = "high";
 
     if (isSecure.value) {
-      const ox = (Math.random() - 0.5) * 1.5;
-      const oy = (Math.random() - 0.5) * 1.5;
+      const ox = (Math.random() - 0.5) * 2.4;
+      const oy = (Math.random() - 0.5) * 2.4;
       ctx.fillText(val, 20 + ox, 20 + oy);
+      // 细密噪点 + 随机干扰线，破坏 OCR 模板匹配
+      const noiseCount = Math.floor((w * h) / 120);
+      for (let n = 0; n < noiseCount; n++) {
+        ctx.fillStyle =
+          Math.random() > 0.5
+            ? "rgba(0,0,0,0.08)"
+            : "rgba(255,255,255,0.18)";
+        ctx.fillRect(Math.random() * w, Math.random() * h, 1, 1);
+      }
+      if (Math.random() > 0.6) {
+        ctx.strokeStyle = "rgba(0,0,0,0.06)";
+        ctx.lineWidth = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(Math.random() * w, Math.random() * h);
+        ctx.lineTo(Math.random() * w, Math.random() * h);
+        ctx.stroke();
+      }
     } else {
       ctx.fillText(val, 20, 20);
     }
@@ -135,23 +154,67 @@ const toggleMode = () => {
 const handleKeyClick = (val) => {
   if (val === "") return;
   if (val === "close") {
+    // secureOnly：收起键也走 secure-payload 协议（父组件用其终止/校验）
+    if (props.secureOnly && isSecure.value) emit("secure-payload", { type: "close" });
     emit("confirm");
     return;
   }
-  emit("input", val);
+  if (val === "del") {
+    // 删除键：secureOnly 走协议，父组件 pop 密文数组
+    if (props.secureOnly && isSecure.value) {
+      emit("secure-payload", { type: "del" });
+      return;
+    }
+    emit("input", val);
+    return;
+  }
 
-  if (props.publicKey && typeof val === "number") {
-    Promise.resolve().then(() => {
-      const crypt = getEncryptor(props.publicKey);
-      if (crypt) {
-        const encrypted = crypt.encrypt(val.toString());
-        emit("secure-payload", encrypted);
-      }
-    });
+  const suppressPlain = props.secureOnly && isSecure.value;
+  if (!suppressPlain) emit("input", val);
+
+  if (isSecure.value && props.publicKey && typeof val === "number") {
+    const crypt = getEncryptor(props.publicKey);
+    if (crypt) {
+      const encrypted = crypt.encrypt(val.toString());
+      emit("secure-payload", { type: "char", encrypted });
+    }
+  } else if (suppressPlain) {
+    emit("secure-payload", { type: "char", encrypted: null });
   }
 };
 
-onMounted(initLayout);
+// ── 防截屏：页面隐藏/窗口失焦时清空 canvas 字符 ──
+const clearCanvases = () => {
+  keyConfig.value.forEach((val, idx) => {
+    if (typeof val !== "number") return;
+    const canvas = document.getElementById(`canvas-${uid}-${idx}`);
+    if (canvas) canvas.getContext("2d").clearRect(0, 0, canvas.width, canvas.height);
+  });
+};
+const onVisibility = () => {
+  if (document.hidden && isSecure.value) clearCanvases();
+  else nextTick(drawKeys);
+};
+const onWindowBlur = () => {
+  if (isSecure.value) clearCanvases();
+};
+
+onMounted(() => {
+  initLayout();
+  document.addEventListener("visibilitychange", onVisibility);
+  window.addEventListener("blur", onWindowBlur);
+  // 防御：secureOnly 要求加密链路却无公钥 → 静默降级 + 警告，避免"假安全"
+  if (props.secureOnly && !props.publicKey) {
+    console.warn(
+      "[SafeKeyboard] secureOnly 已开启但未提供 publicKey，已自动降级为普通模式，请检查父组件是否传入 :public-key"
+    );
+    isSecure.value = false;
+  }
+});
+onBeforeUnmount(() => {
+  document.removeEventListener("visibilitychange", onVisibility);
+  window.removeEventListener("blur", onWindowBlur);
+});
 </script>
 
 <style scoped>

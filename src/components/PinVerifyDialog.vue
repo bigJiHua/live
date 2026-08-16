@@ -33,13 +33,21 @@
     class="pin-keyboard-overlay"
     @click="showKeyboard = false"
   >
-    <SafeKeyboard @input="handleKeyInput" @confirm="showKeyboard = false" />
+    <SafeKeyboard
+      :public-key="publicKey"
+      :secure-only="true"
+      @secure-payload="handleSecurePayload"
+      @input="handleKeyInput"
+      @confirm="showKeyboard = false"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, watch } from "vue";
 import { submitPin, cancelPinVerify } from "@/utils/request/pin";
+import { getRsaPublicKey } from "@/utils/request/handshake";
+import { getClientContext } from "@/utils/request/client";
 import SafeKeyboard from "@/components/KeyBoard/index.vue";
 
 const props = defineProps({
@@ -51,12 +59,26 @@ const props = defineProps({
 
 const visible = ref(false);
 const pinValue = ref("");
+// secureOnly 输入：PIN 以 RSA 密文字符数组存在，明文不落 ref/事件
+const pinEncrypted = ref([]);
+const publicKey = ref("");
 const errorMessage = ref("");
 const showKeyboard = ref(false);
+
+async function ensurePublicKey() {
+  if (publicKey.value) return;
+  try {
+    const deviceData = await getClientContext();
+    publicKey.value = (await getRsaPublicKey(deviceData)) || "";
+  } catch (e) {
+    console.warn("[PinVerifyDialog] 获取 RSA 公钥失败，PIN 键盘将降级为普通模式", e);
+  }
+}
 
 function show() {
   visible.value = true;
   pinValue.value = "";
+  pinEncrypted.value = [];
   errorMessage.value = "";
   setTimeout(() => {
     showKeyboard.value = true;
@@ -67,12 +89,14 @@ function hide() {
   visible.value = false;
   showKeyboard.value = false;
   pinValue.value = "";
+  pinEncrypted.value = [];
   errorMessage.value = "";
 }
 
 function setError(msg) {
   errorMessage.value = msg;
   pinValue.value = "";
+  pinEncrypted.value = [];
 }
 
 function onCancel() {
@@ -85,23 +109,50 @@ function onOverlayClick() {
 }
 
 function onConfirm() {
-  if (pinValue.value.length !== 6) return;
+  const len = pinEncrypted.value.length || pinValue.value.length;
+  if (len !== 6) return;
   errorMessage.value = "";
-  
-  // 调用 submitPin 处理验证逻辑，包括页面刷新等后续操作
-  submitPin(pinValue.value)
+
+  // secureOnly 输入提交 RSA 密文数组，后端私钥解密；无密文时回退明文（普通模式/降级）
+  submitPin(
+    pinEncrypted.value.length
+      ? { pin: pinEncrypted.value }
+      : { pin: pinValue.value }
+  );
 }
 
+// secureOnly：只累加密文数组，不依赖明文
+function handleSecurePayload(payload) {
+  if (!payload) return;
+  if (payload.type === "char") {
+    if (payload.encrypted) {
+      pinEncrypted.value.push(payload.encrypted);
+      pinValue.value += "*"; // 占位，供长度判断
+    }
+  } else if (payload.type === "del") {
+    pinEncrypted.value.pop();
+    pinValue.value = pinValue.value.slice(0, -1);
+  }
+  // 输入满6位自动提交
+  if (pinEncrypted.value.length === 6) {
+    setTimeout(() => {
+      onConfirm();
+    }, 150);
+  }
+}
+
+// 降级/普通模式明文输入
 function handleKeyInput(val) {
   errorMessage.value = "";
   if (val === "del") {
     pinValue.value = pinValue.value.slice(0, -1);
+    pinEncrypted.value.pop();
   } else if (pinValue.value.length < 6) {
     pinValue.value += val;
   }
 
   // 输入满6位自动提交
-  if (pinValue.value.length === 6) {
+  if (pinValue.value.length === 6 && !pinEncrypted.value.length) {
     setTimeout(() => {
       onConfirm();
     }, 150);

@@ -437,14 +437,18 @@ const formatTime = (timestamp) => {
     .padStart(2, "0")}:${date.getMinutes().toString().padStart(2, "0")}`;
 };
 
+// 5+ Runtime(hash 路由) 下 router.back() 返回时 URL query 可能丢失，
+// 用 sessionStorage 暂存「上一次成功加载的日记 id」作兜底，避免返回后 id 丢失导致「日记不存在」
+const DIARY_ID_KEY = 'diary_detail_last_id'
 // 加载详情
 const loadDetail = async () => {
-  const id = route.params.id || route.query.id;
+  const id = route.params.id || route.query.id || sessionStorage.getItem(DIARY_ID_KEY);
   if (!id) {
     showToast("参数错误");
     router.back();
     return;
   }
+  sessionStorage.setItem(DIARY_ID_KEY, id);
 
   loading.value = true;
   try {

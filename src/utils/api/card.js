@@ -39,6 +39,14 @@ export function updateCard(id, data) {
 }
 
 /**
+ * 批量更新排序：前端整列 1-N 重排后一次提交
+ * @param {Array<{id:string, sort:number}>} items - 顺序数组，sort 为 1-based 位置
+ */
+export function updateCardSortBatch(items) {
+  return request.put("/card/sort", { items });
+}
+
+/**
  * 删除卡片
  * @param {string} id - 卡片ID
  */
@@ -153,6 +161,14 @@ export function createRepay(data) {
 }
 
 /**
+ * 信报合一合并还款：一次性结清共享池内全部卡欠款
+ * @param {object} data - { poolId, repayMethod, repayMethodCardId, repayTime, remark }
+ */
+export function mergeRepay(data) {
+  return request.post("/card/repay/merge", data);
+}
+
+/**
  * 更新还款记录
  * @param {string} id - 还款记录ID
  * @param {object} data - 更新的字段
@@ -169,3 +185,69 @@ export function updateRepay(id, data) {
 export function deleteRepay(id) {
   return request.delete(`/card/repay/${id}`);
 }
+
+/**
+ * 共享额度池 API（痛点2）
+ * 基础路径: /api/v1/card/pool
+ */
+
+/** 我的共享池列表 */
+export function getCreditPools() {
+  return request.get("/card/pool");
+}
+
+/** 创建共享池 */
+export function createCreditPool(data) {
+  return request.post("/card/pool", data);
+}
+
+/** 更新共享池 */
+export function updateCreditPool(id, data) {
+  return request.put(`/card/pool/${id}`, data);
+}
+
+/** 删除共享池 */
+export function deleteCreditPool(id) {
+  return request.delete(`/card/pool/${id}`);
+}
+
+/** 卡片归入/移出共享池 */
+export function assignCardPool(cardId, poolId) {
+  return request.post("/card/pool/assign", { cardId, poolId });
+}
+
+/**
+ * 外币消费登记/对账 API（痛点4）
+ * 基础路径: /api/v1/card/bill/foreign
+ */
+
+/** 待对账外币列表（专用登记页） */
+export function getForeignPending() {
+  return request.get("/card/bill/foreign/pending");
+}
+
+/** 全部外币登记列表 */
+export function getForeignList() {
+  return request.get("/card/bill/foreign/list");
+}
+
+/** 历史外币消费流水（扫描账本，含未登记，支持 cardId/startDate/endDate 过滤） */
+export function getForeignHistory(params) {
+  return request.get("/card/bill/foreign/history", { params });
+}
+
+/** 补登记未登记的历史外币消费流水 */
+export function registerForeignAccount(data) {
+  return request.post("/card/bill/foreign/register", data);
+}
+
+/** 外币对账：录入实际汇率/人民币 */
+export function reconcileForeign(id, data) {
+  return request.put(`/card/bill/foreign/${id}/reconcile`, data);
+}
+
+/** 删除外币登记 */
+export function deleteForeign(id) {
+  return request.delete(`/card/bill/foreign/${id}`);
+}
+

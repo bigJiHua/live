@@ -24,7 +24,7 @@
       <div class="func-section">
         <div class="func-section-title">卡片管理</div>
         <div class="func-card" @click="goTo('/card/credit')">
-          <div class="func-icon">
+          <div class="func-icon blue">
             <van-icon name="card" />
           </div>
           <div class="func-info">
@@ -105,6 +105,31 @@
           <div class="func-info">
             <div class="func-name">添加还款</div>
             <div class="func-desc">记录一笔还款</div>
+          </div>
+          <van-icon name="arrow" class="func-arrow" />
+        </div>
+      </div>
+
+      <!-- 额度与外币（重构新增） -->
+      <div class="func-section">
+        <div class="func-section-title">额度与外币</div>
+        <div class="func-card" @click="goTo('/credit/limit-manage')">
+          <div class="func-icon gold">
+            <van-icon name="gold-coin-o" />
+          </div>
+          <div class="func-info">
+            <div class="func-name">额度与共享池管理</div>
+            <div class="func-desc">固定/临时额度独立设置 · 同银行共享额度</div>
+          </div>
+          <van-icon name="arrow" class="func-arrow" />
+        </div>
+        <div class="func-card" @click="goTo('/credit/foreign-register')">
+          <div class="func-icon gold">
+            <van-icon name="exchange" />
+          </div>
+          <div class="func-info">
+            <div class="func-name">外币消费登记对账</div>
+            <div class="func-desc">按银行实际结算汇率入账</div>
           </div>
           <van-icon name="arrow" class="func-arrow" />
         </div>
@@ -245,6 +270,10 @@ onMounted(() => {
   margin-right: 12px;
 }
 
+.func-icon.blue {
+  color: var(--van-blue, #1989fa);
+}
+
 .func-icon.red {
   color: var(--van-danger-color, #ee0a24);
 }
@@ -262,6 +291,9 @@ onMounted(() => {
 }
 .func-icon.purple {
   color: #7232dd;
+}
+.func-icon.gold {
+  color: #ffb300;
 }
 
 .func-info {

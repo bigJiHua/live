@@ -44,6 +44,10 @@ app.component('AppGridItem', AppGridItem);
 import { setupRouterGuard } from "./router/middleware";
 setupRouterGuard();
 
+// 5. 反调试/防篡改防护（仅生产生效：禁右键、禁 DevTools、防 hook 自检）
+import { initAntiHijack } from "./utils/security/antiHijack";
+initAntiHijack();
+
 // 3. 注册 Lazyload 插件
 app.use(Lazyload, {
   loading: 'https://fastly.jsdelivr.net/npm/@vant/assets/icon-demo.png',

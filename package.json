@@ -19,10 +19,12 @@
     "jsencrypt": "^3.5.4",
     "jwt-decode": "^4.0.0",
     "pinia": "^3.0.4",
+    "sortablejs": "^1.15.7",
     "ua-parser-js": "^2.0.9",
     "vant": "^4.9.22",
     "vue": "^3.5.30",
     "vue-router": "^5.0.4",
+    "vuedraggable": "^4.1.0",
     "xlsx": "^0.18.5",
     "xlsx-js-style": "^1.2.0"
   },

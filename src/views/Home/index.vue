@@ -132,10 +132,21 @@
         <div class="info-left">
           <van-icon name="clock-o" class="info-icon" />
           <span class="info-label">待办提醒</span>
-          <span v-if="topReminder" class="reminder-dot"></span>
-          <span v-if="topReminder" class="reminder-text">{{
-            topReminder.content
-          }}</span>
+          <span v-if="reminderList.length" class="reminder-dot"></span>
+          <!-- 直接垂直轮播，去掉 van-notice-bar 外壳（其 content 默认高度/flex 会压塌 swipe 内容导致空白） -->
+          <van-swipe
+            v-if="reminderList.length"
+            vertical
+            class="home-reminder-swipe"
+            :autoplay="3500"
+            :touchable="false"
+            :show-indicators="false"
+            @click.stop="goSubPage('todo')"
+          >
+            <van-swipe-item v-for="r in reminderList" :key="r.date + r.content">
+              <span class="home-reminder-chip" :class="'lv-' + r.level">{{ r.content }}</span>
+            </van-swipe-item>
+          </van-swipe>
         </div>
         <div class="info-right">
           <van-icon name="arrow" class="arrow-right" />
@@ -207,12 +218,13 @@ const dashboardData = reactive({
 const loading = ref(false);
 const recentItems = ref([]);
 const showAmount = ref(true);
-const topReminder = ref(null); // 最重要的1条提醒
+const reminderList = ref([]); // 当月所有未完成待办（与日历横幅同数据源）
 const todaySalaryData = ref(null); // 今日薪酬数据
 const showDemoInfo = import.meta.env.VITE_APP_DEMO === "true";
 
 // 日期
 const now = new Date();
+const currentYear = ref(now.getFullYear());
 const currentMonth = ref(now.getMonth() + 1);
 const currentDay = ref(now.getDate());
 
@@ -243,28 +255,34 @@ const loadHomeData = async () => {
   }
 };
 
-// 加载待办提醒（含当天起 0-30 天窗口）
+// 首页待办提醒：今日±3天窗口（与日历横幅同 API，仅参数不同）
+const getReminderLevel = (item) => {
+  if (!item.happen_date) return "red";
+  const d = new Date(item.happen_date);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const diff = Math.round((d - today) / 86400000);
+  if (diff <= 0) return "red";        // 今天及以前：未完成
+  if (diff >= 10) return "green";
+  if (diff >= 5) return "yellow";
+  return "red";
+};
 const loadReminder = async () => {
   try {
-    const res = await getReminders({ scope: "all" }); // 不传 scope 后端默认 3-10 天，会漏掉当天/明日提醒
-    const list = res.data || [];
-    if (list.length > 0) {
-      // 排序：时间升序（越接近今天越前）> 优先等级（1最高）
-      const sorted = [...list].sort((a, b) => {
-        const dateA = new Date(a.happen_date);
-        const dateB = new Date(b.happen_date);
-        if (dateA.getTime() !== dateB.getTime()) {
-          return dateA.getTime() - dateB.getTime(); // 时间升序
-        }
-        return (a.priority || 3) - (b.priority || 3); // 优先级高的在前
-      });
-      topReminder.value = sorted[0];
-    } else {
-      topReminder.value = null;
-    }
+    // 首页待办提醒 = 今日前后三天窗口（days），并显式传北京时间年月给后端，避免 UTC 默认月错算
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = now.getMonth() + 1;
+    const res = await getReminders({ days: 3, year: y, month: m });
+    const list = (res.data || []).filter(r => r.content && r.content !== "1");
+    reminderList.value = list.map(r => ({
+      content: r.content,
+      date: r.happen_date,
+      level: getReminderLevel(r),
+    }));
   } catch (e) {
     console.error("加载提醒失败", e);
-    topReminder.value = null;
+    reminderList.value = [];
   }
 };
 
@@ -511,11 +529,11 @@ onMounted(() => {
 }
 
 .income-val.in {
-  color: #07c160;
+  color: var(--money-income);
 }
 
 .income-val.out {
-  color: #ee0a24;
+  color: var(--money-expense);
 }
 
 .asset-details {
@@ -638,15 +656,19 @@ onMounted(() => {
   margin-left: 4px;
 }
 
-.reminder-text {
-  font-size: 0.8rem;
-  color: var(--theme-text-tertiary);
+.home-reminder-swipe {
+  flex: 1;
+  min-width: 0;
   margin-left: 6px;
-  max-width: 120px;
+  height: 22px;
+  line-height: 22px;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
+.home-reminder-chip { font-size: 0.8rem; color: var(--theme-text-tertiary); }
+.home-reminder-chip.lv-red { color: var(--van-danger-color, #ee0a24); }
+.home-reminder-chip.lv-yellow { color: #ff976a; }
+.home-reminder-chip.lv-green { color: var(--van-success-color, #07c160); }
+.home-reminder-chip b { font-weight: 600; margin-left: 4px; }
 
 /* 颜色 */
 .text-income {

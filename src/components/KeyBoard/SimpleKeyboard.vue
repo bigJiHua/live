@@ -56,13 +56,13 @@ const ABC_ROWS = [
   ["q","w","e","r","t","y","u","i","o","p"],
   ["a","s","d","f","g","h","j","k","l"],
   ["shift","z","x","c","v","b","n","m","del"],
-  ["switch","space","login"],
+  ["switch",".","space","login"],
 ];
 const NUM_ROWS = [
   ["1","2","3","4","5","6","7","8","9","0"],
   ["!","@","#","$","%","^","&","*","(",")"],
   ["-","_","+","=",",",".","?",":","'",'"'],
-  ["switch","space","login"],
+  ["switch",".","space","login"],
 ];
 
 const rows = computed(() => (page.value === "abc" ? ABC_ROWS : NUM_ROWS));
@@ -110,7 +110,7 @@ const onKey = (k) => {
 
 .kb-rows { display: flex; flex-direction: column; gap: 7px; min-height: 253px; }
 .kb-row { display: grid; grid-template-columns: repeat(10, 1fr); gap: 6px; }
-.kb-indent-1 { padding-left: 5%; }
+.kb-indent-1 { padding-left: 5.5%; }
 
 .kb-key {
   height: 58px; border: none; border-radius: 10px; font-size: 20px; font-weight: 500;
@@ -127,7 +127,7 @@ const onKey = (k) => {
 .kb-key.is-shift { font-size: 15px; font-weight: 700; }
 .sh-aa { font-size: 17px; font-weight: 600; transition: color .15s; }
 .sh-aa.on { color: var(--theme-primary, #07c160); }
-.kb-key.is-space { grid-column: span 5; cursor: default; pointer-events: none; }
+.kb-key.is-space { grid-column: span 4; cursor: default; pointer-events: none; }
 .safe-label { font-size: 14px; font-weight: 600; color: var(--theme-text-tertiary, #969799); letter-spacing: 2px; }
 .kb-key.is-login {
   grid-column: span 3; background: var(--theme-primary, #07c160); color: var(--theme-button-primary-text, #fff); font-size: 19px; font-weight: 700;

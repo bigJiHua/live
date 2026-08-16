@@ -11,6 +11,11 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <link rel="apple-touch-icon" href="/icons/pwa-192x192.png" />
     <title>%VITE_APP_TITLE%</title>
+    <!-- 生产 CSP 由 VITE_CSP 注入（.env.production），dev 留空不限制 HMR -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="%VITE_CSP%"
+    />
   </head>
   <body>
     <div id="app"></div>

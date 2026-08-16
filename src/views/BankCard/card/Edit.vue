@@ -46,8 +46,6 @@
       </div>
     </div>
 
-    <van-skeleton title :row="15" v-if="loading" />
-
     <app-form @submit="onSubmit" ref="formRef" v-if="!loading && cardData.id">
       <!-- 基本信息 -->
       <div class="form-section">

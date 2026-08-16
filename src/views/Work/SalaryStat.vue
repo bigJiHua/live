@@ -209,7 +209,7 @@ onMounted(() => {
 .header .van-icon {
   font-size: 18px;
   padding: 6px;
-  color: var(--van-green, #07c160);
+  color: var(--money-income);
 }
 
 .month-title {
@@ -344,7 +344,7 @@ onMounted(() => {
 .item-amount {
   font-size: 15px;
   font-weight: 600;
-  color: var(--van-green, #07c160);
+  color: var(--money-income);
 }
 
 .arrow-icon {

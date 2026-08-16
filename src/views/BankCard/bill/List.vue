@@ -1,5 +1,6 @@
 <template>
   <div class="page-bill-list">
+    <van-pull-refresh v-model="refreshing" @refresh="onRefresh" :style="{ minHeight: '100vh' }">
 
     <!-- 过滤条件：左月份 右卡片 -->
     <div class="filter-section">
@@ -7,7 +8,7 @@
         <div class="bill-filter-row">
           <app-field
             v-model="monthText"
-            label="代还月份"
+            label="待还月份"
             placeholder="请选择月份"
             is-link
             readonly
@@ -43,11 +44,25 @@
 
     <!-- 账单列表 -->
     <div class="bill-list" v-if="billList.length > 0">
+      <van-collapse v-model="activeGroupNames">
+        <van-collapse-item
+          v-for="group in billGroups"
+          :key="group.key"
+          :name="group.key"
+          :title="`${group.name} · ${group.items.length} 张账单`"
+        >
+      <!-- 信报合一池：一次性结清共享额度入口 -->
+      <div class="merge-repay-bar" v-if="group.poolMerged && group.poolTotalDebt > 0">
+        <div class="merge-repay-info">
+          <span class="merge-repay-tag">信报合一</span>
+          <span class="merge-repay-text">共享额度共待还 <b>¥{{ formatMoney(group.poolTotalDebt) }}</b></span>
+        </div>
+        <app-button size="small" type="primary" round @click.stop="openMergeRepay(group)">合并还款</app-button>
+      </div>
       <div
-        v-for="item in billList"
+        v-for="item in group.items"
         :key="item.id"
         class="bill-card"
-        @click="goToDetail(item)"
       >
         <div class="bill-header">
           <div class="bill-info">
@@ -88,8 +103,17 @@
               <span>可用</span>
               <span>¥{{ formatMoney(item.avail_limit) }}</span>
             </div>
+            <div
+              class="limit-row pending-fx-row"
+              v-if="pendingForeignCount(item.card_id) > 0"
+              @click.stop="goToForeignRegister"
+            >
+              <span class="pending-fx-tag">待对账</span>
+              <span class="pending-fx-count">{{ pendingForeignCount(item.card_id) }} 笔</span>
+              <van-icon name="arrow" class="pending-fx-arrow" />
+            </div>
           </div>
-          <div class="bill-amount-right">
+          <div class="bill-amount-right" @click.stop="goToDetail(item)">
             <div class="amount-col">
               <div class="repay-label">{{ getBillMonthText(item) }}</div>
               <div class="repay-value" :class="{ overdue: Number(item.used_limit) > 0 }">
@@ -107,19 +131,20 @@
 
         <div class="bill-footer">
           <div class="bill-day-info">
-            <div class="limit-row">
-              <span>本月账单日</span>
-              <span style="color: var(--van-danger-color);">{{ item.bill_day }}</span>号
+            <div class="day-row">
+              <span class="day-label">账单日</span>
+              <span class="day-month">{{ item.bill_day }}号</span>
             </div>
-            <div class="limit-row">
-              <span>次月还款日</span>
-              <span style="color: var(--van-danger-color);">{{ item.repay_day }}</span>号
+            <div class="day-row">
+              <span class="day-label">还款日</span>
+              <span class="day-month">{{ item.repay_day }}号</span>
             </div>
           </div>
           <div class="bill-actions">
             <app-button
               size="small"
               plain
+              type="primary"
               round
               @click.stop="refreshBill(item, $event)"
             >
@@ -127,7 +152,7 @@
             </app-button>
             <app-button
               size="small"
-              type="danger"
+              type="primary"
               round
               @click.stop="goToRepay(item)"
             >
@@ -136,6 +161,8 @@
           </div>
         </div>
       </div>
+        </van-collapse-item>
+      </van-collapse>
     </div>
 
     <van-empty v-if="!loading && billList.length === 0" description="暂无账单记录" />
@@ -162,39 +189,60 @@
         @cancel="showCardPicker = false"
       />
     </app-popup>
+
+    </van-pull-refresh>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, watch, onMounted, onActivated } from "vue";
 import { showToast } from "vant";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import dayjs from "dayjs";
-import { getBillList, getCardList, rebuildBill } from "@/utils/api/card";
+import { getBillList, getCardList, getCreditPools, getForeignPending, rebuildBill } from "@/utils/api/card";
 import { categoryApi } from "@/utils/api/category";
 import ENV from "@/utils/env";
 import BankIcon from "@/components/BankIcon.vue";
 
+// keep-alive 精准缓存：name 须与 MainLayout.cachedViewNames / 路由 name 一致
+defineOptions({ name: "BillList" });
+
 const BASE_URL = ENV.FILE_BASE_URL;
 
+const route = useRoute();
 const router = useRouter();
 
 const billList = ref([]);
 const cardList = ref([]);
 const bankList = ref([]);
+const pools = ref([]);
+const foreignPending = ref([]);
 const loading = ref(false);
+const refreshing = ref(false);
 const selectedCardId = ref(null);
 const selectedCardName = ref("");
 const showCardPicker = ref(false);
 
+// 折叠面板：默认展开所有银行分组
+const activeGroupNames = ref([]);
+
 // 月份选择（Vant 4 写法）
+// 从 URL query 恢复年份/月份（?year=2026&month=8），keep-alive 返回时月份不丢
 const now = dayjs();
-const currentYear = ref(now.year());
-const currentMonth = ref(now.month() + 1);
+const yearFromUrl = parseInt(route.query.year, 10);
+const monthFromUrl = parseInt(route.query.month, 10);
+const currentYear = ref(Number.isInteger(yearFromUrl) && yearFromUrl >= 2000 ? yearFromUrl : now.year());
+const currentMonth = ref(Number.isInteger(monthFromUrl) && monthFromUrl >= 1 && monthFromUrl <= 12 ? monthFromUrl : now.month() + 1);
 const showMonthPicker = ref(false);
 // Vant 4 必须绑定 v-model 数组来控制选中项
-const selectedValues = ref([`${now.year()}年`, `${now.month() + 1}月`]);
+const selectedValues = ref([`${currentYear.value}年`, `${currentMonth.value}月`]);
 const monthText = computed(() => `${currentYear.value}年${currentMonth.value}月`);
+
+// 把当前月份同步到 URL query（避免刷新/缓存返回后忘了看哪个月）
+const syncMonthToUrl = () => {
+  const q = { ...route.query, year: String(currentYear.value), month: String(currentMonth.value) };
+  router.replace({ path: route.path, query: q });
+};
 
 // 月份选择器列
 const pickerColumns = computed(() => {
@@ -218,6 +266,7 @@ const onPickerConfirm = ({ selectedOptions }) => {
   currentMonth.value = parseInt(monthText);
   selectedValues.value = [yearText, monthText];
   showMonthPicker.value = false;
+  syncMonthToUrl();
   loadBillList();
 };
 
@@ -270,6 +319,20 @@ const loadBillList = async () => {
   }
 };
 
+// 下拉刷新：重新拉取账单/卡片/池/外币待对账（保持当前月份）
+const onRefresh = async () => {
+  try {
+    await Promise.allSettled([
+      loadBillList(),
+      loadCardList(),
+      loadPools(),
+      loadForeignPending(),
+    ]);
+  } finally {
+    refreshing.value = false;
+  }
+};
+
 // 加载卡片列表
 const loadCardList = async () => {
   try {
@@ -288,6 +351,32 @@ const loadBankList = async () => {
   } catch (error) {
     // 忽略错误
   }
+};
+
+// 加载共享池列表（用于识别信报合一池、计算共享待还）
+const loadPools = async () => {
+  try {
+    const res = await getCreditPools();
+    pools.value = res.data || res || [];
+  } catch (error) {
+    // 忽略错误
+  }
+};
+
+// 加载待对账外币列表（用于账单卡显示黄色"待对账 N 笔"提示）
+const loadForeignPending = async () => {
+  try {
+    const res = await getForeignPending();
+    foreignPending.value = res.data || res || [];
+  } catch (error) {
+    // 忽略错误
+  }
+};
+
+// 某张卡当前待对账的外币笔数（按 card_id 统计 pending 登记）
+const pendingForeignCount = (cardId) => {
+  if (!cardId) return 0;
+  return foreignPending.value.filter((r) => r.card_id === cardId).length;
 };
 
 // 卡片选择确认
@@ -402,6 +491,46 @@ const getCardBankName = (item) => {
   return bank?.name || bank?.bank_name || card.bank_name || "";
 };
 
+// 获取账单对应卡片的 bank_id（用于分组，无则归入 "其他"）
+const getBillBankId = (item) => {
+  const card = cardList.value.find(c => c.id === item.card_id);
+  return (card && (card.bank_id || card.bankId)) || "other";
+};
+
+// 账单按银行分组：同一银行的账单收纳为一个折叠组。
+// 若该银行存在开启信报合一的共享池，则提供一次性结清入口（poolMerged + 池内总待还）
+const billGroups = computed(() => {
+  const map = new Map();
+  billList.value.forEach((item) => {
+    const key = getBillBankId(item);
+    if (!map.has(key)) map.set(key, { key, name: getCardBankName(item) || "其他", items: [] });
+    map.get(key).items.push(item);
+  });
+
+  const groups = Array.from(map.values());
+  // 对每个银行组，尝试关联共享池（按卡 bank_id 匹配池 bank_id）
+  return groups.map((g) => {
+    if (g.key === "other") return { ...g, pool: null, poolMerged: false, poolTotalDebt: 0 };
+    const pool = pools.value.find((p) => p.bank_id === g.key && Number(p.credit_report_merged) === 1);
+    if (!pool) return { ...g, pool: null, poolMerged: false, poolTotalDebt: 0 };
+    // 池内总待还 = 该组中属于该池的卡的 need_repay 之和（每个账单一条）
+    const cardsInPool = new Set(
+      cardList.value
+        .filter((c) => c.bank_id === g.key && c.share_pool_id === pool.id)
+        .map((c) => c.id)
+    );
+    const poolTotalDebt = g.items
+      .filter((item) => cardsInPool.has(item.card_id))
+      .reduce((s, item) => s + (Number(item.need_repay) || 0), 0);
+    return { ...g, pool, poolMerged: true, poolTotalDebt };
+  });
+});
+
+// 折叠面板：默认展开所有银行分组
+watch(billGroups, (groups) => {
+  activeGroupNames.value = groups.map((g) => g.key)
+})
+
 // 获取卡片显示名称
 const getCardDisplayName = (item) => {
   const card = cardList.value.find(c => c.id === item.card_id);
@@ -447,6 +576,22 @@ const goToRepay = (item) => {
   router.push(`/card/repay/add?billId=${item.id}`);
 };
 
+// 跳转到外币对账页（顶层路由，非 /card 子路由）
+const goToForeignRegister = () => {
+  router.push({ name: "CreditForeignRegister" });
+};
+
+// ===== 信报合一合并还款：跳转还款页（复用 card/repay/add，带 mergePoolId）=====
+const openMergeRepay = (group) => {
+  // 任取一张该池内的账单作为入口账单（还款页需要 billId 展示关联信息）
+  const firstBill = group.items.find((item) => item.need_repay > 0);
+  if (!firstBill) {
+    showToast('共享池内暂无待还账单');
+    return;
+  }
+  router.push(`/card/repay/add?billId=${firstBill.id}&mergePoolId=${group.pool?.id || ''}`);
+};
+
 // 跳转到添加
 const goToAdd = () => {
   router.push("/card/bill/add");
@@ -470,10 +615,55 @@ const onClickLeft = () => {
   router.back();
 };
 
+// 根据 URL 月份决定加载目标月，并加载对应数据。
+// 规则：URL 带 year/month → 用 URL 月份；URL 无月份 → 强制重置为本月并同步 URL
+// （避免 keep-alive 缓存了旧月份却看不到本月数据）。
+const applyMonthAndLoad = (forceReload = false) => {
+  const yFromUrl = parseInt(route.query.year, 10);
+  const mFromUrl = parseInt(route.query.month, 10);
+  const hasMonthInUrl = Number.isInteger(yFromUrl) && yFromUrl >= 2000 && Number.isInteger(mFromUrl) && mFromUrl >= 1 && mFromUrl <= 12;
+
+  const nowY = dayjs().year();
+  const nowM = dayjs().month() + 1;
+  const targetY = hasMonthInUrl ? yFromUrl : nowY;
+  const targetM = hasMonthInUrl ? mFromUrl : nowM;
+
+  // 目标月与当前缓存不一致，或 URL 无月份（需重置为本月）→ 更新选中并重新加载
+  const changed = currentYear.value !== targetY || currentMonth.value !== targetM;
+  if (changed) {
+    currentYear.value = targetY;
+    currentMonth.value = targetM;
+    selectedValues.value = [`${targetY}年`, `${targetM}月`];
+  }
+  if (!hasMonthInUrl) syncMonthToUrl();
+
+  // URL 无月份：一律强制重新加载本月（不接着 keep-alive 的旧数据）
+  if (changed || forceReload || !hasMonthInUrl) {
+    loadBillList();
+  }
+};
+
 onMounted(() => {
   loadCardList();
   loadBankList();
-  loadBillList();
+  loadPools();
+  loadForeignPending();
+  applyMonthAndLoad(true); // 首次：按 URL 月份加载（无月份则本月）
+});
+
+// keep-alive：从缓存返回时刷新。URL 无月份时强制回本月加载，
+// URL 有月份时若与缓存一致则仅刷新（消费/还款变化），不一致则切换到该月。
+// 首次挂载时 onActivated 也会触发，与 onMounted 重复，用首次标志跳过。
+let firstActivated = true;
+onActivated(() => {
+  if (typeof window === "undefined") return;
+  if (firstActivated) {
+    firstActivated = false;
+    return;
+  }
+  applyMonthAndLoad(false);
+  loadForeignPending();
+  loadPools();
 });
 </script>
 
@@ -496,12 +686,47 @@ onMounted(() => {
   padding: 0 16px;
 }
 
+/* 折叠面板：无外边框，银行标题不居中（覆盖全局样式） */
+:deep(.van-collapse) {
+  background: transparent;
+}
+:deep(.van-collapse-item) {
+  background: transparent;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--theme-border, rgba(0, 0, 0, 0.06));
+  padding-bottom: 4px;
+}
+/* 最后一个银行分组不加底部边框，避免页底多余分隔线 */
+:deep(.van-collapse-item:last-child) {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+:deep(.van-collapse-item__title) {
+  justify-content: flex-start;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--theme-text-primary);
+}
+:deep(.van-collapse-item__title::after) {
+  right: 0 !important;
+}
+:deep(.van-collapse-item__content) {
+  background: transparent;
+  padding: 0;
+}
+:deep(.van-collapse-item__content > .van-cell-group) {
+  margin-top: 4px;
+}
+
 .bill-card {
   background: var(--theme-bg-secondary);
   border-radius: 12px;
   padding: 16px;
   margin-bottom: 12px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+.bill-card:last-child {
+  margin-bottom: 0;
 }
 
 .bill-header {
@@ -599,7 +824,6 @@ onMounted(() => {
   justify-content: center;
   gap: 4px;
   padding-right: 12px;
-  border: 1px solid var(--theme-border);
 }
 
 .limit-row {
@@ -612,6 +836,55 @@ onMounted(() => {
 
 .limit-row span:last-child {
   color: var(--theme-text-secondary);
+}
+
+/* 外币待对账黄色提示（可点击跳转对账页） */
+.pending-fx-row {
+  align-items: center;
+  cursor: pointer;
+}
+.pending-fx-tag {
+  color: #ed6a0c !important;
+  font-weight: 600;
+}
+.pending-fx-count {
+  color: #ed6a0c !important;
+  font-weight: 600;
+}
+.pending-fx-arrow {
+  color: #ed6a0c;
+  font-size: 12px;
+}
+
+/* 账单金额区（N月账单/待还）作为详情点击区域 */
+.bill-amount-right {
+  cursor: pointer;
+}
+.bill-amount-right:active {
+  opacity: 0.6;
+}
+
+/* 账单日/还款日清晰度 */
+.bill-day-info {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.day-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--theme-text-tertiary);
+}
+.day-label {
+  flex: 0 0 auto;
+  color: var(--theme-text-secondary);
+  font-weight: 500;
+}
+.day-month {
+  font-weight: 600;
+  color: var(--theme-text-primary);
 }
 
 .bill-amount-right {
@@ -648,18 +921,49 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   padding-top: 12px;
-  border: 1px solid var(--theme-border);
-}
-
-.bill-day-info {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
 }
 
 .bill-actions {
   display: flex;
   gap: 8px;
+}
+
+/* 信报合一合并还款入口栏 */
+.merge-repay-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: var(--theme-bg-secondary);
+  border-radius: 12px;
+  padding: 10px 14px;
+  margin: 0 0 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+.merge-repay-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--theme-text-secondary);
+  min-width: 0;
+}
+.merge-repay-tag {
+  flex-shrink: 0;
+  background: var(--theme-primary);
+  color: #fff;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+.merge-repay-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.merge-repay-text b {
+  color: var(--theme-danger, #ee0a24);
+  font-size: 15px;
 }
 
 .bill-limit {

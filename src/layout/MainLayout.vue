@@ -30,6 +30,7 @@
 
     <nav v-if="!route.meta.hideTabbar" 
          class="floating-island-nav"
+         :class="{ 'nav-hidden': !tabbarVisible }"
          style="backdrop-filter: blur(15px) saturate(160%); -webkit-backdrop-filter: blur(15px) saturate(160%);">
       <router-link to="/home" class="nav-item">
         <van-icon name="wap-home-o" class="nav-icon" />
@@ -58,7 +59,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from "vue";
+import { ref, computed, onMounted, onBeforeUnmount } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { showToast } from "vant";
 import { authApi } from "@/utils/api/auth";
@@ -67,8 +68,26 @@ import PinVerifyDialog from "@/components/PinVerifyDialog.vue";
 const route = useRoute();
 const router = useRouter();
 
+// 底部 tabbar 滚动沉浸：下滑收起、上滑弹起
+const tabbarVisible = ref(true);
+let lastScrollY = window.scrollY || 0;
+const onWindowScroll = () => {
+  const y = window.scrollY || 0;
+  const delta = y - lastScrollY;
+  if (Math.abs(delta) > 6) {
+    if (delta > 0) {
+      tabbarVisible.value = false;
+    } else if (y > 0) {
+      tabbarVisible.value = true;
+    }
+    lastScrollY = y;
+  }
+};
+onMounted(() => window.addEventListener("scroll", onWindowScroll, { passive: true }));
+onBeforeUnmount(() => window.removeEventListener("scroll", onWindowScroll));
+
 // 局部 keep-alive：通过 include 按组件 name 精准缓存带 onActivated 滚动恢复的
-// 8 个列表页（与 router/map.js 中 keepAlive:true 路由一致）。
+// 列表页（与 router/map.js 中 keepAlive:true 路由一致）。
 // 详情/编辑/tab 根等页不缓存，保证每次进入重新拉取实时数据。
 // 缓存页在 onActivated 内通过 flowSync 消费变更，确保缓存期间数据不过期。
 const cachedViewNames = [
@@ -80,6 +99,9 @@ const cachedViewNames = [
   "FinanceReportDebtOverview",
   "CardFlowList",
   "BillLedger",
+  "BankCardDebit",
+  "BankCardCredit",
+  "BillList",
 ];
 
 // PIN 验证引用
@@ -227,6 +249,16 @@ const goHome = () => {
   /* ———— 阴影与边框，增加精致感和悬浮感 ———— */
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
   border: 1px solid var(--tabbar-glass-border); /* 跟随主题的高亮边框 */
+
+  /* 滚动沉浸：收起/弹起过渡 */
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+/* 下滑浏览时收起底部岛 */
+.floating-island-nav.nav-hidden {
+  transform: translateY(120px);
+  opacity: 0;
+  pointer-events: none;
 }
 
 /* 5. 导航项 (nav-item) 样式 */

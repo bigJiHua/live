@@ -546,8 +546,8 @@ onMounted(async () => {
   font-weight: 700;
   font-family: 'DIN Alternate', sans-serif;
 }
-.drawer-item-amount.income { color: var(--van-green, #07c160); }
-.drawer-item-amount.expense { color: var(--van-danger-color, #ee0a24); }
+.drawer-item-amount.income { color: var(--money-income); }
+.drawer-item-amount.expense { color: var(--money-expense); }
 .drawer-item-bottom {
   display: flex;
   gap: 10px;

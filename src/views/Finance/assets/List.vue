@@ -1,5 +1,18 @@
 <template>
   <div class="page-assets-list">
+    <!-- 总资产走势快速预览（略缩版） -->
+    <div class="mini-trend" v-if="miniTrend.length > 0">
+      <div class="mini-trend-head">
+        <span class="mini-trend-title">总资产走势</span>
+        <span class="mini-trend-latest">最新 ¥{{ formatAmount(miniTrend[miniTrend.length - 1].value) }}</span>
+        <button class="mini-trend-btn" @click="goToTrend">
+          <van-icon name="chart-trending-o" />
+          <span>查看趋势</span>
+        </button>
+      </div>
+      <div ref="miniChartRef" class="mini-chart"></div>
+    </div>
+
     <!-- 登记列表 -->
     <div class="record-list" v-if="list.length > 0">
       <div v-for="(item, index) in list" :key="item.id" class="record-card">
@@ -182,7 +195,7 @@
       description="暂无登记记录"
     />
 
-    <!-- 底部新增按钮 -->
+    <!-- 底部操作按钮 -->
     <div class="add-btn-wrap">
       <button class="add-btn" @click="goToRegister()">
         <van-icon name="plus" />
@@ -199,10 +212,15 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from "vue";
+import { ref, computed, onMounted, onUnmounted, nextTick } from "vue";
 import { showToast, showConfirmDialog } from "vant";
 import { useRouter } from "vue-router";
 import { getRegisterList, deleteAssetRegister } from "@/utils/api/asset";
+import * as echarts from "echarts/core";
+import { LineChart } from "echarts/charts";
+import { GridComponent, TooltipComponent } from "echarts/components";
+import { CanvasRenderer } from "echarts/renderers";
+echarts.use([LineChart, GridComponent, TooltipComponent, CanvasRenderer]);
 
 const router = useRouter();
 
@@ -329,6 +347,135 @@ const formatDate = (date) => {
   return dayjs(d).format("YYYY-MM-DD HH:mm:ss");
 };
 
+// ============ 顶部总资产走势快速预览（略缩版） ============
+const miniChartRef = ref(null);
+let miniChart = null;
+
+// 统一日期转时间戳数值：兼容 YYYY-MM-DD 与时间戳（秒/毫秒），与 Trend 口径一致
+const toTimeNum = (raw) => {
+  if (raw === null || raw === undefined || raw === "") return 0;
+  const s = String(raw);
+  if (/^\d+$/.test(s)) {
+    let ts = Number(s);
+    if (ts < 1e12) ts *= 1000; // 秒 → 毫秒
+    return ts;
+  }
+  const t = new Date(s).getTime();
+  return isNaN(t) ? 0 : t;
+};
+
+// 登记日期转 YYYY-MM-DD（兼容时间戳/日期串），与 Trend 口径一致
+const toDateStr = (raw) => {
+  if (raw === null || raw === undefined || raw === "") return "";
+  const s = String(raw);
+  if (/^\d+$/.test(s)) {
+    let ts = Number(s);
+    if (ts < 1e12) ts *= 1000;
+    const d = new Date(ts);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }
+  return s.length >= 10 ? s.slice(0, 10) : s;
+};
+
+// 按时间升序、同日取最新一条，得到总资产走势（略缩预览用）
+const miniTrend = computed(() => {
+  const sorted = [...list.value].sort(
+    (a, b) => toTimeNum(a.register_date) - toTimeNum(b.register_date)
+  );
+  const byDay = new Map();
+  sorted.forEach((r) => byDay.set(toDateStr(r.register_date), r));
+  return [...byDay.values()]
+    .sort((a, b) => toTimeNum(a.register_date) - toTimeNum(b.register_date))
+    .map((r) => ({ date: toDateStr(r.register_date), value: Number(r.total_balance) || 0 }));
+});
+
+const miniDates = computed(() => miniTrend.value.map((d) => d.date));
+
+const formatLabelMini = (value) => {
+  const num = Number(value) || 0;
+  const abs = Math.abs(num);
+  if (abs >= 1e8) return (num / 1e8).toFixed(1) + "亿";
+  if (abs >= 1e4) return (num / 1e4).toFixed(1) + "万";
+  return String(Math.round(num));
+};
+
+// 略缩版总资产折线：无 dataZoom，紧凑高度，仅供快速预览
+const renderMini = () => {
+  if (!miniChartRef.value) return;
+  if (!miniChart) miniChart = echarts.init(miniChartRef.value);
+  miniChart.setOption(
+    {
+      color: ["#3b82f6"],
+      grid: { top: 8, right: 10, bottom: 18, left: 4, containLabel: true },
+      tooltip: {
+        trigger: "axis",
+        triggerOn: "mousemove|click",
+        axisPointer: {
+          type: "line",
+          snap: true,
+          lineStyle: { color: "#3b82f6", type: "dashed", width: 1.5 },
+        },
+        confine: true,
+        backgroundColor: "rgba(255,255,255,0.96)",
+        borderColor: "rgba(0,0,0,0.1)",
+        padding: [4, 8],
+        textStyle: { color: "#323233", fontSize: 11 },
+        formatter: (params) => {
+          const p = Array.isArray(params) ? params[0] : params;
+          if (!p) return "";
+          return `${p.axisValue}<br/>总资产 ¥${Number(p.value).toLocaleString(
+            "zh-CN",
+            { minimumFractionDigits: 2, maximumFractionDigits: 2 }
+          )}`;
+        },
+      },
+      xAxis: {
+        type: "category",
+        boundaryGap: false,
+        data: miniDates.value,
+        axisTick: { show: false },
+        axisLine: { lineStyle: { color: "#dcdee0" } },
+        axisLabel: {
+          color: "#969799",
+          fontSize: 9,
+          hideOverlap: true,
+          formatter: (v) => v,
+        },
+      },
+      yAxis: {
+        type: "value",
+        minInterval: 1,
+        splitNumber: 2,
+        splitLine: { lineStyle: { type: "solid", color: "#eceef1", width: 1 } },
+        axisLine: { show: false },
+        axisLabel: { color: "#969799", fontSize: 9, formatter: (v) => formatLabelMini(v) },
+      },
+      series: [
+        {
+          type: "line",
+          smooth: true,
+          symbol: "circle",
+          symbolSize: 4,
+          connectNulls: true,
+          data: miniTrend.value.map((d) => d.value),
+          lineStyle: { width: 2 },
+          emphasis: { scale: false },
+          select: { disabled: true },
+          areaStyle: { opacity: 0.1, color: "#3b82f6" },
+        },
+      ],
+    },
+    true
+  );
+};
+
+const resizeMini = () => {
+  if (miniChart) miniChart.resize();
+};
+
 // 加载列表
 const loadList = async () => {
   loading.value = true;
@@ -341,6 +488,8 @@ const loadList = async () => {
     });
     // 初始化展开状态
     activeNames.value = list.value.map(() => []);
+    await nextTick();
+    renderMini();
   } catch (e) {
     showToast("加载失败");
   } finally {
@@ -358,6 +507,11 @@ const goToRegister = (item) => {
   } else {
     router.push("/finance/assets/register");
   }
+};
+
+// 跳转到趋势页面
+const goToTrend = () => {
+  router.push("/finance/assets/trend");
 };
 
 // 复制到新登记
@@ -391,6 +545,15 @@ const handleDelete = async (item) => {
 
 onMounted(() => {
   loadList();
+  window.addEventListener("resize", resizeMini);
+});
+
+onUnmounted(() => {
+  window.removeEventListener("resize", resizeMini);
+  if (miniChart) {
+    miniChart.dispose();
+    miniChart = null;
+  }
 });
 </script>
 
@@ -408,10 +571,12 @@ onMounted(() => {
   bottom: 0px;
   padding: 12px 16px;
   background: var(--theme-bg-primary);
+  display: flex;
+  gap: 10px;
 }
 
 .add-btn {
-  width: 100%;
+  flex: 1;
   height: 50px;
   background: var(--theme-primary);
   color: #fff;
@@ -643,5 +808,58 @@ onMounted(() => {
   height: 100%;
   align-items: center;
   justify-content: center;
+}
+
+/* 顶部总资产走势快速预览（略缩版） */
+.mini-trend {
+  margin: 12px 16px;
+  background: var(--theme-bg-secondary);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.mini-trend-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  cursor: pointer;
+}
+
+.mini-trend-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--theme-text-primary);
+}
+
+.mini-trend-latest {
+  flex: 1;
+  margin-left: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--theme-primary);
+  font-family: "DIN Alternate", -apple-system, sans-serif;
+}
+
+.mini-trend-btn {
+  padding: 4px 10px;
+  background: var(--theme-bg-tertiary);
+  color: var(--theme-primary);
+  border: 1px solid var(--theme-primary);
+  border-radius: 14px;
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.mini-trend-btn:active {
+  opacity: 0.8;
+}
+
+.mini-chart {
+  width: 100%;
+  height: 110px;
 }
 </style>
