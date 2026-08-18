@@ -66,8 +66,6 @@ const decryptWithSecurity = async (req, res, next) => {
     req.device = device;
     next();
   } catch (error) {
-    console.log(error);
-    
     console.error(`[Security Decrypt Error]: ${error.message}`);
 
     await db.execute(
