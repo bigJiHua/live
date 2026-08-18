@@ -491,6 +491,11 @@ const getReverseType = (item) => {
   const categoryId = item.category_id;
   const payType = item.pay_type;
 
+  // 分期入账流水：不可在前端执行消费冲正，需到分期列表中止并手动冲正
+  if (categoryId === "installment") {
+    return null;
+  }
+
   // 还款撤销 → 提示用户去还款记录操作
   if (payType === "还款" && categoryId === "CATEGORY_REPAY") {
     return "credit-repay";

@@ -532,7 +532,6 @@ Golden Finance 是一款基于 **Vue 3 + Vite + Vant 4** 构建的移动端 PWA 
 | `/card/bill/list` | BankCard/bill/List.vue | 账单列表 |
 | `/card/bill/detail` | BankCard/bill/Detail.vue | 账单详情 |
 | `/card/bill/ledger` | BankCard/bill/Ledger.vue | 账单流水明细 |
-| `/card/bill/add` | BankCard/bill/Add.vue | 添加账单 |
 | `/card/bill/edit` | BankCard/bill/Edit.vue | 编辑账单 |
 | `/card/repay/list` | BankCard/repay/List.vue | 还款列表 |
 | `/card/repay/detail` | BankCard/repay/Detail.vue | 还款详情 |

@@ -92,23 +92,6 @@ export function rebuildBill(cardId) {
 }
 
 /**
- * 创建账单
- * @param {object} data - 账单数据
- * @param {string} data.cardId - 卡片ID (必填)
- * @param {number} data.creditLimit - 信用额度 (必填)
- * @param {number} data.tempLimit - 临时额度 (可选，默认0)
- * @param {number} data.pointsRate - 积分倍率 (可选，默认1)
- * @param {boolean} data.remindSwitch - 还款提醒开关 (可选，默认true)
- * @param {number} data.remindDays - 提前提醒天数 (可选，默认3)
- *
- * 后端自动计算字段: usedLimit, availLimit, billAmount, minRepay, repaid, needRepay,
- * points, pointsExpire, repayStatus, isOverdue, overdueDays
- */
-export function createBill(data) {
-  return request.post("/card/bill", data);
-}
-
-/**
  * 更新账单
  * @param {string} id - 账单ID
  * @param {object} data - 更新的字段

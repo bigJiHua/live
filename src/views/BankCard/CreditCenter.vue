@@ -35,9 +35,9 @@
         </div>
       </div>
 
-      <!-- 账单管理 -->
+      <!-- 账单与还款 -->
       <div class="func-section">
-        <div class="func-section-title">账单管理</div>
+        <div class="func-section-title">账单与还款</div>
         <div class="func-card" @click="goTo('/card/bill/list')">
           <div class="func-icon red">
             <van-icon name="todo-list-o" />
@@ -48,13 +48,13 @@
           </div>
           <van-icon name="arrow" class="func-arrow" />
         </div>
-        <div class="func-card" @click="goTo('/card/bill/add')">
-          <div class="func-icon orange">
-            <van-icon name="plus" />
+        <div class="func-card" @click="goTo('/card/repay/list')">
+          <div class="func-icon green">
+            <van-icon name="paid" />
           </div>
           <div class="func-info">
-            <div class="func-name">添加账单</div>
-            <div class="func-desc">新增一笔账单记录</div>
+            <div class="func-name">还款记录</div>
+            <div class="func-desc">查看所有还款记录</div>
           </div>
           <van-icon name="arrow" class="func-arrow" />
         </div>
@@ -80,31 +80,6 @@
           <div class="func-info">
             <div class="func-name">分期列表</div>
             <div class="func-desc">查看所有分期记录</div>
-          </div>
-          <van-icon name="arrow" class="func-arrow" />
-        </div>
-      </div>
-
-      <!-- 还款管理 -->
-      <div class="func-section">
-        <div class="func-section-title">还款管理</div>
-        <div class="func-card" @click="goTo('/card/repay/list')">
-          <div class="func-icon green">
-            <van-icon name="paid" />
-          </div>
-          <div class="func-info">
-            <div class="func-name">还款记录</div>
-            <div class="func-desc">查看所有还款记录</div>
-          </div>
-          <van-icon name="arrow" class="func-arrow" />
-        </div>
-        <div class="func-card" @click="goTo('/card/repay/add')">
-          <div class="func-icon teal">
-            <van-icon name="plus" />
-          </div>
-          <div class="func-info">
-            <div class="func-name">添加还款</div>
-            <div class="func-desc">记录一笔还款</div>
           </div>
           <van-icon name="arrow" class="func-arrow" />
         </div>

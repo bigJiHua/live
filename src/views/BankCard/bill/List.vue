@@ -167,14 +167,6 @@
 
     <van-empty v-if="!loading && billList.length === 0" description="暂无账单记录" />
 
-    <!-- 添加账单按钮 -->
-    <div class="add-btn-wrap" v-if="canAddBill">
-      <button class="glass-add-btn" @click="goToAdd">
-        <van-icon name="plus" />
-        <span>添加账单</span>
-      </button>
-    </div>
-
     <van-overlay :show="loading" z-index="2000">
       <div class="flex-center">
         <van-loading size="36px" vertical color="#fff">加载中...</van-loading>
@@ -280,11 +272,6 @@ const cardColumns = computed(() => {
     });
   });
   return cols;
-});
-
-// 是否可以添加账单（需要先有信用卡）
-const canAddBill = computed(() => {
-  return cardList.value.some(card => (card.card_type || card.cardType) === 'credit');
 });
 
 // 加载账单列表
@@ -590,11 +577,6 @@ const openMergeRepay = (group) => {
     return;
   }
   router.push(`/card/repay/add?billId=${firstBill.id}&mergePoolId=${group.pool?.id || ''}`);
-};
-
-// 跳转到添加
-const goToAdd = () => {
-  router.push("/card/bill/add");
 };
 
 // 刷新账单

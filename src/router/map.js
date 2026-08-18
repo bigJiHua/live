@@ -542,12 +542,6 @@ const RouterMap = [
         component: () => import("../views/BankCard/bill/Ledger.vue"),
         meta: { title: "账单流水明细", hideTabbar: true, keepAlive: true },
       },
-      {
-        path: "card/bill/add",
-        name: "BillAdd",
-        component: () => import("../views/BankCard/bill/Add.vue"),
-        meta: { title: "信用卡添加账单", hideTabbar: true },
-      },
       // 还款记录
       {
         path: "card/repay/list",

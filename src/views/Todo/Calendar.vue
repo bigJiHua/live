@@ -72,14 +72,19 @@
             <van-icon name="bill-o" color="var(--van-danger-color, #ee0a24)" />
             <span>消费分期</span>
           </div>
-          <div v-for="event in installmentEvents" :key="event.id" class="event-item inst-item">
+          <div v-for="event in installmentEvents" :key="event.id" class="event-item inst-item" @click="goInstallmentList">
             <div class="event-content">
               <div class="event-title">{{ event.content }}</div>
               <div class="event-meta">
                 <app-tag type="danger" size="small">消费分期</app-tag>
+                <span
+                  class="inst-tag"
+                  :class="event.is_void ? 'void' : event.month_overdue ? 'overdue' : event.month_status === 'entered' ? 'entered' : event.month_status === 'entering' ? 'entering' : event.month_status === 'done' ? 'done' : 'pending'"
+                >{{ event.is_void ? '超过期限' : event.month_status === 'entered' ? '已入账' : event.month_overdue ? '逾期未还' : event.month_status === 'entering' ? '入账中' : event.month_status === 'done' ? '已还' : '待入账' }}</span>
                 <span class="event-amount">￥{{ Number(event.amount || 0).toFixed(2) }}</span>
               </div>
             </div>
+            <van-icon name="arrow" class="arrow-icon" />
           </div>
         </div>
 
@@ -311,7 +316,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from "vue";
+import { ref, computed, onMounted, onActivated, watch } from "vue";
 import { showToast, showConfirmDialog, showSuccessToast } from "vant";
 import { useRouter } from "vue-router";
 import dayjs from "dayjs";
@@ -359,6 +364,11 @@ const loadingEvents = ref(false);
 
 const installmentEvents = computed(() => selectedEvents.value.filter(e => e.category_id === 'installment'))
 const otherEvents = computed(() => selectedEvents.value.filter(e => e.category_id !== 'installment'))
+
+// 分期事件点击：跳转到分期列表（入账由系统按账单周期自动触发）
+const goInstallmentList = () => {
+  router.push("/credit-center/installment/list")
+}
 
 // 提醒数据
 const reminders = ref([]);
@@ -668,6 +678,18 @@ const handleAddEvent = async () => {
 const showEventActions = (event) => {
   currentEvent.value = event;
   if (event.source === "recurring") {
+    // 分期期次走三态（未入账/入账待还/已还），不可经此菜单手动标记完成/待处理，
+    // 避免覆盖已入账状态、与已建消费流水矛盾。
+    if (event.category_id === "installment") {
+      actionOptions.value = [
+        {
+          name: "管理固定支出",
+          callback: () => router.push("/finance/recurring"),
+        },
+      ];
+      showActions.value = true;
+      return;
+    }
     actionOptions.value = [
       {
         name: event.month_status === "done" ? "标记待处理" : "标记已处理",
@@ -821,6 +843,14 @@ watch([currentYear, currentMonth], () => {
 });
 
 onMounted(() => {
+  loadCalendarMonth();
+  loadSelectedDateEvents();
+  loadReminders();
+});
+
+// keep-alive 缓存：从其他页（如创建分期）返回日历时不会触发 onMounted，
+// 此处 onActivated 强制重载，确保新建的循环/分期事件能立即出现在日历。
+onActivated(() => {
   loadCalendarMonth();
   loadSelectedDateEvents();
   loadReminders();
@@ -1199,4 +1229,18 @@ onMounted(() => {
   border: 1px solid currentColor;
   background: rgba(238, 10, 36, 0.08);
 }
+
+/* 分期日历条目状态（内联，替代 app-tag） */
+.inst-tag {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+.inst-tag.pending { color: #1989fa; background: rgba(25, 137, 250, 0.1); }
+.inst-tag.entering { color: var(--van-warning-color, #ff976a); background: rgba(255, 151, 106, 0.12); }
+.inst-tag.entered { color: var(--van-success-color, #07c160); background: rgba(7, 193, 96, 0.1); }
+.inst-tag.overdue { color: var(--van-danger-color, #ee0a24); background: rgba(238, 10, 36, 0.1); }
+.inst-tag.done { color: var(--van-success-color, #07c160); background: rgba(7, 193, 96, 0.1); }
+.inst-tag.void { color: var(--theme-text-tertiary); background: rgba(0, 0, 0, 0.05); }
 </style>

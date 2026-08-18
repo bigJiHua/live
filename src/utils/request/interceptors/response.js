@@ -70,7 +70,7 @@ export function createResponseInterceptor() {
     },
 
     // ❌ 错误响应
-    (error) => {
+    async (error) => {
       const response = error.response;
       const status = response?.status;
       const resData = response?.data;
