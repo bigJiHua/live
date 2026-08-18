@@ -128,29 +128,6 @@ exports.updateCard = {
 
 // ==================== 卡片账单 (card_bill) ====================
 
-// 创建账单验证规则
-exports.createBill = {
-  body: joi.object({
-    data: joi.object({
-      // 【前端必填】
-      cardId: joi.string().required().messages({
-        "any.required": "cardId 卡片ID 不能为空",
-      }),
-      // R3：额度以 card_base / CreditCore 为准，模型已忽略前端传入（P4），不再 required
-      creditLimit: joi.number(),
-      tempLimit: joi.number().default(0),
-      pointsRate: joi.number().default(1),
-      // 【可选】
-      billMonth: joi.string().pattern(/^\d{4}-\d{2}$/).messages({
-        "string.pattern.base": "billMonth 格式应为 YYYY-MM",
-      }),
-      // 【后端计算/默认值】
-      remindSwitch: joi.boolean().default(true),
-      remindDays: joi.number().default(3),
-    }).unknown(true),
-  }).unknown(true),
-};
-
 // 更新账单验证规则
 exports.updateBill = {
   body: joi.object({

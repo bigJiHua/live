@@ -97,32 +97,6 @@ class CardBillController {
   }
 
   /**
-   * 创建账单
-   */
-  async create(req, res) {
-    try {
-      const bill = await CardBill.create({
-        userId: req.userId,
-        ...req.body.data,
-      });
-
-      if (!bill || !bill.id) {
-        throw new Error('账单创建失败');
-      }
-
-      // 记录操作日志
-      await CardLog.log(req.body.data.cardId, req.userId, "创建账单", req.ip);
-
-      return res
-        .status(200)
-        .json({ status: 200, message: "创建成功", data: bill });
-    } catch (error) {
-      console.error("创建账单错误:", error);
-      return res.say(error.message || "创建失败", 500);
-    }
-  }
-
-  /**
    * 更新账单
    */
   async update(req, res) {

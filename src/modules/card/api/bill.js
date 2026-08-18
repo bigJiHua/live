@@ -42,13 +42,6 @@ router.delete("/foreign/:id", pinLockGuard, cardBillController.foreignDelete);
 // 获取单个账单详情
 router.get("/:id", cardBillController.getById);
 
-// 创建账单
-router.post(
-  "/",
-  createValidator(CardRules.createBill),
-  cardBillController.create
-);
-
 // 更新账单
 router.put(
   "/:id",

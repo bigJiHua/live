@@ -64,7 +64,22 @@ class RecurringExpenseController {
       const rows = await RecurringExpense.findAll(userId, {
         includeInactive: true, installmentOnly: true, excludeInstallment: false,
       });
-      return res.json({ status: 200, message: "查询成功", data: rows });
+      // 系统自动入账：对处于账单周期内且未入账的期次自动触发（替代前端手动按钮）。
+      // 失败仅告警，不影响后续列表读取。
+      for (const row of rows) {
+        try {
+          await RecurringExpense.autoEnterPending(row.id, userId);
+        } catch (e) {
+          console.warn(`[installments] 自动入账跳过 id=${row.id}:`, e.message);
+        }
+      }
+      // 附加各期有效状态（已还判定：entered 期且账单已还清 -> done），只读不写
+      const decorated = [];
+      for (const row of rows) {
+        const next = { ...row, month_records: await RecurringExpense.decorateInstallmentStatus(row) };
+        decorated.push(next);
+      }
+      return res.json({ status: 200, message: "查询成功", data: decorated });
     } catch (error) {
       console.error("获取分期列表错误:", error);
       return res.status(500).json({ status: 500, message: error.message || "查询失败" });
@@ -131,6 +146,35 @@ class RecurringExpenseController {
     } catch (error) {
       console.error("更新固定支出月度状态错误:", error);
       return res.status(500).json({ status: 500, message: error.message || "更新失败" });
+    }
+  }
+
+  // 分期入账：触发月份直接入账（后端校验账单周期 + 防重复）
+  async enterInstallment(req, res) {
+    try {
+      const userId = req.userId;
+      const { id } = req.params;
+      const { month } = req.body.data || req.body;
+      if (!month) return res.status(400).json({ status: 400, message: "缺少入账月份" });
+      const result = await RecurringExpense.enterInstallment(id, month, userId);
+      return res.json({ status: 200, message: "入账成功", data: result });
+    } catch (error) {
+      console.error("分期入账错误:", error);
+      return res.status(400).json({ status: 400, message: error.message || "入账失败" });
+    }
+  }
+
+  // 分期中止：仅未入账月份可中止，已入账月份需用户去账单手动冲正
+  async abortInstallment(req, res) {
+    try {
+      const userId = req.userId;
+      const { id } = req.params;
+      const { months } = req.body.data || req.body;
+      const result = await RecurringExpense.abortInstallment(id, months, userId);
+      return res.json({ status: 200, message: "中止完成", data: result });
+    } catch (error) {
+      console.error("分期中止错误:", error);
+      return res.status(400).json({ status: 400, message: error.message || "中止失败" });
     }
   }
 }

@@ -3,6 +3,7 @@ const idUtils = require("../../../common/utils/idUtils");
 const dayjs = require("dayjs");
 const utc = require("dayjs/plugin/utc");
 const timezone = require("dayjs/plugin/timezone");
+const CreditAccount = require("../../account/model/credit");
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
@@ -65,11 +66,12 @@ class RecurringExpense {
       amount: Number(row.amount || 0),
       month,
       happen_date: happenDate,
-      month_status: record.status,
+      month_status: record.effectiveStatus || record.status,
+      month_overdue: !!record.overdue,
       month_amount: Number(record.amount || row.amount || 0),
       month_record: record,
       month_records: this.parseMonthRecords(row.month_records),
-      is_done: record.status === "done",
+      is_done: (record.effectiveStatus || record.status) === "done",
       is_skipped: record.status === "skipped",
       is_due: happenDate <= this.today(),
     };
@@ -85,7 +87,9 @@ class RecurringExpense {
     }
 
     const item = this.attachMonthInfo(row, month);
-    const statusMap = { done: "已完成", skipped: "已取消", pending: "待完成" };
+    // 已中止(void)的分期期次不再在日历体现
+    if (item.month_status === "void") return null;
+    const statusMap = { done: "已完成", skipped: "已取消", pending: "待完成", entered: "已入账", void: "已中止" };
 
     // 分期：追加第N/M期
     let content = item.name;
@@ -115,6 +119,7 @@ class RecurringExpense {
       category_name: item.category_name || "",
       remark: item.remark || "",
       month_status: item.month_status,
+      month_overdue: item.month_overdue,
       is_fixed_expense: true,
     };
   }
@@ -372,6 +377,15 @@ class RecurringExpense {
       if (!validMonths.includes(safeMonth)) {
         throw new Error(`分期仅限已登记月份操作，${safeMonth} 不在范围内`);
       }
+      // 分期三态护栏：已入账(entered)/已中止(void) 的期次不可经此入口随意改写，
+      // 避免与已建消费流水矛盾、破坏防重复入账。已入账请去账单手动冲正。
+      const cur = existingRecords[safeMonth] || {};
+      if (cur.status === "entered") {
+        throw new Error("该期已入账，不可直接标记，请去账单手动冲正");
+      }
+      if (cur.status === "void") {
+        throw new Error("该期已中止，不可再修改");
+      }
     }
 
     const records = this.parseMonthRecords(existing.month_records);
@@ -442,10 +456,29 @@ class RecurringExpense {
     return Array.from(map.values()).sort((a, b) => b.amount - a.amount);
   }
 
+  // 批量装饰分期行：超过期限即时作废(写库) + 把 effectiveStatus / overdue 写回 month_records，供日历/提醒/汇总读取
+  static async decorateRowsForCalendar(rows) {
+    await Promise.all(
+      rows.map(async (row) => {
+        const acc = this.parseAccountInfo(row.account_id);
+        if (acc?.type !== "installment") return;
+        try {
+          // 读取即写库：把已过期且未入账的期次标记为 void（任何 GET 都能即时看到灰态）
+          await this.voidExpiredInstallments(row);
+          const decorated = await this.decorateInstallmentStatus(row);
+          row.month_records = JSON.stringify(decorated);
+        } catch {
+          /* 装饰失败不影响日历主流程 */
+        }
+      })
+    );
+  }
+
   static async getCalendarEvents(userId, year, monthNo) {
     const month = `${year}-${String(monthNo).padStart(2, "0")}`;
     const rows = await this.findAll(userId, { month, includeInactive: false });
-    return rows.map(row => this.toCalendarEvent(row, month)).filter(Boolean);
+    await this.decorateRowsForCalendar(rows);
+    return rows.map((row) => this.toCalendarEvent(row, month)).filter(Boolean);
   }
 
   static async getUpcomingReminders(userId, scope = "default") {
@@ -459,6 +492,7 @@ class RecurringExpense {
 
     for (const month of months) {
       const rows = await this.findAll(userId, { month, includeInactive: false });
+      await this.decorateRowsForCalendar(rows);
       rows.forEach(row => {
         const event = this.toCalendarEvent(row, month);
         if (!event) return;
@@ -483,6 +517,7 @@ class RecurringExpense {
   static async getUpcomingRemindersCurrentMonth(userId, opts = {}) {
     const month = opts.month || dayjs().tz('Asia/Shanghai').format('YYYY-MM');
     const rows = await this.findAll(userId, { month, includeInactive: false });
+    await this.decorateRowsForCalendar(rows);
     const result = [];
     rows.forEach((row) => {
       const event = this.toCalendarEvent(row, month);
@@ -494,6 +529,296 @@ class RecurringExpense {
       }
     });
     return result.sort((a, b) => a.happen_date.localeCompare(b.happen_date));
+  }
+
+  static parseAccountInfo(raw) {
+    try {
+      return JSON.parse(raw || "{}") || {};
+    } catch {
+      return {};
+    }
+  }
+
+  static async updateMonthRecords(id, userId, records) {
+    await db.execute(
+      `UPDATE ${this.tableName} SET month_records = ?, update_time = ? WHERE id = ? AND user_id = ? AND is_deleted = 0`,
+      [JSON.stringify(records), this.now(), id, userId]
+    );
+  }
+
+  /**
+   * 分期入账：触发月份直接入账（仅未入账 pending 期可入）。
+   * 加强判断：当前系统日期必须落在目标月份的账单周期内
+   * （账单日 billingDay ~ 下月 billingDay），否则拒绝。
+   * 复用 CreditAccount.create 创建真实消费流水（不动 CreditCore），
+   * 将返回的流水 ID 写回 month_records[month].remark，status='entered'。
+   */
+  /**
+   * 判断某期是否处于可入账的账单周期内：
+   * 当前系统日期落在 month 的 billingDay ~ 下月 billingDay 之间。
+   * 与 enterInstallment 共用，避免周期判定逻辑漂移。
+   */
+  static isWithinBillingCycle(row, month) {
+    const acc = this.parseAccountInfo(row.account_id);
+    const billingDay = Number(acc.billing_day) || 1;
+    const targetMonth = dayjs.tz(`${month}-01`, "Asia/Shanghai").startOf("month");
+    const cycleStart = targetMonth.date(billingDay);
+    const cycleEnd = targetMonth.add(1, "month").date(billingDay);
+    const now = dayjs().tz("Asia/Shanghai");
+    return !now.isBefore(cycleStart) && !now.isAfter(cycleEnd);
+  }
+
+  static async enterInstallment(id, month, userId) {
+    const row = await this.findById(id, userId);
+    if (!row) throw new Error("分期不存在");
+    const records = this.parseMonthRecords(row.month_records);
+    const m = records[month];
+    if (!m) throw new Error("该期不存在");
+    // 幂等：已入账（remark 已有流水 ID）直接返回，避免重复建流水
+    if (m.status === "entered" && m.remark) {
+      return { flowId: m.remark, month, idx: 0, transDate: "", skipped: true };
+    }
+    // 自愈：旧代码占坑态 entering（remark 为空、无真实流水）视为未入账，复位后重入。
+    // 账单侧已确认无任何对应流水时，直接重新建流，避免永久卡死。
+    if (m.status === "entering" && !m.remark) {
+      console.warn(`[installment] 自愈 entering->pending id=${id} month=${month}`);
+      const heal = this.parseMonthRecords(row.month_records);
+      heal[month] = { ...heal[month], status: "pending", remark: "" };
+      await this.updateMonthRecords(id, userId, heal);
+      m.status = "pending";
+    }
+    if (m.status !== "pending") {
+      throw new Error(m.status === "void" ? "该期已中止" : "该期已入账或已处理");
+    }
+    const acc = this.parseAccountInfo(row.account_id);
+    const billingDay = Number(acc.billing_day) || 1;
+    const totalPeriods = Number(acc.total_periods) || Number(row.repeat_count) || 1;
+
+    // 账单周期校验：month 的 billingDay ~ 下月 billingDay（与 isWithinBillingCycle 一致）
+    const targetMonth = dayjs.tz(`${month}-01`, "Asia/Shanghai").startOf("month");
+    if (!this.isWithinBillingCycle(row, month)) {
+      const cycleStart = targetMonth.date(billingDay);
+      const cycleEnd = targetMonth.add(1, "month").date(billingDay);
+      throw new Error(
+        `请在账单周期内触发入账（${cycleStart.format("YYYY-MM-DD")} ~ ${cycleEnd.format("YYYY-MM-DD")}）。入账动作将归属下月账单（${targetMonth
+          .add(1, "month")
+          .format("YYYY-MM")}），当前不在该周期`
+      );
+    }
+
+    // 第几期（按月份升序）
+    const sortedMonths = Object.keys(this.parseMonthRecords(row.month_records)).sort();
+    const idx = sortedMonths.indexOf(month) + 1;
+    const safeDay = Math.min(billingDay + 1, targetMonth.daysInMonth());
+    const transDate = targetMonth.date(safeDay).format("YYYY-MM-DD");
+
+    // 复用信用卡消费入账内部方法（事务 + 锁卡 + 额度校验 + CreditCore.syncCardBills），不改动 CreditCore
+    const flow = await CreditAccount.create({
+      userId,
+      direction: 0,
+      categoryId: "installment",
+      amount: Number(m.amount),
+      transDate,
+      remark: `${acc.card_name || row.name}分期 第${idx}/${totalPeriods}期消费入账`,
+      cardId: acc.card_id,
+      payType: "installment",
+      payMethod: "installment",
+      currency: "CNY",
+      exchangeRate: 1,
+    });
+
+    const flowId = flow?.id || flow?.data?.id;
+    if (!flowId) throw new Error("入账流水创建失败");
+
+    // 成功后写回流水 ID + entered（不再用占坑 entering，避免中间态泄漏）
+    const updated = this.parseMonthRecords(row.month_records);
+    updated[month] = {
+      ...updated[month],
+      status: "entered",
+      remark: String(flowId),
+      done_time: dayjs().tz("Asia/Shanghai").format("YYYY-MM-DD HH:mm:ss"),
+    };
+    await this.updateMonthRecords(id, userId, updated);
+
+    return { flowId, month, idx, transDate };
+  }
+
+  /**
+   * 分期中止：仅未入账(pending)的期次可中止，标记 void + done_time；
+   * 已入账/已中止的期次跳过并说明原因（已入账需用户去账单手动冲正）。
+   */
+  static async abortInstallment(id, months, userId) {
+    const row = await this.findById(id, userId);
+    if (!row) throw new Error("分期不存在");
+    const records = this.parseMonthRecords(row.month_records);
+    const aborted = [];
+    const skipped = [];
+    (months || []).forEach((month) => {
+      const m = records[month];
+      if (!m) {
+        skipped.push({ month, reason: "不存在" });
+        return;
+      }
+      if (m.status === "pending" || m.status === "entering") {
+        records[month] = {
+          ...m,
+          status: "void",
+          remark: m.remark || "",
+          done_time: dayjs().tz("Asia/Shanghai").format("YYYY-MM-DD HH:mm:ss"),
+        };
+        aborted.push(month);
+      } else {
+        skipped.push({
+          month,
+          reason: m.status === "void" ? "已中止" : "已入账/已处理，请去账单手动冲正",
+        });
+      }
+    });
+    if (aborted.length) await this.updateMonthRecords(id, userId, records);
+    // 全部期次都不再是待入账(pending/entering) → 整个分期视为已结束/失效：
+    // 置 is_active=0（卡片整体灰色、不再触发日历/自动入账），并在 remark 标注。
+    let finished = false;
+    const remaining = Object.values(records).filter(
+      (r) => r.status === "pending" || r.status === "entering"
+    );
+    if (aborted.length && remaining.length === 0) {
+      const [rows] = await db.execute(
+        `SELECT remark FROM ${this.tableName} WHERE id = ? AND user_id = ? AND is_deleted = 0 LIMIT 1`,
+        [id, userId]
+      );
+      const oldRemark = rows[0]?.remark || "";
+      const finishedRemark = oldRemark.includes("已全部中止")
+        ? oldRemark
+        : `${oldRemark}｜已全部中止，分期结束`.trim();
+      await db.execute(
+        `UPDATE ${this.tableName} SET is_active = 0, remark = ?, update_time = ? WHERE id = ? AND user_id = ? AND is_deleted = 0`,
+        [finishedRemark, this.now(), id, userId]
+      );
+      finished = true;
+    }
+    return { aborted, skipped, finished };
+  }
+
+  /**
+   * 超过期限自动作废：对仍处于 pending / entering(无流水) 但账单周期已结束的期次，
+   * 标记 void（remark="超过期限，自动作废"）。读取事件（日历/列表/提醒）即触发写库，
+   * 保证任何一端 GET 都能即时看到「超过期限」灰态，无需先访问分期列表。
+   */
+  static async voidExpiredInstallments(row) {
+    if (!row || !row.repeat_count) return false;
+    const records = this.parseMonthRecords(row.month_records);
+    const acc = this.parseAccountInfo(row.account_id);
+    const billingDay = Number(acc.billing_day) || 1;
+    const today = dayjs().tz("Asia/Shanghai").startOf("day");
+    let mutated = false;
+    for (const month of Object.keys(records)) {
+      const rec = records[month];
+      const s = rec.status;
+      if (s !== "pending" && !(s === "entering" && !rec.remark)) continue;
+      const transDate = dayjs
+        .tz(`${month}-01`, "Asia/Shanghai")
+        .startOf("month")
+        .date(billingDay + 1);
+      if (transDate.isBefore(today)) {
+        records[month] = {
+          ...rec,
+          status: "void",
+          remark: "超过期限，自动作废",
+          done_time: dayjs().tz("Asia/Shanghai").format("YYYY-MM-DD HH:mm:ss"),
+        };
+        mutated = true;
+        console.warn(`[installment] 超过期限自动作废 id=${row.id} month=${month}`);
+      }
+    }
+    if (mutated) await this.updateMonthRecords(row.user_id, row.user_id, records);
+    return mutated;
+  }
+
+  /**
+   * 系统自动入账：对处于账单周期内且尚未入账(pending)的期次，自动触发入账。
+   * 由列表/日历读取时调用，替代前端手动「入账」按钮。
+   * 设计原则：
+   *  - 仅 installment（repeat_count 存在）且 status='pending' 且 isWithinBillingCycle 为真时触发；
+   *  - 复用 enterInstallment（entered+remark 幂等防重复，entering 占坑态自愈重入），不改动 CreditCore；
+   *  - 单期失败不影响整体（仅告警），保证列表/日历读取始终可用；
+   *  - 已 entered/void 的期次会被 enterInstallment 自身拒绝，安全跳过。
+   */
+  static async autoEnterPending(id, userId) {
+    const row = await this.findById(id, userId);
+    if (!row || !row.repeat_count) return;
+    const records = this.parseMonthRecords(row.month_records);
+    // 纳入 pending + entering(无流水占坑，需自愈重入) 的期次
+    const pendingMonths = Object.keys(records).filter((k) => {
+      const s = records[k].status;
+      return s === "pending" || (s === "entering" && !records[k].remark);
+    });
+    if (!pendingMonths.length) return;
+    let mutated = false;
+    for (const month of pendingMonths) {
+      let rec = records[month];
+      // entering 自愈：无流水占坑 → 复位 pending 后走正常逻辑
+      if (rec.status === "entering" && !rec.remark) {
+        records[month] = { ...rec, status: "pending", remark: "" };
+        rec = records[month];
+        mutated = true;
+      }
+      if (rec.status !== "pending") continue;
+      if (!this.isWithinBillingCycle(row, month)) continue; // 不在周期内（含未来期）→ 跳过，由 voidExpiredInstallments 处理过期
+      // 在账单周期内 → 自动入账
+      try {
+        await this.enterInstallment(id, month, userId);
+      } catch (e) {
+        console.warn(`[installment] 自动入账失败 id=${id} month=${month}:`, e.message);
+      }
+    }
+    if (mutated) await this.updateMonthRecords(id, userId, records);
+  }
+
+  /**
+   * 计算分期各期“有效状态”：entered 期若所属账单周期已还清(need_repay<=0)
+   * 则视为已还(done)。只读 card_bill，不写库、不改动 CreditCore。
+   * 返回新的 month_records（新增 effectiveStatus 字段）。
+   */
+  static async decorateInstallmentStatus(row) {
+    const records = this.parseMonthRecords(row.month_records);
+    const acc = this.parseAccountInfo(row.account_id);
+    const cardId = acc.card_id;
+    if (!cardId) return records;
+    const billingDay = Number(acc.billing_day) || 1;
+    const enteredMonths = Object.keys(records).filter((k) => records[k].status === "entered");
+    if (!enteredMonths.length) return records;
+    // 入账流水 transDate = 账单月 billingDay+1（day>billDay），按账单规则归属【下月】账单。
+    // 因此不能用 installment 的 month 键查 card_bill.bill_month，需按真实账单月推算查询。
+    const billMonths = new Set();
+    const monthToBillMonth = {};
+    enteredMonths.forEach((month) => {
+      const targetMonth = dayjs.tz(`${month}-01`, "Asia/Shanghai").startOf("month");
+      // day = billingDay+1 > billingDay 恒成立 → 归属下月账单
+      const billMonth = targetMonth.add(1, "month").format("YYYY-MM");
+      monthToBillMonth[month] = billMonth;
+      billMonths.add(billMonth);
+    });
+    const [billRows] = await db.execute(
+      `SELECT bill_month, need_repay, is_overdue FROM card_bill WHERE card_id = ? AND user_id = ? AND bill_month IN (?) AND is_deleted = 0`,
+      [cardId, row.user_id, [...billMonths]]
+    );
+    const billMap = {};
+    (billRows || []).forEach((b) => {
+      billMap[b.bill_month] = {
+        needRepay: parseFloat(b.need_repay),
+        isOverdue: b.is_overdue === 1 || b.is_overdue === "1" || b.is_overdue === true,
+      };
+    });
+    enteredMonths.forEach((month) => {
+      const billMonth = monthToBillMonth[month];
+      const b = billMap[billMonth];
+      const nr = b?.needRepay;
+      const overdue = !!b?.isOverdue;
+      records[month].effectiveStatus = nr !== undefined && nr <= 0.01 ? "done" : "entered";
+      // 逾期：已入账且归属账单处于逾期状态（前端据此显示红色"逾期"）
+      records[month].overdue = records[month].effectiveStatus === "entered" && overdue;
+    });
+    return records;
   }
 }
 
