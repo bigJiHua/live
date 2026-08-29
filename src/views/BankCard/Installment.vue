@@ -25,6 +25,44 @@
         placeholder="选择首期归属月份"
         @click="showStartPicker = true"
       />
+
+      <!-- 入账归属：各银行口径不同（浦发=本月账单，工行=次月账单） -->
+      <div class="opt-row">
+        <span class="opt-label">入账归属</span>
+        <div class="segment-switch" role="tablist">
+          <button
+            class="segment-item"
+            :class="{ active: enterMode === 'current' }"
+            @click="enterMode = 'current'"
+          >
+            本月账单
+          </button>
+          <button
+            class="segment-item"
+            :class="{ active: enterMode === 'next' }"
+            @click="enterMode = 'next'"
+          >
+            次月账单
+          </button>
+          <span class="segment-thumb" :class="enterMode === 'current' ? 'floor' : 'round'" />
+        </div>
+      </div>
+      <div class="opt-note">
+        浦发等：账单日前对本月消费分期 → 本月就是第一期；工行等：次月才入第一期
+      </div>
+
+      <app-field
+        v-model="firstEnterDateLabel"
+        label="首期入账日期"
+        readonly
+        is-link
+        placeholder="选择首期入账日期"
+        @click="showDatePicker = true"
+      />
+      <div class="opt-note">
+        默认账单日前 2 天（{{ anchorDay }}号）入账，可手动调整；每期固定这一日
+      </div>
+
       <div class="input-cell" @click="openKeyboard('amount')">
         <span class="input-label">分期总额</span>
         <span class="input-value">{{ formAmount || "0.00" }}</span>
@@ -111,12 +149,16 @@
           <span>{{ selectedCard ? selectedCard.bill_day + "号" : "-" }}</span>
         </div>
         <div class="preview-row">
-          <span>首期还款日</span>
+          <span>首期入账日</span>
           <span class="preview-date">{{ preview.firstDate }}</span>
+        </div>
+        <div class="preview-row">
+          <span>首期归属账单</span>
+          <span class="preview-date">{{ firstBillMonthLabel }}</span>
         </div>
 
         <div class="adjust-tip">
-          点击每期金额可手动微调（合计不可超过总还款额）
+          系统将在每期入账日自动入账（账单日前 2 天），无需手动操作；点击每期金额可微调
         </div>
         <div class="preview-list">
           <div
@@ -187,6 +229,17 @@
         @cancel="showStartPicker = false"
       />
     </app-popup>
+
+    <!-- 首期入账日期（年/月/日三列） -->
+    <app-popup v-model:show="showDatePicker" position="bottom" round class="start-popup">
+      <van-picker
+        v-model="datePickerSel"
+        title="首期入账日期"
+        :columns="dateColumns"
+        @confirm="onDateConfirm"
+        @cancel="showDatePicker = false"
+      />
+    </app-popup>
   </div>
 </template>
 
@@ -245,6 +298,88 @@ const onStartConfirm = () => {
   const [y, m] = startPickerSel.value;
   startMonth.value = dayjs(`${y}-${String(m).padStart(2, "0")}-01`);
   showStartPicker.value = false;
+};
+
+// ===== 入账归属 + 首期入账日期 =====
+// 本月账单（浦发口径）：首期入账日 <= 账单日 → 归属开始月份所在账单
+// 次月账单（工行口径）：首期入账日落在次月 → 归属下一期账单
+// 计划入账日统一取「账单日前 2 天」，之后每期固定该日（当月不足则取月末）
+const enterMode = ref("next"); // 'current' | 'next'
+
+// 银行默认口径（用户可手动覆盖）：浦发=本月入账，工行=次月入账，其余默认次月
+const BANK_ENTER_MODE = [
+  { keywords: ["浦发", "SPDB"], mode: "current" },
+  { keywords: ["工商", "工行", "ICBC"], mode: "next" },
+];
+const guessEnterMode = (card) => {
+  const text = `${card?.bank_name || ""}${card?.bank_id || ""}${card?.alias || ""}`;
+  const hit = BANK_ENTER_MODE.find((r) => r.keywords.some((k) => text.includes(k)));
+  return hit?.mode || "next";
+};
+
+// 计划入账日：账单日前 2 天（账单日 <= 2 时取 1 号）
+const anchorDay = computed(() => {
+  const bd = Number(selectedCard.value?.bill_day) || 1;
+  return Math.max(1, bd - 2);
+});
+
+// 首期入账日默认值：按归属模式落在开始月份或次月
+const defaultFirstEnterDate = computed(() => {
+  const base = startMonth.value;
+  const target = enterMode.value === "current" ? base : base.add(1, "month");
+  return target.date(Math.min(anchorDay.value, target.daysInMonth()));
+});
+
+const firstEnterDate = ref(dayjs().date(1));
+const showDatePicker = ref(false);
+const dateYears = [dayjs().year(), dayjs().year() + 1];
+const datePickerSel = ref([dayjs().year(), dayjs().month() + 1, 1]);
+
+// 选卡 / 切换归属 / 改开始月份 → 重算首期入账日默认值
+watch(
+  () => [defaultFirstEnterDate.value.valueOf(), selectedCard.value?.id, enterMode.value],
+  () => {
+    firstEnterDate.value = defaultFirstEnterDate.value;
+  },
+  { immediate: true },
+);
+
+const firstEnterDateLabel = computed(() =>
+  firstEnterDate.value ? firstEnterDate.value.format("YYYY年MM月DD日") : "",
+);
+
+const dateColumns = computed(() => {
+  const [y, m] = datePickerSel.value;
+  const dim = dayjs(`${y}-${String(m).padStart(2, "0")}-01`).daysInMonth();
+  return [
+    dateYears.map((v) => ({ text: `${v}年`, value: v })),
+    Array.from({ length: 12 }, (_, i) => ({ text: `${i + 1}月`, value: i + 1 })),
+    Array.from({ length: dim }, (_, i) => ({ text: `${i + 1}日`, value: i + 1 })),
+  ];
+});
+
+// 切换年月时把日号收敛到该月实际天数，避免出现「2月31日」
+watch(
+  datePickerSel,
+  (val) => {
+    const [y, m, d] = val;
+    const dim = dayjs(`${y}-${String(m).padStart(2, "0")}-01`).daysInMonth();
+    if (d > dim) datePickerSel.value = [y, m, dim];
+  },
+  { deep: true },
+);
+
+// 打开选择器时定位到当前首期日期
+watch(showDatePicker, (v) => {
+  if (!v) return;
+  const d = firstEnterDate.value;
+  datePickerSel.value = [d.year(), d.month() + 1, d.date()];
+});
+
+const onDateConfirm = () => {
+  const [y, m, d] = datePickerSel.value;
+  firstEnterDate.value = dayjs(`${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`);
+  showDatePicker.value = false;
 };
 
 // 精度分配开关（默认：本金截断 + 尾差放末期）
@@ -372,30 +507,35 @@ const preview = computed(() => {
     principalMode.value,
     tailMode.value,
   );
-  const billingDay = selectedCard.value?.bill_day || 1;
 
-  // 首期 = 所选开始月份账单日+1（默认下月；可往前选用于补登）
-  const firstMonth = startMonth.value;
-  const safeDay = Math.min(billingDay + 1, firstMonth.daysInMonth());
-  const firstDate = firstMonth.date(safeDay);
-
+  // 每期计划入账日 = 首期入账日往后推 N-1 个月，固定同一日（当月不足则取月末）
+  const base = firstEnterDate.value;
+  const anchor = base.date();
   const dates = [];
   for (let i = 0; i < periods; i++) {
-    const d = firstDate.add(i, "month");
-    const maxDay = d.daysInMonth();
-    const day = Math.min(safeDay, maxDay);
-    dates.push(d.date(day).format("YYYY-MM-DD"));
+    const d = base.add(i, "month");
+    dates.push(d.date(Math.min(anchor, d.daysInMonth())).format("YYYY-MM-DD"));
   }
 
   return {
     periods,
     perPeriod: standard.toFixed(2),
     total: total.toFixed(2),
-    firstDate: firstDate.format("YYYY-MM-DD"),
+    firstDate: dates[0] || "-",
     dates,
     schedule,
   };
 });
+
+// 某期入账流水归属的账单月（与后端 CardBill.getBillMonthByDate 同规则：
+// 入账日 <= 账单日 → 当月账单；> 账单日 → 次月账单）
+const billMonthOf = (dateStr) => {
+  if (!dateStr) return "-";
+  const bd = Number(selectedCard.value?.bill_day) || 1;
+  const d = dayjs(dateStr);
+  return d.date() > bd ? d.add(1, "month").format("YYYY-MM") : d.format("YYYY-MM");
+};
+const firstBillMonthLabel = computed(() => billMonthOf(preview.value.dates?.[0]));
 
 // 均分方案变化时，重置逐期微调列表
 watch(
@@ -437,6 +577,8 @@ const loadData = async () => {
 const onCardConfirm = ({ selectedOptions }) => {
   const cardId = selectedOptions?.[0]?.value;
   selectedCard.value = cards.value.find((c) => c.id === cardId) || null;
+  // 按银行口径预选入账归属（用户可再手动切换）
+  enterMode.value = guessEnterMode(selectedCard.value);
   showCardPicker.value = false;
 };
 
@@ -455,30 +597,37 @@ const handleSubmit = async () => {
     : preview.value.schedule;
   const perPeriodAmount = schedule[0]; // 每期标准金额（列表/日历展示用）
 
+  const planDates = preview.value.dates;
+  const firstEnter = planDates[0] || "";
+
   const accountInfo = JSON.stringify({
     type: "installment",
     card_id: card.id,
     card_name: `${card.alias || card.bank_name || ""}(尾号${card.last4_no || ""})`,
     billing_day: billingDay,
     start_month: startMonth.value.format("YYYY-MM"),
+    enter_mode: enterMode.value,
+    first_enter_date: firstEnter,
     original_amount: Number(formAmount.value),
     fee: Number(formFee.value || 0),
     total_periods: Number(formPeriods.value),
   });
 
+  // 期次键 = 计划入账日所在月份；每期记录 plan_date，后端据此判定入账时机
   const monthRecords = {};
-  preview.value.dates.forEach((d, i) => {
+  planDates.forEach((d, i) => {
     const month = d.substring(0, 7);
     monthRecords[month] = {
       status: "pending",
       amount: schedule[i] ?? perPeriodAmount,
+      plan_date: d,
       remark: "",
       remind_time: null,
       done_time: null,
     };
   });
 
-  const billingDayPlus1 = Math.min(billingDay + 1, 28);
+  const dayOfCycle = firstEnterDate.value.date();
 
   submitting.value = true;
   try {
@@ -488,10 +637,10 @@ const handleSubmit = async () => {
       category_id: "installment",
       account_id: accountInfo,
       cycle: "month",
-      day_of_cycle: billingDayPlus1,
+      day_of_cycle: dayOfCycle,
       month_records: monthRecords,
       repeat_count: Number(formPeriods.value),
-      remark: `总额${formAmount.value} 手续费${formFee.value || 0} ${formPeriods.value}期 本金${principalMode.value === "floor" ? "截断" : "四舍五入"} 尾差${tailMode.value === "last" ? "末期" : "第一期"}`,
+      remark: `总额${formAmount.value} 手续费${formFee.value || 0} ${formPeriods.value}期 ${enterMode.value === "current" ? "本月账单" : "次月账单"} 首期${firstEnter} 本金${principalMode.value === "floor" ? "截断" : "四舍五入"} 尾差${tailMode.value === "last" ? "末期" : "第一期"}`,
       is_active: 1,
     });
     showSuccessToast("分期创建成功");

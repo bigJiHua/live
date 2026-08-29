@@ -37,9 +37,10 @@
         <div class="info-row"><span>账单日</span><span>{{ parseAccount(item.account_id)?.billing_day || '?' }}号</span></div>
 
         <div class="months-section">
-          <div class="ms-title">各期状态（系统按账单周期自动入账）</div>
+          <div class="ms-title">各期状态（系统按入账日自动入账）</div>
           <div v-for="m in getMonthRecords(item)" :key="m.month" class="ms-row">
             <span class="ms-date">{{ m.month }}</span>
+            <span v-if="m.planDate" class="ms-plan">{{ m.planDate.slice(5) }}入账</span>
             <span class="ms-amount">￥{{ formatAmount(m.amount) }}</span>
             <span class="ms-status" :class="statusClass(m)">{{ tagText(m) }}</span>
           </div>
@@ -119,6 +120,7 @@ const getMonthRecords = (item) => {
       rawStatus: rec.status || 'pending',
       status: eff,
       overdue: !!rec.overdue,
+      planDate: rec.plan_date || '',
       amount: rec.amount !== undefined ? Number(rec.amount) : Number(item.amount || 0),
     }
   })
@@ -253,6 +255,7 @@ const handleDelete = async (item) => {
 .ms-title { font-size: 13px; font-weight: 600; color: var(--theme-text-secondary); margin-bottom: 6px; }
 .ms-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 13px; }
 .ms-date { color: var(--theme-text-primary); font-weight: 500; min-width: 64px; }
+.ms-plan { font-size: 11px; color: var(--theme-text-tertiary); padding: 1px 5px; border-radius: 4px; background: rgba(0, 0, 0, 0.04); white-space: nowrap; }
 .ms-amount { color: var(--van-danger-color, #ee0a24); font-weight: 500; }
 .ms-status { margin-left: auto; font-size: 12px; font-weight: 500; }
 .ms-status.st-pending { color: #1989fa; background: rgba(25, 137, 250, 0.1); padding: 1px 6px; border-radius: 4px; }

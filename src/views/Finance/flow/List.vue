@@ -95,7 +95,7 @@
                       <span class="tfd-dot out"></span>
                       <div class="tfd-body">
                         <div class="tfd-cat">{{ getCategoryName(item.expense) }}</div>
-                        <div class="tfd-meta">{{ item.expense.pay_method || '-' }} · {{ formatTime(item.expense.create_time) }}</div>
+                        <div class="tfd-meta">{{ formatPayMethod(item.expense.pay_method) }} · {{ formatTime(item.expense.create_time) }}</div>
                       </div>
                       <span class="tfd-amt out">-{{ formatAmount(item.expense.amount) }}</span>
                     </div>
@@ -103,7 +103,7 @@
                       <span class="tfd-dot in"></span>
                       <div class="tfd-body">
                         <div class="tfd-cat">{{ getCategoryName(item.income) }}</div>
-                        <div class="tfd-meta">{{ item.income.pay_method || '-' }} · {{ formatTime(item.income.create_time) }}</div>
+                        <div class="tfd-meta">{{ formatPayMethod(item.income.pay_method) }} · {{ formatTime(item.income.create_time) }}</div>
                       </div>
                       <span class="tfd-amt in">+{{ formatAmount(item.income.amount) }}</span>
                     </div>
@@ -134,7 +134,7 @@
                       <span class="tfd-dot out"></span>
                       <div class="tfd-body">
                         <div class="tfd-cat">{{ getCategoryName(item.expense) }}</div>
-                        <div class="tfd-meta">{{ item.expense.pay_method || '-' }} · {{ formatTime(item.expense.create_time) }}</div>
+                        <div class="tfd-meta">{{ formatPayMethod(item.expense.pay_method) }} · {{ formatTime(item.expense.create_time) }}</div>
                       </div>
                       <span class="tfd-amt out">-{{ formatAmount(item.expense.amount) }}</span>
                     </div>
@@ -142,7 +142,7 @@
                       <span class="tfd-dot in"></span>
                       <div class="tfd-body">
                         <div class="tfd-cat">{{ getCategoryName(item.income) }}</div>
-                        <div class="tfd-meta">{{ item.income.pay_method || '-' }} · {{ formatTime(item.income.create_time) }}</div>
+                        <div class="tfd-meta">{{ formatPayMethod(item.income.pay_method) }} · {{ formatTime(item.income.create_time) }}</div>
                       </div>
                       <span class="tfd-amt in">+{{ formatAmount(item.income.amount) }}</span>
                     </div>
@@ -173,7 +173,7 @@
                       <span class="tfd-dot out"></span>
                       <div class="tfd-body">
                         <div class="tfd-cat">{{ getCategoryName(item.expense) }}</div>
-                        <div class="tfd-meta">{{ item.expense.pay_method || '-' }} · {{ formatTime(item.expense.create_time) }}</div>
+                        <div class="tfd-meta">{{ formatPayMethod(item.expense.pay_method) }} · {{ formatTime(item.expense.create_time) }}</div>
                       </div>
                       <span class="tfd-amt out">-{{ formatAmount(item.expense.amount) }}</span>
                     </div>
@@ -181,7 +181,7 @@
                       <span class="tfd-dot in"></span>
                       <div class="tfd-body">
                         <div class="tfd-cat">{{ getCategoryName(item.income) }}</div>
-                        <div class="tfd-meta">{{ item.income.pay_method || '-' }} · {{ formatTime(item.income.create_time) }}</div>
+                        <div class="tfd-meta">{{ formatPayMethod(item.income.pay_method) }} · {{ formatTime(item.income.create_time) }}</div>
                       </div>
                       <span class="tfd-amt in">+{{ formatAmount(item.income.amount) }}</span>
                     </div>
@@ -199,7 +199,7 @@
                   <div class="fc-body">
                     <div class="fc-cat">{{ getCategoryName(item.data) }}</div>
                     <div class="fc-meta">
-                      {{ item.data.pay_method || "-" }} · {{ formatTime(item.data.create_time) }}
+                      {{ formatPayMethod(item.data.pay_method) }} · {{ formatTime(item.data.create_time) }}
                       <span v-if="item.data.card_id && !['xxxx','yyyy'].includes(item.data.card_id)" class="fc-bank-chip">
                         <BankIcon :src="getFullUrl(getCardBankIcon(item.data.card_id))" :name="getCardBankName(item.data.card_id)" :size="12" />
                         {{ getCardName(item.data.card_id) }}
@@ -218,9 +218,12 @@
                     {{ item.data.direction === 1 ? '↓' : '↑' }}
                   </span>
                   <div class="fc-body">
-                    <div class="fc-cat">{{ getCategoryName(item.data) }}</div>
+                    <div class="fc-cat">
+                      {{ getCategoryName(item.data) }}
+                      <span v-if="isInstallmentFlow(item.data)" class="fc-inst-tag">分期</span>
+                    </div>
                     <div class="fc-meta">
-                      {{ item.data.pay_method || "-" }}
+                      {{ formatPayMethod(item.data.pay_method) }}
                       <span v-if="item.data.card_id && !['xxxx','yyyy'].includes(item.data.card_id)" class="fc-bank-chip">
                         <BankIcon :src="getFullUrl(getCardBankIcon(item.data.card_id))" :name="getCardBankName(item.data.card_id)" :size="12" />
                         {{ getCardName(item.data.card_id) }}
@@ -484,10 +487,23 @@ const getCompactCardLabel = (item) => {
   return last4 ? last4 : (card.alias || '')
 }
 
+// 信用卡分期入账流水识别：入账时 pay_type / pay_method / category_id 均为 'installment'
+const isInstallmentFlow = (item) =>
+  !!item &&
+  (item.pay_method === "installment" ||
+    item.pay_type === "installment" ||
+    item.category_id === "installment");
+
+// 交易方式展示：分期入账的英文标识统一转中文
+const formatPayMethod = (v) => (v === "installment" ? "信用卡分期" : v || "-");
+
 // 获取分类名称（处理特殊分类）
 const getCategoryName = (item) => {
   if (item.category_id === "CATEGORY_REPAY") {
     return "信用卡还款";
+  }
+  if (isInstallmentFlow(item)) {
+    return "信用卡分期";
   }
   return item.category_name || "未知分类";
 };
@@ -1160,6 +1176,19 @@ html[data-theme-mono="1"] .flow-card.fc-repay .fc-bank-chip {
   align-items: center;
   gap: 4px;
   flex-wrap: wrap;
+}
+/* 信用卡分期标记（installment） */
+.fc-inst-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 5px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16px;
+  border-radius: 4px;
+  vertical-align: middle;
+  color: var(--van-warning-color, #ff976a);
+  background: rgba(255, 151, 106, 0.14);
 }
 .fc-bank-chip {
   display: inline-flex;

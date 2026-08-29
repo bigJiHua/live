@@ -53,7 +53,8 @@
         </app-cell>
         <app-cell title="交易方式">
           <template #value>
-            <span>{{ detail.pay_method || "-" }}</span>
+            <span v-if="isInstallmentFlow(detail)" class="inst-tag">信用卡分期</span>
+            <span v-else>{{ detail.pay_method || "-" }}</span>
           </template>
         </app-cell>
         <app-cell title="关联卡片">
@@ -345,10 +346,20 @@ const getCardBankName = (cardId) => {
   return bank?.name || bank?.bank_name || card.bank_name || "";
 };
 
+// 信用卡分期入账流水识别：入账时 pay_type / pay_method / category_id 均为 'installment'
+const isInstallmentFlow = (item) =>
+  !!item &&
+  (item.pay_method === "installment" ||
+    item.pay_type === "installment" ||
+    item.category_id === "installment");
+
 // 获取分类显示文本
 const getCategoryText = (item) => {
   if (item.category_id === "CATEGORY_REPAY") {
     return "信用卡还款";
+  }
+  if (isInstallmentFlow(item)) {
+    return "信用卡分期";
   }
   return item.category_name || "未知分类";
 };
@@ -647,6 +658,18 @@ onMounted(() => {
   margin: 16px;
   border-radius: 12px;
   overflow: hidden;
+}
+
+/* 信用卡分期标记（installment） */
+.inst-tag {
+  display: inline-block;
+  padding: 1px 6px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+  border-radius: 4px;
+  color: var(--van-warning-color, #ff976a);
+  background: rgba(255, 151, 106, 0.14);
 }
 
 /* 备注行：标签 50% / 内容 50%（55 分），内容超宽自动换行 */

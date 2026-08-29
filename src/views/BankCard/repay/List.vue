@@ -102,14 +102,6 @@
 
     <van-empty v-if="!loading && repayList.length === 0" description="暂无还款记录" />
 
-    <!-- 添加还款按钮 -->
-    <div class="add-btn-wrap">
-      <button class="glass-add-btn" @click="goToAdd">
-        <van-icon name="plus" />
-        <span>添加还款记录</span>
-      </button>
-    </div>
-
     <van-overlay :show="loading" z-index="2000">
       <div class="flex-center">
         <van-loading size="36px" vertical color="#fff">加载中...</van-loading>
@@ -264,11 +256,6 @@ const goToRepay = (item) => {
   router.push(`/card/repay/add?billId=${item.bill_id || ''}`);
 };
 
-// 跳转到添加
-const goToAdd = () => {
-  router.push("/card/repay/add");
-};
-
 // 还款撤销
 const handleReverse = async (item) => {
   if (!item.account_id) {
@@ -302,7 +289,7 @@ onMounted(() => {
 .page-repay-list {
   min-height: 100vh;
   background: var(--theme-bg-primary);
-  padding-bottom: 100px;
+  padding-bottom: 20px;
 }
 
 .filter-section {
@@ -424,30 +411,6 @@ onMounted(() => {
 .repay-actions {
   display: flex;
   gap: 8px;
-}
-
-.add-btn-wrap {
-  position: fixed;
-  bottom: 30px;
-  left: 20px;
-  right: 20px;
-  z-index: 100;
-}
-
-.glass-add-btn {
-  width: 100%;
-  height: 56px;
-  background: var(--theme-primary);
-  color: #fff;
-  border: none;
-  border-radius: 28px;
-  font-weight: 600;
-  font-size: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  box-shadow: 0 8px 24px rgba(7, 193, 96, 0.3);
 }
 
 .flex-center {
