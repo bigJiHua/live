@@ -433,7 +433,7 @@ onMounted(() => {
 }
 
 .info-row .value.primary {
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
 }
 
 .card-footer {
@@ -456,7 +456,7 @@ onMounted(() => {
 
 .cost-info {
   font-size: 11px;
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
 }
 
 .card-arrow {

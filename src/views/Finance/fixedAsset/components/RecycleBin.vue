@@ -224,7 +224,7 @@ onMounted(() => {
 }
 
 :deep(.danger-title) {
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
 }
 
 /* 新增：修复回收站为空时图标与文字对齐 */

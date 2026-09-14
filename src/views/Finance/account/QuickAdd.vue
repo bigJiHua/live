@@ -1657,7 +1657,7 @@ const onSubmit = async () => {
 .summary-amount {
   font-size: 24px;
   font-weight: 700;
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
   font-family: "DIN Alternate", "SF Mono", monospace;
 }
 

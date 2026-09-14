@@ -359,7 +359,7 @@ const submit = async () => {
   font-size: 14px;
 }
 .required {
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
 }
 .upload-section {
   padding: 0 16px;

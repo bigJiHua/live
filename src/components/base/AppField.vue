@@ -25,6 +25,7 @@
           :readonly="readonly"
           :rows="rows"
           :autocomplete="autocomplete || undefined"
+          :inputmode="inputmode || undefined"
           @input="onInput"
           @blur="onBlur"
         ></textarea>
@@ -38,6 +39,7 @@
           :readonly="readonly"
           :maxlength="maxlength"
           :autocomplete="autocomplete || undefined"
+          :inputmode="inputmode || undefined"
           @input="onInput"
           @blur="onBlur"
         />
@@ -97,6 +99,7 @@ const props = defineProps({
   passwordVisible: { type: Boolean, default: false },
   isLink: { type: Boolean, default: false },
   autocomplete: { type: String, default: '' },
+  inputmode: { type: String, default: '' },
 })
 
 const emit = defineEmits(['update:modelValue', 'change', 'blur', 'click'])

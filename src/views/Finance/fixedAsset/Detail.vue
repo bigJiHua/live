@@ -276,7 +276,7 @@ onMounted(() => {
 }
 
 .primary-value {
-  color: #ee0a24 !important;
+  color: var(--van-danger-color, #ee0a24) !important;
   font-weight: 600;
 }
 

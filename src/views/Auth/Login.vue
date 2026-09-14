@@ -792,7 +792,7 @@ const goToRegister = () => {
   margin: 6px 2px 0;
   font-size: 12px;
   line-height: 1.4;
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
 }
 /* 密码框：DOM input 文字透明（值仅为 ● 掩码，F12 无明文），真实明文由 canvas 绘制 */
 .pwd-canvas-field :deep(.app-field__input) {

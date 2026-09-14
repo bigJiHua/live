@@ -363,7 +363,7 @@ onUnmounted(() => {
 }
 .header-icon {
   font-size: 48px;
-  color: #07c160;
+  color: var(--van-green, #07c160);
   margin-bottom: 12px;
 }
 .header-title {
@@ -479,7 +479,7 @@ onUnmounted(() => {
 }
 .divider {
   height: 1px;
-  background: #ebedf0;
+  background: var(--theme-border, #ebedf0);
   margin: 20px 0;
 }
 .manual-backup-section {

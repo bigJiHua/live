@@ -250,10 +250,10 @@ onMounted(loadLogs);
   background: var(--theme-bg-secondary);
   border-radius: 8px;
   padding: 10px 12px;
-  border-left: 3px solid #07c160;
+  border-left: 3px solid var(--van-green, #07c160);
 }
 .log-item.is-failed {
-  border-left-color: #ee0a24;
+  border-left-color: var(--van-danger-color, #ee0a24);
 }
 .log-header {
   display: flex;

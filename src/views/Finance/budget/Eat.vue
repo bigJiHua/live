@@ -347,7 +347,7 @@ onMounted(() => {
 }
 
 .delete-icon {
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
   font-size: 16px;
   padding: 2px;
 }
@@ -401,16 +401,16 @@ onMounted(() => {
 
 .actual-amount {
   font-weight: 600;
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
 }
 
 .diff-positive {
-  color: #07c160;
+  color: var(--van-green, #07c160);
   font-weight: 600;
 }
 
 .diff-negative {
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
   font-weight: 600;
 }
 

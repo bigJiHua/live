@@ -537,7 +537,7 @@ onUnmounted(() => {
 
 .header-icon {
   font-size: 48px;
-  color: #07c160;
+  color: var(--van-green, #07c160);
   margin-bottom: 12px;
 }
 
@@ -650,7 +650,7 @@ onUnmounted(() => {
   border-radius: 12px;
   font-size: 14px;
   font-weight: 500;
-  color: #07c160;
+  color: var(--van-green, #07c160);
   cursor: pointer;
   box-shadow: 0 1px 3px rgba(0,0,0,0.04);
 }

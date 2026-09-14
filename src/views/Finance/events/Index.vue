@@ -428,9 +428,9 @@ onMounted(() => loadData())
 .event-head { display: flex; align-items: center; justify-content: space-between; cursor: pointer; }
 .event-name { font-size: 16px; font-weight: 600; color: var(--theme-text-primary); margin-bottom: 4px; }
 .event-meta { font-size: 12px; color: var(--theme-text-tertiary); }
-.end-hint { color: #ee0a24; }
+.end-hint { color: var(--van-danger-color, #ee0a24); }
 .event-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-.event-amount { font-size: 18px; font-weight: 700; color: #ee0a24; }
+.event-amount { font-size: 18px; font-weight: 700; color: var(--van-danger-color, #ee0a24); }
 .event-amount.tag { font-size: 13px; font-weight: 400; color: var(--van-purple, #7232dd); background: rgba(114, 50, 221, 0.1); padding: 2px 10px; border-radius: 10px; }
 .expand-icon { color: var(--theme-text-tertiary); font-size: 14px; }
 .expand-body { margin-top: 4px; }
@@ -440,7 +440,7 @@ onMounted(() => loadData())
 .mr-title { font-size: 13px; font-weight: 600; color: var(--theme-text-secondary); margin-bottom: 6px; }
 .mr-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; border: 1px solid var(--theme-border); font-size: 13px; }
 .mr-month { color: var(--theme-text-primary); font-weight: 500; min-width: 64px; }
-.mr-amount { color: #ee0a24; font-weight: 500; }
+.mr-amount { color: var(--van-danger-color, #ee0a24); font-weight: 500; }
 .expand-actions { display: flex; gap: 12px; margin-top: 16px; }
 .expand-actions .van-button { flex: 1; }
 .footer-actions { position: fixed; bottom: 24px; left: 16px; right: 16px; display: flex; gap: 12px; }

@@ -42,13 +42,13 @@
           <div class="progress-bar">
             <div
               class="progress-fill"
-              :class="{ over: detail.is_over_budget }"
+              :class="{ over: isOver }"
               :style="{ width: progress + '%' }"
             ></div>
           </div>
           <div class="progress-info">
             <span>使用率 {{ progress }}%</span>
-            <span v-if="detail.is_over_budget" class="over-warning">已超支</span>
+            <span v-if="isOver" class="over-warning">已超支</span>
           </div>
         </div>
       </div>
@@ -236,6 +236,9 @@ const progress = computed(() => {
   if (budget === 0) return 0
   return Math.min(100, Math.round((totalExpense.value / budget) * 100))
 })
+
+// 超额判定以前端计算的剩余为准（避免服务端 is_over_budget 不同步）
+const isOver = computed(() => remaining.value < 0)
 
 // 出行相关
 const travelDays = computed(() => detail.value?.budget_details?.days || [])
@@ -452,7 +455,7 @@ onMounted(() => {
 }
 
 .amount-value.remaining.negative {
-  color: #ffb3b3;
+  color: var(--theme-danger);
 }
 
 .progress-section {
@@ -461,20 +464,20 @@ onMounted(() => {
 
 .progress-bar {
   height: 6px;
-  background: rgba(255, 255, 255, 0.3);
+  background: var(--theme-border);
   border-radius: 3px;
   overflow: hidden;
 }
 
 .progress-fill {
   height: 100%;
-  background: #90f0c8;
+  background: var(--theme-success);
   border-radius: 3px;
   transition: width 0.3s;
 }
 
 .progress-fill.over {
-  background: #ffb3b3;
+  background: var(--theme-danger);
 }
 
 .progress-info {
@@ -486,7 +489,7 @@ onMounted(() => {
 }
 
 .over-warning {
-  color: rgba(255, 255, 255, 0.95);
+  color: var(--theme-danger);
   font-weight: 600;
 }
 
@@ -580,7 +583,7 @@ onMounted(() => {
 .expense-amount {
   font-size: 14px;
   font-weight: 600;
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
 }
 
 .expense-cny {
@@ -641,7 +644,7 @@ onMounted(() => {
 }
 
 .stat-value.danger {
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
 }
 
 /* 购物项 */
@@ -699,7 +702,7 @@ onMounted(() => {
 }
 
 .price-actual {
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
   font-weight: 600;
   margin-left: 10px;
 }
@@ -733,7 +736,7 @@ onMounted(() => {
 .eat-total-value {
   font-size: 18px;
   font-weight: 700;
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
 }
 
 /* 菜品项 */
@@ -785,7 +788,7 @@ onMounted(() => {
 }
 
 .dish-subtotal {
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
   font-weight: 600;
 }
 
@@ -805,6 +808,6 @@ onMounted(() => {
 }
 
 .delete-btn {
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
 }
 </style>

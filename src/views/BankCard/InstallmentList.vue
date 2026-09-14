@@ -243,7 +243,7 @@ const handleDelete = async (item) => {
   font-size: 11px;
   line-height: 16px;
   color: #fff;
-  background: #969799;
+  background: var(--van-gray-6, #969799);
   border-radius: 8px;
   vertical-align: middle;
 }
@@ -258,7 +258,7 @@ const handleDelete = async (item) => {
 .ms-plan { font-size: 11px; color: var(--theme-text-tertiary); padding: 1px 5px; border-radius: 4px; background: rgba(0, 0, 0, 0.04); white-space: nowrap; }
 .ms-amount { color: var(--van-danger-color, #ee0a24); font-weight: 500; }
 .ms-status { margin-left: auto; font-size: 12px; font-weight: 500; }
-.ms-status.st-pending { color: #1989fa; background: rgba(25, 137, 250, 0.1); padding: 1px 6px; border-radius: 4px; }
+.ms-status.st-pending { color: var(--van-blue, #1989fa); background: rgba(25, 137, 250, 0.1); padding: 1px 6px; border-radius: 4px; }
 .ms-status.st-entering { color: var(--van-warning-color, #ff976a); background: rgba(255, 151, 106, 0.12); padding: 1px 6px; border-radius: 4px; }
 .ms-status.st-entered { color: var(--van-success-color, #07c160); background: rgba(7, 193, 96, 0.1); padding: 1px 6px; border-radius: 4px; }
 .ms-status.st-overdue { color: var(--van-danger-color, #ee0a24); background: rgba(238, 10, 36, 0.1); padding: 1px 6px; border-radius: 4px; }
@@ -274,7 +274,7 @@ const handleDelete = async (item) => {
 .ai-month { font-weight: 500; color: var(--theme-text-primary); }
 .ai-amount { color: var(--van-danger-color, #ee0a24); }
 .ai-tag { margin-left: auto; font-size: 12px; padding: 1px 6px; border-radius: 4px; }
-.ai-tag.tag-pending { color: #1989fa; background: rgba(25, 137, 250, 0.1); }
+.ai-tag.tag-pending { color: var(--van-blue, #1989fa); background: rgba(25, 137, 250, 0.1); }
 .ai-tag.tag-entered { color: var(--van-success-color, #07c160); background: rgba(7, 193, 96, 0.1); }
 .ai-tag.tag-overdue { color: var(--van-danger-color, #ee0a24); background: rgba(238, 10, 36, 0.1); }
 .ai-tag.tag-done { color: var(--van-success-color, #07c160); background: rgba(7, 193, 96, 0.1); }

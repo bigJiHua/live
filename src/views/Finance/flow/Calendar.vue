@@ -995,11 +995,11 @@ const getCompactBankLabel = (item) => {
 }
 
 .detail-balance.income {
-  color: var(--van-danger-color, #ee0a24);
+  color: var(--money-income);
 }
 
 .detail-balance.expense {
-  color: var(--van-green, #07c160);
+  color: var(--money-expense);
 }
 
 .detail-content {
@@ -1110,8 +1110,17 @@ html[data-theme-mono="1"] .flow-item-col.repay .fi-line2 {
 .fi-bank {
   font-size: 10px;
   color: var(--theme-text-secondary);
-  flex-shrink: 0;
   text-align: right;
+  /* 超宽文字（如完整银行名+卡号）时允许横向滑动查看，而非被裁切 */
+  min-width: 0;
+  white-space: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.fi-bank::-webkit-scrollbar {
+  display: none;
 }
 
 .fi-card-type {
@@ -1125,6 +1134,7 @@ html[data-theme-mono="1"] .flow-item-col.repay .fi-line2 {
   font-weight: 600;
   font-family: "DIN Alternate", -apple-system, sans-serif;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .fi-line2-wrap {
@@ -1226,9 +1236,11 @@ html[data-theme-mono="1"] .flow-item-col.repay .fi-line2 {
   font-size: 10px;
   color: var(--theme-text-secondary);
   max-width: 45%;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  min-width: 0;
   white-space: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 /* ── 提现区域 ── */
@@ -1313,9 +1325,11 @@ html[data-theme-mono="1"] .flow-item-col.repay .fi-line2 {
   font-size: 10px;
   color: var(--van-green);
   max-width: 45%;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  min-width: 0;
   white-space: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 /* ── 冲正区域（灰色，表示已撤销/无效）── */
@@ -1401,9 +1415,18 @@ html[data-theme-mono="1"] .flow-item-col.repay .fi-line2 {
   font-size: 10px;
   color: var(--theme-text-tertiary);
   max-width: 45%;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  min-width: 0;
   white-space: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+/* 超宽银行名时横向滑动查看，隐藏滚动条 */
+.tf-bank::-webkit-scrollbar,
+.wd-bank::-webkit-scrollbar,
+.rv-bank::-webkit-scrollbar {
+  display: none;
 }
 
 /* 立即记账按钮 */

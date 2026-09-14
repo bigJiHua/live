@@ -108,10 +108,10 @@ const goToPage = (type) => {
   flex-shrink: 0;
 }
 .menu-icon.blue { color: var(--theme-primary); }
-.menu-icon.green { color: #07c160; }
+.menu-icon.green { color: var(--van-green, #07c160); }
 .menu-icon.orange { color: #fa8c16; }
-.menu-icon.teal { color: #07c160; }
-.menu-icon.red { color: #ee0a24; }
+.menu-icon.teal { color: var(--van-green, #07c160); }
+.menu-icon.red { color: var(--van-danger-color, #ee0a24); }
 .menu-info { flex: 1; }
 .menu-title {
   font-size: 14px;

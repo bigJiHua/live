@@ -658,7 +658,7 @@ loadTables();
 
 .header-icon {
   font-size: 48px;
-  color: #ff976a;
+  color: var(--van-orange, #ff976a);
   margin-bottom: 12px;
 }
 
@@ -804,7 +804,7 @@ loadTables();
 }
 
 .text-danger {
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
 }
 
 .time-text {
@@ -824,7 +824,7 @@ loadTables();
 
 .error-item {
   font-size: 11px;
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
   padding: 4px 0;
   border: 1px solid var(--theme-border);
 }

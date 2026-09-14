@@ -1237,7 +1237,7 @@ onActivated(() => {
   border-radius: 4px;
   font-weight: 500;
 }
-.inst-tag.pending { color: #1989fa; background: rgba(25, 137, 250, 0.1); }
+.inst-tag.pending { color: var(--van-blue, #1989fa); background: rgba(25, 137, 250, 0.1); }
 .inst-tag.entering { color: var(--van-warning-color, #ff976a); background: rgba(255, 151, 106, 0.12); }
 .inst-tag.entered { color: var(--van-success-color, #07c160); background: rgba(7, 193, 96, 0.1); }
 .inst-tag.overdue { color: var(--van-danger-color, #ee0a24); background: rgba(238, 10, 36, 0.1); }

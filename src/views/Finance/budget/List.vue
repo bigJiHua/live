@@ -549,7 +549,7 @@ onMounted(() => {
 }
 
 .progress-fill.over {
-  background: linear-gradient(90deg, #ee0a24, #ff6034);
+  background: linear-gradient(90deg, var(--van-danger-color, #ee0a24), #ff6034);
 }
 
 .progress-info {

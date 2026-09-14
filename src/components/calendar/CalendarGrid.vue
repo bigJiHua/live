@@ -1,5 +1,5 @@
 <template>
-  <div class="dc" :class="{ card }" :style="themeVars">
+  <div class="dc" :class="{ card, 'at-today': !showTodayJump }" :style="themeVars">
     <!-- 月份导航（页面自带导航时可隐藏） -->
     <div v-if="showHeader" class="dc-header">
       <button class="dc-nav" @click="$emit('prev')"><van-icon name="arrow-left" /></button>
@@ -565,6 +565,16 @@ const fmt = abbrMoney
 @keyframes dc-ring-green {
   0%, 100% { background: rgba(7, 193, 96, 0.3); box-shadow: inset 0 0 0 2px rgba(7, 193, 96, 0.6); }
   50% { background: rgba(7, 193, 96, 0.06); box-shadow: inset 0 0 0 2px rgba(7, 193, 96, 0.16); }
+}
+
+/* 停留在「今日」视图时不闪烁，仅保留「今日」主色实心圆身份；
+   一旦用户选了他日（at-today 失效），今日提醒恢复闪烁以吸引回到当日 */
+.dc.at-today .dc-cell.today.reminder-red .dc-num,
+.dc.at-today .dc-cell.today.reminder-yellow .dc-num,
+.dc.at-today .dc-cell.today.reminder-green .dc-num {
+  animation: none;
+  color: #fff;
+  font-weight: 500;
 }
 
 /* 出差日：仅弱化 emoji，融入主题，不填充背景 */

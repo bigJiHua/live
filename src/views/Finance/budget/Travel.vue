@@ -22,6 +22,7 @@
               v-model="formData.budget_amount"
               label="总预算"
               type="number"
+              inputmode="decimal"
               placeholder="0.00"
               label-width="70px"
               required
@@ -62,6 +63,7 @@
                   v-model="rate.value"
                   type="number"
                   class="rate-mini-input"
+                  inputmode="decimal"
                   @input="refreshAllCNY"
                 />
                 <van-icon 
@@ -114,10 +116,15 @@
           <div class="progress-bar">
             <div
               class="progress-fill"
+              :class="balance >= 0 ? 'is-safe' : 'is-over'"
               :style="{ width: progressPercent + '%' }"
             ></div>
           </div>
-          <span class="progress-text">预算进度 {{ progressPercent }}%</span>
+          <span
+            class="progress-text"
+            :class="balance >= 0 ? 'is-safe' : 'is-over'"
+            >预算进度 {{ progressPercent }}%</span
+          >
         </div>
       </div>
 
@@ -190,6 +197,7 @@
                       type="number"
                       placeholder="0.00"
                       class="amount-input"
+                      inputmode="decimal"
                       @input="calcItemCNY(item)"
                     />
                     <div
@@ -836,7 +844,7 @@ onMounted(() => {
 }
 
 .rate-delete:hover {
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
 }
 
 .currency-name {
@@ -912,19 +920,31 @@ onMounted(() => {
 }
 .progress-bar {
   height: 6px;
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--theme-border);
   border-radius: 3px;
   overflow: hidden;
   margin-bottom: 4px;
 }
 .progress-fill {
   height: 100%;
-  background: var(--theme-bg-secondary);
+  border-radius: 3px;
   transition: width 0.3s;
+}
+.progress-fill.is-safe {
+  background: var(--theme-success);
+}
+.progress-fill.is-over {
+  background: var(--theme-danger);
 }
 .progress-text {
   font-size: 10px;
   opacity: 0.8;
+}
+.progress-text.is-safe {
+  color: var(--theme-success);
+}
+.progress-text.is-over {
+  color: var(--theme-danger);
 }
 
 /* 每日明细 */
@@ -960,7 +980,7 @@ onMounted(() => {
   font-weight: 600;
 }
 .delete-day {
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
   font-size: 16px;
 }
 
@@ -983,6 +1003,10 @@ onMounted(() => {
   border: none;
   background: transparent;
   font-size: 14px;
+  color: var(--theme-text-primary);
+}
+.desc-input::placeholder {
+  color: var(--theme-text-tertiary);
 }
 .line-two {
   display: flex;
@@ -1000,9 +1024,10 @@ onMounted(() => {
 .amount-input {
   width: 80px;
   border: none;
+  background: transparent;
   padding: 4px 8px;
   font-weight: bold;
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
 }
 .currency-unit {
   font-size: 12px;

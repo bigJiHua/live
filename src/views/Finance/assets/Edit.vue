@@ -269,15 +269,6 @@
       </div>
     </app-popup>
 
-    <app-popup v-model:show="showOffshoreTypePicker" position="bottom">
-      <van-picker
-        title="选择境外账户"
-        :columns="offshoreTypeColumns"
-        @confirm="onOffshoreTypeConfirm"
-        @cancel="showOffshoreTypePicker = false"
-      />
-    </app-popup>
-
     <!-- 境外资产弹窗 -->
     <app-popup v-model:show="showOffshorePopup" position="bottom" round>
       <div class="add-popup">
@@ -324,6 +315,15 @@
             >确定</app-button>
         </div>
       </div>
+    </app-popup>
+
+    <app-popup v-model:show="showOffshoreTypePicker" position="bottom">
+      <van-picker
+        title="选择境外账户"
+        :columns="offshoreTypeColumns"
+        @confirm="onOffshoreTypeConfirm"
+        @cancel="showOffshoreTypePicker = false"
+      />
     </app-popup>
 
     <!-- 负债弹窗 -->
@@ -558,10 +558,7 @@ const handleAddBalance = () => {
   showBalancePopup.value = false;
 };
 const onBalanceTypeConfirm = ({ selectedOptions }) => {
-  const idx = balanceTypes.findIndex(
-    (t) => t.text === selectedOptions[0]
-  );
-  balanceForm.value.type = balanceTypes[idx].value;
+  balanceForm.value.type = selectedOptions[0].value;
   showBalanceTypePicker.value = false;
 };
 
@@ -696,10 +693,7 @@ const handleAddDebt = () => {
   showDebtPopup.value = false;
 };
 const onDebtTypeConfirm = ({ selectedOptions }) => {
-  const idx = debtTypes.findIndex(
-    (t) => t.text === selectedOptions[0]
-  );
-  debtForm.value.type = debtTypes[idx].value;
+  debtForm.value.type = selectedOptions[0].value;
   showDebtTypePicker.value = false;
 };
 

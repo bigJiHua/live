@@ -206,7 +206,7 @@ watch(() => route.path, (path) => {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  border: 2px solid #dcdee0;
+  border: 2px solid var(--theme-border, #dcdee0);
   background: transparent;
   transition: all 0.2s ease;
 }

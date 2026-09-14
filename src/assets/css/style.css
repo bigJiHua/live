@@ -80,6 +80,8 @@
   --van-cell-background: var(--theme-bg-secondary);
   --van-cell-group-background: var(--theme-bg-primary);
   --van-cell-group-title-color: var(--theme-text-tertiary);
+  /* 折叠面板内容区背景跟随主题（Vant 默认 --van-background-2=白，暗色下露白底） */
+  --van-collapse-item-content-background: var(--theme-bg-primary);
 
   --van-divider-content-left-color: var(--theme-text-tertiary);
   --van-divider-content-right-color: var(--theme-text-tertiary);

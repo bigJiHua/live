@@ -666,7 +666,7 @@ onMounted(() => {
 }
 .home-reminder-chip { font-size: 0.8rem; color: var(--theme-text-tertiary); }
 .home-reminder-chip.lv-red { color: var(--van-danger-color, #ee0a24); }
-.home-reminder-chip.lv-yellow { color: #ff976a; }
+.home-reminder-chip.lv-yellow { color: var(--van-orange, #ff976a); }
 .home-reminder-chip.lv-green { color: var(--van-success-color, #07c160); }
 .home-reminder-chip b { font-weight: 600; margin-left: 4px; }
 
