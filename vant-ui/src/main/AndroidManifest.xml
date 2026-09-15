@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 网络图片加载（VanImage lazy-load 等）由调用方 App 声明权限；库本身仅保留 INTERNET 提示 -->
+    <uses-permission android:name="android.permission.INTERNET" />
+</manifest>
