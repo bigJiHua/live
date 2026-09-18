@@ -1,5 +1,9 @@
 # vant-android — web 项目 Vant 组件的安卓原生 1:1 复刻
 
+> **声明**：`vant-ui` 为本项目内部自研 Compose 组件库（独立实现，不含 Vant 源码），
+> 与有赞/Vant 官方无隶属关系；图标字体取自 MIT 协议的 Vant 4.9.22。详见
+> [vant-ui/README.md](vant-ui/README.md)。
+
 本模块把 `web/`（Vue3 + Vant 4.9.22）中实际用到的 **45 类 Vant 组件与 7 类函数式 API**，
 用 Jetpack Compose 一比一复刻为安卓原生组件，供重构原生 APP 时直接调用。
 
