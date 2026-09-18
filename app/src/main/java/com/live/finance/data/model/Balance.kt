@@ -8,6 +8,8 @@ data class Balance(
     val cardAlias: String = "",
     val cardLast4: String = "",
     val currency: String = "CNY",
+    /** 后端 card_type：虚拟行 cash/digital/virtual，实体行 debit/credit。 */
+    val cardType: String = "",
 ) {
     val isVirtual: Boolean get() = cardId == "xxxx" || cardId == "yyyy"
     val label: String get() = when (cardId) {

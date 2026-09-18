@@ -24,11 +24,11 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.zIndex
 import com.live.vant.basic.VanLoading
 import com.live.vant.theme.LocalVantColors
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 /**
@@ -38,6 +38,11 @@ import kotlin.math.roundToInt
  * Compose 中通过 NestedScroll 实现：内部维护 loading 状态与下拉距离，
  * 触发刷新后由 [onRefresh] 通知业务加载，业务完成后调用 [VanPullRefreshState.finishRefresh]。
  * [isChildAtTop] 返回内容是否已滚动到顶部（Vant 自动检测，Compose 需显式传入）。
+ *
+ * ⚠ **调用方必须传真实的 [isChildAtTop]**（如 `{ listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0 }`
+ * 或 `{ scrollState.value == 0 }`）。若用默认 `{ true }`，[NestedScrollConnection.onPreScroll] 会**抢走**列表自身的上滑手势：
+ * 表现为「列表在任意位置往下拖都触发下拉刷新，且滚不回去」（2026-09-17 在动态列表页踩过）。
+ * 默认值之所以不能改成 `false`，是因为 `onPostScroll` 的接管分支也依赖它（恒 false 则下拉刷新永不触发）。
  */
 class VanPullRefreshState internal constructor() {
     internal var offset by mutableFloatStateOf(0f)
@@ -72,7 +77,6 @@ fun VanPullRefresh(
     content: @Composable () -> Unit,
 ) {
     val c = LocalVantColors.current
-    val scope = androidx.compose.runtime.rememberCoroutineScope()
     // loading 外部控制（v-model 语义）：phase 变化同步
     LaunchedEffect(state.phase) {
         when (state.phase) {
@@ -134,7 +138,11 @@ fun VanPullRefresh(
             .nestedScroll(connection)
             .then(modifier),
     ) {
-        content()
+        // 内容整体随下拉位移（Vant .van-pull-refresh__track translate3d 语义）：
+        // 拖动时整个 item 区一起往下滚动，头部提示区恰好填入让出的空间
+        Box(Modifier.fillMaxSize().graphicsLayer { translationY = state.offset }) {
+            content()
+        }
         // 头部提示区（Vant .van-pull-refresh__head）
         val visible = state.offset > 0f || state.isLoading || state.phase == VanPullRefreshState.PullPhase.Success
         val height = when (state.phase) {

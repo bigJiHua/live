@@ -28,6 +28,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.platform.LocalView
 import com.live.vant.basic.VanOverlay
 import com.live.vant.icon.VanIcon
 import com.live.vant.theme.LocalVantColors
@@ -80,10 +83,19 @@ fun VanNumberKeyboard(
             decorFitsSystemWindows = false,
         ),
     ) {
+        // 关掉 Dialog 自身系统 dim（默认一层重黑遮罩）；金额键盘遮罩已为透明，仅保留可点收起，避免"重黑"残留
+        val view = LocalView.current
+        val window = (view.parent as? DialogWindowProvider)?.window
+        val prevDim = window?.attributes?.dimAmount
+        window?.setDimAmount(0f)
+        DisposableEffect(Unit) {
+            onDispose { prevDim?.let { window?.setDimAmount(it) } }
+        }
         val keyBg = if (theme == VanKeyboardTheme.Custom) c.bgPage else c.bgCard
         androidx.compose.runtime.CompositionLocalProvider(LocalKeyboardKeyBg provides keyBg) {
         Box(contentAlignment = Alignment.BottomCenter, modifier = Modifier.fillMaxSize()) {
-            VanOverlay(show = true, onClick = { if (closeOnClickOutside) { onClose?.invoke(); onBlur?.invoke() } })
+            // 金额键盘遮罩改透明：金额步需看穿遮罩看到上方输入的金额（用户要求；web 数字键盘无重黑遮罩）
+            VanOverlay(show = true, color = Color.Transparent, onClick = { if (closeOnClickOutside) { onClose?.invoke(); onBlur?.invoke() } })
             Column(
                 modifier = Modifier
                     .fillMaxWidth()

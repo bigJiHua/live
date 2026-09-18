@@ -21,6 +21,8 @@ data class FlowRow(
     val currency: String = "CNY",
     val exchangeRate: Double = 1.0,
     val payMethod: String = "",
+    /** 后端 `pay_type`（"转账"/"其他支出"/"储蓄卡"…）。web 的转账/提现/冲正配对**以它为准**（`item.pay_type || item.category_name`）。 */
+    val payType: String = "",
     val accountType: String = "",
     val categoryId: String = "",
     val categoryName: String = "",
@@ -47,3 +49,13 @@ data class FlowRow(
     /** 展示日（优先 trans_date）。 */
     val day: String get() = transDate.ifEmpty { createTime.take(10) }
 }
+
+/** 转账明细行（对应 GET /account/transfer/list 行，表 account_transfer）。 */
+data class TransferRow(
+    val id: String,
+    val fromCardId: String = "",
+    val toCardId: String = "",
+    val amount: Double = 0.0,
+    val transDate: String = "",
+    val remark: String = "",
+)

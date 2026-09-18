@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -16,6 +17,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,7 +31,10 @@ import com.live.finance.theme.LocalAppColors
 import com.live.finance.ui.common.Money
 import com.live.finance.ui.common.ScreenScaffold
 import com.live.finance.ui.flow.FText
+import com.live.vant.feedback.VanPullRefresh
+import com.live.vant.feedback.rememberVanPullRefreshState
 import java.util.Calendar
+import kotlinx.coroutines.launch
 
 private data class MonthPoint(val label: String, val income: Double, val expense: Double)
 
@@ -39,8 +44,14 @@ fun MonthlyTrendScreen(nav: NavHostController) {
     val repo = App.of(LocalContext.current).graph.flow
     var points by remember { mutableStateOf<List<MonthPoint>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
+    val scroll = rememberScrollState()
+    // web 把本页列入 keep-alive（FinanceReportMonthlyTrend）；原生每次进入都会重拉，
+    // 这里补下拉刷新，保证登记/记账后能手动刷新到最新数据。
+    val refreshState = rememberVanPullRefreshState()
+    val scope = rememberCoroutineScope()
 
-    LaunchedEffect(Unit) {
+    suspend fun load() {
+        loading = true
         val cal = Calendar.getInstance()
         val list = mutableListOf<MonthPoint>()
         repeat(6) { back ->
@@ -52,10 +63,26 @@ fun MonthlyTrendScreen(nav: NavHostController) {
         points = list.reversed()   // 旧→新
         loading = false
     }
+
+    LaunchedEffect(Unit) { load() }
     val max = (points.flatMap { listOf(it.income, it.expense) }.maxOrNull() ?: 1.0).coerceAtLeast(1.0)
 
     ScreenScaffold { mod ->
-        Column(mod.verticalScroll(rememberScrollState()).padding(16.dp)) {
+        Column(mod) {
+            com.live.vant.nav.VanNavBar(title = "月度收支趋势", leftArrow = true, onClickLeft = { nav.popBackStack() })
+            VanPullRefresh(
+                state = refreshState,
+                // 只有内容滚到顶部时下拉才触发刷新（Vant 语义）
+                isChildAtTop = { scroll.value == 0 },
+                onRefresh = {
+                    scope.launch {
+                        load()
+                        refreshState.finishRefresh()
+                    }
+                },
+                modifier = Modifier.weight(1f),
+            ) {
+                Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(16.dp)) {
             FText("月度收支趋势（近 6 个月）", 18f, FontWeight.Bold, colors.textPrimary)
             Spacer(Modifier.height(4.dp))
             Row {
@@ -86,6 +113,8 @@ fun MonthlyTrendScreen(nav: NavHostController) {
                 }
             }
         }
+        }
+    }
     }
 }
 

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      启动窗口主题：仅决定 Compose 首帧之前的窗口底色与系统栏取色。
+      首帧后由 AppRoot 按「预设 + 深浅」解析的 token 接管（window background + 系统栏图标明暗）。
+      values-night 下同名 style 覆盖为深色父主题，避免深色设备启动白闪。
+    -->
+    <style name="Theme.Live" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/window_bg</item>
+    </style>
+</resources>

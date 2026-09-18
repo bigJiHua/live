@@ -39,6 +39,9 @@ object Routes {
     const val EVENTS = "finance/events"
     const val FIXED_ASSET = "finance/fixed-asset"
     const val FIXED_ASSET_RECYCLE = "finance/fixed-asset/recycle"
+    /** 详情/编辑的**路由模板**（注册与 `popUpTo` 都要用模板，不是填好参数的路径）。 */
+    const val FIXED_ASSET_DETAIL = "finance/fixed-asset/detail/{id}"
+    const val FIXED_ASSET_EDIT = "finance/fixed-asset/edit/{id}"
     fun fixedAssetDetail(id: String) = "finance/fixed-asset/detail/$id"
     fun fixedAssetEdit(id: String) = "finance/fixed-asset/edit/$id"
 
@@ -63,6 +66,8 @@ object Routes {
     const val BUDGET_SHOPPING = "finance/budget/shopping"
     const val BUDGET_TRAVEL = "finance/budget/travel"
     const val BUDGET_EAT = "finance/budget/eat"
+    /** 预算详情路由模板（注册/popUp 用模板，跳转用 [budgetDetail]）。 */
+    const val BUDGET_DETAIL = "finance/budget/detail/{id}"
     fun budgetDetail(id: String) = "finance/budget/detail/$id"
 
     // 数据管理
@@ -113,8 +118,14 @@ object Routes {
     const val PROFILE_EDIT = "profile-edit"
     const val PIN_MANAGE = "user/pin-manage"
     const val PIN_SETUP = "user/pin-setup"
+
+    /** PIN 码设置页带模式（对齐 web `/user/pin-setup?mode=new|modify`）。 */
+    fun pinSetup(mode: String) = "$PIN_SETUP?mode=$mode"
     const val RESOURCE_MANAGE = "user/resource-manage"
     const val RESOURCE_LIST = "user/resource-list"
+
+    /** 资源列表带类型（对齐 web `/user/resource-list?type=post|product|bank|other`）。 */
+    fun resourceList(type: String) = "$RESOURCE_LIST?type=$type"
     const val APP_SETTINGS = "user/app-settings"
     const val CATEGORY_MANAGE = "user/category-manage"
     const val BANK_CATEGORY_MANAGE = "user/bank-category-manage"

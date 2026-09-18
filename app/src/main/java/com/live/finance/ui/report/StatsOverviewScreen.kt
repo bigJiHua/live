@@ -46,7 +46,9 @@ fun StatsOverviewScreen(nav: NavHostController) {
     }
 
     ScreenScaffold { mod ->
-        Column(mod.verticalScroll(rememberScrollState())) {
+        Column(mod) {
+            com.live.vant.nav.VanNavBar(title = "收支总额与结余", leftArrow = true, onClickLeft = { nav.popBackStack() })
+            Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             FText("收支概览 · ${year}年${month}月", 18f, FontWeight.Bold, colors.textPrimary, Modifier.padding(16.dp))
             // 三格总览
             Row(Modifier.padding(horizontal = 12.dp)) {
@@ -75,6 +77,7 @@ fun StatsOverviewScreen(nav: NavHostController) {
                 onClick = { nav.navigate(com.live.finance.core.nav.Routes.REPORT_MONTHLY_TREND) },
             )
             Spacer(Modifier.height(24.dp))
+            }
         }
     }
 }

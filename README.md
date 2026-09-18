@@ -4,6 +4,8 @@
 用 Jetpack Compose 一比一复刻为安卓原生组件，供重构原生 APP 时直接调用。
 
 > 组件盘点与使用统计见 [docs/vant-components-inventory.md](docs/vant-components-inventory.md)。
+>
+> **接手/改造请先读 [docs/项目构造书.md](docs/项目构造书.md)**：构造书含「文件↔源文件对照表 / 改造手册 / 注意事项 / P0–P3 坑清单」。
 
 ## 工程结构
 

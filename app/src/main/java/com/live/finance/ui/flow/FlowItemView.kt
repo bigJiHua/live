@@ -22,7 +22,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.live.finance.data.model.FlowRow
 import com.live.finance.theme.LocalAppColors
-import com.live.finance.ui.common.FlowCell
 import com.live.finance.ui.common.Money
 import com.live.finance.ui.common.MoneyColor
 import com.live.finance.ui.common.currencySymbol
@@ -81,27 +80,6 @@ fun FlowItemRow(row: FlowRow, onClick: () -> Unit) {
     Spacer(Modifier.height(0.5.dp))
 }
 
-/** 一个分组单元格：普通行或转账合并行。 */
-@Composable
-fun FlowCellRow(cell: FlowCell, onClick: (FlowRow) -> Unit) {
-    val colors = LocalAppColors.current
-    when (cell) {
-        is FlowCell.Single -> FlowItemRow(cell.row) { onClick(cell.row) }
-        is FlowCell.Transfer -> Row(
-            Modifier.fillMaxWidth().background(colors.bgCard).padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f)) {
-                FText("转账", 15f, FontWeight.Medium, colors.primary)
-                val from = cell.out?.bankLabel?.ifBlank { "现金/余额" } ?: "—"
-                val to = cell.income?.bankLabel?.ifBlank { "现金/余额" } ?: "—"
-                FText("$from → $to", 11f, FontWeight.Normal, colors.textTertiary,
-                    modifier = Modifier.padding(top = 2.dp).horizontalScroll(rememberScrollState()))
-            }
-            Column(horizontalAlignment = Alignment.End) {
-                FText(Money.format(cell.amount), 16f, FontWeight.SemiBold, colors.textPrimary)
-                FText(cell.time, 10f, FontWeight.Normal, colors.textTertiary)
-            }
-        }
-    }
-}
+// 说明：原 `FlowCellRow`（转账合并行）已被 `FlowCards.kt` 的
+// `FlowCardRow` / `FlowPairedBlock` 取代（对齐 web `flow/List.vue` 的卡片与三层转账块）。
+// `FlowItemRow` 保留：余额流水页（`ui/account/BalanceFlowScreen.kt`）仍在用。

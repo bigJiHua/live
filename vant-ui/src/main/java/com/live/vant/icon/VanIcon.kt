@@ -53,6 +53,9 @@ fun VanIcon(
 ) {
     val clickableMod = if (onClick != null) modifier.then(Modifier.clickable { onClick() }) else modifier
     val glyph = if (isImageUrl(name)) null else VantIconCodes.glyph(name)
+    // 对应 web `.van-icon { font-size: inherit }` 的 currentColor 继承：未显式传色时取主题兜底色
+    // （Compose 里 Unspecified 会落到黑色，深色主题下会变成一堆黑图标）
+    val tint = if (color == Color.Unspecified) LocalVantColors.current.iconDefault else color
 
     Box(contentAlignment = Alignment.Center, modifier = clickableMod) {
         when {
@@ -67,7 +70,7 @@ fun VanIcon(
                 style = TextStyle(
                     fontFamily = VantIconFontFamily,
                     fontSize = size,
-                    color = color,
+                    color = tint,
                 ),
             )
             else -> Box(Modifier.size(sizeDp(size))) // 未知名称：与 web 一致，仅占位不出字形

@@ -60,6 +60,23 @@ data class VantColors(
     val noticeText: Color = Color(0xFFED6A0C),
     /** 通知条背景 --van-notice-bar-background（orange-light） */
     val noticeBg: Color = Color(0xFFFFFBE8),
+    /** --tabbar-glass-bg 底部悬浮岛玻璃底（浅色 rgba(255,255,255,.62)，见 web useUiTheme 的 TABBAR.light） */
+    val tabbarGlassBg: Color = Color(0x9EFFFFFF),
+    /** --tabbar-glass-border 悬浮岛玻璃描边（浅色 rgba(0,0,0,.06)） */
+    val tabbarGlassBorder: Color = Color(0x0F000000),
+    /** --tabbar-text 悬浮岛未选中项文字色（浅色 #7d7e80，注意不是 textPrimary） */
+    val tabbarText: Color = Color(0xFF7D7E80),
+    /** --van-tabs-nav-background / --van-nav-bar-background（web useUiTheme 的 navBg：浅色=卡片白、深色=页面最深色） */
+    val navBarBg: Color = Color(0xFFFFFFFF),
+    /** --theme-primary-grad：主色渐变终点（app-button primary 实心、首页头卡渐变） */
+    val primaryGrad: Color = Color(0xFF2A4FB8),
+    /** --van-button-primary-color：primary 实心按钮的文字色（深色亮主色主题下为深字，如钛金属/悠森绿） */
+    val buttonPrimaryText: Color = Color(0xFFFFFFFF),
+    /** --theme-success-text / warning / danger / info：落在底色上的状态小字（浅/深各一套，保证对比度） */
+    val successText: Color = Color(0xFF0A7A45),
+    val warningText: Color = Color(0xFFB45309),
+    val dangerText: Color = Color(0xFFC0102A),
+    val infoText: Color = Color(0xFF646566),
 ) {
     companion object {
         /** Vant 4.9.22 出厂浅色主题（primary #1989fa） */
@@ -74,19 +91,44 @@ data class VantColors(
     }
 }
 
-/** 运行时深浅色：web 端 useUiTheme 通过 data-theme-mode=dark 覆盖变量；安卓侧提供对应深色预设 */
+/**
+ * 运行时深色兜底：逐项对齐 web `useUiTheme.buildVars` 在 `mode=dark` 且预设未覆盖时的**默认值**
+ * （此前这里是凭感觉取的中性灰 #121212/#1E1E1E/#2C2C2E，已按 web 原值校正为 #0f0f12/#1a1a1e/#26262b）。
+ *
+ * 注：正式主题由 `:app` 的 `resolveTokens()` 按「预设 + 深浅」解析；本对象仅作库层兜底 / 单测用。
+ */
 object VantDarkColors {
-    /** 项目深色主题下常见覆盖（与 [style.css] [data-theme-mode="dark"] 区块对应） */
     fun dark(): VantColors = VantColors().copy(
-        textPrimary = Color(0xFFF5F5F5),
+        // web buildVars dark 默认：bg #0f0f12/#1a1a1e/#26262b、text #f0f0f0/#b0b0b0/#8a8a8a/#5a5a5a、border rgba(255,255,255,.08)
+        bgPage = Color(0xFF0F0F12),
+        bgCard = Color(0xFF1A1A1E),
+        bgThird = Color(0xFF26262B),
+        active = Color(0xFF26262B),
+        textPrimary = Color(0xFFF0F0F0),
         textSecondary = Color(0xFFB0B0B0),
-        textTertiary = Color(0xFF8A8A8C),
-        textPlaceholder = Color(0xFF6E6E70),
-        border = Color(0xFF3A3A3C),
-        bgPage = Color(0xFF121212),
-        bgCard = Color(0xFF1E1E1E),
-        bgThird = Color(0xFF2C2C2E),
-        active = Color(0xFF2C2C2E),
-        pickerMaskColor = Color(0xFF121212),
+        textTertiary = Color(0xFF8A8A8A),
+        textPlaceholder = Color(0xFF5A5A5A),
+        border = Color(0x14FFFFFF),
+        pickerMaskColor = Color(0xFF0F0F12),
+        primaryLight = Color(0x14FFFFFF),   // dark 下 --theme-primary-light = rgba(255,255,255,.08)
+        iconDefault = Color(0xFFF0F0F0),    // .van-icon 继承 currentColor → 跟随正文色
+        navBarBg = Color(0xFF0F0F12),       // web navBg：dark 取 bg.primary
+        buttonDefaultBorder = Color(0x14FFFFFF),
+        // web STATUS_COMP.dark（组件底色，亮底 + 白字场景）
+        success = Color(0xFF2F9B70),
+        warning = Color(0xFFC9A05A),
+        danger = Color(0xFFE5484D),
+        info = Color(0xFF7A7A7A),
+        // web STATUS_TEXT.dark（落在深底上的状态小字）
+        successText = Color(0xFF5FD6A0),
+        warningText = Color(0xFFF0B267),
+        dangerText = Color(0xFFFF6B6B),
+        infoText = Color(0xFFA0A0A0),
+        // web buildVars：dark 下 --van-button-primary-color = #1a1a1a
+        buttonPrimaryText = Color(0xFF1A1A1A),
+        // web useUiTheme 的 TABBAR.dark：glassBg rgba(18,18,22,.55) / border rgba(255,255,255,.12) / text #b0b0b0
+        tabbarGlassBg = Color(0x8C121216),
+        tabbarGlassBorder = Color(0x1FFFFFFF),
+        tabbarText = Color(0xFFB0B0B0),
     )
 }

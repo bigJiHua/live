@@ -72,6 +72,8 @@ fun VanButton(
     val fg: Color = textColor ?: when {
         plain -> typeColor
         type == VanButtonType.Default && color == null -> c.textPrimary
+        // 对应 --van-button-primary-color：深色亮主色主题（钛金属/悠森绿等）为深字
+        type == VanButtonType.Primary && color == null -> c.buttonPrimaryText
         else -> Color.White
     }
     val baseBg: Color = when {

@@ -71,7 +71,7 @@ fun VanTabs(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(44.dp)
-                .background(c.bgCard),
+                .background(c.navBarBg),  // --van-tabs-nav-background（web navBg）
             verticalAlignment = Alignment.CenterVertically,
         ) {
             tabs.forEachIndexed { index, tab ->

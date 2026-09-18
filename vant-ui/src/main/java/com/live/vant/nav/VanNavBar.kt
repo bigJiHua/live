@@ -49,7 +49,7 @@ fun VanNavBar(
             .fillMaxWidth()
             .let { if (statusbarInset) it.statusBarsPadding() else it }
             .height(46.dp)
-            .background(c.bgCard),
+            .background(c.navBarBg),  // --van-nav-bar-background（web navBg）
     ) {
         // 左侧区
         Box(

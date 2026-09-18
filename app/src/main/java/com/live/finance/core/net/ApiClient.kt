@@ -41,8 +41,8 @@ class ApiClient(
 
     val handshake = HandshakeManager(http, device)
 
-    /** 命中 8303 时的验证回调（由 AppGraph 接到 PinCoordinator）；返回 true 则重发原请求。 */
-    var pinGate: (suspend () -> Boolean)? = null
+    /** 命中 8303 时的验证回调（由 AppGraph 接到 PinCoordinator）；返回票据则带票重发原请求，null 表示取消。 */
+    var pinGate: (suspend (com.google.gson.JsonElement?) -> com.live.finance.core.PinTicket?)? = null
 
     suspend fun get(path: String, query: Map<String, String>? = null) =
         request("get", path, query, null, encrypted = false)
@@ -52,6 +52,10 @@ class ApiClient(
 
     suspend fun put(path: String, body: JsonElement? = null) =
         request("put", path, null, body, encrypted = true)
+
+    /** PATCH（如 `PATCH /account/:id/remark`）；`request` 走 `else -> method(...)` 分支，任意 method 都支持。 */
+    suspend fun patch(path: String, body: JsonElement? = null) =
+        request("patch", path, null, body, encrypted = true)
 
     suspend fun delete(path: String, body: JsonElement? = null) =
         request("delete", path, null, body, encrypted = true)
@@ -154,10 +158,12 @@ class ApiClient(
         query?.forEach { (k, v) -> urlBuilder.addQueryParameter(k, v) }
         val url = urlBuilder.build()
 
-        suspend fun attempt(): Envelope {
+        suspend fun attempt(routeTicket: com.live.finance.core.PinTicket? = null): Envelope {
             val reqBuilder = Request.Builder().url(url)
             device.headers().forEach { (k, v) -> reqBuilder.header(k, v) }
             session.token?.let { reqBuilder.header("Authorization", "Bearer $it") }
+            // 风险路由（pinLockGuard）验证通过后重发：带上一次性令牌头
+            routeTicket?.token?.takeIf { it.isNotEmpty() }?.let { reqBuilder.header(routeTicket.headerName, it) }
             if (needEncrypt) reqBuilder.header("X-FP-ID", device.fp)
 
             val requestBody: RequestBody? = buildBody(lower, body, needEncrypt, routeTag)
@@ -181,10 +187,10 @@ class ApiClient(
             handshake.invalidate()
             env = attempt()
         }
-        // 命中 8303：弹 PIN，验证通过后重发原请求一次
+        // 命中 8303：弹 PIN，验证通过后带上票据重发原请求一次
         if (env.isPinVerify) {
-            val gate = pinGate
-            if (gate != null && gate()) env = attempt()
+            val ticket = pinGate?.invoke(env.data)
+            if (ticket != null) env = attempt(routeTicket = ticket)
         }
         return env
     }

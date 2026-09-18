@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import com.live.vant.theme.LocalVantColors
 
 /**
@@ -21,6 +22,8 @@ fun VanOverlay(
     modifier: Modifier = Modifier.fillMaxSize(),
     onClick: (() -> Unit)? = null,
     lockScroll: Boolean = true, // 语义占位：原生由调用容器自行处理
+    /** 遮罩底色（默认沿用主题 overlay；数字键盘等需要看穿底层时可传 Color.Transparent）。 */
+    color: Color = LocalVantColors.current.overlay,
 ) {
     AnimatedVisibility(
         visible = show,
@@ -31,8 +34,8 @@ fun VanOverlay(
         Box(
             Modifier
                 .fillMaxSize()
-                .background(LocalVantColors.current.overlay)
-                .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier),
+                .background(color = color)
+                .then(if (onClick != null) Modifier.clickable(onClick = { onClick() }) else Modifier),
         )
     }
 }

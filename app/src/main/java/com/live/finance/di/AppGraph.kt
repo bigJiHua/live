@@ -4,8 +4,10 @@ import android.content.Context
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import com.live.finance.core.AppConfig
-import com.live.finance.core.ThemeMode
 import com.live.finance.core.ThemeStore
+import com.live.finance.theme.MONEY_RED_IN
+import com.live.finance.theme.ThemePresets
+import com.live.finance.ui.common.MoneyColor
 import com.live.finance.core.net.ApiClient
 import com.live.finance.core.net.DeviceProfile
 import com.live.finance.core.store.SessionStore
@@ -82,9 +84,13 @@ class AppGraph(context: Context) {
     val device = DeviceProfile(session)
     val client = ApiClient(device, session)
 
+    /** 会话级握手管理（AES 信封密钥 + RSA 安全键盘公钥），供登录安全键盘逐字符加密取公钥。 */
+    val handshake = client.handshake
+
     /** PIN 拦截协调器：任意写请求遇 8303 时弹窗验证后重发。 */
     val pinCoordinator = com.live.finance.core.PinCoordinator().also {
-        client.pinGate = { it.awaitVerify() }
+        // 入参为该次 8303 的挑战数据（route_verify 场景 UI 需要 challengeId/requestUrl/method）
+        client.pinGate = { challenge -> it.awaitVerify(challenge) }
     }
 
     val auth: AuthRepository =
@@ -131,15 +137,34 @@ class AppGraph(context: Context) {
         if (AppConfig.useFake) FakeDataRepository() else RemoteDataRepository(client)
 
     val themeStore = ThemeStore(context)
-    val themeMode: MutableState<ThemeMode> = mutableStateOf(ThemeMode.System)
+
+    /** 主题方案（对应 web `localStorage['ui-theme-choice']`：`system` 或预设 key）。 */
+    val themeChoice: MutableState<String> = mutableStateOf(ThemePresets.CHOICE_SYSTEM)
+
+    /** 收支颜色模式（对应 web `localStorage['money-color-mode']`）。 */
+    val moneyColorMode: MutableState<String> = mutableStateOf(MONEY_RED_IN)
+
+    /** 启动就绪标记：session.load()（读 DataStore 持久 token）与主题加载完成后置 true，
+     *  AppRoot 据此再合成 NavHost 决定首屏——避免首帧合成时 token 尚未从 DataStore 读出。 */
+    val sessionReady: MutableState<Boolean> = mutableStateOf(false)
 
     suspend fun init() {
         session.load()
-        themeMode.value = themeStore.load()
+        val prefs = themeStore.load()
+        themeChoice.value = prefs.choice
+        moneyColorMode.value = prefs.moneyColorMode
+        MoneyColor.apply(prefs.moneyColorMode)   // 首帧前先落到全局收支配色
+        sessionReady.value = true
     }
 
-    suspend fun setThemeMode(mode: ThemeMode) {
-        themeMode.value = mode
-        themeStore.save(mode)
+    suspend fun setThemeChoice(key: String) {
+        themeChoice.value = key
+        themeStore.saveChoice(key)
+    }
+
+    suspend fun setMoneyColorMode(mode: String) {
+        moneyColorMode.value = mode
+        themeStore.saveMoneyColorMode(mode)
+        MoneyColor.apply(mode)
     }
 }

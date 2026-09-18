@@ -17,10 +17,11 @@ interface BalanceRepository {
 
 class FakeBalanceRepository : BalanceRepository {
     private val seed = mutableListOf(
-        Balance("xxxx", 860.0),
-        Balance("yyyy", 12580.50),
-        Balance("c1", 45200.00, cardAlias = "工资卡", cardLast4 = "0088"),
-        Balance("c3", -3200.00, cardAlias = "龙卡", cardLast4 = "9012"),
+        Balance("xxxx", 860.0, cardType = "cash"),
+        Balance("yyyy", 12580.50, cardType = "digital"),
+        Balance("c1", 45200.00, cardAlias = "工资卡", cardLast4 = "0088", cardType = "debit"),
+        Balance("c2", 6800.00, cardAlias = "招商储蓄卡", cardLast4 = "6621", cardType = "debit"),
+        Balance("c3", -3200.00, cardAlias = "龙卡", cardLast4 = "9012", cardType = "credit"),
     )
     override suspend fun list(): ApiResult<List<Balance>> = ApiResult.Ok(seed, "")
     override suspend fun upsert(cardId: String, balance: Double): ApiResult<Unit> {
@@ -37,6 +38,7 @@ class RemoteBalanceRepository(private val client: ApiClient) : BalanceRepository
                 .map { el -> val o = el.asJsonObject; Balance(
                     cardId = str(o, "card_id"), balance = dbl(o, "balance"), alias = str(o, "alias"),
                     cardAlias = str(o, "card_alias"), cardLast4 = str(o, "card_last4"), currency = str(o, "currency").ifEmpty { "CNY" },
+                    cardType = str(o, "card_type"),
                 ) }
         }
 
