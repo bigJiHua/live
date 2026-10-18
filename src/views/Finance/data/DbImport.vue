@@ -315,7 +315,8 @@
 
 <script setup>
 import { ref, computed } from "vue";
-import { showToast, showConfirmDialog, showDialog } from "vant";
+import { showConfirmDialog, showDialog } from 'vant';
+import { showToast } from '@/utils/toast';
 import { getTableList, validateImportData, importData, importSql } from "@/utils/api/dataManager";
 
 const importFormat = ref("json");

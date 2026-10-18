@@ -5,7 +5,9 @@
         <div class="pin-title">安全验证</div>
         <div class="pin-desc">请输入 PIN 码以继续操作</div>
 
-        <div class="pin-input-area">
+        <!-- 点击输入区重新唤出键盘：Vant 的 password-input 只在 touchstart 派发 focus，
+             鼠标点击（桌面/调试）收不到，且键盘遮罩可能盖住输入区，故额外绑 click 兜底 -->
+        <div class="pin-input-area" @click="showKeyboard = true">
           <van-password-input
             :value="pinValue"
             :length="6"
@@ -18,29 +20,33 @@
         <div v-if="errorMessage" class="pin-error">{{ errorMessage }}</div>
 
         <div class="pin-actions">
-          <app-button size="small" plain @click="onCancel">取消</app-button>
+          <app-button size="normal" plain class="pin-cancel-btn" @click="onCancel">
+            取消
+          </app-button>
           <!-- <app-button size="small" type="primary" :disabled="pinValue.length < 6" @click="onConfirm">
             确认
           </app-button> -->
         </div>
       </div>
     </div>
-  </van-overlay>
 
-  <!-- 安全键盘 -->
-  <div
-    v-if="showKeyboard"
-    class="pin-keyboard-overlay"
-    @click="showKeyboard = false"
-  >
-    <SafeKeyboard
-      :public-key="publicKey"
-      :secure-only="true"
-      @secure-payload="handleSecurePayload"
-      @input="handleKeyInput"
-      @confirm="showKeyboard = false"
-    />
-  </div>
+    <!-- 安全键盘：放在 van-overlay 内部、与卡片同一层叠上下文，z-index 低于卡片，
+         这样键盘遮罩不会盖住输入区/取消按钮（此前它是 overlay 的兄弟节点，
+         z-index 10000 > overlay 9999，短屏上会把卡片下缘整个吃掉，点不到输入框和取消键） -->
+    <div
+      v-if="showKeyboard"
+      class="pin-keyboard-overlay"
+      @click="showKeyboard = false"
+    >
+      <SafeKeyboard
+        :public-key="publicKey"
+        :secure-only="true"
+        @secure-payload="handleSecurePayload"
+        @input="handleKeyInput"
+        @confirm="showKeyboard = false"
+      />
+    </div>
+  </van-overlay>
 </template>
 
 <script setup>
@@ -169,9 +175,15 @@ defineExpose({ show, hide, setError });
   align-items: center;
   justify-content: center;
   height: 100%;
+  /* 高于 .pin-keyboard-overlay(10000)：键盘弹出时卡片仍在最上层，输入区/取消按钮始终可点 */
+  position: relative;
+  z-index: 10001;
+  /* 它是满屏容器，若可点击会整片挡住下方键盘，故整层禁用、只在卡片上恢复 */
+  pointer-events: none;
 }
 
 .pin-verify-card {
+  pointer-events: auto;
   width: 320px;
   background: var(--theme-bg-secondary);
   border-radius: 16px;
@@ -200,9 +212,11 @@ defineExpose({ show, hide, setError });
 
 /* 1. 选中每一个 PIN 码的格子 */
 :deep(.van-password-input__item) {
-  /* 基础边框 */
-  border: 1px solid #acabab !important; /* Vant 的标准灰色边框色 */
-  background-color: var(--theme-bg-secondary)fff; /* 强制白色背景，防止看不见 */
+  /* 基础边框：跟随主题（原为写死 #acabab，深色模式下边框不跟随） */
+  border: 1px solid var(--theme-border) !important;
+  /* 背景跟随主题卡片色（原声明 `var(--theme-bg-secondary)fff` 是无效值，整条被浏览器丢弃，
+     深色模式下会退回 Vant 默认的 --van-background-2 白底） */
+  background-color: var(--theme-bg-secondary) !important;
   border-radius: 6px; /* 让格子稍微圆润一点 */
   transition: all 0.2s; /* 增加过渡动画，更好看 */
   flex: 1; /* 均匀分配空间 */
@@ -237,11 +251,19 @@ defineExpose({ show, hide, setError });
   gap: 16px;
 }
 
+/* 取消按钮：原来用 small（高 34 / 字号 13）偏小不好点，加宽到易点的尺寸 */
+.pin-cancel-btn {
+  min-width: 132px;
+  height: 44px;
+  font-size: 15px;
+}
+
 .pin-keyboard-overlay {
   position: fixed;
   bottom: 0;
   left: 0;
   right: 0;
+  /* 低于 .pin-verify-wrapper(10001)：与卡片同层叠上下文内比较，卡片永远在键盘之上 */
   z-index: 10000;
   background: rgba(0, 0, 0, 0.5);
 }

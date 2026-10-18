@@ -178,8 +178,7 @@ import { ref, computed, watch, onMounted, onActivated, onDeactivated, nextTick }
 import { getMoneyColors } from '@/composables/useMoneyColor'
 defineOptions({ name: 'FinanceReportFlowFilter' })
 import { useRouter, useRoute } from 'vue-router'
-import { showToast } from 'vant'
-import dayjs from 'dayjs'
+import { showToast, showFailToast } from '@/utils/toast';import dayjs from 'dayjs'
 import { getAccountList } from '@/utils/api/account'
 import { getCardList } from '@/utils/api/card'
 import { categoryApi } from '@/utils/api/category'
@@ -705,7 +704,7 @@ const fetchData = async () => {
     const list = res.data?.list ?? res.data ?? []
     allData.value = Array.isArray(list) ? list : []
   } catch (e) {
-    showToast('查询失败')
+    showFailToast('查询失败')
   } finally {
     searchLoading.value = false
   }
@@ -719,44 +718,78 @@ const handleSearch = () => {
 
 const handleExport = async () => {
   if (resultList.value.length === 0) return
-  const XLSX = await import('xlsx-js-style')
+
+  // 🔒 安全整改 P1-12（2026-10-08）：`xlsx-js-style@1.2.0` 是 xlsx 0.18.x 的 fork，
+  //   含同一份原型污染（CVE-2023-30533）与 ReDoS（CVE-2024-22363）漏洞代码，
+  //   且npm 上已停止维护。改用**活跃维护的 exceljs** 重写导出。
+  //   ⚠ exceljs API 与 xlsx 完全不同（无 `aoa_to_sheet`/`!cols`），
+  //     样式改用 `cell.font` / `cell.fill` / `numFmt` / `column.width`。
+  const ExcelJS = (await import('exceljs')).default ?? (await import('exceljs'))
+  const Excel = ExcelJS.Workbook ? ExcelJS : (ExcelJS.default ?? ExcelJS)
 
   const mc = getMoneyColors()
-  const incomeRgb = mc['--money-income'].replace('#', '')
-  const expenseRgb = mc['--money-expense'].replace('#', '')
-  const green = { font: { color: { rgb: incomeRgb }, bold: true } }
-  const red = { font: { color: { rgb: expenseRgb }, bold: true } }
-  const headerStyle = { font: { bold: true, sz: 12 }, fill: { fgColor: { rgb: 'f0f0f0' } } }
+  // exceljs 的颜色必须是 8 位 ARGB（FFRRGGBB），不带 # 且需补 alpha
+  const argb = (hex) => 'FF' + String(hex || '').replace('#', '').toUpperCase().slice(0, 6)
+  const incomeArgb = argb(mc['--money-income'])
+  const expenseArgb = argb(mc['--money-expense'])
 
-  const makeSheet = (records, sheetName) => {
-    const sheetData = [
-      ['日期', '分类', '类型', '金额', '支付方式', '银行/卡号'].map(h => ({ v: h, s: headerStyle })),
-    ]
-    records.forEach((item) => {
-      const isIncome = item.direction === 1 || item.direction === 'income'
-      const color = isIncome ? green : red
-      sheetData.push([
-        { v: (item.trans_date || item.transDate || '').slice(0, 10) },
-        { v: item.category_name || item.categoryName || '未分类' },
-        { v: isIncome ? '收入' : '支出', s: color },
-        { v: Number(item.amount || 0), s: { ...color, numFmt: '#,##0.00' } },
-        { v: item.pay_method || item.payMethod || '' },
-        { v: getBankCardLabel(item) },
-      ])
+  const HEADERS = ['日期', '分类', '类型', '金额', '支付方式', '银行/卡号']
+  const COL_WIDTHS = [14, 12, 8, 14, 10, 12]
+
+  const fillSheet = (ws, records) => {
+    // 表头
+    ws.columns = HEADERS.map((h, i) => ({ header: h, width: COL_WIDTHS[i] }))
+    const headerRow = ws.getRow(1)
+    headerRow.font = { bold: true, size: 12 }
+    headerRow.eachCell((cell) => {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0F0F0' } }
+      cell.alignment = { vertical: 'middle' }
     })
-    const ws = XLSX.utils.aoa_to_sheet(sheetData)
-    ws['!cols'] = [{ wch: 14 }, { wch: 12 }, { wch: 8 }, { wch: 14 }, { wch: 10 }, { wch: 12 }]
+
+    records.forEach((item, idx) => {
+      const isIncome = item.direction === 1 || item.direction === 'income'
+      const colorArgb = isIncome ? incomeArgb : expenseArgb
+      const row = ws.getRow(idx + 2)
+      row.values = [
+        (item.trans_date || item.transDate || '').slice(0, 10),
+        item.category_name || item.categoryName || '未分类',
+        isIncome ? '收入' : '支出',
+        Number(item.amount || 0),
+        item.pay_method || item.payMethod || '',
+        getBankCardLabel(item),
+      ]
+      // 收入/支出金额着色 + 千分位
+      row.getCell(3).font = { color: { argb: colorArgb }, bold: true }
+      row.getCell(4).font = { color: { argb: colorArgb }, bold: true }
+      row.getCell(4).numFmt = '#,##0.00'
+    })
+    ws.views = [{ state: 'frozen', ySplit: 1 }]
     return ws
   }
 
   const incomeList = resultList.value.filter(i => i.direction === 1 || i.direction === 'income')
   const expenseList = resultList.value.filter(i => i.direction === 0 || i.direction === 'expense' || i.direction === 2)
 
-  const workbook = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(workbook, makeSheet(resultList.value, '流水明细'), '流水明细')
-  XLSX.utils.book_append_sheet(workbook, makeSheet(incomeList, '收入'), '收入')
-  XLSX.utils.book_append_sheet(workbook, makeSheet(expenseList, '支出'), '支出')
-  XLSX.writeFile(workbook, `流水筛选_${startDate.value}_${endDate.value}.xlsx`)
+  const workbook = new Excel.Workbook()
+  workbook.creator = 'Gold 财管'
+  fillSheet(workbook.addWorksheet('流水明细'), resultList.value)
+  fillSheet(workbook.addWorksheet('收入'), incomeList)
+  fillSheet(workbook.addWorksheet('支出'), expenseList)
+
+  const fileName = `流水筛选_${startDate.value}_${endDate.value}.xlsx`
+  await workbook.xlsx.writeBuffer().then((buf) => {
+    // exceljs 在浏览器里返回 ArrayBuffer，转成 Blob 触发下载
+    const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = fileName
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    // 立即 revoke 会让部分浏览器下载失败，延迟释放
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+  })
 }
 
 onMounted(async () => {

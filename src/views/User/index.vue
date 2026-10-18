@@ -71,7 +71,9 @@
 <script setup>
 import { computed, onMounted, reactive } from "vue";
 import { useRouter } from "vue-router";
-import { showConfirmDialog, showToast } from "vant";
+import { showConfirmDialog } from 'vant';
+import { showToast } from '@/utils/toast';
+import { clearSession } from '@/utils/session';
 import { useUserStore } from "@/stores/user";
 import { authApi } from "@/utils/api/auth";
 import { securityApi } from "@/utils/api/security";
@@ -143,10 +145,11 @@ const goToPinManage = () => {
 const onLogout = async () => {
   showConfirmDialog({ title: "提醒", message: "确定退出登录？" }).then(
     async () => {
-      userStore.clearUserInfo();
-      userStore.setPinState(false, false);
+      // 🔒 安全整改 P1-17：统一清理会话痕迹。
+      //    ① 先调后端 /auth/logout 清 httpOnly Cookie（JS 删不掉它）
+      //    ② 再清登录标记、遗留 token、AES 会话密钥、API 响应缓存
+      await clearSession();
       router.push("/login");
-      localStorage.removeItem("finance_token");
       showToast("已安全退出");
     }
   );

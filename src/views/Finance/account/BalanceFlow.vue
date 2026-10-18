@@ -120,7 +120,7 @@
 <script setup>
 import { ref, computed, onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { showToast } from "vant";
+import { showToast, showFailToast } from '@/utils/toast';
 import dayjs from "dayjs";
 import { getAccountListByCard, getBalanceList } from "@/utils/api/account";
 import ENV from "@/utils/env";
@@ -196,7 +196,7 @@ const loadData = async () => {
     // 底部默认展开所有日期
     expandedDates.value = new Set(items.value.map((i) => (i.trans_date || i.transDate || "").slice(0, 10)).filter(Boolean));
   } catch (e) {
-    showToast("加载失败");
+    showFailToast("加载失败");
   } finally {
     loading.value = false;
   }

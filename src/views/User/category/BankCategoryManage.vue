@@ -175,7 +175,8 @@
 
 <script setup>
 import { ref, onMounted, watch } from "vue";
-import { showToast, showConfirmDialog } from "vant";
+import { showConfirmDialog } from 'vant';
+import { showToast, showFailToast, showSuccessToast } from '@/utils/toast';
 import { categoryApi } from "@/utils/api/category";
 import { uploadApi, BusType } from "@/utils/api/upload";
 import BankIcon from "@/components/BankIcon.vue";
@@ -224,7 +225,7 @@ const loadCategories = async () => {
   } catch (e) {
     // 加载失败不注入 mock 数据，留空并提示
     categories.value = [];
-    showToast("银行分类加载失败");
+    showFailToast("银行分类加载失败");
   } finally {
     loading.value = false;
   }
@@ -264,7 +265,7 @@ const beforeUpload = (file) => {
   }
   const isLt2M = file.size / 1024 / 1024 < 2;
   if (!isLt2M) {
-    showToast("图片大小不能超过 2MB");
+    showFailToast("图片大小不能超过 2MB");
     return false;
   }
   return true;
@@ -283,12 +284,12 @@ const handleAfterRead = async (file) => {
       formData.value.iconUrl = res.data[0].file_path || res.data[0].url;
       file.status = "done";
       file.message = "上传成功";
-      showToast("上传成功");
+      showSuccessToast("上传成功");
     }
   } catch (e) {
     file.status = "failed";
     file.message = "上传失败";
-    showToast("上传失败");
+    showFailToast("上传失败");
   }
 
   uploadQueue.value = [];
@@ -340,7 +341,7 @@ const handleConfirm = async () => {
           icon_url: formData.value.iconUrl.trim(),
         };
       }
-      showToast("更新成功");
+      showSuccessToast("更新成功");
     } else {
       const newItem = await categoryApi.create({
         type: "bank",
@@ -349,7 +350,7 @@ const handleConfirm = async () => {
         iconUrl: formData.value.iconUrl.trim() || null,
       });
       categories.value.push(newItem.data || newItem);
-      showToast("创建成功");
+      showSuccessToast("创建成功");
     }
   } catch (e) {
     showToast(editingItem.value ? "更新失败" : "创建失败");

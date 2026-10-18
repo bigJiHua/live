@@ -215,7 +215,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useRouter } from "vue-router";
-import { showToast } from "vant";
+import { showToast } from '@/utils/toast';
 import { getTableList, getTableStatus, exportSingleTable, exportFullDatabase, getExportTaskStatus, cancelExportTask, downloadBackup } from "@/utils/api/dataManager";
 
 const selectedType = ref("all");

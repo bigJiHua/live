@@ -53,17 +53,14 @@
       </router-link>
     </nav>
   </div>
-
-  <!-- PIN 验证弹窗 -->
-  <PinVerifyDialog ref="pinVerifyRef" />
 </template>
 
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { showToast } from "vant";
+import { showToast } from '@/utils/toast';
 import { authApi } from "@/utils/api/auth";
-import PinVerifyDialog from "@/components/PinVerifyDialog.vue";
+import { showPinDialog } from "@/utils/request/pin";
 
 const route = useRoute();
 const router = useRouter();
@@ -104,24 +101,17 @@ const cachedViewNames = [
   "BillList",
 ];
 
-// PIN 验证引用
-const pinVerifyRef = ref(null);
-
 // 锁定系统
+// ⚠ 不要在本组件里 new 一个 PinVerifyDialog：全项目只有 App.vue 里那个注册进了 pin.js
+// （registerPinDialog），自建实例会出现"验证成功了但弹窗关不掉"。
+// 这里改用 showPinDialog() 弹全局那一个，锁定成功后立刻要求解锁，不等下次请求。
 const handleLockSystem = async () => {
-  console.log('🔒 锁定按钮被点击了');
   try {
-    console.log('🔒 开始调用 lockSystem API');
-    await authApi.lockSystem();
-    console.log('🔒 API 调用成功');
-    showToast({ message: '系统已锁定', position: 'top' });
-    
-    if (pinVerifyRef.value) {
-      pinVerifyRef.value.show();
-    }
+    const res = await authApi.lockSystem();
+    showToast({ message: res?.message || '系统已锁定', position: 'top' });
+    showPinDialog();
   } catch (error) {
-    console.error('🔒 锁定失败:', error);
-    showToast({ message: error.message || '锁定失败', position: 'top' });
+    showToast({ message: error?.message || '锁定失败', position: 'top' });
   }
 };
 
@@ -151,7 +141,7 @@ const toggleFullscreen = () => {
     // 降级方案：使用 CSS 模拟全屏
     docEl.style.overflow = 'hidden';
     docEl.style.height = '100vh';
-    showToast({ message: '已最大化显示', position: 'bottom', duration: 1500 });
+    showToast({ message: '已最大化显示', duration: 1500 });
   } else {
     if (document.exitFullscreen) {
       document.exitFullscreen().catch(() => {});
@@ -206,16 +196,33 @@ const goHome = () => {
 /* 3. 规整的主体逻辑 CSS */
 .app-wrapper {
   width: 100%;
+  /* ⚠⚠ 2026-10-12 负责人报的 bug：移动端 100vh（大视口）> 当前可视视口时文档会外滚，
+     卡片页随文档整体上滑，.page-card-list 顶部窜到固定 nav 后面，而卡片栈容器
+     .card-stack-container z-index:9999 > nav 1000 ⇒ 卡片直接盖住顶部导航栏
+     （「借记卡/管理你的银行卡/右侧按钮凸显」同源问题）。100dvh = 当前可视高，
+     从几何上杜绝文档外溢；不支持 dvh 的旧浏览器自动回落上一行 vh。 */
   min-height: 100vh;
+  min-height: 100dvh;
   /* 跟随主题背景（浅色/深色自动切换） */
   background-color: var(--theme-bg-primary);
+}
+
+/* ⚠⚠ 2026-10-12 负责人报的 bug：移动端 100vh 大于可视视口时文档会外滚，
+   卡片页页头（.card-manage-header z-index:10）趁机压住顶部导航栏
+   （Vant nav-bar 默认 z-index:1）——「借记卡/管理你的银行卡/右侧按钮凸显在导航上」。
+   根因是页头 z-index 10 > 导航 1。这里把顶部导航栏层级提到页面内容之上
+   （底部悬浮岛 999 不冲突；卡片弹出层 95000+ 是模态，仍应盖住导航，不受影响）。 */
+:deep(.van-nav-bar) {
+  z-index: 1000;
 }
 
 /* TODO 待定 */
 .main-body {
   width: 100%;
   /* 精准 Padding：岛屿高度60px + 悬浮20px + 预留间距 = 90px */
+  /* 同上：dvh 随当前可视视口，杜绝移动端文档外溢把卡片页带上滑（2026-10-12） */
   height: calc(100vh - 90px);
+  height: calc(100dvh - 90px);
 }
 
 /* 4. 纯手撸悬浮岛导航栏核心 CSS (纯果味实现) */

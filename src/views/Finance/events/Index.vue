@@ -204,9 +204,10 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { showToast, showConfirmDialog, showSuccessToast } from 'vant'
-import { getRecurringList, createRecurring, updateRecurring, deleteRecurring, updateRecurringMonthStatus } from '@/utils/api/recurring'
+import { showConfirmDialog } from 'vant';
+import { showToast, showSuccessToast, showFailToast } from '@/utils/toast';import { getRecurringList, createRecurring, updateRecurring, deleteRecurring, updateRecurringMonthStatus } from '@/utils/api/recurring'
 import { categoryApi } from '@/utils/api/category'
+import { apiErrorToast } from '@/utils/request/helpers'
 
 const router = useRouter()
 const list = ref([])
@@ -259,7 +260,7 @@ const loadData = async () => {
     list.value = listRes.data || []
     categories.value = catRes.data || []
   } catch (e) {
-    showToast(e.message || '加载失败')
+    apiErrorToast(e, '加载失败')
   } finally {
     loading.value = false
   }
@@ -281,7 +282,7 @@ const toggleActive = async (item, active) => {
     await updateRecurring(item.id, { is_active: active ? 1 : 0 })
     item.is_active = active ? 1 : 0
     showSuccessToast(active ? '已启用' : '已停用')
-  } catch (e) { showToast(e.message || '操作失败') }
+  } catch (e) { apiErrorToast(e, '操作失败') }
 }
 
 const getMonthRecords = (item) => {
@@ -316,7 +317,7 @@ const toggleMonthStatus = async (item, m) => {
       }
       expandedId.value = item.id
     }
-  } catch (e) { showToast(e.message || '操作失败') }
+  } catch (e) { apiErrorToast(e, '操作失败') }
 }
 
 const handleSave = async (item) => {
@@ -333,7 +334,7 @@ const handleSave = async (item) => {
     showSuccessToast('保存成功')
     await loadData()
     expandedId.value = ''
-  } catch (e) { showToast(e.message || '保存失败') } finally { savingId.value = '' }
+  } catch (e) { apiErrorToast(e, '保存失败') } finally { savingId.value = '' }
 }
 
 const handleDelete = async (item) => {
@@ -346,7 +347,7 @@ const handleDelete = async (item) => {
     showSuccessToast('已删除')
     expandedId.value = '';
     await loadData()
-  } catch (e) { if (e !== 'cancel') showToast('删除失败') }
+  } catch (e) { if (e !== 'cancel') showFailToast('删除失败') }
 }
 
 // 新增事件
@@ -394,7 +395,7 @@ const handleAdd = async () => {
     showSuccessToast('创建成功')
     showAddForm.value = false
     await loadData()
-  } catch (e) { showToast(e.message || '创建失败') } finally { adding.value = false }
+  } catch (e) { apiErrorToast(e, '创建失败') } finally { adding.value = false }
 }
 
 const openEndDatePicker = () => {

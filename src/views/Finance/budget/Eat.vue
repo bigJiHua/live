@@ -142,8 +142,10 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { showToast, showSuccessToast, showConfirmDialog } from 'vant'
+import { showConfirmDialog } from 'vant';
+import { showToast, showSuccessToast, showFailToast } from '@/utils/toast';
 import { createBudget, updateBudget, getBudget } from '@/utils/api/budget'
+import { apiErrorToast } from '@/utils/request/helpers'
 
 const router = useRouter()
 const route = useRoute()
@@ -232,7 +234,7 @@ const loadData = async () => {
       notes: details.notes || '',
     }
   } catch (e) {
-    showToast('加载失败')
+    showFailToast('加载失败')
   }
 }
 
@@ -276,7 +278,7 @@ const submit = async () => {
     showSuccessToast('保存成功')
     router.replace('/finance/budget')
   } catch (e) {
-    showToast(e.message || '保存失败')
+    apiErrorToast(e, '保存失败')
   } finally {
     saving.value = false
   }

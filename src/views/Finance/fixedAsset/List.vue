@@ -132,7 +132,7 @@
 <script setup>
 import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
-import { showToast } from "vant";
+import { showToast, showFailToast } from '@/utils/toast';
 import dayjs from "dayjs";
 import { getFixedAssetList } from "@/utils/api/fixedAsset";
 import AssetForm from "./components/AssetForm.vue";
@@ -264,7 +264,7 @@ const loadList = async () => {
     const res = await getFixedAssetList();
     assetList.value = res.data || [];
   } catch (e) {
-    showToast("加载失败");
+    showFailToast("加载失败");
   } finally {
     loading.value = false;
   }

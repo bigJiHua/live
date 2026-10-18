@@ -43,19 +43,17 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-        runtimeCaching: [
-          {
-            urlPattern: /^https?:\/\/.*\/api\/v1\/.*/i,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'api-cache',
-              expiration: {
-                maxEntries: 100,
-                maxAgeSeconds: 60 * 60 * 24,
-              },
-            },
-          },
-        ],
+        // ⚠ 刻意**不配置 runtimeCaching**（2026-10-08 安全整改 P0-8 已移除）
+        //
+        // 原先有一条规则把 `/api/v1/` 的响应按 NetworkFirst 缓存进 Cache Storage
+        // （cacheName: 'api-cache'，maxAge 24 小时、100 条）。
+        // 问题：这是**财务隐私数据**（流水、账单、余额、用户信息），会被明文写进
+        // 浏览器磁盘；且原登出与 401 流程都不清它 ⇒ 登出后数据仍留在本机可被读取。
+        //
+        // 结论：API 响应一律走网络，不进缓存。
+        // 若日后确需离线能力，请**逐接口白名单**添加，且必须排除含敏感字段的路径，
+        // 绝不要用 `/api/v1/` 这种通配规则。
+        runtimeCaching: [],
       },
     }),
   ],

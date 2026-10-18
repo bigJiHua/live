@@ -53,10 +53,16 @@
       title="修改用户名"
       show-cancel-button
       confirm-button-text="确认修改"
+      :style="dialogPanelStyle"
       @confirm="handleUsernameSubmit"
     >
-      <div class="dialog-content">
-        <div class="field-wrap" :class="{ active: activeField === 'username' }">
+      <div class="dialog-content" :style="dialogContentStyle">
+        <!-- 点击热区放在 .field-wrap 上（含 label/内边距），点整块都能唤起键盘 -->
+        <div
+          class="field-wrap"
+          :class="{ active: activeField === 'username' }"
+          @click="activateField('username')"
+        >
           <app-field
             v-model="usernameForm.new"
             label="新用户名"
@@ -94,10 +100,11 @@
       title="修改邮箱"
       show-cancel-button
       confirm-button-text="确认修改"
+      :style="dialogPanelStyle"
       @confirm="handleEmailVerify"
       :before-close="onBeforeEmailClose"
     >
-      <div class="dialog-content">
+      <div class="dialog-content" :style="dialogContentStyle">
         <div class="field-wrap" :class="{ active: activeField === 'email' }">
           <app-field
             v-model="emailForm.new"
@@ -148,9 +155,9 @@
       confirm-button-text="确认修改"
       :before-close="onBeforePasswordClose"
       :close-on-click-overlay="!activeField"
-      :style="passwordDialogPanelStyle"
+      :style="dialogPanelStyle"
     >
-      <div class="dialog-content password-dialog-content" :style="passwordDialogContentStyle" ref="passwordDialogBody">
+      <div class="dialog-content password-dialog-content" :style="dialogContentStyle" ref="passwordDialogBody">
           <app-form @submit="handlePasswordSubmit" autocomplete="on">
           <div class="field-wrap" :class="{ active: activeField === 'pwdOld' }">
           <app-field
@@ -242,9 +249,10 @@
       title="输入头像 URL"
       show-cancel-button
       confirm-button-text="确认"
+      :style="dialogPanelStyle"
       @confirm="handleAvatarUrlConfirm"
     >
-      <div class="dialog-content">
+      <div class="dialog-content" :style="dialogContentStyle">
         <div class="field-wrap" :class="{ active: activeField === 'avatarUrl' }">
           <app-field
             v-model="avatarUrlInput"
@@ -275,7 +283,8 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, onBeforeUnmount, watch, nextTick } from "vue";
-import { showToast, showSuccessToast } from "vant";
+import { showToast, showSuccessToast, showFailToast } from '@/utils/toast';
+import { clearSession } from '@/utils/session';
 import { useUserStore } from "@/stores/user";
 import { authApi } from "@/utils/api/auth";
 import { useRouter } from "vue-router";
@@ -383,9 +392,20 @@ const measureKeyboardHeight = () => {
   keyboardHeight.value = el.getBoundingClientRect().height || 0;
 };
 
-const passwordDialogPanelStyle = computed(() => {
-  // 仅在密码弹窗打开且键盘弹出时，整体上移避开键盘
-  if (!showPasswordDialog.value || !activeField.value || !keyboardHeight.value) {
+// 弹窗打开 + 键盘弹出 → 整体上移避开键盘。
+// ⚠ 原先只有「修改密码」弹窗做了避让，改用户名 / 改邮箱 / 头像 URL 都没有：
+// 小屏上键盘从底部升起会直接盖住输入框，点击落到 .kb-sheet 上被 @click.stop 吞掉，
+// 表现为「点了没反应 / 唤不出键盘」。改成任意弹窗统一避让。
+const anyDialogOpen = computed(
+  () =>
+    showUsernameDialog.value ||
+    showEmailDialog.value ||
+    showPasswordDialog.value ||
+    showAvatarUrlDialog.value,
+);
+
+const dialogPanelStyle = computed(() => {
+  if (!anyDialogOpen.value || !activeField.value || !keyboardHeight.value) {
     return {};
   }
   // 弹窗原本居中（translate(-50%, -50%)）。键盘覆盖底部 viewport，
@@ -398,8 +418,8 @@ const passwordDialogPanelStyle = computed(() => {
   };
 });
 
-const passwordDialogContentStyle = computed(() => {
-  if (!showPasswordDialog.value || !activeField.value || !keyboardHeight.value) {
+const dialogContentStyle = computed(() => {
+  if (!anyDialogOpen.value || !activeField.value || !keyboardHeight.value) {
     return {};
   }
   return {
@@ -411,9 +431,11 @@ const adjustActiveFieldAboveKeyboard = (field) => {
   const refEl = measureRefs[field]?.value;
   const body = passwordDialogBody.value;
   const kbH = keyboardHeight.value;
-  if (!refEl || !body || !kbH) return;
-  // 找到最近的可滚动祖先（弹窗本体 .app-popup）
-  const scrollable = body.closest(".app-popup") || body.parentElement;
+  if (!refEl || !kbH) return;
+  // 找到最近的可滚动祖先（弹窗本体 .app-popup）。
+  // 原来只认 passwordDialogBody，导致改用户名/邮箱时整个校正函数直接 return。
+  const scrollable =
+    (body && body.closest(".app-popup")) || refEl.closest(".app-popup");
   if (!scrollable) return;
   const fieldRect = refEl.getBoundingClientRect();
   const scrollRect = scrollable.getBoundingClientRect();
@@ -574,7 +596,10 @@ onMounted(async () => {
 const handleDocClick = (e) => {
   if (!activeField.value) return;
   const el = e.target;
-  // 点在键盘面板内 / 点在输入框（field-wrap）内 → 不收起
+  // e.target 可能不是元素（如 document / 文本节点），closest 不存在时不能抛错，
+  // 否则同批次的其它点击逻辑会被中断
+  if (typeof el?.closest !== "function") return;
+  // 点在键盘面板内 / 点在输入框（field-wrap / app-field）内 → 不收起（保证可再次唤出）
   if (el.closest(".kb-sheet") || el.closest(".field-wrap")) return;
   closeKeyboard();
 };
@@ -691,7 +716,7 @@ const handleSendPasswordCode = async () => {
     return showToast("请先填写完整信息");
   }
   if (passwordForm.new !== passwordForm.confirm) {
-    return showToast("两次输入的新密码不一致");
+    return showFailToast("两次输入的新密码不一致");
   }
   try {
     await authApi.sendEmailCode({ email: userStore.email, type: "pwd" });
@@ -710,7 +735,7 @@ const handlePasswordSubmit = async () => {
     throw new Error("incomplete");
   }
   if (passwordForm.new !== passwordForm.confirm) {
-    showToast("新输入的两次密码不一致");
+    showFailToast("新输入的两次密码不一致");
     throw new Error("mismatch");
   }
 
@@ -723,7 +748,8 @@ const handlePasswordSubmit = async () => {
 
     showSuccessToast("修改成功，请重新登录");
     passwordForm.countdown = 0;
-    localStorage.removeItem("finance_token");
+    // 🔒 安全整改 P1-17：改密后统一清会话（含 httpOnly Cookie、登录标记、AES 密钥、缓存）
+    await clearSession();
     userStore.$reset();
 
     setTimeout(() => {
@@ -955,16 +981,18 @@ const onBeforePasswordClose = async (action) => {
   color: var(--theme-text-tertiary);
 }
 
-/* 内置 26 安全键盘弹层（覆盖于弹窗之上） */
+/* 内置 26 安全键盘弹层（覆盖于弹窗之上）
+   度量与 Login.vue 的 .kb-sheet 保持一致（padding 5 / z-index 2001），
+   否则同一套 SimpleKeyboard 在两个页面弹出来的整体高度会不一样。 */
 .kb-sheet {
   position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 2002;
+  z-index: 2001;
   background: var(--theme-bg-secondary, #fff);
   border-radius: 18px 18px 0 0;
-  padding: 10px;
+  padding: 5px;
   box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.12);
 }
 .kb-up-enter-active,

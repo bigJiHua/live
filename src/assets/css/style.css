@@ -83,6 +83,29 @@
   /* 折叠面板内容区背景跟随主题（Vant 默认 --van-background-2=白，暗色下露白底） */
   --van-collapse-item-content-background: var(--theme-bg-primary);
 
+  /* 密码输入框（van-password-input）：底色默认取 --van-background-2（暗色下仍为白），
+     必须重映射到主题卡片色，否则 PIN 格子深浅色不区分。 */
+  --van-password-input-background: var(--theme-bg-secondary);
+  --van-password-input-text-color: var(--theme-text-primary);
+  --van-password-input-dot-color: var(--theme-text-primary);
+  --van-password-input-cursor-color: var(--theme-primary);
+  --van-password-input-info-color: var(--theme-text-tertiary);
+
+  /* Vant 基础色 token 全部映射到主题。
+     Vant 的 --van-background-* / --van-text-color-* 等都是**写死的浅色**，只在 `.van-theme-dark`
+     类下才切换，而本项目用的是 `[data-theme-mode="dark"]` ⇒ 深色模式下所有依赖它们的组件
+     都会露浅色底/暗字（PIN 格子白底就是这个坑的个例）。
+     下面这组映射在**默认浅色主题下取值与 Vant 默认值逐字节相同**（gray-1=f7f8fa、
+     white=ffffff、gray-8=323233、gray-6=969799、gray-5=c8c9cc、gray-2=f2f3f5），
+     故浅色模式零视觉变化，深色模式与自定义主题自动跟随。 */
+  --van-background: var(--theme-bg-primary);
+  --van-background-2: var(--theme-bg-secondary);
+  --van-background-3: var(--theme-bg-secondary);
+  --van-text-color: var(--theme-text-primary);
+  --van-text-color-2: var(--theme-text-tertiary);
+  --van-text-color-3: var(--theme-text-placeholder);
+  --van-active-color: var(--theme-bg-tertiary);
+
   --van-divider-content-left-color: var(--theme-text-tertiary);
   --van-divider-content-right-color: var(--theme-text-tertiary);
 
@@ -170,6 +193,257 @@
 
   /* 兼容旧代码使用的 --app-primary 别名 */
   --app-primary: var(--theme-primary);
+}
+
+/* --- 2.5 消息弹窗（Toast）：浅色底卡片 + accent 色圆环图标 ---
+   负责人 2026-09-20 给的设计稿要求（取代此前的「纯色实心条」）：
+     · 底色是**该状态的极浅 tint 渐变**，正文用常规文字色；
+       只有**图标**用 accent 色 —— 20px 圆环 + 极浅 accent 底 + accent 描边。
+     · **关闭按钮**（可关）；支持**长信息**（标题 + 描述两行）。
+     · 深浅主题各一套 tint：深色只覆盖下面那组变量即可自动切换。
+
+   ⚠ 配色仍是**独立变量**（--toast-*），不占用 --theme-success/warning/... ，
+     改这里不会牵连标签 / 图表 / 通知条 / 收支绿等全站用色。
+
+   ⭐ **五色语义（负责人 2026-09-21 定的口径，取代 09-20 的「info 保持灰」）**：
+     🟢 绿 `--success`  ← HTTP 200 / 业务成功（`showSuccessToast`）
+     🔴 红 `--fail`     ← **经过 API 往返**后业务失败（4xx / 业务体 status≠200）
+     🟡 黄 `--warning`  ← 经过 API 往返后的「警告」级（前端显式指定，如 429 限流）
+     ⚪ 灰 `--info`     ← **拿不到响应**：本地连不上 API，或远端 5xx 故障
+     🔵 蓝 `--notice`   ← 普通信息（非状态、非错误）—— `showToast('纯文字')` 默认走它
+     ⏳ loading 也走蓝（「进行中」是中性提示，不是状态结果）
+
+   ⚠ 灰与蓝都是**独立新增/保留**的变量，别跟 `--theme-primary` 混（那个是页面主色）。
+   ⚠ `type:'info'` 现在**专指灰（系统/网络层）**；普通信息请用默认的纯文字 `showToast`。
+     改造前 web 侧显式传 `type:'info'` 的调用点有 **0 处**，所以这次语义收窄没有破坏面。
+   ⚠ 灰/红/黄/绿都带图标与关闭按钮；**蓝（纯文字）不带**（它是轻量提示，2 秒即走）。
+
+   ⚠ 实现是自研 `src/utils/toast/index.js`（Vant 的 Toast 没有关闭按钮、
+     也没有「标题 + 描述」结构），下面的 .app-toast-* 就是它的样式。
+     旧的 `.van-toast*` 覆盖已全部移除。 */
+:root {
+  --toast-success-a: #eafbf2;  --toast-success-b: #dcf5e7;
+  --toast-success-accent: #0b8a5a;  --toast-success-soft: rgba(11, 138, 90, 0.10);
+  --toast-warning-a: #fff9e6;  --toast-warning-b: #fff2cc;
+  --toast-warning-accent: #b46f00;  --toast-warning-soft: rgba(180, 111, 0, 0.10);
+  --toast-danger-a: #fef1f0;   --toast-danger-b: #fce6e4;
+  --toast-danger-accent: #c62f2a;   --toast-danger-soft: rgba(198, 47, 42, 0.09);
+  --toast-info-a: #f6f7f9;     --toast-info-b: #edeff3;
+  --toast-info-accent: #4b5563;     --toast-info-soft: rgba(75, 85, 99, 0.09);
+  /* 蓝 = 普通信息（showToast 纯文字 / showLoadingToast）。取项目主色 #3a66e0 压深一档，
+     与 success/warning/danger 的 accent 同一量级（都是「极浅 tint + 深 accent」）。 */
+  --toast-notice-a: #eef3ff;   --toast-notice-b: #dfe9ff;
+  --toast-notice-accent: #2b52c4;   --toast-notice-soft: rgba(43, 82, 196, 0.10);
+
+  --toast-text-1: #1a1f26;
+  --toast-text-2: rgba(26, 31, 38, 0.62);
+  --toast-text-3: rgba(26, 31, 38, 0.42);
+  --toast-inner-hairline: rgba(16, 24, 40, 0.06);
+  --toast-shadow: 0 8px 24px rgba(16, 24, 40, 0.10), 0 1px 2px rgba(16, 24, 40, 0.06);
+  --toast-close-hover-bg: rgba(16, 24, 40, 0.08);
+  --toast-radius: 8px;
+
+  /* 落点：状态栏/沉浸式安全区（--nav-top-inset，由 webview 壳注入；浏览器下为 0）
+     + 顶栏高度（Vant 46px）+ 8px 间距 ⇒ 正好压在 nav header 下沿，不盖住顶栏。 */
+  --toast-top-offset: calc(var(--nav-top-inset, 0px) + var(--van-nav-bar-height, 46px) + 8px);
+}
+
+[data-theme-mode="dark"] {
+  --toast-success-a: #0f6150;  --toast-success-b: #0a4536;
+  --toast-success-accent: #3ddc97;  --toast-success-soft: rgba(61, 220, 151, 0.16);
+  --toast-warning-a: #6b4f1a;  --toast-warning-b: #4e3912;
+  --toast-warning-accent: #ffd166;  --toast-warning-soft: rgba(255, 209, 102, 0.16);
+  --toast-danger-a: #7e2626;   --toast-danger-b: #581818;
+  --toast-danger-accent: #ff7a6b;   --toast-danger-soft: rgba(255, 122, 107, 0.16);
+  --toast-info-a: #3b424b;     --toast-info-b: #2b2f36;
+  --toast-info-accent: #aeb6c2;     --toast-info-soft: rgba(174, 182, 194, 0.16);
+  --toast-notice-a: #1e3a72;   --toast-notice-b: #152a52;
+  --toast-notice-accent: #7aa8ff;   --toast-notice-soft: rgba(122, 168, 255, 0.16);
+
+  --toast-text-1: #f2f5f8;
+  --toast-text-2: rgba(242, 245, 248, 0.62);
+  --toast-text-3: rgba(242, 245, 248, 0.42);
+  --toast-inner-hairline: rgba(255, 255, 255, 0.06);
+  --toast-shadow: 0 10px 28px rgba(0, 0, 0, 0.42);
+  --toast-close-hover-bg: rgba(255, 255, 255, 0.12);
+}
+
+/* forbidClick：一层透明拦截层，吞掉点击但不压暗画面（对应 Vant 的 forbid-click） */
+.app-toast-blocker {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  background: transparent;
+}
+
+.app-toast-root {
+  position: fixed;
+  left: 0;
+  right: 0;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+.app-toast-root--top { top: var(--toast-top-offset); }
+.app-toast-root--middle { top: 50%; transform: translateY(-50%); }
+.app-toast-root--bottom { bottom: calc(var(--nav-bottom-inset, 0px) + 24px); }
+
+.app-toast {
+  --accent: var(--toast-info-accent);
+  --accent-soft: var(--toast-info-soft);
+  --accent-a: var(--toast-info-a);
+  --accent-b: var(--toast-info-b);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-sizing: border-box;
+  min-width: 200px;
+  max-width: 420px;
+  padding: 12px 14px;
+  border-radius: var(--toast-radius);
+  font-size: 14px;
+  line-height: 22px;
+  font-weight: 500;
+  color: var(--toast-text-1);
+  pointer-events: auto;
+  background: linear-gradient(180deg, var(--accent-a) 0%, var(--accent-b) 100%);
+  box-shadow: inset 0 0 0 1px var(--toast-inner-hairline), var(--toast-shadow);
+  animation: app-toast-in 0.24s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+.app-toast.is-hiding {
+  opacity: 0;
+  transform: translateY(-6px) scale(0.96);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+/* 纯文字（无图标、无关闭按钮）→ 不强制 200px 最小宽，文字居中 */
+.app-toast--plain {
+  min-width: 0;
+  justify-content: center;
+}
+.app-toast--plain .app-toast__text {
+  text-align: center;
+}
+
+.app-toast__icon {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+}
+.app-toast__icon svg {
+  width: 11px;
+  height: 11px;
+  display: block;
+}
+
+.app-toast__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.app-toast__close {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin-left: 4px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: var(--toast-text-3);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.app-toast__close:hover {
+  background: var(--toast-close-hover-bg);
+  color: var(--toast-text-1);
+}
+.app-toast__close:active { transform: scale(0.88); }
+.app-toast__close svg { width: 10px; height: 10px; display: block; }
+
+/* 长信息：图标与关闭按钮顶对齐，标题 + 描述两行 */
+.app-toast--long {
+  max-width: 480px;
+  align-items: flex-start;
+  padding: 14px 14px 14px 16px;
+}
+.app-toast--long .app-toast__icon { margin-top: 1px; }
+.app-toast--long .app-toast__close { margin-top: 1px; }
+.app-toast__content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.app-toast__title { font-weight: 500; }
+.app-toast__desc {
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 20px;
+  color: var(--toast-text-2);
+}
+
+/* 五态：只换 accent 与 tint，结构完全一致 */
+.app-toast--success {
+  --accent: var(--toast-success-accent);
+  --accent-soft: var(--toast-success-soft);
+  --accent-a: var(--toast-success-a);
+  --accent-b: var(--toast-success-b);
+}
+.app-toast--warning {
+  --accent: var(--toast-warning-accent);
+  --accent-soft: var(--toast-warning-soft);
+  --accent-a: var(--toast-warning-a);
+  --accent-b: var(--toast-warning-b);
+}
+.app-toast--fail {
+  --accent: var(--toast-danger-accent);
+  --accent-soft: var(--toast-danger-soft);
+  --accent-a: var(--toast-danger-a);
+  --accent-b: var(--toast-danger-b);
+}
+/* 蓝 = 普通信息（showToast 纯文字 / showLoadingToast） */
+.app-toast--notice {
+  --accent: var(--toast-notice-accent);
+  --accent-soft: var(--toast-notice-soft);
+  --accent-a: var(--toast-notice-a);
+  --accent-b: var(--toast-notice-b);
+}
+/* 灰 = 系统/网络层（本地连不上 API、远端 5xx） */
+.app-toast--info {
+  --accent: var(--toast-info-accent);
+  --accent-soft: var(--toast-info-soft);
+  --accent-a: var(--toast-info-a);
+  --accent-b: var(--toast-info-b);
+}
+
+/* loading 的转圈：与 3 点同色系，但一眼能认出「进行中」 */
+.app-toast--loading .app-toast__icon svg {
+  animation: app-toast-spin 0.9s linear infinite;
+}
+
+@keyframes app-toast-in {
+  from { opacity: 0; transform: translateY(-8px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes app-toast-spin {
+  to { transform: rotate(360deg); }
 }
 
 /* 数字键盘 custom 删除键默认 #f7f8fa 固定浅底，改为跟随主题层级 */

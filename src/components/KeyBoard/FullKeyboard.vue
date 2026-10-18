@@ -217,6 +217,10 @@ const onWindowBlur = () => {
   // 窗口失焦（切应用/点地址栏等）同样清空，防截屏 OCR
   if (isSecure.value) clearCanvases();
 };
+// 重新获得焦点必须重绘：否则 blur 清空的键面字符永远不会恢复，键盘看起来像「唤不出来」
+const onWindowFocus = () => {
+  nextTick(drawKeys);
+};
 onMounted(() => {
   // rAF 等布局完成、首帧前绘制，避免默认 300×150 canvas 被 button overflow 裁剪后看到错位
   requestAnimationFrame(drawKeys);
@@ -228,6 +232,7 @@ onMounted(() => {
   window.addEventListener("resize", drawKeys);
   document.addEventListener("visibilitychange", onVisibility);
   window.addEventListener("blur", onWindowBlur);
+  window.addEventListener("focus", onWindowFocus);
   // 初始：secure 模式却无公钥 → 暂时降级（仅告警一次，待公钥异步到达后由 watch 自动恢复）
   if (props.defaultSecure && !props.publicKey) {
     console.warn(
@@ -252,6 +257,7 @@ onBeforeUnmount(() => {
   window.removeEventListener("resize", drawKeys);
   document.removeEventListener("visibilitychange", onVisibility);
   window.removeEventListener("blur", onWindowBlur);
+  window.removeEventListener("focus", onWindowFocus);
 });
 
 // ── 按键逻辑 ──

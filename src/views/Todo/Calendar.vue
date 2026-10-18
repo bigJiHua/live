@@ -3,7 +3,7 @@
     <!-- 顶部月份选择 -->
     <div class="header">
       <van-icon name="arrow-left" @click="prevMonth" />
-      <span class="month-title" @click="showMonthPicker = true">
+      <span class="month-title" @click="openMonthPicker">
         {{ currentYear }}年{{ currentMonth + 1 }}月
         <van-icon name="arrow-down" />
       </span>
@@ -317,7 +317,8 @@
 
 <script setup>
 import { ref, computed, onMounted, onActivated, watch } from "vue";
-import { showToast, showConfirmDialog, showSuccessToast } from "vant";
+import { showConfirmDialog } from 'vant';
+import { showToast, showSuccessToast, showFailToast } from '@/utils/toast';
 import { useRouter } from "vue-router";
 import dayjs from "dayjs";
 import "dayjs/locale/zh-cn";
@@ -332,6 +333,7 @@ import {
 } from "@/utils/api/todo";
 import { updateRecurringMonthStatus } from "@/utils/api/recurring";
 import CalendarGrid from "@/components/calendar/CalendarGrid.vue";
+import { apiErrorToast } from '@/utils/request/helpers'
 
 dayjs.locale("zh-cn");
 const router = useRouter();
@@ -545,7 +547,7 @@ const loadCalendarMonth = async () => {
     calendarData.value = res.data || res;
     syncSelectedRecurringEvents();
   } catch {
-    showToast("加载日历失败");
+    showFailToast("加载日历失败");
   } finally {
     loading.value = false;
   }
@@ -572,7 +574,7 @@ const loadSelectedDateEvents = async () => {
     );
     selectedEvents.value = [...todoEvents, ...getSelectedRecurringEvents()];
   } catch {
-    showToast("加载事件失败");
+    showFailToast("加载事件失败");
   } finally {
     loadingEvents.value = false;
     refreshing.value = false;
@@ -606,6 +608,17 @@ const goToday = () => {
   currentMonth.value = now.month();
   selectedDate.value = now.format("YYYY-MM-DD");
   loadSelectedDateEvents();
+};
+
+// 打开月份选择器：滚轮同步到「当前查看月」
+// （原写法 `pickerSelectedValues` 只在 confirm 时更新、初值恒为今天 ⇒ 翻到 3 月再打开却停在 9 月。
+//   与原生 `ui/todo/TodoCalendarScreen.kt` 的 picker 对齐：打开时高亮当前查看月。）
+const openMonthPicker = () => {
+  pickerSelectedValues.value = [
+    `${currentYear.value}年`,
+    `${currentMonth.value + 1}月`,
+  ];
+  showMonthPicker.value = true;
 };
 
 // 选择年月
@@ -668,7 +681,7 @@ const handleAddEvent = async () => {
     loadCalendarMonth();
     loadReminders();
   } catch (e) {
-    showToast(e.message || "添加失败");
+    apiErrorToast(e, "添加失败");
   } finally {
     submitting.value = false;
   }
@@ -748,7 +761,7 @@ const toggleRecurringComplete = async (event) => {
     loadSelectedDateEvents();
     loadReminders();
   } catch (e) {
-    showToast(e.message || "操作失败");
+    apiErrorToast(e, "操作失败");
   }
 };
 
@@ -772,7 +785,7 @@ const toggleEventComplete = async (event) => {
     showSuccessToast("操作成功");
     loadCalendarMonth();
   } catch (e) {
-    if (e !== "cancel") showToast("操作失败");
+    if (e !== "cancel") showFailToast("操作失败");
   }
 };
 
@@ -812,7 +825,7 @@ const handleEditEvent = async () => {
     loadCalendarMonth();
     loadReminders();
   } catch (e) {
-    showToast(e.message || "保存失败");
+    apiErrorToast(e, "保存失败");
   } finally {
     submitting.value = false;
   }
@@ -832,7 +845,7 @@ const handleDelete = async (event) => {
     loadCalendarMonth();
     loadReminders();
   } catch (e) {
-    if (e !== "cancel") showToast("删除失败");
+    if (e !== "cancel") showFailToast("删除失败");
   }
 };
 

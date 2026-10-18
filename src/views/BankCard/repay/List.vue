@@ -121,7 +121,8 @@
 
 <script setup>
 import { ref, computed, onMounted } from "vue";
-import { showToast, showConfirmDialog } from "vant";
+import { showConfirmDialog } from 'vant';
+import { showToast, showFailToast, showSuccessToast } from '@/utils/toast';
 import { useRouter } from "vue-router";
 import dayjs from "dayjs";
 import { getRepayList, getCardList } from "@/utils/api/card";
@@ -193,7 +194,7 @@ const loadRepayList = async () => {
     const res = await getRepayList(params);
     repayList.value = res.data || res || [];
   } catch (error) {
-    showToast(error.message || "加载失败");
+    apiErrorToast(error, "加载失败");
   } finally {
     loading.value = false;
   }
@@ -226,6 +227,7 @@ const getCardDisplayName = (item) => {
 
 // 格式化金额
 import { formatMoney } from "@/utils/money";
+import { apiErrorToast } from '@/utils/request/helpers'
 
 // 格式化日期 - 显示完整日期
 const formatDate = (date) => {
@@ -259,7 +261,7 @@ const goToRepay = (item) => {
 // 还款撤销
 const handleReverse = async (item) => {
   if (!item.account_id) {
-    showToast("该记录无法撤销");
+    showFailToast("该记录无法撤销");
     return;
   }
 
@@ -270,11 +272,11 @@ const handleReverse = async (item) => {
     });
 
     await reverseCreditRepay(item.account_id);
-    showToast("撤销成功");
+    showSuccessToast("撤销成功");
     loadRepayList();
   } catch (e) {
     if (e !== "cancel") {
-      showToast(e.message || "撤销失败");
+      apiErrorToast(e, "撤销失败");
     }
   }
 };

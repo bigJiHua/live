@@ -251,9 +251,10 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { showToast, showConfirmDialog } from 'vant'
-import dayjs from 'dayjs'
+import { showConfirmDialog } from 'vant';
+import { showToast, showFailToast, showSuccessToast } from '@/utils/toast';import dayjs from 'dayjs'
 import { getSalaryDay, saveSalaryDay, deleteSalaryDay, getJobList } from '@/utils/api/work'
+import { apiErrorToast } from '@/utils/request/helpers'
 
 const route = useRoute()
 
@@ -427,11 +428,11 @@ const saveFormal = async () => {
       work_date: currentDate.value,
       cut: parseFloat(editFormalData.value.cut) || 0,
     })
-    showToast('保存成功')
+    showSuccessToast('保存成功')
     showEditFormal.value = false
     loadSalaryData()
   } catch (e) {
-    showToast(e.message || '保存失败')
+    apiErrorToast(e, '保存失败')
   } finally {
     saving.value = false
   }
@@ -448,10 +449,10 @@ const submitFormalSalary = async () => {
       job_id: formalJob.value.id,
       work_date: currentDate.value,
     })
-    showToast('提交成功')
+    showSuccessToast('提交成功')
     loadSalaryData()
   } catch (e) {
-    showToast(e.message || '提交失败')
+    apiErrorToast(e, '提交失败')
   } finally {
     submittingFormal.value = false
   }
@@ -479,10 +480,10 @@ const deleteSalary = async () => {
     await deleteSalaryDay({
       work_date: currentDate.value,
     })
-    showToast('删除成功')
+    showSuccessToast('删除成功')
     loadSalaryData()
   } catch (e) {
-    showToast(e.message || '删除失败')
+    apiErrorToast(e, '删除失败')
   } finally {
     deleting.value = false
   }
@@ -511,7 +512,7 @@ const saveEditingParttime = async () => {
     // 备用：从 parttimeJobs 查找 job_id
     const jobId = item.job_id || item.id || parttimeJobs.value[idx]?.id
     if (!jobId) {
-      showToast('无法获取工作信息')
+      showFailToast('无法获取工作信息')
       saving.value = false
       return
     }
@@ -522,11 +523,11 @@ const saveEditingParttime = async () => {
       subsidy_meal: parseFloat(editParttimeData.value.subsidy) || 0,
       cut: parseFloat(editParttimeData.value.cut) || 0,
     })
-    showToast('保存成功')
+    showSuccessToast('保存成功')
     showEditParttime.value = false
     loadSalaryData()
   } catch (e) {
-    showToast(e.message || '保存失败')
+    apiErrorToast(e, '保存失败')
   } finally {
     saving.value = false
   }

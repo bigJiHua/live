@@ -73,7 +73,7 @@
 <script setup>
 import { ref, onMounted } from "vue";
 import { authApi } from "@/utils/api/auth";
-import { showToast } from "vant";
+import { showToast } from '@/utils/toast';
 
 const loading = ref(false);
 const logs = ref([]);

@@ -200,7 +200,8 @@
 <script setup>
 import { ref, computed, onMounted, watch } from "vue";
 import { useRouter, useRoute } from "vue-router";
-import { showToast, showConfirmDialog } from "vant";
+import { showConfirmDialog } from 'vant';
+import { showToast, showSuccessToast } from '@/utils/toast';
 import dayjs from "dayjs";
 import zhCn from "dayjs/locale/zh-cn";
 import {
@@ -414,7 +415,7 @@ const handleSaveRemark = async () => {
     detail.value.remark = editRemark.value;
     flowSync.recordChange(route.params.id, { remark: editRemark.value })
     showRemarkPopup.value = false;
-    showToast("保存成功");
+    showSuccessToast("保存成功");
   } catch (e) {
     // 错误已由拦截器处理
   } finally {

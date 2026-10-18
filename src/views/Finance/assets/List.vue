@@ -213,7 +213,8 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick } from "vue";
-import { showToast, showConfirmDialog } from "vant";
+import { showConfirmDialog } from 'vant';
+import { showToast, showFailToast, showSuccessToast } from '@/utils/toast';
 import { useRouter } from "vue-router";
 import { getRegisterList, deleteAssetRegister } from "@/utils/api/asset";
 import * as echarts from "echarts/core";
@@ -340,6 +341,7 @@ const debtTotal = (item) => {
   return arr.reduce((sum, a) => sum + (Number(a.amount) || 0), 0);
 };
 import dayjs from "dayjs";
+import { apiErrorToast } from '@/utils/request/helpers'
 // 格式化日期
 const formatDate = (date) => {
   if (!date) return "-";
@@ -491,7 +493,7 @@ const loadList = async () => {
     await nextTick();
     renderMini();
   } catch (e) {
-    showToast("加载失败");
+    showFailToast("加载失败");
   } finally {
     loading.value = false;
   }
@@ -534,11 +536,11 @@ const handleDelete = async (item) => {
     });
 
     await deleteAssetRegister(item.id);
-    showToast("删除成功");
+    showSuccessToast("删除成功");
     loadList();
   } catch (e) {
     if (e !== "cancel") {
-      showToast(e.message || "删除失败");
+      apiErrorToast(e, "删除失败");
     }
   }
 };

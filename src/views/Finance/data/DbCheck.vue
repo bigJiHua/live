@@ -100,7 +100,7 @@
 
 <script setup>
 import { ref } from "vue";
-import { showToast } from "vant";
+import { showToast } from '@/utils/toast';
 import { getTableList, getTableStatus } from "@/utils/api/dataManager";
 
 const loading = ref(false);

@@ -91,8 +91,7 @@
 import { ref, reactive, computed, onMounted, onActivated, onDeactivated, nextTick } from 'vue'
 defineOptions({ name: 'CardFlowList' })
 import { useRouter, useRoute } from 'vue-router'
-import { showToast } from 'vant'
-import { getAccountListByCard } from '@/utils/api/account'
+import { showToast, showFailToast } from '@/utils/toast';import { getAccountListByCard } from '@/utils/api/account'
 import { useFlowSyncStore } from '@/stores/flowSync'
 
 const router = useRouter()
@@ -202,7 +201,7 @@ const loadList = async (reset = false) => {
 
   } catch (e) {
     console.error('加载失败', e)
-    showToast('加载失败')
+    showFailToast('加载失败')
   } finally {
     loading.value = false
     loadingMore.value = false

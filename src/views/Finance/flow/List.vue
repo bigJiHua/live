@@ -261,7 +261,7 @@
 import { ref, computed, onMounted, onActivated, onDeactivated, watch, nextTick } from "vue";
 defineOptions({ name: 'FinanceFlowList' })
 import { useRouter, useRoute } from "vue-router";
-import { showToast } from "vant";
+import { showToast, showFailToast } from '@/utils/toast';
 import dayjs from "dayjs";
 import zhCn from "dayjs/locale/zh-cn";
 import { getAccountList, getMonthStats } from "@/utils/api/account";
@@ -834,7 +834,7 @@ const loadData = async () => {
     if (!finished.value) page.value++;
   } catch (e) {
     finished.value = true;
-    showToast("加载失败");
+    showFailToast("加载失败");
   } finally {
     requesting.value = false;
     loading.value = false;

@@ -89,7 +89,7 @@
 
 <script setup>
 import { ref, onMounted } from "vue";
-import { showToast } from "vant";
+import { showToast } from '@/utils/toast';
 import { useRouter, useRoute } from "vue-router";
 import { getRepayDetail } from "@/utils/api/card";
 
@@ -113,7 +113,7 @@ const loadRepayDetail = async () => {
     const res = await getRepayDetail(id);
     repayData.value = res.data || res || {};
   } catch (error) {
-    showToast(error.message || "加载失败");
+    apiErrorToast(error, "加载失败");
   } finally {
     loading.value = false;
   }
@@ -122,6 +122,7 @@ const loadRepayDetail = async () => {
 // 格式化金额
 import { formatMoney } from "@/utils/money";
 import dayjs from "dayjs";
+import { apiErrorToast } from '@/utils/request/helpers'
 // 格式化日期时间
 const formatDateTime = (date) => {
   if (!date) return "-";

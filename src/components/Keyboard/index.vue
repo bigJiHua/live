@@ -198,11 +198,17 @@ const onVisibility = () => {
 const onWindowBlur = () => {
   if (isSecure.value) clearCanvases();
 };
+// 窗口重新获得焦点（切回页面/点回地址栏等）必须重绘：
+// 否则 blur 清空的键面字符永远不会恢复，键盘看起来像「失效/唤不出来」
+const onWindowFocus = () => {
+  nextTick(drawKeys);
+};
 
 onMounted(() => {
   initLayout();
   document.addEventListener("visibilitychange", onVisibility);
   window.addEventListener("blur", onWindowBlur);
+  window.addEventListener("focus", onWindowFocus);
   // 防御：secureOnly 要求加密链路却无公钥 → 静默降级 + 警告，避免"假安全"
   if (props.secureOnly && !props.publicKey) {
     console.warn(
@@ -214,6 +220,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   document.removeEventListener("visibilitychange", onVisibility);
   window.removeEventListener("blur", onWindowBlur);
+  window.removeEventListener("focus", onWindowFocus);
 });
 </script>
 

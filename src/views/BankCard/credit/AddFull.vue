@@ -536,17 +536,14 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from "vue";
-import {
-  showToast,
-  showLoadingToast,
-  closeToast,
-  showConfirmDialog,
-} from "vant";
+import { showConfirmDialog } from 'vant';
+import { showToast, showLoadingToast, closeToast, showFailToast } from '@/utils/toast';
 import { useRouter } from "vue-router";
 import { createCard } from "@/utils/api/card";
 import { categoryApi } from "@/utils/api/category";
 import CardOrgIcon from "@/components/BankCard/org/CardOrgIcon.vue";
 import { ORG_NAME_MAP } from "@/components/BankCard/org/orgMap.js";
+import { apiErrorToast } from '@/utils/request/helpers'
 
 const router = useRouter();
 const loading = ref(false);
@@ -709,7 +706,7 @@ const validateRepayDay = () => {
 const validateCreditLimit = () => {
   const val = Number(formData.creditLimit);
   if (formData.creditLimit && val > 1000000) {
-    showToast("信用额度不能超过100万");
+    showFailToast("信用额度不能超过100万");
     formData.creditLimit = "1000000";
   }
 };
@@ -718,7 +715,7 @@ const validateCreditLimit = () => {
 const validateTempLimit = () => {
   const val = Number(formData.tempLimit);
   if (formData.tempLimit && val > 1000000) {
-    showToast("临时额度不能超过100万");
+    showFailToast("临时额度不能超过100万");
     formData.tempLimit = "1000000";
   }
 };
@@ -912,7 +909,7 @@ const onSaveDraft = () => {
     localStorage.setItem("creditCardDraft", JSON.stringify(formData));
     showToast("草稿已保存");
   } catch (e) {
-    showToast("保存草稿失败");
+    showFailToast("保存草稿失败");
   }
 };
 
@@ -986,11 +983,11 @@ const submitCard = async () => {
       });
     } else {
       closeToast();
-      showToast("创建失败，请重试");
+      showFailToast("创建失败，请重试");
     }
   } catch (error) {
     closeToast();
-    showToast(error.message || "创建失败，请重试");
+    apiErrorToast(error, "创建失败，请重试");
   } finally {
     loading.value = false;
   }

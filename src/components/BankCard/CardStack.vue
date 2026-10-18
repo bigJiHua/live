@@ -1,5 +1,5 @@
 <template>
-  <div class="card-stack-container" v-if="cardList.length > 0">
+  <div class="card-stack-container" v-if="cardList.length > 0" ref="rootEl">
     <div
       class="stack-backdrop"
       :class="{ 'is-visible': selectedId !== null }"
@@ -13,6 +13,7 @@
         v-for="(item, index) in cardList"
         :key="item.id"
         class="bank-card-item"
+        :data-card-id="item.id"
         :class="{
           'is-selected': selectedId === item.id,
           'is-dimmed': selectedId !== null && selectedId !== item.id,
@@ -121,7 +122,7 @@
       <button
         v-if="selectedId !== null"
         class="close-btn"
-        @click.stop="emit('update:selectedId', null)"
+        @click.stop="closeSelected()"
         aria-label="关闭"
       >
         <van-icon name="cross" />
@@ -131,7 +132,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, watch, onUnmounted } from "vue";
+import { ref, reactive, watch, nextTick, onUnmounted } from "vue";
 import CardOrgIcon from "@/components/BankCard/org/CardOrgIcon.vue";
 import { ORG_NAME_MAP } from "@/components/BankCard/org/orgMap.js";
 
@@ -187,10 +188,69 @@ onUnmounted(unlockScroll);
 
 const handleCardClick = (item) => {
   if (props.selectedId === item.id) {
-    emit("update:selectedId", null);
+    flipClose(item);
   } else {
-    emit("update:selectedId", item.id);
+    flipOpen(item);
   }
+};
+
+// ===== 抽出 / 收回动画（FLIP：First-Last-Invert-Play）=====
+// 2026-10-11 负责人要求：点列表中任意位置的卡片，卡片必须**从它在 list 里的实际
+// 位置直接跳出 list 层级**飞到固定弹出位；收起时再从固定弹出位飞回它在 list 的槽位。
+// 旧实现靠 CSS 过渡 top（absolute→fixed）：卡片会从屏幕外下方飞入，与点击位置割裂。
+// 两个 pane（借记/信用）各有一份实例，rootEl 把查询范围收在本组件内。
+const rootEl = ref(null);
+
+const getCardEl = (id) =>
+  rootEl.value
+    ? rootEl.value.querySelector(`.bank-card-item[data-card-id="${id}"]`)
+    : null;
+
+/** 量出把 last 矩形搬回 first 矩形所需的 invert 变换（transform-origin 为中心，故用中心点位移）。 */
+const invertTransform = (first, last) => {
+  const dx = first.left + first.width / 2 - (last.left + last.width / 2);
+  const dy = first.top + first.height / 2 - (last.top + last.height / 2);
+  const sx = last.width ? first.width / last.width : 1;
+  const sy = last.height ? first.height / last.height : 1;
+  return `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})`;
+};
+
+/** 抽出：先记 list 中的位置 → 弹出 → 瞬间 invert 回原位 → 下一帧播放飞行动画。 */
+const flipOpen = async (item) => {
+  const el = getCardEl(item.id);
+  const first = el ? el.getBoundingClientRect() : null;
+  emit("update:selectedId", item.id);
+  if (!el || !first) return;
+  await nextTick();
+  // 此刻 el 已切换成 fixed 弹出位。先掐掉所有过渡再量最终位，防止 top 也跟着过渡。
+  el.style.transition = "none";
+  const last = el.getBoundingClientRect();
+  el.style.transform = invertTransform(first, last);
+  void el.offsetWidth; // 强制 reflow，把 invert 定格成起始帧
+  el.style.transition = ""; // 交回 CSS：.is-selected 的 transform .38s 曲线
+  el.style.transform = ""; // 回到 CSS 的 translate3d(0,0,0) scale(1.05)
+};
+
+/** 收回：先记固定弹出位 → 回 list 槽位 → 瞬间 invert 回弹出位 → 播放插入动画。 */
+const flipClose = async (item) => {
+  const el = getCardEl(item.id);
+  const first = el ? el.getBoundingClientRect() : null;
+  emit("update:selectedId", null);
+  if (!el || !first) return;
+  await nextTick();
+  // 此刻 el 已回到 list 槽位（absolute + top:stack-offset）
+  el.style.transition = "none";
+  const last = el.getBoundingClientRect();
+  el.style.transform = invertTransform(first, last);
+  void el.offsetWidth;
+  el.style.transition = ""; // 交回 CSS：基础态的 transform .6s 弹性曲线（插入回弹感）
+  el.style.transform = "";
+};
+
+/** 关闭按钮 / 再次点击弹出卡：走同一套收回动画。 */
+const closeSelected = () => {
+  const item = props.cardList.find((c) => c.id === props.selectedId);
+  if (item) flipClose(item);
 };
 
 // 银行名取首字：去"中国"前缀（中国银行→中白名单），空名不显示 "?"

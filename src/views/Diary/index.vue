@@ -39,8 +39,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { showToast } from 'vant'
-import DiaryCard from '@/components/Diary/DiaryCard.vue'
+import { showToast, showFailToast } from '@/utils/toast';import DiaryCard from '@/components/Diary/DiaryCard.vue'
 import { momentApi } from '@/utils/api/moment'
 
 const refreshing = ref(false)
@@ -126,7 +125,7 @@ const loadList = async (append = false) => {
     }
   } catch (err) {
     console.error("加载动态列表失败:", err);
-    showToast("加载失败");
+    showFailToast("加载失败");
   } finally {
     requesting.value = false;
     loading.value = false;

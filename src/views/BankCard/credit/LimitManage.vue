@@ -174,8 +174,7 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { showToast, showSuccessToast, showLoadingToast, closeToast } from 'vant'
-import {
+import { showToast, showSuccessToast, showLoadingToast, closeToast, showFailToast } from '@/utils/toast';import {
   getCardList,
   updateCard,
   getCreditPools,
@@ -359,7 +358,7 @@ async function saveBatchPool() {
     batchShow.value = false
     await loadData()
   } catch (e) {
-    showToast('归池失败')
+    showFailToast('归池失败')
   } finally {
     closeToast()
   }
@@ -406,7 +405,7 @@ async function saveCard() {
     cardEditShow.value = false
     await loadData()
   } catch (e) {
-    showToast('保存失败')
+    showFailToast('保存失败')
   } finally {
     closeToast()
   }
@@ -458,7 +457,7 @@ async function savePool() {
     poolEditShow.value = false
     await loadData()
   } catch (e) {
-    showToast('保存失败')
+    showFailToast('保存失败')
   } finally {
     closeToast()
   }
@@ -471,7 +470,7 @@ async function removePool(pool) {
     showSuccessToast('已删除')
     await loadData()
   } catch (e) {
-    showToast('删除失败')
+    showFailToast('删除失败')
   } finally {
     closeToast()
   }

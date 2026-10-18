@@ -10,8 +10,12 @@
       <button class="dc-nav" @click="$emit('next')"><van-icon name="arrow" /></button>
     </div>
 
-    <!-- 待办：提醒横幅（可折叠，默认展开） -->
-    <div v-if="variant === 'todo' && reminderBanner.length" class="dc-reminder" :class="{ collapsed: !reminderExpanded }">
+    <!-- 待办：提醒横幅（可折叠，默认展开）
+         ⚠⚠ 2026-10-12 同步 APP 定案逻辑：原来 `v-if="variant === 'todo' && reminderBanner.length"`
+         整行隐藏 ⇒ 本月无提醒时铃铛/年月/个数/眼睛插槽/收起箭头全消失，
+         而「眼睛」（小飞机开关）在插槽里 ⇒ 无提醒月份点不到（APP 负责人报的 bug）。
+         改为 todo 变体**恒显**：空列表时计数「0个」、轮播与 chip 区降级为「暂无提醒」。 -->
+    <div v-if="variant === 'todo'" class="dc-reminder" :class="{ collapsed: !reminderExpanded }">
       <div class="dc-reminder-head" @click="reminderExpanded = !reminderExpanded">
         <template v-if="reminderExpanded">
           <van-icon name="bell" />
@@ -22,7 +26,8 @@
           <van-icon name="bell" />
           <span class="dc-reminder-title">本月提醒：</span>
           <van-notice-bar class="dc-reminder-scroll" left-icon="" :scrollable="false" @click.stop>
-            <van-swipe vertical class="dc-reminder-swipe" :autoplay="3500" :touchable="false" :show-indicators="false">
+            <span v-if="!reminderBanner.length" class="dc-reminder-empty">暂无提醒</span>
+            <van-swipe v-else vertical class="dc-reminder-swipe" :autoplay="3500" :touchable="false" :show-indicators="false">
               <van-swipe-item v-for="r in reminderBanner" :key="r.date + r.content">
                 <span class="dc-reminder-chip" :class="'lv-' + r.level">{{ r.content }} <b>{{ r.date.slice(5) }}</b></span>
               </van-swipe-item>
@@ -35,6 +40,7 @@
         </div>
       </div>
       <div v-if="reminderExpanded" class="dc-reminder-list">
+        <span v-if="!reminderBanner.length" class="dc-reminder-empty">暂无提醒</span>
         <span
           v-for="r in reminderBanner"
           :key="r.date + r.content"
@@ -427,6 +433,12 @@ const fmt = abbrMoney
 .dc-reminder-chip.lv-red { background: var(--van-danger-bg, rgba(238,10,36,0.1)); color: var(--van-danger-color, #ee0a24); }
 .dc-reminder-chip.lv-yellow { background: var(--van-orange-bg, rgba(255,151,106,0.12)); color: var(--van-orange, #ff976a); }
 .dc-reminder-chip.lv-green { background: var(--van-green-bg, rgba(7,193,96,0.1)); color: var(--van-green, #07c160); }
+/* 空态（2026-10-12 横幅恒显后新增）：无背景的弱化文字，与 chip 同行高对齐 */
+.dc-reminder-empty {
+  font-size: 12px;
+  color: var(--theme-text-tertiary, #969799);
+  line-height: 22px;
+}
 
 /* 统计栏 */
 .dc-stat {

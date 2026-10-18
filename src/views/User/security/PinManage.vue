@@ -88,12 +88,14 @@
     >
       <div class="disable-dialog-content">
         <div class="dialog-tip">请输入当前 PIN 码以确认关闭</div>
+        <!-- @focus 只在 touchstart 派发（Vant 实现），鼠标点击收不到；补 click 兜底重新唤出键盘 -->
         <van-password-input
           :value="disablePin"
           :length="6"
           :focused="showDisableKeyboard"
           :gutter="10"
           @focus="showDisableKeyboard = true"
+          @click="showDisableKeyboard = true"
         />
         <div v-if="disableError" class="error-text">{{ disableError }}</div>
       </div>
@@ -116,7 +118,7 @@
 <script setup>
 import { ref, watch, onMounted } from "vue";
 import { useRouter } from "vue-router";
-import { showToast } from "vant";
+import { showToast } from '@/utils/toast';
 import { securityApi } from "@/utils/api/security";
 import SafeKeyboard from "@/components/KeyBoard/index.vue";
 
@@ -346,7 +348,7 @@ const onDisableDialogClose = async (action) => {
 :deep(.van-password-input__item) {
   /* 基础边框 */
   border: 1px solid var(--theme-border) !important; /* 跟随主题边框色 */
-  background-color: var(--theme-bg-secondary); /* 跟随主题背景 */
+  background-color: var(--theme-bg-secondary) !important; /* 跟随主题背景 */
   border-radius: 6px; /* 让格子稍微圆润一点 */
   transition: all 0.2s; /* 增加过渡动画，更好看 */
   flex: 1; /* 均匀分配空间 */

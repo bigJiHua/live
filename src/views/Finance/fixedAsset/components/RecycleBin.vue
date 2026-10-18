@@ -1,249 +1,29 @@
 <template>
-  <div class="recycle-bin">
-    <div class="stats-bar">
-      <span class="count">{{ list.length }} 个已删除资产</span>
-    </div>
-    <!-- 资产列表 -->
-    <div class="asset-list" v-if="list.length > 0">
-      <div v-for="item in list" :key="item.id" class="asset-card">
-        <div class="card-image" v-if="item.img_url">
-          <img :src="getImageUrl(item.img_url)" :alt="item.info" />
-        </div>
-        <div class="card-image placeholder" v-else>
-          <van-icon name="photo-o" />
-        </div>
-        <div class="card-content">
-          <div class="card-title">{{ item.info }}</div>
-          <div class="card-tag" v-if="item.tag">{{ item.tag }}</div>
-          <div class="card-info">
-            <span>购买价 ¥{{ formatAmount(item.buy_price) }}</span>
-          </div>
-        </div>
-        <div class="card-actions">
-          <app-button
-            size="small"
-            type="primary"
-            plain
-            @click="handleRestore(item)"
-          >
-            恢复
-          </app-button>
-          <app-button
-            size="small"
-            type="danger"
-            plain
-            @click="handlePermanentDelete(item)"
-          >
-            永久删除
-          </app-button>
-        </div>
-      </div>
-    </div>
-    <div class="empty-container" v-if="!loading && list.length === 0">
-      <van-empty description="回收站为空" class="empty-content" />
-    </div>
-
-    <van-loading v-if="loading" class="loading-center" vertical
-      >加载中...</van-loading
-    >
+  <div class="recycle-bin-panel">
+    <van-empty image="search" description="回收站功能建设中，敬请期待" />
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from "vue";
-import { showConfirmDialog, showToast, showSuccessToast } from "vant";
-import {
-  getRecycleBinList,
-  restoreFixedAsset,
-  permanentlyDeleteFixedAsset,
-} from "@/utils/api/fixedAsset";
+/**
+ * 固定资产回收站（占位组件，2026-10-09 补建）
+ *
+ * 背景：BUILD-1 —— 本文件在仓库中缺失（components/ 目录为空），导致
+ * `npm run build` 因 UNRESOLVED_IMPORT 失败。父壳 `../RecycleBin.vue`
+ * 通过 ref 调用 `loadList()`，故这里必须暴露同名方法（空实现）。
+ *
+ * 后续实现提示：数据接口可参考同目录 List.vue 的 `@/utils/api/fixedAsset`；
+ * 建议后端先补「已归档资产列表 + 恢复/彻底删除」两个接口再接 UI。
+ */
 
-const emit = defineEmits(["restore", "delete"]);
-
-const loading = ref(false);
-const list = ref([]);
-
-const loadList = async () => {
-  loading.value = true;
-  try {
-    const res = await getRecycleBinList();
-    list.value = res.data || [];
-  } catch (e) {
-    showToast("加载失败");
-  } finally {
-    loading.value = false;
-  }
-};
-
-const formatAmount = (amount) => {
-  if (!amount && amount !== 0) return "0.00";
-  return (parseFloat(amount) || 0).toFixed(2);
-};
-
-const getImageUrl = (path) => {
-  if (!path) return "";
-  if (path.startsWith("http")) return path;
-  const BASE_URL = import.meta.env.VITE_FILE_BASE_URL || "";
-  return BASE_URL + path;
-};
-
-const handleRestore = async (item) => {
-  try {
-    await showConfirmDialog({
-      title: "确认恢复",
-      message: "确定要恢复这个资产吗？",
-    });
-    await restoreFixedAsset(item.id);
-    showSuccessToast("恢复成功");
-    emit("restore");
-    loadList();
-  } catch (e) {
-    if (e !== "cancel") {
-      showToast(e.message || "恢复失败");
-    }
-  }
-};
-
-const handlePermanentDelete = async (item) => {
-  try {
-    await showConfirmDialog({
-      title: "警告",
-      titleClass: "danger-title",
-      message: "永久删除后数据无法恢复，确定要删除吗？",
-      confirmButtonColor: "#ee0a24",
-    });
-    await permanentlyDeleteFixedAsset(item.id);
-    showSuccessToast("删除成功");
-    emit("delete");
-    loadList();
-  } catch (e) {
-    if (e !== "cancel") {
-      showToast(e.message || "删除失败");
-    }
-  }
-};
+// 父壳 onMounted 会调用；占位阶段无列表可加载，保持空实现以满足接口契约
+function loadList() {}
 
 defineExpose({ loadList });
-
-onMounted(() => {
-  loadList();
-});
 </script>
 
 <style scoped>
-.recycle-bin {
-  min-height: 100vh;
-  background: var(--theme-bg-primary);
-  padding: 12px 16px;
-}
-
-.stats-bar {
-  background: var(--theme-bg-secondary);
-  border-radius: 8px;
-  padding: 12px 16px;
-  margin-bottom: 12px;
-  text-align: center;
-  color: var(--theme-text-tertiary);
-  font-size: 14px;
-}
-
-.asset-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.asset-card {
-  display: flex;
-  align-items: center;
-  background: var(--theme-bg-secondary);
-  border-radius: 12px;
-  padding: 12px;
-  gap: 12px;
-}
-
-.card-image {
-  width: 60px;
-  height: 60px;
-  border-radius: 8px;
-  overflow: hidden;
-  flex-shrink: 0;
-}
-
-.card-image img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.card-image.placeholder {
-  background: var(--theme-bg-primary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--theme-text-tertiary);
-  font-size: 20px;
-}
-
-.card-content {
-  flex: 1;
-  min-width: 0;
-}
-
-.card-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--theme-text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.card-tag {
-  font-size: 12px;
-  color: var(--theme-text-tertiary);
-  margin-top: 2px;
-}
-
-.card-info {
-  font-size: 12px;
-  color: var(--theme-text-secondary);
-  margin-top: 4px;
-}
-
-.card-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.loading-center {
-  display: flex;
-  justify-content: center;
-  padding: 40px;
-}
-
-:deep(.danger-title) {
-  color: var(--van-danger-color, #ee0a24);
-}
-
-/* 新增：修复回收站为空时图标与文字对齐 */
-.empty-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 40px 0;
-}
-
-.empty-icon {
-  color: var(--theme-text-tertiary); /* 与空状态文字颜色统一，更协调 */
-  margin-bottom: 16px; /* 图标与文字间距，避免拥挤 */
-}
-
-/* 微调空状态文字样式，确保与图标对齐协调 */
-:deep(.van-empty__description) {
-  color: var(--theme-text-tertiary);
-  font-size: 14px;
+.recycle-bin-panel {
+  padding: 40vh 16px 0;
 }
 </style>

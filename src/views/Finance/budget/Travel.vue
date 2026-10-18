@@ -342,8 +342,10 @@
 <script setup>
 import { ref, computed, onMounted } from "vue";
 import { useRouter, useRoute } from "vue-router";
-import { showToast, showSuccessToast, showConfirmDialog } from "vant";
+import { showConfirmDialog } from 'vant';
+import { showToast, showSuccessToast, showFailToast } from '@/utils/toast';
 import { createBudget, updateBudget, getBudget } from "@/utils/api/budget";
+import { apiErrorToast } from '@/utils/request/helpers'
 
 const router = useRouter();
 const route = useRoute();
@@ -627,7 +629,7 @@ const deleteRate = (currency) => {
   }
   
   if (isUsed) {
-    showToast("该汇率已被使用，无法删除");
+    showFailToast("该汇率已被使用，无法删除");
     return;
   }
   
@@ -686,7 +688,7 @@ const loadData = async () => {
     }
     refreshAllCNY();
   } catch (e) {
-    showToast("加载失败");
+    showFailToast("加载失败");
   }
 };
 
@@ -743,7 +745,7 @@ const submit = async () => {
     showSuccessToast("保存成功");
     router.replace("/finance/budget");
   } catch (e) {
-    showToast(e.message || "保存失败");
+    apiErrorToast(e, "保存失败");
   } finally {
     saving.value = false;
   }

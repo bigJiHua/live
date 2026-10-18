@@ -161,7 +161,8 @@
 <script setup>
 import { ref, watch, computed, shallowRef, onBeforeUnmount } from "vue";
 import { useRouter } from "vue-router";
-import { showToast, showConfirmDialog, showLoadingToast, closeToast } from "vant";
+import { showConfirmDialog } from 'vant';
+import { showToast, showLoadingToast, closeToast, showFailToast, showSuccessToast } from '@/utils/toast';
 import { uploadApi, BusType } from "@/utils/api/upload";
 import { getBrowserLocation, getAmapLocation, getIpLocation } from "@/utils/geo";
 import { momentApi } from "@/utils/api/moment";
@@ -557,11 +558,11 @@ const handleSave = async () => {
     });
 
     closeToast();
-    showToast("成功");
+    showSuccessToast("成功");
     router.replace("/diary");
   } catch (err) {
     closeToast();
-    if (err !== "cancel") showToast("失败");
+    if (err !== "cancel") showFailToast("失败");
   } finally {
     submitting.value = false;
   }

@@ -375,7 +375,8 @@
 
 <script setup>
 import { ref, computed, onMounted, watch } from "vue";
-import { showToast, showSuccessToast, showFailToast } from "vant";
+import { showToast, showSuccessToast, showFailToast } from '@/utils/toast';
+import { apiErrorToast } from '@/utils/request/helpers';
 import { useRouter } from "vue-router";
 import dayjs from "dayjs";
 import { categoryApi } from "@/utils/api/category";
@@ -503,7 +504,7 @@ const loadCategories = async () => {
       if (transferCat) selectedCategory.value = transferCat;
     }
   } catch (e) {
-    showToast("加载分类失败");
+    showFailToast("加载分类失败");
   }
 };
 
@@ -1014,7 +1015,7 @@ const handleSubmit = async () => {
     useFlowSyncStore().markListRefresh();
     router.back();
   } catch (e) {
-    showFailToast(e.message || "提交失败");
+    apiErrorToast(e, "提交失败");
   } finally {
     submitting.value = false;
   }

@@ -246,10 +246,11 @@
 <script setup>
 import { ref, computed, onMounted, watch } from "vue";
 import { useRouter } from "vue-router";
-import { showToast, showSuccessToast } from "vant";
+import { showToast, showSuccessToast, showFailToast } from '@/utils/toast';
 import dayjs from "dayjs";
 import { getCardList } from "@/utils/api/card";
 import { createRecurring } from "@/utils/api/recurring";
+import { apiErrorToast } from '@/utils/request/helpers'
 
 const cards = ref([]);
 const submitting = ref(false);
@@ -570,7 +571,7 @@ const loadData = async () => {
     const cardRes = await getCardList({ cardType: "credit" });
     cards.value = (cardRes.data || []).filter((c) => c.bill_day);
   } catch (e) {
-    showToast(e.message || "加载失败");
+    apiErrorToast(e, "加载失败");
   }
 };
 
@@ -588,7 +589,7 @@ const handleSubmit = async () => {
     return showToast("请输入分期总额");
   if (!formPeriods.value || Number(formPeriods.value) < 2)
     return showToast("期数至少2期");
-  if (exceedLimit.value) return showToast("微调后合计不能超过总还款额");
+  if (exceedLimit.value) return showFailToast("微调后合计不能超过总还款额");
 
   const card = selectedCard.value;
   const billingDay = card.bill_day || 1;
@@ -646,7 +647,7 @@ const handleSubmit = async () => {
     showSuccessToast("分期创建成功");
     router.push("/credit-center/installment/list");
   } catch (e) {
-    showToast(e.message || "创建失败");
+    apiErrorToast(e, "创建失败");
   } finally {
     submitting.value = false;
   }

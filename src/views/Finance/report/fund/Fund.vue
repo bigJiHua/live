@@ -34,7 +34,10 @@
         </div>
         <div class="menu-item" @click="$router.push('/finance/report/fund/daily')">
           <div class="menu-icon">
-            <van-icon name="edit" style="color: var(--van-green, #07c160)" />
+            <!-- 原为 style="color: var(--van-green, #07c160)"：内联写死绿色盖掉了 `.menu-icon{color:var(--theme-primary)}`
+                 ⇒ 换主题时这个图标不跟着换色（其余 3 个入口都没内联，是正常的）。负责人 2026-09-19 点名"web 需要同步
+                 修改这个 bug" ⇒ 删掉内联，让它回到 `.menu-icon` 的主题色。 -->
+            <van-icon name="edit" />
           </div>
           <div class="menu-info">
             <div class="menu-title">每日收益登记</div>
@@ -95,9 +98,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { getFundList } from '@/utils/api/fund'
-import { showToast } from 'vant'
-
-const loading = ref(true)
+import { showToast, showFailToast } from '@/utils/toast';const loading = ref(true)
 const fundList = ref([])
 
 const formatAmount = (v) => {
@@ -148,7 +149,7 @@ onMounted(async () => {
     const res = await getFundList()
     fundList.value = res.data?.list || []
   } catch (e) {
-    showToast('加载失败')
+    showFailToast('加载失败')
   } finally {
     loading.value = false
   }

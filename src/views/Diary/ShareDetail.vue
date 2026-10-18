@@ -28,6 +28,7 @@
           :focused="pwFocused"
           :class="{ 'pw-incomplete': pwIncomplete }"
           @focus="pwFocused = true"
+          @click="pwFocused = true"
         />
 
         <p v-if="pwError" class="pw-error">{{ pwError }}</p>
@@ -59,7 +60,7 @@
         </div>
       </div>
 
-      <div class="body-text" v-html="data.content"></div>
+      <div class="body-text" v-html="safeContent"></div>
 
       <div v-if="data.img_url?.length" class="image-grid">
         <div
@@ -96,6 +97,7 @@
 import { ref, computed, onMounted, nextTick } from 'vue';
 import { useRoute } from 'vue-router';
 import ENV from '@/utils/env';
+import { sanitizeHtml } from '@/utils/sanitize';
 
 const route = useRoute();
 const BASE_URL = ENV.FILE_BASE_URL;
@@ -107,6 +109,11 @@ const mode = ref(
 const loading = ref(false);
 const data = ref(null);
 const errorState = ref(null);
+
+// ── 安全：公开分享页的富文本必须消毒后再渲染 ──
+// 该页面无需登录即可访问，任何能拿到链接的人都能看到内容，
+// 因此这里绝不能直接 v-html="data.content"（存储型 XSS ⇒ 访客浏览器执行注入脚本）
+const safeContent = computed(() => sanitizeHtml(data.value?.content));
 // 公开页面不请求任何用户数据，使用内联 SVG 默认头像
 const defaultAvatar = 'data:image/svg+xml,' + encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><rect width="40" height="40" rx="20" fill="#e8e8e8"/><circle cx="20" cy="14" r="8" fill="#c0c0c0"/><ellipse cx="20" cy="36" rx="15" ry="10" fill="#c0c0c0"/></svg>'

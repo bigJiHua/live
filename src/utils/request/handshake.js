@@ -3,8 +3,10 @@
  * 处理与后端的安全握手和密钥管理
  */
 
-import axios from 'axios'
 import config from './config'
+import { createClientNonce } from '../securityHeaders'
+// 🔄 P2-18：握手通道的 8401 一次性自愈
+import { axiosWithNonceRetry } from './nonceRetry'
 
 // 状态
 let sessionAesKey = null
@@ -17,11 +19,25 @@ let handshakePromise = null
 async function fetchHandshakeKey(fp, deviceData) {
   const now = Date.now()
   
-  const response = await axios.get(`${config.baseURL}${config.handshakeUrl}`, {
+  // 🔄 P2-18（2026-10-08）：握手也接 8401 一次性自愈。
+  //   握手同样过 securityCheck（带一次性 nonce）；被判定重放时旧代码
+  //   会直接 throw 'Handshake Failed'，且握手失败会连累后续所有加密请求。
+  //   axiosWithNonceRetry 内部 validateStatus:()=>true，HTTP 4xx 也会
+  //   落到下面的 status===200 判定，语义不变。
+  const response = await axiosWithNonceRetry({
+    method: 'get',
+    url: `${config.baseURL}${config.handshakeUrl}`,
     params: { fp },
+    // 🔄 2026-10-12 优化：握手显式加 10s 超时。
+    //   此前用全局裸 axios（无实例默认超时），网络挂起时握手 Promise 永不 settle，
+    //   后续所有加密写操作全部堵死（api.md §8.5）。
+    timeout: 10000,
     headers: {
       'X-Requested-With': 'XMLHttpRequest',
       'x-client-timestamp': now,
+      // 握手同样经过 securityCheck，带上一次性随机数，保证开启
+      // REQUIRE_CLIENT_NONCE=true 后握手不会被拒
+      'x-client-nonce': createClientNonce(),
       'x-fingerprint-hash': fp,
       'x-user-agent-custom': deviceData.userAgent,
       'x-device-model': deviceData.deviceModel,

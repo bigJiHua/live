@@ -215,8 +215,10 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { showToast, showConfirmDialog } from 'vant'
+import { showConfirmDialog } from 'vant';
+import { showToast, showFailToast, showSuccessToast } from '@/utils/toast';
 import { getBudget, deleteBudget } from '@/utils/api/budget'
+import { apiErrorToast } from '@/utils/request/helpers'
 
 const router = useRouter()
 const route = useRoute()
@@ -321,7 +323,7 @@ const loadDetail = async () => {
     const res = await getBudget(route.params.id)
     detail.value = res.data
   } catch (e) {
-    showToast('加载失败')
+    showFailToast('加载失败')
   } finally {
     loading.value = false
   }
@@ -345,11 +347,11 @@ const handleDelete = async () => {
       message: '删除后不可恢复，是否继续？'
     })
     await deleteBudget(route.params.id)
-    showToast('删除成功')
+    showSuccessToast('删除成功')
     router.replace('/finance/budget')
   } catch (e) {
     if (e !== 'cancel') {
-      showToast(e.message || '删除失败')
+      apiErrorToast(e, '删除失败')
     }
   }
 }

@@ -87,7 +87,10 @@ watch(() => route.path, (path) => {
 
 <style scoped>
 .page-bank-card-manage {
-  height: calc(100vh - 50px);
+  /* ⚠ 2026-10-12：原 calc(100vh - 50px) 比 MainLayout 的 .main-body（100vh - 90px）
+     高 40px ⇒ 内容溢出内容区、移动端 100vh 动态工具栏下文档可外滚，
+     页头会顺着滚动压住顶部导航栏。改 100% 撑满内容区，彻底消除外溢。 */
+  height: 100%;
   background: var(--theme-bg-secondary);
   display: flex;
   flex-direction: column;
@@ -132,7 +135,10 @@ watch(() => route.path, (path) => {
   position: relative;
   display: inline-flex;
   padding: 4px;
-  background: var(--theme-bg-primary, #fff);
+  /* ⚠ 2026-10-12 同步 APP 定案：原 background:var(--theme-bg-primary) 在深色下=bgPage
+     (#0f0f12 近黑)，贴在 bgCard 的顶栏上就是一坨黑。改 bgThird：深色 #26262b 微隆起，
+     浅色 #f2f3f5 与原 #f7f8fa 几乎无差。 */
+  background: var(--theme-bg-tertiary, #fff);
   border-radius: 22px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
@@ -185,7 +191,8 @@ watch(() => route.path, (path) => {
   align-items: center;
   gap: 6px;
   padding: 6px 10px;
-  background: var(--theme-bg-primary, #fff);
+  /* 同 segment-switch：深色下 bgPrimary 近黑，改 bgThird 微隆起（2026-10-12 同步 APP） */
+  background: var(--theme-bg-tertiary, #fff);
   border-radius: 20px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
   cursor: pointer;
@@ -213,6 +220,8 @@ watch(() => route.path, (path) => {
 .preview-toggle.on .dot {
   border-color: var(--theme-primary);
   background: var(--theme-primary);
+  /* 同步 APP：color-mix 兜底，旧引擎丢掉第二条也不至于没有光环 */
+  box-shadow: 0 0 0 3px rgba(58, 102, 224, 0.2);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--theme-primary) 20%, transparent);
 }
 

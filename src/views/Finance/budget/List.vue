@@ -109,7 +109,7 @@
 <script setup>
 import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
-import { showToast } from "vant";
+import { showToast, showFailToast } from '@/utils/toast';
 import { getBudgetList, getBudgetStats } from "@/utils/api/budget";
 
 const router = useRouter();
@@ -221,7 +221,7 @@ const loadData = async () => {
     budgetList.value = listRes.data || [];
     stats.value = statsRes.data || [];
   } catch (e) {
-    showToast("加载失败");
+    showFailToast("加载失败");
   } finally {
     loading.value = false;
   }

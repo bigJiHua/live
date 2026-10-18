@@ -107,8 +107,7 @@
 import { ref, computed, onMounted, onActivated, onDeactivated, nextTick } from 'vue'
 defineOptions({ name: 'FinanceReportCardFlow' })
 import { useRouter, useRoute } from 'vue-router'
-import { showToast } from 'vant'
-import dayjs from 'dayjs'
+import { showToast, showFailToast } from '@/utils/toast';import dayjs from 'dayjs'
 import zhCn from 'dayjs/locale/zh-cn'
 import { getAccountListByCard } from '@/utils/api/account'
 import { getCardList } from '@/utils/api/card'
@@ -235,7 +234,7 @@ const loadData = async () => {
     if (page.value === 1) list.value = data; else list.value.push(...data)
     finished.value = data.length < limit || page.value >= (pagination.totalPages || 1)
     if (!finished.value) page.value++
-  } catch (e) { finished.value = true; showToast('加载失败') }
+  } catch (e) { finished.value = true; showFailToast('加载失败') }
   finally { loading.value = false }
 }
 

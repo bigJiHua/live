@@ -329,16 +329,13 @@
 <script setup>
 import { ref, reactive, onMounted } from "vue";
 import { useRouter } from "vue-router";
-import {
-  showToast,
-  showLoadingToast,
-  closeToast,
-  showConfirmDialog,
-} from "vant";
+import { showConfirmDialog } from 'vant';
+import { showToast, showLoadingToast, closeToast } from '@/utils/toast';
 import { createCard } from "@/utils/api/card";
 import { categoryApi } from "@/utils/api/category";
 import CardOrgIcon from "@/components/BankCard/org/CardOrgIcon.vue";
 import { ORG_NAME_MAP } from "@/components/BankCard/org/orgMap.js";
+import { apiErrorToast } from '@/utils/request/helpers'
 
 const router = useRouter();
 const loading = ref(false);
@@ -702,7 +699,7 @@ const onSubmit = async () => {
     showToast({ message: "添加成功", onClose: () => router.back() });
   } catch (error) {
     closeToast();
-    showToast(error.message || "添加失败");
+    apiErrorToast(error, "添加失败");
   } finally {
     loading.value = false;
   }

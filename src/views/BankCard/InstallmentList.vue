@@ -84,8 +84,9 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { showToast } from 'vant'
+import { showToast } from '@/utils/toast';
 import { getInstallments, deleteRecurring, abortInstallment } from '@/utils/api/recurring'
+import { apiErrorToast } from '@/utils/request/helpers'
 
 const installments = ref([])
 const loading = ref(false)
@@ -152,7 +153,7 @@ const loadData = async () => {
   try {
     const res = await getInstallments()
     installments.value = res.data || []
-  } catch (e) { showToast(e.message || '加载失败') } finally { loading.value = false }
+  } catch (e) { apiErrorToast(e, '加载失败') } finally { loading.value = false }
 }
 
 const refreshing = ref(false)
@@ -160,7 +161,7 @@ const onRefresh = async () => {
   try {
     const res = await getInstallments()
     installments.value = res.data || []
-  } catch (e) { showToast(e.message || '刷新失败') } finally { refreshing.value = false }
+  } catch (e) { apiErrorToast(e, '刷新失败') } finally { refreshing.value = false }
 }
 
 onMounted(() => loadData())
@@ -203,7 +204,7 @@ const confirmAbort = async () => {
     }
     abortShow.value = false
     loadData()
-  } catch (e) { showToast(e.message || '中止失败') }
+  } catch (e) { apiErrorToast(e, '中止失败') }
 }
 
 // 删除入口保留（极端情况），默认不暴露
@@ -212,7 +213,7 @@ const handleDelete = async (item) => {
     await deleteRecurring(item.id)
     showToast('已删除')
     loadData()
-  } catch (e) { showToast(e.message || '删除失败') }
+  } catch (e) { apiErrorToast(e, '删除失败') }
 }
 </script>
 

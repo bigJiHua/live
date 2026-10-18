@@ -532,7 +532,8 @@
 <script setup>
 import { ref, computed, onMounted, watch } from "vue";
 import { useRouter } from "vue-router";
-import { showToast, showSuccessToast, showFailToast } from "vant";
+import { showToast, showSuccessToast } from '@/utils/toast';
+import { apiErrorToast } from '@/utils/request/helpers';
 import dayjs from "dayjs";
 import { categoryApi } from "@/utils/api/category";
 import { getCardList } from "@/utils/api/card";
@@ -1062,7 +1063,7 @@ const onSubmit = async () => {
     flowSync.markListRefresh();
     router.back();
   } catch (e) {
-    showFailToast(e.message || "提交失败");
+    apiErrorToast(e, "提交失败");
   } finally {
     submitting.value = false;
   }

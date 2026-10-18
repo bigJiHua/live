@@ -96,45 +96,54 @@ const onKey = (k) => {
 </script>
 
 <style scoped>
+/* ⚠ 度量必须与登录用 FullKeyboard.vue 保持一致（键高 52 / 行距 6 / 键距 4 / 圆角 8 /
+   字符 24·400 / 功能键 17·500 / 键区总高 232）。此前两套键盘各有一套尺寸，
+   编辑资料的全键盘明显比登录键盘高出一截。 */
 .simple-kb { user-select: none; padding: 0; }
 .kb-toolbar {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 6px 4px 10px;
+  padding: 2px 0 8px;
 }
 .tool-btn {
   display: flex; align-items: center; gap: 5px;
-  font-size: 13px; font-weight: 600; color: var(--theme-text-primary, #323233);
+  font-size: 13px; font-weight: 500; color: var(--theme-text-primary, #323233);
   cursor: pointer; user-select: none;
 }
 .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--theme-primary, #07c160); }
 
-.kb-rows { display: flex; flex-direction: column; gap: 7px; min-height: 253px; }
-.kb-row { display: grid; grid-template-columns: repeat(10, 1fr); gap: 6px; }
-.kb-indent-1 { padding-left: 5.5%; }
+.kb-rows { display: flex; flex-direction: column; gap: 6px; min-height: 232px; }
+.kb-row { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; }
+.kb-indent-1 { grid-template-columns: repeat(9, 1fr); justify-content: center; padding: 0 5%; }
 
 .kb-key {
-  height: 58px; border: none; border-radius: 10px; font-size: 20px; font-weight: 500;
+  height: 52px; border: none; border-radius: 8px; font-size: 24px; font-weight: 400;
   background: var(--theme-bg-primary, #f7f8fa); color: var(--theme-text-primary, #323233);
-  box-shadow: 0 2px 6px rgba(0,0,0,.10), 0 4px 14px rgba(0,0,0,.05), inset 0 -1px 0 rgba(0,0,0,.05);
-  cursor: pointer; transition: transform .05s ease, box-shadow .05s ease, background .08s ease;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04), inset 0 -1px 0 rgba(0, 0, 0, 0.06);
+  cursor: pointer; transition: transform .08s ease, box-shadow .08s ease, background .1s ease;
   -webkit-tap-highlight-color: transparent; min-width: 0; overflow: hidden; white-space: nowrap;
   display: flex; align-items: center; justify-content: center;
 }
-.kb-key.is-fn { background: var(--theme-bg-tertiary, #e8e9eb); color: var(--theme-text-secondary, #646566); font-size: 19px; }
+.kb-key.is-fn { background: var(--theme-bg-tertiary, #e8e9eb); color: var(--theme-text-primary, #323233); font-size: 17px; font-weight: 500; }
 .kb-key.is-del { grid-column: span 2; }
-.del-arrow { font-size: 26px; line-height: 1; font-weight: 700; }
+.del-arrow { font-size: 24px; line-height: 1; font-weight: 500; }
 .kb-key.is-switch { grid-column: span 2; }
-.kb-key.is-shift { font-size: 15px; font-weight: 700; }
-.sh-aa { font-size: 17px; font-weight: 600; transition: color .15s; }
+.kb-key.is-shift { font-size: 14px; font-weight: 700; }
+.sh-aa { font-size: 17px; font-weight: 500; transition: color .15s; }
 .sh-aa.on { color: var(--theme-primary, #07c160); }
-.kb-key.is-space { grid-column: span 4; cursor: default; pointer-events: none; }
-.safe-label { font-size: 14px; font-weight: 600; color: var(--theme-text-tertiary, #969799); letter-spacing: 2px; }
+.kb-key.is-space { grid-column: span 4; cursor: default; pointer-events: none; background: var(--theme-bg-primary, #f7f8fa); }
+.safe-label { font-size: 13px; font-weight: 500; color: var(--theme-text-tertiary, #969799); letter-spacing: 2px; }
 .kb-key.is-login {
-  grid-column: span 3; background: var(--theme-primary, #07c160); color: var(--theme-button-primary-text, #fff); font-size: 19px; font-weight: 700;
-  box-shadow: 0 2px 6px rgba(0,0,0,.14), 0 4px 14px rgba(0,0,0,.08);
+  grid-column: span 3; background: var(--theme-primary, #07c160); color: var(--theme-button-primary-text, #fff); font-size: 17px; font-weight: 600;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04), inset 0 -1px 0 rgba(0, 0, 0, 0.1);
 }
 .kb-key:active {
-  transform: translateY(2px);
-  box-shadow: 0 1px 3px rgba(0,0,0,.10), inset 0 2px 3px rgba(0,0,0,.08);
+  transform: translateY(1px) scale(0.97);
+  background: var(--theme-bg-secondary, #d1d4dc);
+  box-shadow: 0 0.5px 0 rgba(0, 0, 0, 0.06), inset 0 1px 3px rgba(0, 0, 0, 0.1);
 }
+.kb-key.is-login:active {
+  background: var(--theme-primary-active, #06a050);
+  filter: brightness(0.92);
+}
+.kb-key.is-fn:active { background: var(--theme-bg-quaternary, #8e909a); }
 </style>

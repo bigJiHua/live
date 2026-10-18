@@ -181,12 +181,13 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from "vue";
-import { showToast, showLoadingToast, closeToast } from "vant";
+import { showToast, showLoadingToast, closeToast } from '@/utils/toast';
 import { useRouter, useRoute } from "vue-router";
 import { createRepay, getBillDetail, getBillList, getCardList, getCreditPools, mergeRepay } from "@/utils/api/card";
 import { categoryApi } from "@/utils/api/category";
 import { formatMoney } from "@/utils/money";
 import { useUiTheme } from "@/composables/useUiTheme";
+import { apiErrorToast } from '@/utils/request/helpers'
 
 const { primary: themePrimary } = useUiTheme();
 
@@ -542,7 +543,7 @@ const onSubmit = async () => {
     showToast({ message: "添加成功", onClose: () => router.back() });
   } catch (error) {
     closeToast();
-    showToast(error.message || "添加失败");
+    apiErrorToast(error, "添加失败");
   } finally {
     loading.value = false;
   }

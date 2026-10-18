@@ -95,8 +95,10 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { getFundList, getMonthlyHistory, addFundHistory, updateFundHistory, deleteFundHistory } from '@/utils/api/fund'
-import { showConfirmDialog, showToast } from 'vant'
+import { showConfirmDialog } from 'vant';
+import { showToast, showFailToast, showSuccessToast } from '@/utils/toast';
 import dayjs from 'dayjs'
+import { apiErrorToast } from '@/utils/request/helpers'
 
 const trimDecimal = (value, digits = 3) => {
   const fixed = Number(value).toFixed(digits)
@@ -217,20 +219,20 @@ const handleSave = async () => {
         netValue: normalizeNumber(editNet.value),
         marketVal: normalizeNumber(editMkt.value)
       })
-      showToast('修改成功')
+      showSuccessToast('修改成功')
     } else {
       await addFundHistory(selectedFund.value, {
         netValue: normalizeNumber(editNet.value),
         marketVal: normalizeNumber(editMkt.value),
         recordDate: popupDate.value,
       })
-      showToast('登记成功')
+      showSuccessToast('登记成功')
     }
     showDayPopup.value = false
     await loadFundList()
     await loadHistory()
   } catch (e) {
-    showToast(e?.message || e?.response?.data?.message || '保存失败')
+    apiErrorToast(e, '保存失败')
   } finally {
     saving.value = false
   }
@@ -243,12 +245,12 @@ const handleDelete = () => {
       deleting.value = true
       try {
         await deleteFundHistory(popupRecordId.value)
-        showToast('删除成功')
+        showSuccessToast('删除成功')
         showDayPopup.value = false
         await loadFundList()
         await loadHistory()
       } catch (e) {
-        showToast('删除失败')
+        showFailToast('删除失败')
       } finally {
         deleting.value = false
       }
@@ -332,7 +334,7 @@ onMounted(async () => {
     await loadFundList()
     if (selectedFund.value) await loadHistory()
   } catch (e) {
-    showToast('加载失败')
+    showFailToast('加载失败')
   } finally {
     loading.value = false
   }

@@ -3,8 +3,11 @@
  * 全局单例，处理 PIN 验证弹窗的显示/隐藏、请求重发等逻辑
  */
 
-import axios from 'axios'
 import config from './config'
+import { refreshVolatileSecurityHeaders } from '../securityHeaders'
+// 安全整改 P2-16：PIN 重发通道自带 8401 一次性自愈
+// （这两处走裸全局 axios，没有响应拦截器 —— 8401 会被当成普通响应）
+import { axiosWithNonceRetry } from './nonceRetry'
 
 // PIN 码状态码
 export const PIN_CODE = {
@@ -75,19 +78,34 @@ function checkAppOnlyHasPinOverlay() {
  * @param {object} originalRequest - 被拦截的原始请求配置
  * @returns {Promise} 验证成功 resolve，失败/锁定 reject
  */
-export function requestPinVerify(originalRequest, verifyData = {}) {
+export function requestPinVerify(originalRequest, verifyData = {}, skipCooldown = false) {
   const actionType = verifyData?.action_type || verifyData?.actionType
   const isRouteVerify = actionType === ROUTE_VERIFY_ACTION
   const currentIsRouteVerify = verifyContext?.action_type === ROUTE_VERIFY_ACTION
 
   // 冷却窗口保护：验证成功后 30 秒内再收到 8303 → 静默重发，不再弹窗
   const cooldownMs = 30000
-  if (!isVerifying && lastSuccessAt > 0 && (Date.now() - lastSuccessAt < cooldownMs)) {
+  if (!skipCooldown && !isVerifying && lastSuccessAt > 0 && (Date.now() - lastSuccessAt < cooldownMs)) {
     return new Promise((resolve, reject) => {
       const retryConfig = { ...originalRequest }
       delete retryConfig.__pinVerify
-      axios(retryConfig)
-        .then(res => resolve(res.data || res))
+      // 重发前刷新时间戳与一次性随机数：
+      // 时间戳可能已超出后端 ±2 分钟窗口；nonce 复用会被判定为重放而直接 400。
+      refreshVolatileSecurityHeaders(retryConfig.headers)
+      // P2-16：改用自带 8401 自愈的请求 —— 裸 axios 下重发被判重放时
+      // 调用方拿到 {code:8401} 会当成普通成功（与 8303 误判同类问题）。
+      axiosWithNonceRetry(retryConfig)
+        .then(res => {
+          const data = res.data || res
+          // ⚠ 这里用的是裸 axios，没有响应拦截器：后端再回 8303 也会被当成普通成功 resolve，
+          // 调用方拿到 {code:8303} 却以为成功（页面静默空白 / 或误渲染）。
+          // 重发仍被拦截时，必须回到正常弹窗流程，不能再走冷却捷径。
+          if (isPinResponse(data)) {
+            requestPinVerify(originalRequest, verifyData, true).then(resolve, reject)
+          } else {
+            resolve(data)
+          }
+        })
         .catch(err => reject(err))
     })
   }
@@ -176,7 +194,12 @@ export async function submitPin(pin) {
       ? await securityApi.verifyRoutePin(payload)
       : await securityApi.verifyPin(payload)
 
-    if (res.code === PIN_CODE.SUCCESS || res.status === 200) {
+    // 🛡️ 只认 8301（成功码），不认 status===200：
+    //    后端 verifyPin/verifyRoutePin 的失败分支也是 {code:8302|8304, status:200}
+    //    （HTTP 200 + body 业务码）。旧判据 `code===8301 || status===200` 会把
+    //    PIN 输错/锁定误判为成功（目前靠响应拦截器 handlePinResponse 先行拦截才未触发，
+    //    属脆弱设计 —— 一旦后端调整状态码即失效）。见 api.md §8.6 F-F。
+    if (res.code === PIN_CODE.SUCCESS) {
       onPinSuccess(res.data || res)
     } else if (res.code === PIN_CODE.ERROR) {
       pinDialogInstance.setError(res.message || 'PIN 码错误')
@@ -233,24 +256,39 @@ async function onPinSuccess(verifyResult = {}) {
     return
   }
 
-  // 依次重发请求（串行避免并发风暴）
-  for (const req of requests) {
-    try {
-      const pinVerify = req.__pinVerify
-      delete req.__pinVerify
+  // 并发重发请求（🔄 2026-10-12 优化）：原为串行 for-await，
+  // N 个挂起请求耗时线性叠加（2Mbps 弱网下页面解冻慢）。
+  // 改为限流并发：每次 attempt 都会经 refreshVolatileSecurityHeaders 换新 nonce，
+  // 并发安全；上限 3 避免打爆后端连接与 PIN 风控窗口。
+  const RETRY_CONCURRENCY = 3
+  const queue = [...requests]
+  const worker = async () => {
+    while (queue.length > 0) {
+      const req = queue.shift()
+      try {
+        const pinVerify = req.__pinVerify
+        delete req.__pinVerify
 
-      if (pinVerify?.action_type === ROUTE_VERIFY_ACTION && verifyResult.token) {
-        req.headers = {
-          ...(req.headers || {}),
-          [verifyResult.headerName || 'x-route-verify-token']: verifyResult.token,
+        if (pinVerify?.action_type === ROUTE_VERIFY_ACTION && verifyResult.token) {
+          req.headers = {
+            ...(req.headers || {}),
+            [verifyResult.headerName || 'x-route-verify-token']: verifyResult.token,
+          }
         }
-      }
 
-      await axios(req)
-    } catch (e) {
-      console.error('[PIN] Retry request failed:', e)
+        // 重发前刷新时间戳与一次性随机数（同上：避免超窗 / 被判定为重放）
+        refreshVolatileSecurityHeaders(req.headers)
+
+        // P2-16：同样改用自带 8401 自愈的请求
+        await axiosWithNonceRetry(req)
+      } catch (e) {
+        console.error('[PIN] Retry request failed:', e)
+      }
     }
   }
+  await Promise.all(
+    Array.from({ length: Math.min(RETRY_CONCURRENCY, queue.length) }, worker)
+  )
 
   isRetrying = false
 }
@@ -291,6 +329,9 @@ export function cancelPinVerify() {
   pendingRequests = []
   isRetrying = false
   verifyContext = null
+  // 取消 ≠ 已验证：清掉冷却窗口，否则随后 30 秒内的 8303 会走"静默重发"捷径，
+  // 用户点了取消却看到数据照常加载（且没有任何提示）。清掉后后续请求会正常弹窗。
+  lastSuccessAt = 0
 
   if (pinReject) {
     pinReject(new Error('PIN 验证已取消'))
@@ -298,6 +339,17 @@ export function cancelPinVerify() {
     pinResolve = null
     pinReject = null
   }
+}
+
+/**
+ * 主动弹出 PIN 验证窗
+ * 用于「没有挂起请求」的场景（如点击"锁定系统"后立即要求解锁）。
+ * 与 requestPinVerify 的区别：不入 pendingRequests、不设 pinResolve，
+ * 纯解锁用途；用户输入正确 PIN 后由 submitPin → onPinSuccess 关窗 + 解锁。
+ */
+export function showPinDialog() {
+  if (pinDialogInstance) pinDialogInstance.show()
+  return Promise.resolve()
 }
 
 /**
@@ -319,6 +371,7 @@ export default {
   requestPinVerify,
   submitPin,
   cancelPinVerify,
+  showPinDialog,
   isPinResponse,
   PIN_CODE,
 }

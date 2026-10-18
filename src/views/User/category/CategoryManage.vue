@@ -162,7 +162,8 @@
 
 <script setup>
 import { ref, computed, onMounted, watch } from "vue";
-import { showToast, showConfirmDialog } from "vant";
+import { showConfirmDialog } from 'vant';
+import { showToast, showFailToast, showSuccessToast } from '@/utils/toast';
 import { categoryApi } from "@/utils/api/category";
 import { uploadApi, BusType } from "@/utils/api/upload";
 import ENV from "@/utils/env";
@@ -240,7 +241,7 @@ watch(showIconPicker, (val) => {
 const beforeUpload = (file) => {
   const isImage = file.type.startsWith("image/");
   if (!isImage) { showToast("只能上传图片文件"); return false; }
-  if (file.size / 1024 / 1024 >= 2) { showToast("图片大小不能超过 2MB"); return false; }
+  if (file.size / 1024 / 1024 >= 2) { showFailToast("图片大小不能超过 2MB"); return false; }
   return true;
 };
 
@@ -255,12 +256,12 @@ const handleAfterRead = async (file) => {
       formData.value.iconUrl = res.data[0].file_path || res.data[0].url;
       file.status = "done";
       file.message = "上传成功";
-      showToast("上传成功");
+      showSuccessToast("上传成功");
     }
   } catch (e) {
     file.status = "failed";
     file.message = "上传失败";
-    showToast("上传失败");
+    showFailToast("上传失败");
   }
   uploadQueue.value = [];
 };
@@ -277,7 +278,7 @@ const loadCategories = async (type) => {
     const data = await apiGetCategories(type);
     allCategories.value[type] = data;
   } catch (e) {
-    showToast("加载失败");
+    showFailToast("加载失败");
   } finally {
     loading.value = false;
   }
@@ -307,7 +308,7 @@ const handleConfirm = async () => {
       await apiUpdateCategory(editingItem.value.id, updateData);
       const idx = allCategories.value[activeType.value].findIndex(c => c.id === editingItem.value.id);
       if (idx !== -1) allCategories.value[activeType.value][idx] = { ...editingItem.value, ...updateData, icon_url: updateData.iconUrl };
-      showToast("更新成功");
+      showSuccessToast("更新成功");
     } else {
       const newItem = await apiCreateCategory({
         type: activeType.value,
@@ -316,7 +317,7 @@ const handleConfirm = async () => {
         iconUrl: formData.value.iconUrl.trim() || null,
       });
       allCategories.value[activeType.value].push(newItem);
-      showToast("创建成功");
+      showSuccessToast("创建成功");
     }
   } catch (e) {
     showToast(editingItem.value ? "更新失败" : "创建失败");

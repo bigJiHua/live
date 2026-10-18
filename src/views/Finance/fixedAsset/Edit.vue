@@ -154,8 +154,9 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { showToast, showSuccessToast } from 'vant'
+import { showToast, showSuccessToast, showFailToast } from '@/utils/toast';
 import { getFixedAsset, updateFixedAsset, getAssetImageList, uploadAssetImage } from '@/utils/api/fixedAsset'
+import { apiErrorToast } from '@/utils/request/helpers'
 
 const router = useRouter()
 const route = useRoute()
@@ -203,7 +204,7 @@ const loadData = async () => {
       now_val: data.now_val || '',
     }
   } catch (e) {
-    showToast('加载失败')
+    showFailToast('加载失败')
   }
 }
 
@@ -218,7 +219,7 @@ const loadImageList = async () => {
     const res = await getAssetImageList(100, 0)
     imageList.value = res.data || []
   } catch (e) {
-    showToast('加载图片失败')
+    showFailToast('加载图片失败')
   } finally {
     imageLoading.value = false
   }
@@ -250,7 +251,7 @@ const handleImageUpload = async () => {
     uploadFileList.value = []
     showImagePicker.value = false
   } catch (e) {
-    showToast('上传失败')
+    showFailToast('上传失败')
   } finally {
     imageUploading.value = false
   }
@@ -293,7 +294,7 @@ const submit = async () => {
     showSuccessToast('保存成功')
     router.replace(`/finance/fixed-asset/detail/${route.params.id}`)
   } catch (e) {
-    showToast(e.message || '保存失败')
+    apiErrorToast(e, '保存失败')
   } finally {
     saving.value = false
   }

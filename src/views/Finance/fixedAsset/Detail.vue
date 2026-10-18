@@ -107,8 +107,10 @@
 <script setup>
 import { ref, onMounted } from "vue";
 import { useRouter, useRoute } from "vue-router";
-import { showConfirmDialog, showToast, showSuccessToast } from "vant";
+import { showConfirmDialog } from 'vant';
+import { showToast, showSuccessToast, showFailToast } from '@/utils/toast';
 import dayjs from "dayjs";
+import { apiErrorToast } from '@/utils/request/helpers'
 import {
   getFixedAsset,
   changeAssetStatus,
@@ -207,7 +209,7 @@ const loadDetail = async () => {
     const res = await getFixedAsset(route.params.id);
     asset.value = res.data;
   } catch (e) {
-    showToast("加载失败");
+    showFailToast("加载失败");
   } finally {
     loading.value = false;
   }
@@ -230,7 +232,7 @@ const onStatusConfirm = async ({ selectedOptions }) => {
     showSuccessToast("状态变更成功");
     loadDetail();
   } catch (e) {
-    showToast(e.message || "变更失败");
+    apiErrorToast(e, "变更失败");
   }
 };
 
@@ -246,7 +248,7 @@ const handleDelete = async () => {
     router.replace("/finance/fixed-asset");
   } catch (e) {
     if (e !== "cancel") {
-      showToast(e.message || "删除失败");
+      apiErrorToast(e, "删除失败");
     }
   }
 };

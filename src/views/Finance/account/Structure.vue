@@ -135,7 +135,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useRouter } from "vue-router";
-import { showToast } from "vant";
+import { showToast, showFailToast } from '@/utils/toast';
 import { getBalanceList, getCardsFlowStats } from "@/utils/api/account";
 import { getCardList } from "@/utils/api/card";
 import { categoryApi } from "@/utils/api/category";
@@ -317,7 +317,7 @@ const goToPreview = async () => {
     showFlowStats.value = true;
   } catch (e) {
     console.error("获取消费预览失败", e);
-    showToast("获取失败");
+    showFailToast("获取失败");
   }
 };
 
@@ -328,7 +328,7 @@ const loadData = async () => {
     accountList.value = res.data || [];
   } catch (e) {
     console.error("加载失败", e);
-    showToast("加载失败");
+    showFailToast("加载失败");
   } finally {
     loading.value = false;
   }

@@ -35,6 +35,15 @@ export const authApi = {
     return request.post("/auth/refresh", data);
   },
 
+  /**
+   * 登出（安全整改 P1-17）
+   * 服务端会清 httpOnly Cookie。**不需要**传 token（也不该传 —— JS 读不到）。
+   * 该接口刻意不挂 authGuard，令牌失效时也能调用（幂等）。
+   */
+  logout() {
+    return request.post("/auth/logout", {});
+  },
+
   // 检查管理员是否存在
   checkAdmin() {
     return request.get("/auth/check-admin");

@@ -458,8 +458,8 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { showToast, showConfirmDialog, showLoadingToast, closeToast } from 'vant'
-import { getCardDetail, updateCard, deleteCard } from '@/utils/api/card'
+import { showConfirmDialog } from 'vant';
+import { showToast, showLoadingToast, closeToast, showFailToast } from '@/utils/toast';import { getCardDetail, updateCard, deleteCard } from '@/utils/api/card'
 import { categoryApi } from '@/utils/api/category'
 import { getAccountListByCard } from '@/utils/api/account'
 import { uploadApi } from '@/utils/api/upload'
@@ -785,7 +785,7 @@ const checkEditable = async () => {
     }
   } catch (e) {
     console.error('检查失败', e)
-    showToast('检查失败')
+    showFailToast('检查失败')
   } finally {
     checkLoading.value = false
   }
@@ -859,6 +859,7 @@ const loadImageList = async () => {
 
 // 监听弹窗打开，加载图片
 import { watch } from 'vue'
+import { apiErrorToast } from '@/utils/request/helpers'
 watch(showImagePicker, (val) => {
   if (val) {
     // 如果已有选择，记录已选
@@ -993,7 +994,7 @@ const loadCardDetail = async () => {
       }
     }
   } catch (error) {
-    showToast(error.message || '加载失败')
+    apiErrorToast(error, '加载失败')
   } finally {
     loading.value = false
   }
@@ -1054,7 +1055,7 @@ const onSubmit = async () => {
     showToast({ message: '保存成功', onClose: () => router.push(backPath.value) })
   } catch (error) {
     closeToast()
-    showToast(error.message || '保存失败')
+    apiErrorToast(error, '保存失败')
   } finally {
     loading.value = false
   }
@@ -1076,7 +1077,7 @@ const onDelete = async () => {
     showToast({ message: '删除成功', onClose: () => router.push(backPath.value) })
   } catch (error) {
     if (error !== 'cancel') {
-      showToast(error.message || '删除失败')
+      apiErrorToast(error, '删除失败')
     }
   }
 }

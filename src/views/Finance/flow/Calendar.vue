@@ -3,7 +3,7 @@
     <!-- 顶部月份选择 -->
     <div class="header">
       <van-icon name="arrow-left" @click="prevMonth" />
-      <span class="month-title" @click="showMonthPicker = true">
+      <span class="month-title" @click="openMonthPicker">
         {{ currentYear }}年{{ currentMonth + 1 }}月
         <van-icon name="arrow-down" />
       </span>
@@ -246,6 +246,17 @@ const pickerColumns = computed(() => {
 
   return [years, months];
 });
+
+// 打开月份选择器：滚轮同步到「当前查看月」
+// （原写法 `pickerSelectedValues` 只在 confirm 时更新、初值恒为今天 ⇒ 翻到 3 月再打开却停在 9 月。
+//   与原生 `ui/flow/CalendarScreen.kt` 的 picker 对齐：打开时高亮当前查看月。）
+const openMonthPicker = () => {
+  pickerSelectedValues.value = [
+    `${currentYear.value}年`,
+    `${currentMonth.value + 1}月`,
+  ];
+  showMonthPicker.value = true;
+};
 
 // 选择年月
 const onPickerConfirm = ({ selectedOptions }) => {

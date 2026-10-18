@@ -188,7 +188,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onActivated } from "vue";
-import { showToast } from "vant";
+import { showToast } from '@/utils/toast';
 import { useRoute, useRouter } from "vue-router";
 import dayjs from "dayjs";
 import { getBillList, getCardList, getCreditPools, getForeignPending, rebuildBill } from "@/utils/api/card";
@@ -300,7 +300,7 @@ const loadBillList = async () => {
     })
     billList.value = list
   } catch (error) {
-    showToast(error.message || '加载失败');
+    apiErrorToast(error, '加载失败');
   } finally {
     loading.value = false;
   }
@@ -435,6 +435,7 @@ const getStatusExtra = (item) => getBillStatus(item).extra
 
 // 格式化金额
 import { formatMoney } from "@/utils/money";
+import { apiErrorToast } from '@/utils/request/helpers'
 
 // 格式化日期 - 只显示天数
 const formatDay = (date) => {
@@ -588,7 +589,7 @@ const refreshBill = async (item, event) => {
     showToast(msg);
     loadBillList();
   } catch (error) {
-    showToast(error.message || "刷新失败");
+    apiErrorToast(error, "刷新失败");
   }
 };
 

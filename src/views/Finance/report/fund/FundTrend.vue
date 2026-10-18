@@ -44,12 +44,12 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { getFundList, getFundHistory } from '@/utils/api/fund'
-import { showToast } from 'vant'
-import dayjs from 'dayjs'
+import { showToast } from '@/utils/toast';import dayjs from 'dayjs'
 import * as echarts from 'echarts/core'
 import { LineChart } from 'echarts/charts'
 import { GridComponent, TooltipComponent, LegendComponent, DataZoomComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
+import { apiErrorToast } from '@/utils/request/helpers'
 
 echarts.use([LineChart, GridComponent, TooltipComponent, LegendComponent, DataZoomComponent, CanvasRenderer])
 
@@ -202,7 +202,7 @@ const loadChart = async () => {
     })
   } catch (e) {
     loading.value = false
-    showToast(e?.message || '加载失败')
+    apiErrorToast(e, '加载失败')
   }
 }
 
@@ -230,7 +230,7 @@ onMounted(async () => {
       selectedFund.value = fundList.value[0].id
     }
   } catch (e) {
-    showToast(e?.message || '加载失败')
+    apiErrorToast(e, '加载失败')
   } finally {
     loading.value = false
     await nextTick()

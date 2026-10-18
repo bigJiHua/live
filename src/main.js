@@ -7,6 +7,7 @@ import router from './router';
 // 1. 引入 Vant 和 Lazyload 插件（全量引入）
 import Vant from 'vant';
 import { Lazyload } from 'vant';
+import { setToastDefaultOptions } from '@/utils/toast';
 import 'vant/lib/index.css';
 
 import './assets/css/style.css';
@@ -28,6 +29,12 @@ const pinia = createPinia();
 app.use(pinia);
 app.use(router);
 app.use(Vant);
+
+// 消息弹窗（Toast）统一形态：默认落在**顶部居中（nav header 下沿）**，不再出现在屏幕正中。
+// 形态与配色见 `src/utils/toast/index.js` + style.css 的 `.app-toast*`
+// （浅色 tint 卡片 + accent 色圆环图标 + 关闭按钮，深浅主题各一套）。
+// ⚠ 这是「默认值」，调用点显式传 position 的仍以调用点为准。
+setToastDefaultOptions({ position: 'top' });
 
 // 全局注册自写主题化基础组件（<app-*> / <App*> 均可）
 app.component('AppButton', AppButton);

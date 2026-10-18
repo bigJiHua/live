@@ -13,22 +13,34 @@ export const aesUtil = {
   encrypt(data, key) {
     if (!data || !key) return data;
 
-    // 1. 格式化 Key 为 WordArray（Hex 解析：64位hex字符 → 32字节 = AES-256）
-    const keyHex = CryptoJS.enc.Hex.parse(key);
+    // 🔒 安全整改 P2-22（2026-10-08）：补异常兜底。
+    //   `CryptoJS.enc.Hex.parse(key)` 对**非法长度/非 hex 字符**的 key 会抛错，
+    //   原实现没有 try/catch，异常会一路冒泡到 `request.js:76` 的
+    //   `encrypt(...)` 调用处，变成未捕获异常（整页交互瘫掉，用户只看到"没反应"）。
+    //   这里改为「返回原文由后端按明文处理」，保证功能不中断。
+    try {
+      // 1. 格式化 Key 为 WordArray（Hex 解析：64位hex字符 → 32字节 = AES-256）
+      const keyHex = CryptoJS.enc.Hex.parse(key);
 
-    // 2. 生成随机 IV (16字节)
-    const iv = CryptoJS.lib.WordArray.random(16);
+      // 2. 生成随机 IV (16字节)
+      const iv = CryptoJS.lib.WordArray.random(16);
 
-    // 3. 执行加密
-    const encrypted = CryptoJS.AES.encrypt(data, keyHex, {
-      iv: iv,
-      mode: CryptoJS.mode.CBC,
-      padding: CryptoJS.pad.Pkcs7
-    });
+      // 3. 执行加密
+      const encrypted = CryptoJS.AES.encrypt(data, keyHex, {
+        iv: iv,
+        mode: CryptoJS.mode.CBC,
+        padding: CryptoJS.pad.Pkcs7
+      });
 
-    // 4. 返回：IV 的 Hex 字符串 (32位) + 密文 Base64
-    // 后端解密时截取前 32 位即可获得 IV
-    return iv.toString() + encrypted.toString();
+      // 4. 返回：IV 的 Hex 字符串 (32位) + 密文 Base64
+      //    后端解密时截取前 32 位即可获得 IV
+      return iv.toString() + encrypted.toString();
+    } catch (err) {
+      // 密钥不可用（未握手 / 握手失败 / 非法 key）⇒ 明确告警后降级明文，
+      // 不能静默吞掉，否则线上排查会毫无线索。
+      console.warn('[aes] 加密失败，已降级为明文提交（请检查握手是否成功）:', err?.message);
+      return data;
+    }
   },
 
   /**

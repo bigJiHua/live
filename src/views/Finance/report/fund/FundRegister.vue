@@ -153,7 +153,9 @@ import {
   updateFund,
   deleteFund,
 } from "@/utils/api/fund";
-import { showToast, showConfirmDialog } from "vant";
+import { showConfirmDialog } from 'vant';
+import { showToast, showFailToast, showSuccessToast } from '@/utils/toast';
+import { apiErrorToast } from '@/utils/request/helpers'
 
 const formatAmount = (v) => {
   if (!v && v !== 0) return "0.00";
@@ -251,15 +253,15 @@ const handleSave = async () => {
 
     if (editingItem.value) {
       await updateFund(editingItem.value.id, payload);
-      showToast("修改成功");
+      showSuccessToast("修改成功");
     } else {
       await createFund(payload);
-      showToast("添加成功");
+      showSuccessToast("添加成功");
     }
     showEditor.value = false;
     await loadList();
   } catch (e) {
-    showToast(e?.message || (editingItem.value ? "修改失败" : "添加失败"));
+    apiErrorToast(e, editingItem.value ? "修改失败" : "添加失败");
   }
 };
 
@@ -271,10 +273,10 @@ const handleDelete = (item) => {
     .then(async () => {
       try {
         await deleteFund(item.id);
-        showToast("删除成功");
+        showSuccessToast("删除成功");
         await loadList();
       } catch (e) {
-        showToast("删除失败");
+        showFailToast("删除失败");
       }
     })
     .catch(() => {});
@@ -285,7 +287,7 @@ const loadList = async () => {
     const res = await getFundList();
     fundList.value = res.data?.list || [];
   } catch (e) {
-    showToast("加载失败");
+    showFailToast("加载失败");
   } finally {
     loading.value = false;
   }

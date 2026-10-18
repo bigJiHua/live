@@ -6,6 +6,8 @@ import config from '../config'
 import { getClientContext } from '../client'
 import { getAesKey } from '../handshake'
 import { encrypt } from '../crypto'
+import { createClientNonce } from '../../securityHeaders'
+import { getLegacyToken } from '@/utils/authState'
 
 /**
  * 构建请求拦截器
@@ -24,6 +26,9 @@ export function createRequestInterceptor(router) {
     }
     requestConfig.headers['X-Requested-With'] = 'XMLHttpRequest'
     requestConfig.headers['x-client-timestamp'] = Date.now()
+    // 一次性随机数：后端据此拒绝「窗口期内原样重放」的请求。
+    // ⚠ PIN 验证后重发原请求时必须重新生成，见 securityHeaders.refreshVolatileSecurityHeaders
+    requestConfig.headers['x-client-nonce'] = createClientNonce()
     requestConfig.headers['x-fingerprint-hash'] = fp
     requestConfig.headers['x-user-agent-custom'] = deviceData.userAgent
     requestConfig.headers['x-device-model'] = deviceData.deviceModel
@@ -31,9 +36,19 @@ export function createRequestInterceptor(router) {
     requestConfig.headers['x-device-type'] = deviceData.deviceType
 
     // 2. 注入 Token
-    const token = localStorage.getItem(config.tokenKey)
-    if (token) {
-      requestConfig.headers['Authorization'] = `Bearer ${token}`
+    // 🔒 安全整改 P0-5（2026-10-08）：**不再**从 localStorage 读 JWT 注入 Bearer。
+    //    真实凭证改由服务端下发 httpOnly Cookie，浏览器自动携带、JS 读不到
+    //    ⇒ 任意 XSS 都偷不走会话令牌。
+    //
+    //    兼容说明：`APP`（原生 Kotlin）与 `webview-APP` 仍走 Bearer 通道，
+    //    服务端 `authGuard` 是双通道（Cookie 或 Bearer 都认），两端不受影响。
+    //    `config.withCredentials: true`（config.js:13）保证 Cookie 会随请求发出。
+    //
+    //    降级兜底：若因故内存里仍有 token（例如旧版本遗留），照旧注入，
+    //    保证任何环境下都不会因为缺 Authorization 而全站 401。
+    const legacyToken = getLegacyToken();
+    if (legacyToken) {
+      requestConfig.headers['Authorization'] = `Bearer ${legacyToken}`;
     }
 
     // 3. FormData 跳过所有加密逻辑

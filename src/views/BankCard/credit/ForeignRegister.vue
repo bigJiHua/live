@@ -107,8 +107,9 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { showToast, showSuccessToast, showLoadingToast, closeToast } from 'vant'
+import { showToast, showSuccessToast, showLoadingToast, closeToast, showFailToast } from '@/utils/toast';
 import { getCardList, getForeignPending, getForeignList, getForeignHistory, registerForeignAccount, reconcileForeign } from '@/utils/api/card'
+import { apiErrorToast } from '@/utils/request/helpers'
 
 const router = useRouter()
 const activeTab = ref(0)
@@ -163,7 +164,7 @@ async function loadData() {
     pending.value = pRes.data || []
     all.value = aRes.data || []
   } catch (e) {
-    showToast('加载失败')
+    showFailToast('加载失败')
   }
 }
 
@@ -196,7 +197,7 @@ async function saveReconcile() {
     reconcileShow.value = false
     await loadData()
   } catch (e) {
-    showToast(e.message || '对账失败')
+    apiErrorToast(e, '对账失败')
   } finally {
     closeToast()
   }
@@ -219,7 +220,7 @@ async function loadHistory() {
     const res = await getForeignHistory(params)
     history.value = res.data || []
   } catch (e) {
-    showToast('加载历史流水失败')
+    showFailToast('加载历史流水失败')
   }
 }
 
@@ -234,7 +235,7 @@ async function doRegister(item) {
     showSuccessToast('已登记为待对账')
     await Promise.all([loadData(), loadHistory()])
   } catch (e) {
-    showToast(e.message || '登记失败')
+    apiErrorToast(e, '登记失败')
   } finally {
     closeToast()
   }

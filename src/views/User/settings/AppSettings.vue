@@ -129,8 +129,8 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
-import { showToast, showDialog } from 'vant'
-import { useUiTheme } from '@/composables/useUiTheme'
+import { showDialog } from 'vant';
+import { showToast } from '@/utils/toast';import { useUiTheme } from '@/composables/useUiTheme'
 import { useMoneyColor } from '@/composables/useMoneyColor'
 
 // UI 主题自定义（系统默认 / 各方案），选择后即时应用到全局并保存到 localStorage

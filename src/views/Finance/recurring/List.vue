@@ -94,8 +94,9 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { showConfirmDialog, showSuccessToast, showToast } from 'vant'
-import dayjs from 'dayjs'
+import { showConfirmDialog } from 'vant';
+import { showSuccessToast, showToast, showFailToast } from '@/utils/toast';import dayjs from 'dayjs'
+import { apiErrorToast } from '@/utils/request/helpers'
 import {
   getRecurringList,
   getRecurringSummary,
@@ -130,7 +131,7 @@ const loadData = async () => {
     list.value = listRes.data || []
     summary.value = summaryRes.data || { totalAmount: 0, total: 0, pending: 0, categoryStats: [] }
   } catch (error) {
-    showToast(error.message || '加载失败')
+    apiErrorToast(error, '加载失败')
   } finally {
     loading.value = false
     refreshing.value = false
@@ -159,14 +160,14 @@ const openEdit = (item) => {
 
 const restoreMonth = async () => {
   const item = list.value.find(i => i.name === form.value.name.trim())
-  if (!item) return showToast('数据异常')
+  if (!item) return showFailToast('数据异常')
   try {
     await updateRecurringMonthStatus(item.id, { month: monthKey.value, status: 'pending' })
     showSuccessToast('已恢复为待处理')
     showForm.value = false
     loadData()
   } catch (e) {
-    showToast(e.message || '操作失败')
+    apiErrorToast(e, '操作失败')
   }
 }
 
@@ -190,7 +191,7 @@ const handleSubmit = async () => {
 
   // 从列表中找到当前正在编辑的项
   const item = list.value.find(i => i.name === form.value.name.trim())
-  if (!item) return showToast('数据异常')
+  if (!item) return showFailToast('数据异常')
 
   submitting.value = true
   try {
@@ -204,7 +205,7 @@ const handleSubmit = async () => {
     showForm.value = false
     loadData()
   } catch (error) {
-    showToast(error.message || '保存失败')
+    apiErrorToast(error, '保存失败')
   } finally {
     submitting.value = false
   }
@@ -221,7 +222,7 @@ const toggleDone = async (item) => {
     showSuccessToast('已更新')
     loadData()
   } catch (error) {
-    showToast(error.message || '更新失败')
+    apiErrorToast(error, '更新失败')
   }
 }
 
@@ -236,7 +237,7 @@ const handleSkipMonth = async (item) => {
     showSuccessToast('已跳过')
     loadData()
   } catch (error) {
-    if (error !== 'cancel') showToast('操作失败')
+    if (error !== 'cancel') showFailToast('操作失败')
   }
 }
 

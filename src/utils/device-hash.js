@@ -1,10 +1,33 @@
 /**
  * 浏览器指纹生成工具
  * 使用 Canvas 生成唯一的设备指纹
+ *
+ * ## 安全整改 P2-16（2026-10-08）
+ * 1. **hash 算法从 djb2 换成 SHA-256 + 盐**：
+ *    djb2 输出是 36 进制短串（约 6~7 字符），特征串结构固定（`canvas|分辨率|时区|...`），
+ *    攻击者可离线批量枚举常见浏览器配置反推出指纹（彩虹表），
+ *    进而**伪造**任意目标用户的 `x-fingerprint-hash`。
+ *    SHA-256 + 应用级盐让枚举成本不可行。盐在前端代码中公开 ——
+ *    它不是秘密，防的是批量反推而非伪造请求本身（伪造由 nonce/签名类措施管）。
+ * 2. **失败降级不再返回 'unknown'**：
+ *    旧逻辑在 Canvas 被禁用/异常时返回固定值 'unknown'，
+ *    所有失败用户**共享同一指纹** ⇒ 风控会把他们聚合成"同一台设备"（误杀放大器）。
+ *    现改为失败时生成**会话级随机指纹**（crypto.getRandomValues，存 sessionStorage）：
+ *    - 会话内稳定（同会话多次请求指纹一致，风控可关联）
+ *    - 用户之间互不相同（不再聚合误杀）
+ *    - 与真实设备指纹可区分（`fp-` 前缀），服务端如需可单独统计降级率
  */
+
+import CryptoJS from 'crypto-js'
 
 // 存储 fingerprint，避免重复计算
 let cachedFingerprint = null
+
+/** 应用级盐（见文件头说明 1）；`import.meta.env?.`：非 vite 环境（单测）下 env 为 undefined */
+const FP_SALT = import.meta.env?.VITE_FP_SALT || 'live-fp-salt-v1'
+
+/** 会话级随机指纹的 sessionStorage 键 */
+const SESSION_FP_KEY = '__fp_session_fallback'
 
 /**
  * 生成 Canvas 指纹
@@ -47,8 +70,8 @@ export function generateCanvasFingerprint() {
     // 获取 base64 编码
     const dataURL = canvas.toDataURL()
 
-    // 计算 hash
-    const hash = hashCode(dataURL)
+    // 计算 hash（P2-16：SHA-256 + 盐）
+    const hash = sha256Salted(dataURL)
 
     return {
       dataURL,
@@ -59,7 +82,7 @@ export function generateCanvasFingerprint() {
     console.error('生成 Canvas 指纹失败:', e)
     return {
       dataURL: '',
-      hash: 'unknown',
+      hash: sessionFallbackFingerprint(), // P2-16：会话随机指纹，不再共享 'unknown'
       raw: ''
     }
   }
@@ -121,11 +144,12 @@ export function generateBrowserFingerprint() {
       webrtc: !!window.RTCPeerConnection,
     }
 
-    // 生成综合 hash
-    const fingerprintStr = Object.values(features)
-      .filter(Boolean)
-      .join('|')
-    const fingerprintHash = hashCode(fingerprintStr)
+    // 生成综合 hash（P2-16：SHA-256 + 盐）
+    // 🐛 2026-10-08 复审修复：djb2→SHA-256 替换时遗漏了 features 的序列化语句，
+    //   旧变量名 fingerprintStr 悬空 ⇒ 每次调用抛 ReferenceError 被下方 catch 吞掉，
+    //   所有用户永久走随机降级指纹（风控关联失效）。现提取为可独立单测的纯函数。
+    const fingerprintStr = serializeFeatures(features)
+    const fingerprintHash = sha256Salted(fingerprintStr)
 
     cachedFingerprint = {
       hash: fingerprintHash,
@@ -136,10 +160,11 @@ export function generateBrowserFingerprint() {
     return cachedFingerprint
   } catch (e) {
     console.error('生成浏览器指纹失败:', e)
+    const fallback = sessionFallbackFingerprint() // P2-16：见文件头说明 2
     return {
-      hash: 'unknown',
+      hash: fallback,
       features: {},
-      canvas: { hash: 'unknown' }
+      canvas: { hash: fallback }
     }
   }
 }
@@ -212,6 +237,61 @@ function hashCode(str) {
 
   // 转为正数并转为 36 进制字符串
   return Math.abs(hash).toString(36)
+}
+
+/**
+ * SHA-256 + 盐（安全整改 P2-16）
+ *
+ * 替代上面的 djb2：djb2 输出空间太小且可离线枚举反推（见文件头说明 1）。
+ * 保留原函数仅因 `hashCode(dataURL)` 曾被外部脚本/调试用法引用过 ——
+ * 实际上本模块内部已全部改用 sha256Salted，此函数可在后续版本删除。
+ *
+ * 输出取前 32 个十六进制字符（128 bit），足够指纹用途且日志友好。
+ */
+/**
+ * 特征序列化（P2-16 复审补充，2026-10-08）
+ *
+ * 稳定序列化：键按插入顺序（features 构造顺序固定）→ JSON。
+ * 提取为纯函数便于单测 —— 之前 djb2→SHA-256 替换时漏掉序列化语句，
+ * 导致 fingerprintStr 悬空（ReferenceError 被降级 catch 吞掉），教训：
+ * **替换算法时输出路径必须有一条端到端测试，不能只测降级路径。**
+ * @param {Record<string, unknown>} features
+ * @returns {string}
+ */
+export function serializeFeatures(features) {
+  return JSON.stringify(features)
+}
+
+function sha256Salted(str) {
+  const raw = CryptoJS.SHA256(`${FP_SALT}|${str}`).toString(CryptoJS.enc.Hex)
+  return raw.slice(0, 32)
+}
+
+/**
+ * 生成会话级随机降级指纹（安全整改 P2-16，见文件头说明 2）
+ *
+ * Canvas 被禁 / 特征采集异常时使用：随机但会话内稳定，用户间互不相同。
+ * `fp-` 前缀便于服务端区分「真实指纹」与「降级指纹」。
+ */
+function sessionFallbackFingerprint() {
+  try {
+    const existing = sessionStorage.getItem(SESSION_FP_KEY)
+    if (existing) return existing
+  } catch {
+    /* sessionStorage 不可用（隐私模式等）⇒ 每次生成新的，至少不共享 */
+  }
+
+  const bytes = new Uint8Array(16)
+  crypto.getRandomValues(bytes)
+  const rand = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
+  const fp = `fp-${rand}`
+
+  try {
+    sessionStorage.setItem(SESSION_FP_KEY, fp)
+  } catch {
+    /* 存不进去就让它每次变化 —— 仍优于所有用户共享 'unknown' */
+  }
+  return fp
 }
 
 /**

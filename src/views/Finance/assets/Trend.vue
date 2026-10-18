@@ -69,9 +69,11 @@
       <div v-if="dates.length > 0" class="detail-list">
         <div class="dl-head">
           <span>项目</span>
+          <!-- 表头顺序与行内一致：`dl-dot → 名称 → 金额 → 较上期`（2026-09-19 负责人实测发现
+               表头原先写「较上期 / 金额」，与下方 dl-row 的渲染顺序相反，原生照表头排过被指错）-->
           <span class="dl-head-r">
-            <span class="dl-compare">较上期</span>
             金额（{{ activeTab === 'offshore' ? 'CNY' : '¥' }}）
+            <span class="dl-compare">较上期</span>
           </span>
         </div>
         <div class="dl-body" v-if="detailRows.length > 0">

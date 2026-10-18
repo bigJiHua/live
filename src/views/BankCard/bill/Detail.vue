@@ -86,7 +86,8 @@
 
 <script setup>
 import { ref, computed, onMounted } from "vue";
-import { showToast, showConfirmDialog, showLoadingToast, closeToast } from "vant";
+import { showConfirmDialog } from 'vant';
+import { showToast, showLoadingToast, closeToast } from '@/utils/toast';
 import { useRouter, useRoute } from "vue-router";
 import { getBillDetail, deleteBill } from "@/utils/api/card";
 
@@ -132,7 +133,7 @@ const loadBillDetail = async () => {
     const res = await getBillDetail(id);
     billData.value = res.data || res || {};
   } catch (error) {
-    showToast(error.message || "加载失败");
+    apiErrorToast(error, "加载失败");
   } finally {
     loading.value = false;
   }
@@ -140,6 +141,7 @@ const loadBillDetail = async () => {
 
 // 格式化金额
 import { formatMoney } from "@/utils/money";
+import { apiErrorToast } from '@/utils/request/helpers'
 
 // 格式化日期
 const formatDate = (date) => {
@@ -178,7 +180,7 @@ const handleDelete = async () => {
     showToast({ message: "删除成功", onClose: () => router.back() });
   } catch (error) {
     if (error !== "cancel") {
-      showToast(error.message || "删除失败");
+      apiErrorToast(error, "删除失败");
     }
   }
 };

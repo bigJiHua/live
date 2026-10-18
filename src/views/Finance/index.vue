@@ -107,7 +107,7 @@
 import { ref, computed, onMounted } from "vue";
 defineOptions({ name: 'Finance' })
 import { useRouter } from "vue-router";
-import { showToast } from "vant";
+import { showToast, showFailToast } from '@/utils/toast';
 import { getMonthStats } from "@/utils/api/account";
 
 const router = useRouter();
@@ -189,7 +189,7 @@ const loadMonthStats = async () => {
       };
     }
   } catch (e) {
-    showToast("加载失败");
+    showFailToast("加载失败");
   }
 };
 

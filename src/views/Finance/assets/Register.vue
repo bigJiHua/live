@@ -399,15 +399,11 @@
 
 <script setup>
 import { ref, computed, watch, onMounted } from "vue";
-import {
-  showToast,
-  showSuccessToast,
-  showLoadingToast,
-  closeToast,
-  showConfirmDialog,
-} from "vant";
+import { showConfirmDialog } from 'vant';
+import { showToast, showSuccessToast, showLoadingToast, closeToast, showFailToast } from '@/utils/toast';
 import { useRoute } from "vue-router";
 import { createAssetRegister, updateAssetRegister } from "@/utils/api/asset";
+import { apiErrorToast } from '@/utils/request/helpers'
 
 const route = useRoute();
 
@@ -484,7 +480,7 @@ const deleteRate = (currency) => {
   }
   const isUsed = offshoreList.value.some(item => item.currency === currency && item.amount);
   if (isUsed) {
-    showToast("该汇率已被使用，无法删除");
+    showFailToast("该汇率已被使用，无法删除");
     return;
   }
   const index = exchangeRateList.value.findIndex(r => r.currency === currency);
@@ -847,7 +843,7 @@ const handleSubmit = async () => {
     showSuccessToast({ message: "保存成功", onClose: () => history.back() });
   } catch (e) {
     closeToast();
-    showToast(e.message || "保存失败");
+    apiErrorToast(e, "保存失败");
   } finally {
     loading.value = false;
   }

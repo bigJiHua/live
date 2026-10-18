@@ -73,7 +73,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onActivated, inject } from "vue";
 defineOptions({ name: "BankCardDebit" });
-import { showToast } from "vant";
+import { showToast } from '@/utils/toast';
 import { useRouter } from "vue-router";
 import { getCardList, updateCardSortBatch } from "@/utils/api/card";
 import { getCardsFlowStats } from "@/utils/api/account";
@@ -181,6 +181,7 @@ const openCardFlow = () => {
 
 // BASE_URL
 import ENV from '@/utils/env'
+import { apiErrorToast } from '@/utils/request/helpers'
 const BASE_URL = ENV.FILE_BASE_URL;
 
 // 获取银行信息
@@ -268,7 +269,7 @@ const loadCards = async (silent = false) => {
     // 仅在成功加载后记录时间戳，供激活节流判断
     lastLoadTime = Date.now();
   } catch (error) {
-    showToast(error.message || "加载失败");
+    apiErrorToast(error, "加载失败");
     cardList.value = [];
   } finally {
     if (!silent) loading.value = false;
@@ -367,7 +368,8 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: var(--theme-bg-primary, #fff);
+  /* 同步 APP（2026-10-12）：深色下 bgPrimary=近黑，改 bgThird 微隆起 */
+  background: var(--theme-bg-tertiary, #fff);
   border-radius: 12px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
   user-select: none;
@@ -450,7 +452,9 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
   gap: 8px;
+  /* 同步 APP（2026-10-12）：光晕跟随主色；color-mix 需 Chrome 111+，前面压一条兜底 */
   box-shadow: 0 8px 24px rgba(25, 137, 250, 0.3);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--theme-primary) 42%, transparent);
 }
 
 .flex-center {

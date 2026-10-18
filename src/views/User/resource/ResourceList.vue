@@ -227,7 +227,8 @@
 <script setup>
 import { ref, computed, onMounted, nextTick } from "vue";
 import { useRoute } from "vue-router";
-import { showConfirmDialog, showToast } from "vant";
+import { showConfirmDialog } from 'vant';
+import { showToast, showFailToast, showSuccessToast } from '@/utils/toast';
 import { uploadApi, BusType } from "@/utils/api/upload";
 import imageCompression from "browser-image-compression";
 
@@ -312,7 +313,7 @@ const loadResourceList = async () => {
     });
     resourceList.value = res.data || [];
   } catch (err) {
-    showToast("列表加载失败");
+    showFailToast("列表加载失败");
   } finally {
     loading.value = false;
   }
@@ -335,7 +336,7 @@ const loadSearchResult = async () => {
     });
     resourceList.value = res.data || [];
   } catch (err) {
-    showToast("搜索失败");
+    showFailToast("搜索失败");
   } finally {
     loading.value = false;
   }
@@ -441,7 +442,7 @@ const handleSubmit = async () => {
     const remark = uploadRemark.value.trim();
     const tags = [...uploadTags.value]; // 确保是纯数组
     await uploadApi.multiple(compressedFiles, currentType.value, "", remark, tags);
-    showToast("上传成功");
+    showSuccessToast("上传成功");
     // 清空上传信息
     uploadRemark.value = "";
     uploadTags.value = [];
@@ -451,7 +452,7 @@ const handleSubmit = async () => {
     loadResourceList();
   } catch (e) {
     if (e.message !== "文件过大") {
-      showToast("上传失败");
+      showFailToast("上传失败");
     }
   } finally {
     uploading.value = false;
@@ -514,10 +515,10 @@ const handleEditConfirm = async () => {
       remark: editRemark.value,
       tags: editTags.value,
     });
-    showToast("更新成功");
+    showSuccessToast("更新成功");
     loadResourceList();
   } catch (e) {
-    showToast("更新失败");
+    showFailToast("更新失败");
   }
 };
 
@@ -531,7 +532,7 @@ const handleBatchDelete = async () => {
       message: `确定删除这 ${selectedList.value.length} 项吗？`,
     });
     await uploadApi.batchDelete(selectedList.value);
-    showToast("批量删除成功");
+    showSuccessToast("批量删除成功");
     selectedList.value = [];
     // 延迟刷新：PIN 验证后重发请求可能尚未完成，等待服务端处理
     setTimeout(() => loadResourceList(), 600);
@@ -547,7 +548,7 @@ const handleBatchDelete = async () => {
       );
       showToast(e.response.data.message || "部分文件无法删除");
     } else if (e?.message !== 'PIN 验证已取消') {
-      showToast("删除失败");
+      showFailToast("删除失败");
     }
   }
 };

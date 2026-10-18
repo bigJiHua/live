@@ -29,6 +29,8 @@
             maxlength="50"
             readonly
             autocomplete="username"
+            :rules="usernameRules"
+            :error="usernameError"
             @click="onFieldClick('username')"
           />
           <span
@@ -53,6 +55,7 @@
             autocomplete="current-password"
             maxlength="30"
             :password-visible="false"
+            :error="passwordError"
             readonly
             @click="onFieldClick('password')"
           >
@@ -108,7 +111,7 @@
               native-type="submit"
               :loading="loading"
               loading-text="正在安全登录..."
-              :disabled="!passwordRulesComputed.validLength"
+              :disabled="!canSubmit"
             >
               立即登录
             </app-button>
@@ -182,6 +185,8 @@ import { authApi } from "@/utils/api/auth";
 import FullKeyboard from "@/components/KeyBoard/FullKeyboard.vue";
 import { getRsaPublicKey } from "@/utils/request/handshake";
 import { getClientContext } from "@/utils/request/client";
+import { markAuthed } from "@/utils/authState";
+import { showToast } from "@/utils/toast";
 
 const router = useRouter();
 // 仅在演示模式预填演示账号；生产环境不预填任何凭据，避免硬编码密码泄露
@@ -504,18 +509,106 @@ function drawPwdCanvas() {
 window.addEventListener("resize", () => drawPwdCanvas());
 
 
+// ══════════════════════════════════════════════════════════════
+// 登录校验（安全整改 P1-13，2026-10-08）
+//
+// ⚠ 所有规则**必须与后端 `api/src/modules/auth/rules/index.js` 逐字一致**，
+//   否则用户会遇到「前端过了、后端 400」的"点了没反应"。
+//   后端口径：
+//     nameOrEmail : min(3).max(50).required()      —— **无格式正则**
+//     password 明文: 必须含大写+小写+数字+特殊字符，长度 6-30
+//     password 密文: RSA 密文字符数组，长度 6-30（每项 8-1024 字符）
+//
+// ⚠ 关键：密码**不能**用 AppField 的 rules 校验 —— 该字段的 modelValue 是
+//   掩码串 `'●'.repeat(len)`（安全键盘设计），拿不到真实密码。
+//   所以密码校验必须在能拿到 `password` / `pwdEncrypted` 的地方做（即 onSubmit）。
+// ══════════════════════════════════════════════════════════════
+const RE_USERNAME_MIN = 3;
+const RE_USERNAME_MAX = 50;
+const RE_PWD_MIN = 6;
+const RE_PWD_MAX = 30;
+// 与后端 plainPwdRule 完全一致（注意 `[^]{6,30}` 表示「任意字符，长度 6-30」）
+const RE_PLAIN_PWD = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>])[^]{6,30}$/;
+const RE_SPECIAL = /[!@#$%^&*(),.?":{}|<>]/;
+
+/** 是否处于「安全键盘 RSA 密文」模式 */
+const isEncryptedMode = computed(() => (pwdEncrypted.value?.length || 0) > 0);
+
+/** 账号校验（对齐后端 nameOrEmail 规则） */
+const validateUsername = (raw) => {
+  const v = String(raw ?? '').trim();
+  if (!v) return "请输入账号或邮箱";
+  if (v.length < RE_USERNAME_MIN) return `账号至少 ${RE_USERNAME_MIN} 个字符`;
+  if (v.length > RE_USERNAME_MAX) return `账号不能超过 ${RE_USERNAME_MAX} 个字符`;
+  return '';
+};
+
+/** 密码校验（按模式分流，对齐后端 alternatives） */
+const validatePassword = () => {
+  if (isEncryptedMode.value) {
+    const len = pwdEncrypted.value.length;
+    if (len < RE_PWD_MIN) return `密码至少 ${RE_PWD_MIN} 位`;
+    if (len > RE_PWD_MAX) return `密码不能超过 ${RE_PWD_MAX} 位`;
+    return '';
+  }
+  const pwd = String(password.value ?? '');
+  if (!pwd) return '请输入密码';
+  if (pwd.length < RE_PWD_MIN) return `密码至少 ${RE_PWD_MIN} 位`;
+  if (pwd.length > RE_PWD_MAX) return `密码不能超过 ${RE_PWD_MAX} 位`;
+  if (!RE_SPECIAL.test(pwd)) return '密码需包含特殊字符（如 ! @ # $ % ^ & *）';
+  if (!/[a-z]/.test(pwd)) return '密码需包含小写字母';
+  if (!/[A-Z]/.test(pwd)) return '密码需包含大写字母';
+  if (!/\d/.test(pwd)) return '密码需包含数字';
+  return '';
+};
+
+/** 提交前的综合校验，返回第一条错误（空串 = 通过） */
+const validateAll = () => validateUsername(username.value) || validatePassword();
+
+/** 账号字段规则（交给 AppField.validate；与 validateUsername 同源） */
+const usernameRules = [
+  { required: true, message: "请输入账号或邮箱" },
+  {
+    validator: (v) => validateUsername(v) || true,
+    message: "账号格式不正确",
+  },
+];
+
+/** 账号错误提示（未输入时不打扰） */
+const usernameError = computed(() =>
+  username.value ? validateUsername(username.value) : ''
+);
+
+/** 按钮可用性：账号与密码**都**合法才可点（原先只看密码长度，用户名为空也能提交） */
+const canSubmit = computed(() => validateAll() === '');
+
+/** 密码错误提示（供字段下方展示） */
+const passwordError = computed(() =>
+  // 未开始输入时不打扰用户
+  password.value || pwdEncrypted.value?.length ? validatePassword() : ''
+);
+
+// 保留旧的强度信息（仅用于展示，判定以 canSubmit 为准）
 const passwordRulesComputed = computed(() => {
   const len = (pwdEncrypted.value?.length) || (password.value?.length) || 0;
   return {
     hasUpperCase: /[A-Z]/.test(password.value),
     hasLowerCase: /[a-z]/.test(password.value),
     hasNumber: /\d/.test(password.value),
-    hasSpecial: /[!@#$%^&*(),.?":{}|<>]/.test(password.value),
-    validLength: len >= 6 && len <= 30,
+    hasSpecial: RE_SPECIAL.test(password.value),
+    validLength: len >= RE_PWD_MIN && len <= RE_PWD_MAX,
   };
 });
 
 const onSubmit = async (values) => {
+  // 兜底校验：AppForm 只校验「传了 rules 的字段」，密码字段没传 rules（掩码串），
+  // 所以这里必须自己再拦一次，避免空密码/弱密码直接打到后端。
+  const err = validateAll();
+  if (err) {
+    showToast(err);
+    return;
+  }
+
   loading.value = true;
 
   try {
@@ -526,14 +619,17 @@ const onSubmit = async (values) => {
       ? pwdEncrypted.value
       : password.value;
     const res = await authApi.login({
-      nameOrEmail: username.value,
+      nameOrEmail: username.value.trim(),
       password: payloadPwd,
     });
-    // 存储返回的 Token
-    const token = res.token;
-    if (token) {
-      localStorage.setItem("finance_token", token);
-    }
+    // 🔒 安全整改 P0-5：登录成功后**不再**把 JWT 写进 localStorage。
+    //    服务端已在登录响应里下发 httpOnly Cookie（浏览器自动保存、JS 读不到），
+    //    这里只记录一个**不含凭证**的登录标记，供路由守卫快速判定。
+    //    ⇒ 任意 XSS 都读不到令牌，窃取会话这条路被切断。
+    //
+    //    注：登录响应是扁平结构 `{ message, token, status }`，**不含用户信息**，
+    //    用户资料由 `router/middleware.js` 的 `restoreSession()` / `getUserInfo()` 补齐。
+    markAuthed({ username: username.value });
     setTimeout(() => {
       loading.value = false;
       router.push("/");

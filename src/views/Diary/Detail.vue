@@ -24,7 +24,7 @@
           </div>
         </div>
 
-        <div class="content-text" v-html="detail.content"></div>
+        <div class="content-text" v-html="safeContent"></div>
 
         <div
           v-if="detail.img_url?.length"
@@ -85,7 +85,7 @@
             </div>
 
             <div class="append-content-wrap">
-              <div class="append-content" v-html="child.content"></div>
+              <div class="append-content" v-html="sanitizeHtml(child.content)"></div>
 
               <div v-if="child.img_url?.length" class="append-image-list">
                 <div
@@ -283,9 +283,10 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useRouter, useRoute } from "vue-router";
-import { showToast } from "vant";
+import { showToast, showFailToast, showSuccessToast } from '@/utils/toast';
 import { momentApi } from "@/utils/api/moment";
 import { useUserStore } from "@/stores/user";
+import { sanitizeHtml } from "@/utils/sanitize";
 
 const router = useRouter();
 const route = useRoute();
@@ -294,6 +295,10 @@ const userStore = useUserStore();
 const loading = ref(false);
 const detail = ref(null);
 const childrenLoading = ref(false);
+
+// ── 安全：日记正文为富文本，入库时未过滤（Add.vue 原样存 HTML），
+//渲染前必须消毒，否则任何能写日记的人都能注入脚本 => 存储型 XSS
+const safeContent = computed(() => sanitizeHtml(detail.value?.content));
 
 // 删除确认弹窗
 const showDeleteDialog = ref(false);
@@ -339,11 +344,11 @@ const executeDelete = async () => {
   try {
     if (target.type === 'main') {
       await momentApi.delete(detail.value.id);
-      showToast("删除成功");
+      showSuccessToast("删除成功");
       router.back();
     } else if (target.type === 'child') {
       await momentApi.delete(target.id);
-      showToast("删除成功");
+      showSuccessToast("删除成功");
       const childIds = detail.value.children || [];
       if (childIds.length > 0) {
         await loadChildren(childIds);
@@ -351,12 +356,13 @@ const executeDelete = async () => {
     }
   } catch (err) {
     console.error("删除失败:", err);
-    showToast(err.message || "删除失败");
+    apiErrorToast(err, "删除失败");
   }
 };
 
 // 基础 URL
 import ENV from '@/utils/env'
+import { apiErrorToast } from '@/utils/request/helpers'
 const BASE_URL = ENV.FILE_BASE_URL;
 
 const getFullUrl = (path) => {
@@ -444,7 +450,7 @@ const DIARY_ID_KEY = 'diary_detail_last_id'
 const loadDetail = async () => {
   const id = route.params.id || route.query.id || sessionStorage.getItem(DIARY_ID_KEY);
   if (!id) {
-    showToast("参数错误");
+    showFailToast("参数错误");
     router.back();
     return;
   }
@@ -464,7 +470,7 @@ const loadDetail = async () => {
     }
   } catch (err) {
     console.error("加载详情失败:", err);
-    showToast("加载失败");
+    showFailToast("加载失败");
   } finally {
     loading.value = false;
   }
@@ -559,7 +565,7 @@ const doOpenShare = async () => {
       showShareResult.value = true;
     }
   } catch {
-    showToast('开启分享失败');
+    showFailToast('开启分享失败');
   } finally {
     shareLoading.value = false;
   }
@@ -575,7 +581,7 @@ const doCloseShare = async () => {
     showSharePopup.value = false;
     showToast('分享已关闭');
   } catch (err) {
-    showToast('关闭分享失败');
+    showFailToast('关闭分享失败');
   } finally {
     shareLoading.value = false;
   }
@@ -595,10 +601,10 @@ const copyExistingLink = async (type) => {
         const url = `${ENV.SITE_URL}/share/diary/detail?token=${encodeURIComponent(res.share.token)}`;
         copyToClipboard(url, '公共链接已复制');
       } else {
-        showToast(res.message || '生成失败');
+        apiErrorToast(res, '生成失败');
       }
     } catch {
-      showToast('生成链接失败');
+      showFailToast('生成链接失败');
     }
   } else {
     const url = `${ENV.SITE_URL}/share/diary/detail?id=${detail.value.id}`;

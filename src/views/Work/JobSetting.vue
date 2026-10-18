@@ -253,8 +253,10 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { showToast, showConfirmDialog } from 'vant'
+import { showConfirmDialog } from 'vant';
+import { showToast, showFailToast, showSuccessToast } from '@/utils/toast';
 import { getJobList, saveJob, updateJob, deleteJob } from '@/utils/api/work'
+import { apiErrorToast } from '@/utils/request/helpers'
 
 const saving = ref(false)
 const loading = ref(false)
@@ -444,11 +446,11 @@ const saveFormal = async () => {
       await saveJob(data)
     }
 
-    showToast('保存成功')
+    showSuccessToast('保存成功')
     showFormalPopup.value = false
     loadJobList()
   } catch (e) {
-    showToast(e.message || '保存失败')
+    apiErrorToast(e, '保存失败')
   } finally {
     saving.value = false
   }
@@ -513,11 +515,11 @@ const saveParttime = async () => {
       await saveJob(data)
     }
 
-    showToast('保存成功')
+    showSuccessToast('保存成功')
     showParttimePopup.value = false
     loadJobList()
   } catch (e) {
-    showToast(e.message || '保存失败')
+    apiErrorToast(e, '保存失败')
   } finally {
     saving.value = false
   }
@@ -532,10 +534,10 @@ const removeParttime = async (id) => {
       confirmButtonColor: 'var(--van-danger-color, #ee0a24)',
     })
     await deleteJob(id)
-    showToast('删除成功')
+    showSuccessToast('删除成功')
     loadJobList()
   } catch (e) {
-    if (e !== 'cancel') showToast('删除失败')
+    if (e !== 'cancel') showFailToast('删除失败')
   }
 }
 

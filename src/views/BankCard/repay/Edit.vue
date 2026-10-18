@@ -76,9 +76,11 @@
 
 <script setup>
 import { ref, reactive, onMounted } from "vue";
-import { showToast, showConfirmDialog, showLoadingToast, closeToast } from "vant";
+import { showConfirmDialog } from 'vant';
+import { showToast, showLoadingToast, closeToast } from '@/utils/toast';
 import { useRouter, useRoute } from "vue-router";
 import { getRepayDetail, updateRepay, deleteRepay } from "@/utils/api/card";
+import { apiErrorToast } from '@/utils/request/helpers'
 
 const router = useRouter();
 const route = useRoute();
@@ -120,7 +122,7 @@ const loadRepayDetail = async () => {
       currentDate.value = new Date(formData.repayTime.replace(" ", "T"));
     }
   } catch (error) {
-    showToast(error.message || "加载失败");
+    apiErrorToast(error, "加载失败");
   } finally {
     loading.value = false;
   }
@@ -163,7 +165,7 @@ const onSubmit = async () => {
     showToast({ message: "保存成功", onClose: () => router.back() });
   } catch (error) {
     closeToast();
-    showToast(error.message || "保存失败");
+    apiErrorToast(error, "保存失败");
   } finally {
     loading.value = false;
   }
@@ -185,7 +187,7 @@ const handleDelete = async () => {
     showToast({ message: "删除成功", onClose: () => router.back() });
   } catch (error) {
     if (error !== "cancel") {
-      showToast(error.message || "删除失败");
+      apiErrorToast(error, "删除失败");
     }
   }
 };

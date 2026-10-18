@@ -37,7 +37,9 @@
       <div v-if="mode === 'modify' && currentStep === 1" class="verify-section">
         <div class="section-title">验证身份</div>
         <div class="tip-text">请输入当前的 PIN 码以确认身份</div>
-        <div class="pin-display">
+        <!-- 点击输入区重新唤出键盘：Vant password-input 只在 touchstart 派发 focus，
+             鼠标点击收不到；且键盘遮罩(z 9998)会盖住输入区，故额外绑 click 兜底 -->
+        <div class="pin-display" @click="showKeyboard = true">
           <van-password-input
             :value="currentPin"
             :length="6"
@@ -49,7 +51,7 @@
       </div>
 
       <!-- 设置新 PIN -->
-      <div v-else class="pin-display">
+      <div v-else class="pin-display" @click="showKeyboard = true">
         <van-password-input
           :value="currentPin"
           :length="6"
@@ -87,7 +89,7 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from "vue";
 import { useRouter, useRoute } from "vue-router";
-import { showToast } from "vant";
+import { showToast, showSuccessToast } from '@/utils/toast';
 import SafeKeyboard from "@/components/KeyBoard/index.vue";
 import { securityApi } from "@/utils/api/security";
 
@@ -259,7 +261,7 @@ const handleNewMode = async () => {
         await securityApi.setPin({ pin: firstPin.value });
         // PIN 存储在后端，本地只标记启用状态
         localStorage.setItem("pin_enabled", "true");
-        showToast("PIN 码设置成功");
+        showSuccessToast("PIN 码设置成功");
         setTimeout(() => {
           router.back();
         }, 1500);
@@ -323,7 +325,7 @@ const handleModifyMode = async () => {
           oldPin: oldPin.value,
           newPin: currentPin.value,
         });
-        showToast("PIN 码修改成功");
+        showSuccessToast("PIN 码修改成功");
         setTimeout(() => {
           router.back();
         }, 1500);
@@ -445,12 +447,15 @@ const handleModifyMode = async () => {
   display: flex;
   justify-content: center;
   margin: 40px 0;
+  /* 压在 .keyboard-overlay(9998) 之上，保证键盘弹出时输入区仍可点击（点击即重新唤出键盘） */
+  position: relative;
+  z-index: 9999;
 }
 /* 1. 选中每一个 PIN 码的格子 */
 :deep(.van-password-input__item) {
   /* 基础边框 */
   border: 1px solid var(--theme-border) !important; /* 跟随主题边框色 */
-  background-color: var(--theme-bg-secondary); /* 跟随主题背景 */
+  background-color: var(--theme-bg-secondary) !important; /* 跟随主题背景 */
   border-radius: 6px; /* 让格子稍微圆润一点 */
   transition: all 0.2s; /* 增加过渡动画，更好看 */
   flex: 1; /* 均匀分配空间 */
