@@ -35,9 +35,11 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import com.live.finance.App
 import com.live.finance.core.net.ApiResult
+import com.live.finance.core.net.failMessage
 import com.live.finance.data.model.Card
 import com.live.finance.data.model.Category
 import com.live.finance.theme.LocalAppColors
+import com.live.finance.theme.vanGreen
 import com.live.finance.theme.LocalAppTokens
 import com.live.finance.ui.common.AppButton
 import com.live.finance.ui.common.AppButtonType
@@ -58,6 +60,7 @@ import com.live.vant.nav.VanTabs
 import com.live.vant.other.VanCalendar
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import com.live.finance.core.net.showFail
 
 /**
  * 记一笔（新增收支明细）—— 一比一复刻 web `src/views/Finance/account/Add.vue`。
@@ -75,7 +78,6 @@ import java.time.LocalDate
 @Composable
 fun AddTransactionScreen(nav: NavHostController) {
     val colors = LocalAppColors.current
-    val tokens = LocalAppTokens.current
     val toast = LocalVanToastController.current
     val graph = App.of(LocalContext.current).graph
     val scope = rememberCoroutineScope()
@@ -120,7 +122,14 @@ fun AddTransactionScreen(nav: NavHostController) {
     LaunchedEffect(type) {
         selectedCategory = null
         val t = if (type == RecordType.Transfer) "expense" else type.key
-        categories = (graph.category.list(t) as? ApiResult.Ok)?.data ?: emptyList()
+        when (val r = graph.category.list(t)) {
+            is ApiResult.Ok -> categories = r.data ?: emptyList()
+            // web `loadCategories` 的 catch → showToast("加载分类失败")
+            else -> {
+                categories = emptyList()
+                toast.showFail(r, "加载分类失败")
+            }
+        }
         if (type == RecordType.Transfer) {
             categories.firstOrNull { it.name == "转账" }?.let { selectedCategory = it }
         }
@@ -154,6 +163,8 @@ fun AddTransactionScreen(nav: NavHostController) {
     val filteredIncomeCards = filterCards(incomeCardColumns, banks, incomeSearchKey)
     val sameCard = selectedCard?.id != null && selectedIncomeCard?.id != null &&
         selectedCard!!.id == selectedIncomeCard!!.id
+    /** web `showIncomeCardCell`：转入方式非现金/余额时才需要选转入卡 */
+    val needIncomeCard = incomeMethod.isNotEmpty() && incomeMethod != METHOD_CASH && incomeMethod != METHOD_BALANCE
 
     val canSubmit: Boolean = run {
         val hasAmount = amountValue(amount) != null
@@ -206,7 +217,30 @@ fun AddTransactionScreen(nav: NavHostController) {
     }
 
     fun doSubmit() {
-        if (!canSubmit || submitting) return
+        if (submitting) return
+        if (!canSubmit) {
+            // web `handleSubmit`：`!canSubmit` 时逐分支给出对应的失败提示（showFailToast）
+            if (isTransfer) {
+                when (transferMode) {
+                    TransferMode.External ->
+                        if (needCard && selectedCard?.id == null) toast.fail("请选择关联卡片")
+                        else toast.fail("请填写完整信息")
+                    TransferMode.Withdraw ->
+                        if (selectedIncomeCard?.id == null) toast.fail("请选择到账卡片")
+                        else toast.fail("请填写完整信息")
+                    TransferMode.Self -> when {
+                        needCard && selectedCard?.id == null -> toast.fail("请选择转出卡片")
+                        needIncomeCard && selectedIncomeCard?.id == null -> toast.fail("请选择转入卡片")
+                        sameCard -> toast.fail("转出和转入不能是同一张卡")
+                        else -> toast.fail("请填写完整信息")
+                    }
+                }
+            } else {
+                if (needCard && selectedCard?.id == null) toast.fail("请选择关联卡片")
+                else toast.fail("请填写完整信息")
+            }
+            return
+        }
         val amt = amountValue(amount) ?: return
         val catId = selectedCategory?.id.orEmpty()
         val catName = selectedCategory?.name.orEmpty()
@@ -277,12 +311,12 @@ fun AddTransactionScreen(nav: NavHostController) {
                         .padding(horizontal = 12.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    FText(currency.label, 13f, FontWeight.Normal, colors.textPrimary)
+                    FText(currency.label, 14f, FontWeight.Normal, colors.textPrimary)
                     Spacer(Modifier.width(4.dp))
                     VanIcon(name = "arrow-down", size = 13.sp, color = colors.textPrimary)
                 }
                 Spacer(Modifier.height(12.dp))   // .currency-selector { margin-bottom: 12px }
-                FText("请输入${if (isExpense) "支出" else if (isIncome) "收入" else "转账"}金额", 14f, FontWeight.Normal, colors.textTertiary)
+                FText("请输入${if (isExpense) "支出" else if (isIncome) "收入" else "转账"}金额", 16f, FontWeight.Normal, colors.textTertiary)
                 Spacer(Modifier.height(15.dp))   // .value { margin-top: 15px }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     FText(currency.symbol, 32f, FontWeight.Normal, colors.textPrimary)
@@ -293,7 +327,7 @@ fun AddTransactionScreen(nav: NavHostController) {
                     Spacer(Modifier.height(8.dp))
                     FText(
                         "约 ¥ ${Money.formatMoney(exchangedCny(amount, exchangeRate, currency))}",
-                        13f, FontWeight.Normal, colors.textTertiary,
+                        14f, FontWeight.Normal, colors.textTertiary,
                     )
                 }
             }
@@ -580,20 +614,22 @@ fun AddTransactionScreen(nav: NavHostController) {
 
 // ───────────────────────────── 页内组件 ─────────────────────────────
 
-/** web `.popup-header`：左右分布、padding 16、1px 边框、16px/600 + 关闭图标。 */
+/** web `.popup-header`：左右分布、padding 16、仅底 1px 分隔、16px/600 + 关闭图标（去掉原全环绕边框）。 */
 @Composable
 private fun PopupHeader(title: String, onClose: () -> Unit) {
     val colors = LocalAppColors.current
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(1.dp, colors.border)
-            .padding(16.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        FText(title, 16f, FontWeight.SemiBold, colors.textPrimary)
-        VanIcon(name = "cross", size = 16.sp, color = colors.textSecondary, onClick = onClose)
+    Column(Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            FText(title, 18f, FontWeight.SemiBold, colors.textPrimary)
+            VanIcon(name = "cross", size = 16.sp, color = colors.textSecondary, onClick = onClose)
+        }
+        Box(Modifier.fillMaxWidth().height(1.dp).background(colors.border))
     }
 }
 
@@ -614,10 +650,10 @@ private fun MethodChipsRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        FText(label, 14f, FontWeight.Normal, colors.textPrimary)
+        FText(label, 16f, FontWeight.Normal, colors.textPrimary)
         Row(
             modifier = Modifier.weight(1f),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.End,
         ) {
             methods.forEach { m ->
                 val active = selected == m
@@ -629,7 +665,7 @@ private fun MethodChipsRow(
                         .clickable { onSelect(m) }
                         .padding(horizontal = 15.dp, vertical = 8.dp),
                 ) {
-                    FText(m, 10.4f, FontWeight.Normal, if (active) colors.success else colors.textPrimary)
+                    FText(m, 12f, FontWeight.Normal, if (active) colors.success else colors.textPrimary)
                 }
             }
         }
@@ -674,7 +710,7 @@ private fun CategoryTile(name: String, active: Boolean, modifier: Modifier, onCl
             VanIcon(
                 name = "success",
                 size = 14.sp,
-                color = Color(0xFF07C160),
+                color = vanGreen(),
                 modifier = Modifier.align(Alignment.TopEnd).padding(4.dp),
             )
         }
@@ -713,22 +749,23 @@ private fun CardPickerPopup(
                     .verticalScroll(rememberScrollState()),
             ) {
                 cards.forEach { card ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .border(1.dp, colors.border)
-                            .clickable { onSelect(card) }
-                            .padding(horizontal = 16.dp, vertical = 14.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        FText(cardDisplayText(card, banks), 14f, FontWeight.Normal, colors.textPrimary)
-                        if (card.id == selectedId) VanIcon(name = "success", size = 16.sp, color = Color(0xFF07C160))
+                    Column(Modifier.fillMaxWidth().clickable { onSelect(card) }) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            FText(cardDisplayText(card, banks), 16f, FontWeight.Normal, colors.textPrimary)
+                            if (card.id == selectedId) VanIcon(name = "success", size = 16.sp, color = vanGreen())
+                        }
+                        Box(Modifier.fillMaxWidth().height(1.dp).background(colors.border))
                     }
                 }
                 if (cards.isEmpty()) {
                     Box(Modifier.fillMaxWidth().padding(30.dp), contentAlignment = Alignment.Center) {
-                        FText(emptyText, 14f, FontWeight.Normal, colors.textTertiary)
+                        FText(emptyText, 16f, FontWeight.Normal, colors.textTertiary)
                     }
                 }
             }

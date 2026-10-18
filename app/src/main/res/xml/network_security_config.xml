@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  网络安全配置（安全整改 P0-4 / P2-19，2026-10-08；2026-10-14 按分发需求调整）
+
+  历史目标（公网部署）：
+    1. **禁止明文 HTTP** —— 配合 Manifest 的 usesCleartextTraffic="false"，
+       彻底断掉「降级到 http 抓包」这条路。
+    2. **只信任系统 CA**（不信任用户安装的证书）——
+       这条比 Pinning 更实用：它同时防了「用户自己装了个抓包证书来中间人」，
+       而抓包证书恰恰是伪造金融数据最常用的手段。
+
+  ⚠ 2026-10-14 调整（站点分发适配）：登录页开放「任意输入 API 地址」（http 系均可，
+  不强制 https，适配内网/自建 http 部署）。若继续禁明文，用户输入的 http 地址会在
+  系统网络层直接被拒（CLEARTEXT not permitted），功能上等于不可用。
+  因此 cleartextTrafficPermitted 调整为 true —— **明文传输风险由站点部署方自担**：
+    - 公网部署仍应使用 https（输入 https 地址即可，行为与调整前一致）；
+    - http 仅建议内网/自建场景；
+    - 「只信任系统 CA」保持不变（仍防用户安装抓包证书的中间人）。
+
+  关于抓包调试：
+    本工程默认「不放开用户证书」。若确需 Charles/mitmproxy 调试，
+    临时取消下面 <certificates src="user" /> 的注释即可，**切勿发布到线上**。
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <!-- 只信系统 CA：防用户安装抓包证书 -->
+            <certificates src="system" />
+            <!--
+            <certificates src="user" />
+            -->
+        </trust-anchors>
+    </base-config>
+</network-security-config>

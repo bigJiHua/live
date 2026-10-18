@@ -31,9 +31,9 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.platform.LocalView
-import com.live.vant.basic.VanOverlay
 import com.live.vant.icon.VanIcon
 import com.live.vant.theme.LocalVantColors
+import com.live.vant.theme.rememberKeyHaptic
 import com.live.vant.theme.LocalVantDimens
 
 enum class VanKeyboardTheme { Default, Custom }
@@ -93,9 +93,19 @@ fun VanNumberKeyboard(
         }
         val keyBg = if (theme == VanKeyboardTheme.Custom) c.bgPage else c.bgCard
         androidx.compose.runtime.CompositionLocalProvider(LocalKeyboardKeyBg provides keyBg) {
-        Box(contentAlignment = Alignment.BottomCenter, modifier = Modifier.fillMaxSize()) {
-            // 金额键盘遮罩改透明：金额步需看穿遮罩看到上方输入的金额（用户要求；web 数字键盘无重黑遮罩）
-            VanOverlay(show = true, color = Color.Transparent, onClick = { if (closeOnClickOutside) { onClose?.invoke(); onBlur?.invoke() } })
+        Column(Modifier.fillMaxSize()) {
+            // 点外收起区只占面板**上方**的空白：原先用 fillMaxSize 的 VanOverlay 兄弟层，命中区盖住键盘，
+            // 点键缝会误触发收起（与 VanSecureKeyboard 同一处修正；web 数字键盘本身无重黑遮罩，故仍透明）
+            Box(
+                Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                    ) { if (closeOnClickOutside) { onClose?.invoke(); onBlur?.invoke() } }
+                    .background(Color.Transparent),
+            )
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -126,43 +136,53 @@ fun VanNumberKeyboard(
                 }
                 // 按键区
                 Column(Modifier.fillMaxWidth().padding(top = 6.dp)) {
-                    KeyboardRow { key("1", ::append); key("2", ::append); key("3", ::append) }
-                    KeyboardRow { key("4", ::append); key("5", ::append); key("6", ::append) }
                     if (theme == VanKeyboardTheme.Custom && closeButtonText != null) {
-                        // custom 主题：左 2 列按键 + 右侧跨两行的「完成」大按钮
+                        // web custom 主题（NumberKeyboard.js genCustomKeys + renderSidebar）：
+                        // **整个左区 3 列×4 行**收进同一个 weight(3f) 栏（1-9 后，extraKey 为 0/1/2 个时
+                        // 末行分别为 [0 加宽] / [0 加宽, extra] / [extra, 0, extra]），保证四行键宽一致；
+                        // 右栏跨满 4 行、上下两半：上 ⌫ 删除、下蓝色「完成」
                         Row(
                             Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            Column(Modifier.weight(2f)) {
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    key("7", ::append); key("8", ::append)
-                                }
-                                Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    for (ek in extraKey) key(ek, ::append)
-                                    key("0", ::append)
-                                    if (showDeleteKey && extraKey.isEmpty()) DeleteKey {
-                                        if (text.isNotEmpty()) { onTextChange(text.dropLast(1)); onDelete?.invoke() }
+                            Column(Modifier.weight(3f)) {
+                                KeyboardRow { key("1", ::append); key("2", ::append); key("3", ::append) }
+                                KeyboardRow { key("4", ::append); key("5", ::append); key("6", ::append) }
+                                KeyboardRow { key("7", ::append); key("8", ::append); key("9", ::append) }
+                                KeyboardRow {
+                                    when (extraKey.size) {
+                                        0 -> WideKey("0", ::append)
+                                        1 -> { WideKey("0", ::append); key(extraKey[0], ::append) }
+                                        else -> { key(extraKey[0], ::append); key("0", ::append); key(extraKey[1], ::append) }
                                     }
                                 }
                             }
-                            Box(
-                                contentAlignment = Alignment.Center,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(104.dp) // 2×48 + 8 行距
-                                    .background(c.primary, RoundedCornerShape(5.dp))
-                                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
-                                        onClose?.invoke(); onBlur?.invoke()
-                                    },
-                            ) {
-                                androidx.compose.foundation.text.BasicText(
-                                    closeButtonText,
-                                    style = TextStyle(color = Color.White, fontSize = 16.sp),
-                                )
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                if (showDeleteKey) {
+                                    SidebarKey(onClick = {
+                                        if (text.isNotEmpty()) { onTextChange(text.dropLast(1)); onDelete?.invoke() }
+                                    }) { DeleteIcon() }
+                                }
+                                Box(
+                                    contentAlignment = Alignment.Center,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(104.dp)
+                                        .background(c.primary, RoundedCornerShape(5.dp))
+                                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                                            onClose?.invoke(); onBlur?.invoke()
+                                        },
+                                ) {
+                                    androidx.compose.foundation.text.BasicText(
+                                        closeButtonText,
+                                        style = TextStyle(color = Color.White, fontSize = 16.sp),
+                                    )
+                                }
                             }
                         }
                     } else {
+                        KeyboardRow { key("1", ::append); key("2", ::append); key("3", ::append) }
+                        KeyboardRow { key("4", ::append); key("5", ::append); key("6", ::append) }
                         KeyboardRow { key("7", ::append); key("8", ::append); key("9", ::append) }
                         KeyboardRow {
                             for (ek in extraKey) key(ek, ::append)
@@ -198,13 +218,14 @@ private fun KeyboardRow(content: @Composable RowScope.() -> Unit) {
 private fun RowScope.key(k: String, onClick: (String) -> Unit) {
     val c = LocalVantColors.current
     val keyBg = LocalKeyboardKeyBg.current
+    val haptic = rememberKeyHaptic()
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
             .weight(1f)
             .height(48.dp)
             .background(keyBg, RoundedCornerShape(5.dp))
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onClick(k) },
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { haptic(); onClick(k) },
     ) {
         androidx.compose.foundation.text.BasicText(
             k,
@@ -215,13 +236,14 @@ private fun RowScope.key(k: String, onClick: (String) -> Unit) {
 
 @Composable
 private fun RowScope.WideKey(k: String, onClick: (String) -> Unit) {
+    val haptic = rememberKeyHaptic()
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
             .weight(2f)
             .height(48.dp)
             .background(LocalKeyboardKeyBg.current, RoundedCornerShape(5.dp))
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onClick(k) },
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { haptic(); onClick(k) },
     ) {
         androidx.compose.foundation.text.BasicText(
             k,
@@ -231,8 +253,22 @@ private fun RowScope.WideKey(k: String, onClick: (String) -> Unit) {
 }
 
 @Composable
+private fun SidebarKey(onClick: () -> Unit, content: @Composable () -> Unit) {
+    val haptic = rememberKeyHaptic()
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(104.dp)
+            .background(LocalKeyboardKeyBg.current, RoundedCornerShape(5.dp))
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { haptic(); onClick() },
+    ) { content() }
+}
+
+@Composable
 private fun RowScope.DeleteKey(onDelete: () -> Unit) {
     val c = LocalVantColors.current
+    val haptic = rememberKeyHaptic()
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
@@ -242,18 +278,23 @@ private fun RowScope.DeleteKey(onDelete: () -> Unit) {
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
-                onClick = { onDelete() },
+                onClick = { haptic(); onDelete() },
             ),
     ) {
-        // Vant 删除键 ⌫（delete-back svg 路径，viewBox 0 0 32 22）
-        androidx.compose.foundation.Canvas(Modifier.size(32.dp, 22.dp)) {
-            val path = com.live.vant.svgPath(
-                "M28 0a4 4 0 0 1 4 4v14a4 4 0 0 1-4 4H10.4a2 2 0 0 1-1.4-.6L1 13.1c-.6-.5-.9-1.3-.9-2 0-1 .3-1.7.9-2.2L9 .6A2 2 0 0 1 10.4 0ZM28 2H10.4l-8.2 8.3a1 1 0 0 0-.3.7c0 .3.1.5.3.7l8.2 8.4H28a2 2 0 0 0 2-2V4c0-1.1-.9-2-2-2ZM23 6a1 1 0 0 1 .7.3 1 1 0 0 1 0 1.4L20.4 11l3.3 3.3c.2.2.3.5.3.7 0 .3-.1.5-.3.7a1 1 0 0 1-.7.3 1 1 0 0 1-.7-.3L19 12.4l-3.4 3.3a1 1 0 0 1-.6.3 1 1 0 0 1-.7-.3 1 1 0 0 1-.3-.7c0-.2.1-.5.3-.7l3.3-3.3-3.3-3.3A1 1 0 0 1 14 7c0-.3.1-.5.3-.7A1 1 0 0 1 15 6a1 1 0 0 1 .6.3L19 9.6l3.3-3.3A1 1 0 0 1 23 6Z",
-            )
-            val sx = size.width / 33f
-            val sy = size.height / 24f
-            path.transform(androidx.compose.ui.graphics.Matrix().apply { scale(sx, sy) })
-            drawPath(path, androidx.compose.ui.graphics.Color(0xFF646566))
-        }
+        DeleteIcon()
+    }
+}
+
+@Composable
+private fun DeleteIcon() {
+    // Vant 删除键 ⌫（delete-back svg 路径，viewBox 0 0 32 22）
+    androidx.compose.foundation.Canvas(Modifier.size(32.dp, 22.dp)) {
+        val path = com.live.vant.svgPath(
+            "M28 0a4 4 0 0 1 4 4v14a4 4 0 0 1-4 4H10.4a2 2 0 0 1-1.4-.6L1 13.1c-.6-.5-.9-1.3-.9-2 0-1 .3-1.7.9-2.2L9 .6A2 2 0 0 1 10.4 0ZM28 2H10.4l-8.2 8.3a1 1 0 0 0-.3.7c0 .3.1.5.3.7l8.2 8.4H28a2 2 0 0 0 2-2V4c0-1.1-.9-2-2-2ZM23 6a1 1 0 0 1 .7.3 1 1 0 0 1 0 1.4L20.4 11l3.3 3.3c.2.2.3.5.3.7 0 .3-.1.5-.3.7a1 1 0 0 1-.7.3 1 1 0 0 1-.7-.3L19 12.4l-3.4 3.3a1 1 0 0 1-.6.3 1 1 0 0 1-.7-.3 1 1 0 0 1-.3-.7c0-.2.1-.5.3-.7l3.3-3.3-3.3-3.3A1 1 0 0 1 14 7c0-.3.1-.5.3-.7A1 1 0 0 1 15 6a1 1 0 0 1 .6.3L19 9.6l3.3-3.3A1 1 0 0 1 23 6Z",
+        )
+        val sx = size.width / 33f
+        val sy = size.height / 24f
+        path.transform(androidx.compose.ui.graphics.Matrix().apply { scale(sx, sy) })
+        drawPath(path, androidx.compose.ui.graphics.Color(0xFF646566))
     }
 }

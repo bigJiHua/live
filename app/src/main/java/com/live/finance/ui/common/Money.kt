@@ -61,4 +61,19 @@ object Money {
         }
         return (if (neg) "-" else "") + body
     }
+    /**
+     * 逐字对齐 web 报表页的 `formatAmount`：
+     * `Number(v).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 3 })`
+     * —— 千分位、**最少 2 位小数、最多 3 位**（与 [format] 的固定 2 位、[formatMoney] 的截断 2~4 位都不同）。
+     * 用于 `stats/StatsOverview.vue` 与 `stats/MonthlyTrend.vue` 的金额文案。
+     */
+    fun formatAmount(value: Double): String {
+        if (!value.isFinite()) return "0.00"
+        val s = String.format(Locale.US, "%,.3f", value)
+        val dot = s.indexOf('.')
+        if (dot < 0) return "$s.00"
+        var end = s.length
+        while (end - dot - 1 > 2 && s[end - 1] == '0') end--
+        return s.substring(0, end)
+    }
 }

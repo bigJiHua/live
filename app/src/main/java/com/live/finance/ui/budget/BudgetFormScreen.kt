@@ -38,6 +38,7 @@ import androidx.navigation.NavHostController
 import com.live.finance.App
 import com.live.finance.core.nav.Routes
 import com.live.finance.core.net.ApiResult
+import com.live.finance.core.net.failMessage
 import com.live.finance.data.model.Budget
 import com.live.finance.data.model.Dish
 import com.live.finance.data.model.EatDetails
@@ -48,6 +49,8 @@ import com.live.finance.data.model.TravelDay
 import com.live.finance.data.model.TravelDetails
 import com.live.finance.data.model.TravelItem
 import com.live.finance.theme.LocalAppColors
+import com.live.vant.basic.VanEmpty
+import com.live.finance.theme.vanGreen
 import com.live.finance.ui.common.AppButton
 import com.live.finance.ui.common.AppButtonSize
 import com.live.finance.ui.common.AppButtonType
@@ -63,9 +66,13 @@ import com.live.vant.form.VanDatePicker
 import com.live.vant.form.VanPicker
 import com.live.vant.form.VanPickerOption
 import com.live.vant.icon.VanIcon
+import com.live.vant.other.VanCalendar
+import com.live.vant.other.VanCalendarType
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import kotlin.math.roundToInt
+import com.live.finance.core.net.showFail
+import com.live.vant.feedback.VanToastType
 
 /** 三类型表单（web Shopping.vue / Travel.vue / Eat.vue 三页合一，路由仍是三条）。 */
 @Composable
@@ -79,7 +86,7 @@ fun BudgetFormScreen(nav: NavHostController, type: String, editId: String?) {
     // ===== 基本字段 =====
     var title by remember { mutableStateOf("") }
     var route by remember { mutableStateOf("") }
-    var planDate by remember { mutableStateOf(todayStr()) }
+    var planDate by remember { mutableStateOf(if (type == "买") todayStr() else "") }
     var cycle by remember { mutableStateOf("") }
     var budgetAmount by remember { mutableStateOf("") }
     var notes by remember { mutableStateOf("") }
@@ -101,9 +108,12 @@ fun BudgetFormScreen(nav: NavHostController, type: String, editId: String?) {
 
     // ===== 弹层 =====
     var showCycle by remember { mutableStateOf(false) }
-    var showPlanDate by remember { mutableStateOf(false) }
+    var showPlanDate by remember { mutableStateOf(false) }   // 吃/行：van-date-picker
+    var showBuyCal by remember { mutableStateOf(false) }     // 买：van-calendar（购买日期 / 清单购买日期 共用）
+    var buyCalIsPlan by remember { mutableStateOf(true) }
+    var buyCalIdx by remember { mutableStateOf(-1) }
+    var buyCalSel by remember { mutableStateOf(LocalDate.now()) }
     var showPriority by remember { mutableStateOf(-1) }      // 买：item index
-    var showShopDate by remember { mutableStateOf(-1) }      // 买：item index
     var showType by remember { mutableStateOf(-1 to -1) }    // 行：(day, item)
     var showCurrency by remember { mutableStateOf(-1 to -1) }
     var showDayDate by remember { mutableStateOf(-1) }       // 行：day index（-2=新增）
@@ -117,7 +127,7 @@ fun BudgetFormScreen(nav: NavHostController, type: String, editId: String?) {
     LaunchedEffect(editId) {
         if (editId == null) return@LaunchedEffect
         val b = (repo.detail(editId) as? ApiResult.Ok)?.data ?: run {
-            toast.show("加载失败"); nav.popBackStack(); return@LaunchedEffect
+            toast.show("加载失败", VanToastType.Fail); nav.popBackStack(); return@LaunchedEffect
         }
         title = b.title; route = b.route; planDate = b.planDate.ifEmpty { todayStr() }
         cycle = b.cycle; budgetAmount = if (b.budgetAmount == 0.0) "" else trimAmt(b.budgetAmount)
@@ -136,7 +146,7 @@ fun BudgetFormScreen(nav: NavHostController, type: String, editId: String?) {
     val shopActual = validShops.sumOf { it.actualPrice }
     val purchasedCount = validShops.count { it.actualPrice > 0 }
     val validDishes = dishes.filter { it.name.isNotBlank() }
-    val eatActual = validDishes.sumOf { it.price * (it.quantity.toDoubleOrNull() ?: 1.0) }
+    val eatActual = validDishes.sumOf { dishSubtotal(it) }
 
     fun rateOf(ccy: String): Double = rates.firstOrNull { it.currency == ccy }?.value?.toDoubleOrNull() ?: 0.0
     fun travelTotal(): Double = days.sumOf { day ->
@@ -152,9 +162,29 @@ fun BudgetFormScreen(nav: NavHostController, type: String, editId: String?) {
     }
 
     // ===== 提交（web submit 校验原文）=====
+    /** web app-field rules 校验（买/吃 为逐字段文案；行为「请完善基本信息」）。 */
+    fun validateBasic(): Boolean {
+        when (type) {
+            "买" -> {
+                if (title.isBlank()) { toast.show("请输入计划标题"); return false }
+                if (planDate.isBlank()) { toast.show("请选择预计日期"); return false }
+                if (budgetAmount.toDoubleOrNull() == null) { toast.show("请输入总预算"); return false }
+            }
+            "吃" -> {
+                if (title.isBlank()) { toast.show("请输入标题"); return false }
+                if (planDate.isBlank()) { toast.show("请选择日期"); return false }
+                if (budgetAmount.toDoubleOrNull() == null) { toast.show("请输入预算"); return false }
+            }
+            else -> {
+                if (title.isBlank() || budgetAmount.toDoubleOrNull() == null) { toast.show("请完善基本信息"); return false }
+            }
+        }
+        return true
+    }
+
+
     fun doSubmit() {
         showSubmit = false
-        if (title.isBlank() || budgetAmount.toDoubleOrNull() == null) { toast.show("请完善基本信息"); return }
         saving = true
         val amount = budgetAmount.toDoubleOrNull() ?: 0.0
         val details = when (type) {
@@ -165,6 +195,11 @@ fun BudgetFormScreen(nav: NavHostController, type: String, editId: String?) {
             "吃" -> EatDetails(dishes = validDishes, actualTotal = eatActual, notes = notes)
             else -> {
                 if (days.size > 15) { toast.show("计划天数最多15天"); saving = false; return }
+                for (day in days) {
+                    if (day.items.count { it.amount > 0 && it.description.isNotBlank() } > 15) {
+                        toast.show("日期 ${day.date} 消费条目最多15条"); saving = false; return
+                    }
+                }
                 val filtered = days.map { it.copy(items = it.items.filter { i -> i.amount > 0 && i.description.isNotBlank() }) }
                     .filter { it.items.isNotEmpty() }
                 if (filtered.sumOf { it.items.size } == 0) { toast.show("请至少添加一条消费记录"); saving = false; return }
@@ -184,24 +219,41 @@ fun BudgetFormScreen(nav: NavHostController, type: String, editId: String?) {
                 is ApiResult.Ok -> { toast.success("保存成功"); nav.popBackStack(Routes.BUDGET, false) }
                 is ApiResult.Unauthorized -> nav.navigate(Routes.LOGIN) { popUpTo(Routes.MAIN) { inclusive = true } }
                 is ApiResult.RateLimited -> nav.navigate(Routes.ERROR_429)
-                is ApiResult.Fail -> toast.show(r.message.ifEmpty { "保存失败" })
-                else -> toast.show("保存失败")
+                is ApiResult.Fail -> toast.show(r.message.ifEmpty { "保存失败" }, VanToastType.Fail)
+                else -> toast.showFail(r, "保存失败")
             }
         }
     }
 
+    fun submitClick() {
+        if (!validateBasic()) return
+        // web：买/吃 先 confirm 再保存；行 无 confirm，直接提交
+        if (type == "行") doSubmit() else showSubmit = true
+    }
     val budgetVal = budgetAmount.toDoubleOrNull() ?: 0.0
-    val plannedExpense = when (type) { "行" -> travelTotal(); "吃" -> eatActual; else -> estimatedTotal }
+
 
     ScreenScaffold { inner ->
         Column(inner.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 32.dp)) {
             // ===== 基本信息 =====
-            SectionHeader("基本信息", null)
+            SectionHeader(when (type) {
+                "买" -> "购物计划"
+                "吃" -> "本次餐饮"
+                else -> "行程概览"
+            }, null)
             Column(Modifier.padding(horizontal = 12.dp).fillMaxWidth()
                 .clip(RoundedCornerShape(8.dp)).background(colors.bgCard)) {
                 AppField(value = title, onValueChange = { title = it },
-                    label = if (type == "行") "行程标题" else "计划标题",
-                    placeholder = if (type == "行") "如：香港3天2晚" else if (type == "买") "如：618购物清单" else "如：本月餐饮",
+                    label = when (type) {
+                        "行" -> "行程标题"
+                        "买" -> "计划标题"
+                        else -> "标题"
+                    },
+                    placeholder = when (type) {
+                        "行" -> "如：香港3天2晚"
+                        "买" -> "如：618购物清单"
+                        else -> "如：周末家庭聚餐"
+                    },
                     border = false)
                 if (type == "行") {
                     AppField(value = route, onValueChange = { route = it },
@@ -209,14 +261,19 @@ fun BudgetFormScreen(nav: NavHostController, type: String, editId: String?) {
                 }
                 AppField(value = budgetAmount,
                     onValueChange = { budgetAmount = filterAmount(it) },
-                    label = "总预算", placeholder = "0.00",
+                    label = if (type == "吃") "本次预算" else "总预算", placeholder = "0.00",
                     keyboardType = KeyboardType.Number,
-                    trailing = { FText("元", 14f, color = colors.textTertiary) })
+                    trailing = { FText(if (type == "行") "CNY" else "元", 16f, color = colors.textTertiary) })
                 SelectRow(label = "预算周期", value = BudgetShared.cycleName(cycle).ifEmpty { "" },
                     hasValue = cycle.isNotEmpty(),
                     onClick = { showCycle = true })
-                SelectRow(label = if (type == "买") "购买日期" else "计划日期", value = planDate,
-                    hasValue = true, onClick = { showPlanDate = true })
+                SelectRow(label = when (type) {
+                    "买" -> "购买日期"
+                    "吃" -> "用餐日期"
+                    else -> "计划日期"
+                }, value = planDate,
+                    hasValue = planDate.isNotEmpty(),
+                    onClick = { if (type == "买") { buyCalIsPlan = true; showBuyCal = true } else showPlanDate = true })
             }
 
             // ===== 行：常用汇率 =====
@@ -231,7 +288,7 @@ fun BudgetFormScreen(nav: NavHostController, type: String, editId: String?) {
                                 Row(Modifier.weight(1f).clip(RoundedCornerShape(6.dp))
                                     .background(colors.bgThird).padding(horizontal = 8.dp, vertical = 4.dp),
                                     verticalAlignment = Alignment.CenterVertically) {
-                                    FText(rate.currency, 13f, FontWeight.SemiBold, colors.textPrimary)
+                                    FText(rate.currency, 14f, FontWeight.SemiBold, colors.textPrimary)
                                     AppField(value = rate.value,
                                         onValueChange = { v ->
                                             val i = rates.indexOfFirst { it.currency == rate.currency }
@@ -244,7 +301,7 @@ fun BudgetFormScreen(nav: NavHostController, type: String, editId: String?) {
                                     VanIcon("cross", size = 13.sp, color = colors.textTertiary,
                                         modifier = Modifier.clickable {
                                             if (days.any { d -> d.items.any { it.currency == rate.currency && it.amount > 0 } }) {
-                                                toast.show("该汇率已被使用，无法删除")
+                                                toast.show("该汇率已被使用，无法删除", VanToastType.Fail)
                                             } else {
                                                 rates.removeAll { it.currency == rate.currency }; refreshCny()
                                             }
@@ -271,11 +328,12 @@ fun BudgetFormScreen(nav: NavHostController, type: String, editId: String?) {
                 onAdd = { shopItems.add(ShopItem(quantity = "1", purchaseDate = todayStr())) },
                 onRemove = { i -> showDeleteItem = Triple("item", -1, i) },
                 onPriority = { i -> showPriority = i },
-                onDate = { i -> showShopDate = i },
+                onDate = { i -> buyCalIsPlan = false; buyCalIdx = i; showBuyCal = true },
                 onChange = { i, s -> shopItems[i] = s },
             )
                 "吃" -> EatSection(
                     dishes = dishes,
+                    budgetAmount = budgetVal,
                     onAdd = { dishes.add(Dish(quantity = "1")) },
                     onRemove = { i -> showDeleteItem = Triple("dish", -1, i) },
                     onChange = { i, d -> dishes[i] = d },
@@ -300,15 +358,25 @@ fun BudgetFormScreen(nav: NavHostController, type: String, editId: String?) {
                 )
             }
 
-            // ===== 备注（行/吃；买在 summary 内）=====
-            if (type != "买") {
-                SectionHeader("备忘录", null)
-                Column(Modifier.padding(horizontal = 12.dp).fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp)).background(colors.bgCard)) {
-                    AppField(value = notes, onValueChange = { notes = it.take(200) },
-                        label = "备忘录", border = false,
-                        placeholder = "有什么需要特别注意的？（例如：签证准备、小费习惯等）")
-                }
+            // ===== 备注（三类型均有：买=备注说明 / 吃=备注 / 行=备忘录）=====
+            SectionHeader(when (type) {
+                "买" -> "备注说明"
+                "吃" -> "备注"
+                else -> "备忘录"
+            }, null)
+            Column(Modifier.padding(horizontal = 12.dp).fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp)).background(colors.bgCard)) {
+                AppField(value = notes, onValueChange = { notes = it.take(200) },
+                    label = when (type) {
+                        "买" -> "备注"
+                        "吃" -> "备注"
+                        else -> "备忘录"
+                    }, border = false,
+                    placeholder = when (type) {
+                        "买" -> "可选，添加备注说明"
+                        "吃" -> "餐厅名称、用餐人数等"
+                        else -> "有什么需要特别注意的？（例如：签证准备、小费习惯等）"
+                    })
             }
 
             Spacer(Modifier.height(24.dp))
@@ -318,10 +386,10 @@ fun BudgetFormScreen(nav: NavHostController, type: String, editId: String?) {
                     type == "行" -> "立即创建预算"
                     type == "买" && isEdit -> "保存修改"
                     type == "买" -> "创建购物计划"
-                    type == "吃" && isEdit -> "保存修改"
-                    else -> "创建餐饮预算"
+                    type == "吃" && isEdit -> "保存"
+                    else -> "创建"
                 },
-                onClick = { showSubmit = true },
+                onClick = { submitClick() },
                 type = AppButtonType.Primary, size = AppButtonSize.Large,
                 block = true, round = true, loading = saving || loading,
                 modifier = Modifier.padding(horizontal = 16.dp),
@@ -342,8 +410,10 @@ fun BudgetFormScreen(nav: NavHostController, type: String, editId: String?) {
     }
     if (showPlanDate) {
         VanPopup(show = true, onDismissRequest = { showPlanDate = false }, position = VanPopupPosition.Bottom, round = true) {
+            // ⚠ `VanDatePicker` 是**受控**组件（`value` + `onValueChange`）。旧实现传了空的 `onValueChange = { }` ⇒ 滚轮新位置永远写不回外部状态（与 `RepayAddScreen` 同款 BUG，2026-09-19 修）。
+            var pendingPlanDate by remember { mutableStateOf(parseDate(planDate)) }
             VanDatePicker(
-                type = "date", value = parseDate(planDate), onValueChange = { },
+                type = "date", value = pendingPlanDate, onValueChange = { pendingPlanDate = it },
                 minDate = LocalDate.of(2021, 1, 1), maxDate = LocalDate.of(2031, 12, 31),
                 title = "选择日期",
                 onConfirm = { planDate = it.toString(); showPlanDate = false },
@@ -364,19 +434,29 @@ fun BudgetFormScreen(nav: NavHostController, type: String, editId: String?) {
             )
         }
     }
-    if (showShopDate >= 0) {
-        VanPopup(show = true, onDismissRequest = { showShopDate = -1 }, position = VanPopupPosition.Bottom, round = true) {
-            VanDatePicker(
-                type = "date", value = parseDate(shopItems[showShopDate].purchaseDate), onValueChange = { },
-                minDate = LocalDate.of(2021, 1, 1), maxDate = LocalDate.of(2031, 12, 31),
-                title = "购买日期",
-                onConfirm = {
-                    if (showShopDate < shopItems.size) shopItems[showShopDate] = shopItems[showShopDate].copy(purchaseDate = it.toString())
-                    showShopDate = -1
-                },
-                onCancel = { showShopDate = -1 },
-            )
-        }
+    // 买：购买日期 / 清单购买日期 共用一个 van-calendar
+    // web `Shopping.vue` 未传 min/max ⇒ Vant 默认「今天 ~ 今天 + 6 个月」；`:color` = 主色
+    if (showBuyCal) {
+        VanCalendar(
+            show = true,
+            onClose = { showBuyCal = false },
+            type = VanCalendarType.Single,
+            minDate = LocalDate.now(),
+            maxDate = LocalDate.now().plusMonths(6),
+            defaultDate = listOf(buyCalSel),
+            color = colors.primary,
+            onConfirm = { dates ->
+                dates.firstOrNull()?.let { d ->
+                    buyCalSel = d
+                    if (buyCalIsPlan) {
+                        planDate = d.toString()
+                    } else if (buyCalIdx in shopItems.indices) {
+                        shopItems[buyCalIdx] = shopItems[buyCalIdx].copy(purchaseDate = d.toString())
+                    }
+                }
+                showBuyCal = false
+            },
+        )
     }
     val (tDay, tItem) = showType
     if (tDay >= 0) {
@@ -411,10 +491,11 @@ fun BudgetFormScreen(nav: NavHostController, type: String, editId: String?) {
     if (showDayDate != -1) {
         val isAdd = showDayDate == -2
         VanPopup(show = true, onDismissRequest = { showDayDate = -1 }, position = VanPopupPosition.Bottom, round = true) {
+            var pendingDayDate by remember { mutableStateOf(if (isAdd) LocalDate.now() else parseDate(days[showDayDate].date)) }
             VanDatePicker(
                 type = "date",
-                value = if (isAdd) LocalDate.now() else parseDate(days[showDayDate].date),
-                onValueChange = { },
+                value = pendingDayDate,
+                onValueChange = { pendingDayDate = it },
                 minDate = LocalDate.of(2021, 1, 1), maxDate = LocalDate.of(2031, 12, 31),
                 title = "选择日期",
                 onConfirm = {
@@ -429,7 +510,7 @@ fun BudgetFormScreen(nav: NavHostController, type: String, editId: String?) {
     if (showAddRate) {
         VanPopup(show = true, onDismissRequest = { showAddRate = false }, position = VanPopupPosition.Bottom, round = true) {
             Column(Modifier.fillMaxWidth().padding(20.dp)) {
-                FText("添加常用汇率", 17f, FontWeight.SemiBold, colors.textPrimary)
+                FText("添加常用汇率", 18f, FontWeight.SemiBold, colors.textPrimary)
                 Spacer(Modifier.height(20.dp))
                 AppField(value = newRateName, onValueChange = { newRateName = it.take(12) }, label = "币种名称", placeholder = "如：韩元")
                 AppField(value = newRateCode, onValueChange = { newRateCode = it.replace(Regex("[^a-zA-Z]"), "").uppercase() }, label = "币种代码", placeholder = "如：KRW")
@@ -495,7 +576,7 @@ internal fun SectionHeader(title: String, action: (@Composable () -> Unit)?) {
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        FText(title, 14f, FontWeight.SemiBold, colors.textPrimary)
+        FText(title, 16f, FontWeight.SemiBold, colors.textPrimary)
         action?.invoke()
     }
 }
@@ -505,10 +586,10 @@ internal fun SelectRow(label: String, value: String, hasValue: Boolean, onClick:
     val colors = LocalAppColors.current
     Column(Modifier.fillMaxWidth().clickable { onClick() }) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
-            FText(label, 13f, color = colors.textSecondary)
+            FText(label, 14f, color = colors.textSecondary)
             Spacer(Modifier.height(6.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                FText(value.ifEmpty { "请选择" }, 14f,
+                FText(value.ifEmpty { "请选择" }, 16f,
                     color = if (hasValue) colors.textPrimary else colors.textTertiary,
                     modifier = Modifier.weight(1f))
                 VanIcon("arrow-down", size = 13.sp, color = colors.textTertiary)
@@ -535,7 +616,7 @@ private fun ShoppingSection(
     }
     if (items.isEmpty()) {
         Box(Modifier.fillMaxWidth().padding(vertical = 24.dp), contentAlignment = Alignment.Center) {
-            FText("点击上方添加商品", 13f, color = colors.textTertiary)
+            FText("点击上方添加商品", 14f, color = colors.textTertiary)
         }
     }
     items.forEachIndexed { i, item ->
@@ -556,11 +637,11 @@ private fun ShoppingSection(
             AppField(value = if (item.price == 0.0) "" else trimAmt(item.price),
                 onValueChange = { onChange(i, item.copy(price = it.toDoubleOrNull() ?: 0.0)) },
                 label = "预计价格", placeholder = "0.00", keyboardType = KeyboardType.Number,
-                trailing = { FText("元", 13f, color = colors.textTertiary) })
+                trailing = { FText("元", 14f, color = colors.textTertiary) })
             AppField(value = if (item.actualPrice == 0.0) "" else trimAmt(item.actualPrice),
                 onValueChange = { onChange(i, item.copy(actualPrice = it.toDoubleOrNull() ?: 0.0)) },
                 label = "实际价格", placeholder = "0.00", keyboardType = KeyboardType.Number,
-                trailing = { FText("元", 13f, color = colors.textTertiary) })
+                trailing = { FText("元", 14f, color = colors.textTertiary) })
             SelectRow(label = "购买日期", value = item.purchaseDate, hasValue = true, onClick = { onDate(i) })
             AppField(value = item.shop, onValueChange = { onChange(i, item.copy(shop = it)) },
                 label = "店铺", placeholder = "京东自营")
@@ -577,7 +658,7 @@ private fun ShoppingSection(
         SummaryRow("预算总额", "¥${Money.format(budgetAmount)}", colors.textPrimary)
         SummaryRow("预计总花费", "¥${Money.format(est)}", colors.primary)
         SummaryRow("实际总花费", "¥${Money.format(act)}", colors.danger)
-        SummaryRow("已购/总数", "$bought / ${items.filter { it.name.isNotBlank() }.size}", Color(0xFF07C160))
+        SummaryRow("已购/总数", "$bought / ${items.filter { it.name.isNotBlank() }.size}", vanGreen())
     }
 }
 
@@ -585,48 +666,65 @@ private fun ShoppingSection(
 @Composable
 private fun EatSection(
     dishes: List<Dish>,
+    budgetAmount: Double,
     onAdd: () -> Unit,
     onRemove: (Int) -> Unit,
     onChange: (Int, Dish) -> Unit,
 ) {
     val colors = LocalAppColors.current
-    SectionHeader("菜单明细") {
+    SectionHeader("菜单") {
         AppButton("添加菜品", onAdd, type = AppButtonType.Primary, plain = true, size = AppButtonSize.Small)
     }
     if (dishes.isEmpty()) {
         Box(Modifier.fillMaxWidth().padding(vertical = 24.dp), contentAlignment = Alignment.Center) {
-            FText("点击上方添加菜品", 13f, color = colors.textTertiary)
+            FText("点击上方添加菜品", 14f, color = colors.textTertiary)
         }
     }
     dishes.forEachIndexed { i, dish ->
-        Column(Modifier.padding(horizontal = 12.dp, vertical = 4.dp).fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp)).background(colors.bgCard).padding(12.dp)) {
+        Column(Modifier.padding(horizontal = 12.dp).padding(bottom = 8.dp).fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp)).background(colors.bgCard).padding(horizontal = 12.dp, vertical = 8.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 IndexBadge(i + 1, colors.danger)
                 Spacer(Modifier.weight(1f))
                 VanIcon("cross", size = 16.sp, color = colors.danger, modifier = Modifier.clickable { onRemove(i) })
             }
             AppField(value = dish.name, onValueChange = { onChange(i, dish.copy(name = it)) },
-                label = "菜品名称", placeholder = "如：火锅")
-            AppField(value = if (dish.price == 0.0) "" else trimAmt(dish.price),
-                onValueChange = { onChange(i, dish.copy(price = it.toDoubleOrNull() ?: 0.0)) },
-                label = "价格", placeholder = "0.00", keyboardType = KeyboardType.Number,
-                trailing = { FText("元", 13f, color = colors.textTertiary) })
-            AppField(value = dish.quantity, onValueChange = { onChange(i, dish.copy(quantity = it.filter { c -> c.isDigit() }.take(4))) },
-                label = "数量", placeholder = "1", keyboardType = KeyboardType.Number)
+                label = "菜品", placeholder = "如：红烧肉")
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                AppField(value = if (dish.price == 0.0) "" else trimAmt(dish.price),
+                    onValueChange = { onChange(i, dish.copy(price = it.toDoubleOrNull() ?: 0.0)) },
+                    label = "价格", placeholder = "0.00", keyboardType = KeyboardType.Number,
+                    trailing = { FText("元", 14f, color = colors.textTertiary) },
+                    modifier = Modifier.weight(1f))
+                AppField(value = dish.quantity, onValueChange = { onChange(i, dish.copy(quantity = it.filter { c -> c.isDigit() }.take(4))) },
+                    label = "份数", placeholder = "1", keyboardType = KeyboardType.Number,
+                    modifier = Modifier.weight(1f))
+            }
             AppField(value = dish.notes, onValueChange = { onChange(i, dish.copy(notes = it.take(50))) },
-                label = "备注", placeholder = "口味、日期等")
+                label = "备注", placeholder = "口味、做法等")
+            if (dish.price != 0.0) {
+                Box(Modifier.fillMaxWidth().padding(top = 4.dp), contentAlignment = Alignment.CenterEnd) {
+                    FText("小计：¥${eatFmt(dishSubtotal(dish))}", 12f, FontWeight.Normal, colors.textTertiary)
+                }
+            }
         }
     }
     val valid = dishes.filter { it.name.isNotBlank() }
-    val actual = valid.sumOf { it.price * (it.quantity.toDoubleOrNull() ?: 1.0) }
-    Column(Modifier.padding(horizontal = 12.dp, vertical = 4.dp).fillMaxWidth()
-        .clip(RoundedCornerShape(8.dp)).background(Color(0x1AEE0A24)).padding(12.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically) {
-            FText("实际消费合计", 14f, FontWeight.SemiBold, colors.danger)
-            FText("¥${Money.format(actual)}", 18f, FontWeight.Bold, colors.danger)
-        }
+    val actual = valid.sumOf { dishSubtotal(it) }
+    val diff = budgetAmount - actual
+    Column(Modifier.padding(horizontal = 12.dp).padding(top = 8.dp).fillMaxWidth()
+        .clip(RoundedCornerShape(8.dp)).background(colors.bgCard)) {
+        SummaryRow("预算", "¥${eatFmt(budgetAmount)}", colors.textPrimary)
+        SummaryRow("实际", "¥${eatFmt(actual)}", colors.danger)
+        SummaryRow(
+            "余额",
+            (if (diff > 0) "+" else "") + eatFmt(diff),
+            when {
+                diff > 0 -> vanGreen()
+                diff < 0 -> colors.danger
+                else -> colors.textPrimary
+            },
+        )
     }
 }
 
@@ -656,13 +754,13 @@ private fun TravelSection(
             TSummary("总预算", "¥${Money.format(totalBudget)}", colors.textPrimary, Modifier.weight(1f))
             TSummary("已规划支出", "¥${Money.format(totalExpense)}", colors.danger, Modifier.weight(1f))
             TSummary("剩余结余", "¥${Money.format(balance)}",
-                if (balance >= 0) Color(0xFF07C160) else colors.danger, Modifier.weight(1f))
+                if (balance >= 0) vanGreen() else colors.danger, Modifier.weight(1f))
         }
         if (currencyTotals.isNotEmpty()) {
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 currencyTotals.forEach { (ccy, amt) ->
-                    FText("${trimAmt(amt)} $ccy", 11f, FontWeight.Medium, colors.textSecondary,
+                    FText("${trimAmt(amt)} $ccy", 12f, FontWeight.Medium, colors.textSecondary,
                         modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(colors.bgThird).padding(horizontal = 6.dp, vertical = 2.dp))
                 }
             }
@@ -670,19 +768,19 @@ private fun TravelSection(
         Spacer(Modifier.height(10.dp))
         Box(Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)).background(colors.bgThird)) {
             Box(Modifier.fillMaxWidth(progress / 100f).height(6.dp).clip(RoundedCornerShape(3.dp))
-                .background(if (balance >= 0) Color(0xFF07C160) else colors.danger))
+                .background(if (balance >= 0) vanGreen() else colors.danger))
         }
         Spacer(Modifier.height(4.dp))
-        FText("预算进度 $progress%", 11f, FontWeight.Medium,
-            if (balance >= 0) Color(0xFF07C160) else colors.danger)
+        FText("预算进度 $progress%", 12f, FontWeight.Medium,
+            if (balance >= 0) vanGreen() else colors.danger)
     }
     SectionHeader("消费明细清单") {
         AppButton("增加天数", onAddDay, type = AppButtonType.Primary, size = AppButtonSize.Small, round = true, icon = "plus")
     }
     if (days.isEmpty()) {
-        Box(Modifier.fillMaxWidth().padding(vertical = 24.dp), contentAlignment = Alignment.Center) {
-            FText("暂无行程规划，点击「增加天数」开始", 13f, color = colors.textTertiary)
-        }
+        // web `budget/Travel.vue:229`：`<van-empty description="暂无行程规划" />`
+        // ⚠ 文案也要照 web —— 旧实现自加了「，点击「增加天数」开始」
+        VanEmpty(description = "暂无行程规划")
     }
     days.forEachIndexed { di, day ->
         Column(Modifier.padding(horizontal = 12.dp, vertical = 4.dp).fillMaxWidth()
@@ -692,7 +790,7 @@ private fun TravelSection(
                 .clickable { onEditDay(di) }.padding(horizontal = 12.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 VanIcon("calendar-o", size = 14.sp, color = colors.primary)
-                FText(day.date.ifEmpty { "未设置日期" }, 14f, FontWeight.SemiBold, colors.primary,
+                FText(day.date.ifEmpty { "未设置日期" }, 16f, FontWeight.SemiBold, colors.primary,
                     modifier = Modifier.weight(1f).padding(start = 6.dp))
                 VanIcon("arrow", size = 12.sp, color = colors.textTertiary)
                 Spacer(Modifier.width(8.dp))
@@ -705,13 +803,13 @@ private fun TravelSection(
                         // 类型 tag（点击弹 picker）
                         Box(
                             Modifier.clip(RoundedCornerShape(999.dp))
-                                .background(expenseTypeColor(item.type).copy(alpha = 0.12f))
+                                .background(expenseTypeColor(item.type, colors).copy(alpha = 0.12f))
                                 .clickable { onPickType(di, ii) }
                                 .padding(horizontal = 10.dp, vertical = 3.dp),
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                FText(item.type, 12f, FontWeight.Medium, expenseTypeColor(item.type))
-                                VanIcon("arrow-down", size = 10.sp, color = expenseTypeColor(item.type))
+                                FText(item.type, 12f, FontWeight.Medium, expenseTypeColor(item.type, colors))
+                                VanIcon("arrow-down", size = 10.sp, color = expenseTypeColor(item.type, colors))
                             }
                         }
                         AppField(value = item.description,
@@ -733,12 +831,12 @@ private fun TravelSection(
                                 .padding(horizontal = 8.dp, vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            FText(item.currency, 13f, FontWeight.Medium, colors.textPrimary)
+                            FText(item.currency, 14f, FontWeight.Medium, colors.textPrimary)
                             VanIcon("arrow-down", size = 10.sp, color = colors.textTertiary)
                         }
                     }
                     if (item.currency != "CNY") {
-                        FText("≈ ¥${Money.format(item.cnyAmount)}", 11f, color = colors.textTertiary,
+                        FText("≈ ¥${Money.format(item.cnyAmount)}", 12f, color = colors.textTertiary,
                             modifier = Modifier.padding(top = 2.dp))
                     }
                 }
@@ -748,12 +846,12 @@ private fun TravelSection(
             Row(Modifier.fillMaxWidth().clickable { onAddItem(di) }.padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 VanIcon("add-o", size = 14.sp, color = colors.primary)
-                FText(" 记一笔", 13f, color = colors.primary)
+                FText(" 记一笔", 14f, color = colors.primary)
             }
             Row(Modifier.fillMaxWidth().background(colors.bgThird).padding(horizontal = 12.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween) {
                 FText("当日小计:", 12f, color = colors.textSecondary)
-                FText("¥${Money.format(day.items.sumOf { it.cnyAmount })}", 13f, FontWeight.SemiBold, colors.primary)
+                FText("¥${Money.format(day.items.sumOf { it.cnyAmount })}", 14f, FontWeight.SemiBold, colors.primary)
             }
         }
     }
@@ -764,7 +862,7 @@ private fun IndexBadge(n: Int, color: Color) {
     Box(
         Modifier.size(20.dp).clip(CircleShape).background(color),
         contentAlignment = Alignment.Center,
-    ) { FText("$n", 11f, FontWeight.SemiBold, Color.White) }
+    ) { FText("$n", 12f, FontWeight.SemiBold, Color.White) }
 }
 
 @Composable
@@ -772,8 +870,8 @@ private fun SummaryRow(label: String, value: String, valueColor: Color) {
     val colors = LocalAppColors.current
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.SpaceBetween) {
-        FText(label, 14f, color = colors.textSecondary)
-        FText(value, 14f, FontWeight.SemiBold, valueColor)
+        FText(label, 16f, color = colors.textSecondary)
+        FText(value, 16f, FontWeight.SemiBold, valueColor)
     }
     Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(1.dp).background(colors.border))
 }
@@ -783,11 +881,21 @@ private fun TSummary(label: String, value: String, valueColor: Color, modifier: 
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp)) {
         FText(label, 12f, color = LocalAppColors.current.textTertiary)
-        FText(value, 15f, FontWeight.Bold, valueColor)
+        FText(value, 16f, FontWeight.Bold, valueColor)
     }
 }
 
 // ================= 工具 =================
+
+/** web `formatAmount = Number(v||0).toFixed(2)`：两位小数、无千分位。 */
+internal fun eatFmt(v: Double): String =
+    String.format(java.util.Locale.US, "%.2f", if (v.isFinite()) v else 0.0)
+
+/** web `dishSubtotal`：`price * (parseFloat(quantity) || 1)` —— 份数为空或 0 时按 1 计。 */
+internal fun dishSubtotal(dish: Dish): Double {
+    val qty = (dish.quantity.toDoubleOrNull() ?: 0.0).takeIf { it != 0.0 } ?: 1.0
+    return dish.price * qty
+}
 
 internal fun todayStr(): String = LocalDate.now().toString()
 internal fun parseDate(s: String): LocalDate =

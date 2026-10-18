@@ -38,6 +38,8 @@ fun VanEmpty(
     description: String? = null,
     image: String = "default",
     imageSize: Dp? = null,
+    /** 对齐 Vant 的 `#image` 插槽：给了就**完全替换**预设图（如 web `<template #image><van-icon name="albums-o" size="60"/></template>`）。 */
+    imageSlot: (@Composable () -> Unit)? = null,
     bottomContent: @Composable (() -> Unit)? = null,
 ) {
     val tokens = LocalVantDimens.current
@@ -51,7 +53,8 @@ fun VanEmpty(
             contentAlignment = Alignment.Center,
             modifier = Modifier.size(imageSize ?: 160.dp),
         ) {
-            when (image) {
+            if (imageSlot != null) imageSlot()
+            else when (image) {
                 "default", "error", "search", "network" -> EmptyPresetImage(image)
                 else -> AsyncImage(
                     model = image,

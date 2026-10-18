@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.sp
 import com.live.vant.icon.VanIcon
 import com.live.vant.theme.LocalVantColors
 import com.live.vant.theme.LocalVantDimens
+import com.live.vant.theme.fontSp
 
 enum class VanFieldType { Text, Password, Number, Digit, Tel, Email, Textarea }
 
@@ -176,7 +177,7 @@ fun VanField(
         if (showWordLimit && maxlength != null) {
             androidx.compose.foundation.text.BasicText(
                 "${value.length}/$maxlength",
-                style = TextStyle(color = c.textTertiary, fontSize = tokens.fontSizeSm, lineHeight = 16.sp, textAlign = TextAlign.End),
+                style = TextStyle(color = c.textTertiary, fontSize = tokens.fontSizeSm, lineHeight = tokens.fontSp(16f), textAlign = TextAlign.End),
                 modifier = Modifier.fillMaxWidth().padding(end = tokens.cellHorizontalPadding),
             )
         }

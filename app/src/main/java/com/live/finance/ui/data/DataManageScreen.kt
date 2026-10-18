@@ -29,6 +29,9 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import com.live.finance.core.nav.Routes
 import com.live.finance.theme.LocalAppColors
+import com.live.finance.theme.SemanticRole
+import com.live.finance.theme.LocalAppTokens
+import com.live.finance.theme.vanGreen
 import com.live.finance.ui.common.ScreenScaffold
 import com.live.finance.ui.flow.FText
 import com.live.vant.icon.VanIcon
@@ -54,12 +57,15 @@ import com.live.vant.icon.VanIcon
 @Composable
 fun DataManageScreen(nav: NavHostController) {
     val colors = LocalAppColors.current
+    // web `.menu-icon <color>` 走 `html[data-theme-mono="1"]`：非「绿/蓝/靛」三套主题时语义图标统一成主色
+    val tokens = LocalAppTokens.current
     val entries = listOf(
-        DataEntry("数据库检查", "检查数据库连接状态和完整性", "search", colors.primary, Routes.DATA_CHECK),
-        DataEntry("导出数据库/表", "导出数据库或指定表数据", "notes-o", DEEP_GREEN, Routes.DATA_EXPORT),
-        DataEntry("数据导入", "从文件导入数据到数据库", "add-o", ORANGE, Routes.DATA_IMPORT),
-        DataEntry("数据库备份", "查看和管理已导出的备份文件", "records", DEEP_GREEN, Routes.DATA_BACKUP),
-        DataEntry("查看登录日志", "近期登录记录和设备信息", "manager-o", colors.danger, Routes.DATA_LOGIN_LOG),
+        DataEntry("数据库检查", "检查数据库连接状态和完整性", "search", tokens.semanticIcon(SemanticRole.Blue), Routes.DATA_CHECK),
+        DataEntry("导出数据库/表", "导出数据库或指定表数据", "notes-o", tokens.semanticIcon(SemanticRole.Green), Routes.DATA_EXPORT),
+        DataEntry("数据导入", "从文件导入数据到数据库", "add-o", tokens.semanticIcon(SemanticRole.Orange), Routes.DATA_IMPORT),
+        // web `.menu-icon.teal{ color: var(--van-green) }` —— 这一页的 teal 就是绿 ⇒ 走 Green 角色
+        DataEntry("数据库备份", "查看和管理已导出的备份文件", "records", tokens.semanticIcon(SemanticRole.Green), Routes.DATA_BACKUP),
+        DataEntry("查看登录日志", "近期登录记录和设备信息", "manager-o", tokens.semanticIcon(SemanticRole.Red), Routes.DATA_LOGIN_LOG),
     )
 
     ScreenScaffold { inner ->
@@ -71,7 +77,7 @@ fun DataManageScreen(nav: NavHostController) {
                 .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 30.dp),
         ) {
             // .section-title{font-size 15; weight 600; primary; mb 10; padding-left 2}
-            FText("数据管理功能", 15f, FontWeight.SemiBold, colors.textPrimary, Modifier.padding(start = 2.dp, bottom = 10.dp))
+            FText("数据管理功能", 16f, FontWeight.SemiBold, colors.textPrimary, Modifier.padding(start = 2.dp, bottom = 10.dp))
             // .menu-card{bg secondary; radius 10; overflow hidden}
             Column(
                 Modifier
@@ -87,7 +93,6 @@ fun DataManageScreen(nav: NavHostController) {
     }
 }
 
-private val DEEP_GREEN = Color(0xFF07C160)     // web `var(--van-green, #07c160)`（Vant 调色板色，非主题色）
 private val ORANGE = Color(0xFFFA8C16)         // web 硬编码 `#fa8c16`
 private val ARROW_GREY = Color(0xFFC8C9CC)     // web `<van-icon color="#c8c9cc">` 硬编码
 
@@ -124,9 +129,9 @@ private fun MenuItem(e: DataEntry, isLast: Boolean, onClick: () -> Unit) {
             VanIcon(name = e.icon, size = 20.sp, color = e.color)
         }
         Column(Modifier.weight(1f)) {
-            FText(e.title, 14f, FontWeight.Medium, colors.textPrimary)
+            FText(e.title, 16f, FontWeight.Medium, colors.textPrimary)
             Spacer(Modifier.height(2.dp))
-            FText(e.desc, 11f, FontWeight.Normal, colors.textTertiary)
+            FText(e.desc, 12f, FontWeight.Normal, colors.textTertiary)
         }
         Spacer(Modifier.width(0.dp))
         VanIcon(name = "arrow", size = 16.sp, color = ARROW_GREY)

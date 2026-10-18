@@ -4,11 +4,15 @@ import com.google.gson.JsonArray
 import com.google.gson.JsonElement
 import com.google.gson.JsonNull
 import com.google.gson.JsonObject
+import com.live.finance.core.BankIconWarmer
 import com.live.finance.core.net.ApiClient
 import com.live.finance.core.net.ApiResult
 import com.live.finance.core.net.map
 import com.live.finance.core.net.toResult
 import com.live.finance.data.model.Category
+import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * 分类（对齐 web `utils/api/category.js` + 后端 `modules/category`）：
@@ -68,16 +72,87 @@ class FakeCategoryRepository : CategoryRepository {
     }
 }
 
-class RemoteCategoryRepository(private val client: ApiClient) : CategoryRepository {
-    override suspend fun list(type: String): ApiResult<List<Category>> =
-        client.get("/category", mapOf("type" to type)).toResult().map { data ->
-            val arr: JsonArray = when (data) {
-                is JsonArray -> data
-                is JsonObject -> data.getAsJsonArray("list") ?: JsonArray()
-                else -> JsonArray()
-            }
-            arr.map { parse(it) }
+class RemoteCategoryRepository(
+    private val client: ApiClient,
+    private val bankIconWarmer: BankIconWarmer,
+) : CategoryRepository {
+
+    /**
+     * 进程内缓存 + 并发合并（对齐 web「切页面别重复打同一个接口」的口径）。
+     *
+     * ## 为什么要做（2026-10-11 审计）
+     *
+     * `list()` 有 **18 个调用点**（流水/账单/账户/报表…全都拉 `type=bank` 这一份字典），
+     * 而 `ApiClient` 是**零缓存、零并发合并**的（`http.newCall(...).execute()` 每次都真的发），
+     * 于是 N 个界面 = N 个一模一样的 `GET /category?type=bank`。
+     * web 侧靠 `<keep-alive>` 让页面实例常驻、`onMounted` 只跑一次来规避；原生没有 keep-alive，
+     * 所以在仓储层补一份进程内缓存。
+     *
+     * ## 为什么用 Mutex 而不是 single-flight 的 `Deferred`
+     *
+     * `Deferred` 方案里「发起者」协程被取消（用户切走页面）会把结果一起带崩，连带坑掉所有
+     * 等在它上面的调用方。`Mutex.withLock` 则是「后到的协程排队 → 第 1 个拉完写缓存 → 后面直接从缓存读」，
+     * 取消只影响自己，且天然达到合并效果。
+     */
+    private data class CacheEntry(val data: List<Category>, val at: Long)
+
+    private companion object {
+        /** 字典是低频参照数据，60s 足够；与 web `REFRESH_INTERVAL=10s` 同量级且更保守。 */
+        const val TTL_MS = 60_000L
+    }
+
+    private val cache = ConcurrentHashMap<String, CacheEntry>()
+    private val locks = ConcurrentHashMap<String, Mutex>()
+
+    override suspend fun list(type: String): ApiResult<List<Category>> {
+        // 快路径：命中新鲜缓存直接返回，连锁都不进
+        fresh(type)?.let { return ApiResult.Ok(it, "") }
+
+        val lock = locks.getOrPut(type) { Mutex() }
+        return lock.withLock {
+            // 慢路径：排队期间前一个已把缓存写好了 ⇒ 这里不再发请求（这就是并发合并）
+            fresh(type)?.let { return@withLock ApiResult.Ok(it, "") }
+            fetchAndCache(type)
         }
+    }
+
+    private fun fresh(type: String): List<Category>? {
+        val hit = cache[type] ?: return null
+        return if (System.currentTimeMillis() - hit.at < TTL_MS) hit.data else null
+    }
+
+    private suspend fun fetchAndCache(type: String): ApiResult<List<Category>> {
+        // ⚠ 整体包try-catch：本方法有 18 个调用点，且**全都是 `LaunchedEffect` 里的协程**，
+        //   异常一旦穿透就会崩 App（协程异常走全局处理器）。且这里有 Mutex 排队，
+        //   一个请求抛异常会让所有等待方一起失败。所以**只允许返回 ApiResult，不允许抛**。
+        //   `ApiClient` 自己只捕 IOException，JSON 解析等异常会到这里。
+        val result = try {
+            client.get("/category", mapOf("type" to type)).toResult().map { data ->
+                val arr: JsonArray = when (data) {
+                    is JsonArray -> data
+                    is JsonObject -> data.getAsJsonArray("list") ?: JsonArray()
+                    else -> JsonArray()
+                }
+                arr.map { parse(it) }
+            }
+        } catch (t: Throwable) {
+            return ApiResult.Fail(t.message ?: "分类加载失败")
+        }
+        if (result is ApiResult.Ok) {
+            result.data?.let { cache[type] = CacheEntry(it, System.currentTimeMillis()) }
+            // 银行 logo 预热：`type=bank` 时把全部 logo 灌进 Coil 缓存。
+            // 注意这只是**兜底**——真正的提前量由 `AppGraph` 在 `sessionReady` 之后的后台协程里做。
+            // 实现在 BankIconWarmer/BankIconCache：SVG 走与尺寸无关的固定 memoryCacheKey，
+            // 与 BankIconView 取图用**同一把键**，所以这里再触发时基本都是内存命中、几乎零成本。
+            if (type == "bank") result.data?.let { bankIconWarmer.warmCategories(it) }
+        }
+        return result
+    }
+
+    /** 写操作后让缓存失效，避免用户刚改完的名字/图标还要等 TTL 才生效。 */
+    private fun invalidate(type: String) {
+        cache.remove(type)
+    }
 
     override suspend fun create(type: String, name: String, remark: String, iconUrl: String): ApiResult<Category?> {
         val body = JsonObject().apply {
@@ -86,7 +161,9 @@ class RemoteCategoryRepository(private val client: ApiClient) : CategoryReposito
             putNullable("iconUrl", iconUrl)
             putNullable("remark", remark)
         }
-        return client.post("/category", body).toResult().map { parse(it) }
+        val res = client.post("/category", body).toResult().map { parse(it) }
+        if (res is ApiResult.Ok) invalidate(type)
+        return res
     }
 
     override suspend fun update(id: String, name: String, remark: String, iconUrl: String): ApiResult<Unit> {
@@ -95,11 +172,17 @@ class RemoteCategoryRepository(private val client: ApiClient) : CategoryReposito
             putNullable("iconUrl", iconUrl)
             putNullable("remark", remark)
         }
-        return client.put("/category/$id", body).toResult().map { }
+        val res = client.put("/category/$id", body).toResult().map { }
+        // update/delete 只有 id、拿不到 type ⇒ 清全部（分类数量很少，代价可忽略）
+        if (res is ApiResult.Ok) cache.clear()
+        return res
     }
 
-    override suspend fun delete(id: String): ApiResult<Unit> =
-        client.delete("/category/$id").toResult().map { }
+    override suspend fun delete(id: String): ApiResult<Unit> {
+        val res = client.delete("/category/$id").toResult().map { }
+        if (res is ApiResult.Ok) cache.clear()
+        return res
+    }
 
     /** 响应行 → 模型（`icon_url` 优先，兼容 `iconUrl`；缺字段一律空串，不抛）。 */
     private fun parse(el: JsonElement?): Category {

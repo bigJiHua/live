@@ -10,6 +10,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -21,11 +22,14 @@ import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.live.vant.icon.VanIcon
+import com.live.vant.theme.vantDimens
 import com.live.vant.theme.LocalVantColors
 
 /** 折叠面板内部状态（v-model / accordion） */
@@ -51,6 +55,9 @@ fun VanCollapse(
     modifier: Modifier = Modifier,
     accordion: Boolean = false,
     border: Boolean = true,
+    /** 容器底色；null = Vant 默认（bgCard）。页面里 web 用 `:deep(.van-collapse){background:transparent}`
+     *  覆写时传 `Color.Transparent` —— 底座默认值不动，避免影响其它调用点。 */
+    containerColor: Color? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val toggle: (String) -> Unit = { name ->
@@ -69,7 +76,7 @@ fun VanCollapse(
         Column(
             modifier
                 .fillMaxWidth()
-                .background(LocalVantColors.current.bgCard),
+                .background(containerColor ?: LocalVantColors.current.bgCard),
             content = content,
         )
     }
@@ -84,6 +91,25 @@ fun VanCollapseItem(
     icon: String? = null,
     disabled: Boolean = false,
     border: Boolean = true,
+    /** 条目底色覆写；null = Vant 默认（bgCard）。对应 web 页面 `:deep(.van-collapse-item){background:transparent}`。 */
+    itemColor: Color? = null,
+    /** 内容区底色覆写；null = bgCard。对应 `:deep(.van-collapse-item__content){background:transparent}`。 */
+    contentColor: Color? = null,
+    /** 内容区内边距；null = Vant 默认（水平 16 / 垂直 12）。web 该页覆写成 `padding:0`。 */
+    contentPadding: PaddingValues? = null,
+    /** 内容区与下分隔线之间的留白（web `.van-collapse-item{padding-bottom:4px}`）。 */
+    contentBottomGap: Dp = 0.dp,
+    /** 下分隔线之后的外边距（web `.van-collapse-item{margin-bottom:20px}`，`:last-child` 为 0）。 */
+    bottomSpacing: Dp = 0.dp,
+    /** 标题行内边距；null = Vant 默认 16/12。Vant 真实值是 cell 的 `10px 16px`（`--van-cell-vertical-padding`），
+     *  页面按 Vant 原样复刻时传 `PaddingValues(horizontal = 16.dp, vertical = 10.dp)`。 */
+    titlePadding: PaddingValues? = null,
+    /** 展开时标题**下方**再加一条 hairline（Vant `__title:after` 只在 `--expanded` 时 display:block，
+     *  且页面把它从 `right:16px` 覆写成 `right:0` ⇒ 左缩进 16、右到边）。 */
+    titleDivider: Boolean = false,
+    /** 条目**顶部**的 hairline（Vant `.van-collapse-item--border:after{top:0;left:16px;right:16px}`，
+     *  只在「非首个条目」且 `border` 为真时出现）。由调用点按序号传。 */
+    topDivider: Boolean = false,
     titleSlot: @Composable (() -> Unit)? = null,
     iconSlot: @Composable (() -> Unit)? = null,
     content: @Composable () -> Unit,
@@ -93,7 +119,11 @@ fun VanCollapseItem(
     val expanded = state?.activeNames?.contains(name) == true
     val showBorder = border && (state?.border != false)
 
-    Column(modifier.fillMaxWidth().background(c.bgCard)) {
+    Column(modifier.fillMaxWidth().background(itemColor ?: c.bgCard)) {
+        // Vant `.van-collapse-item--border:after{top:0;left:16px;right:16px}` —— 非首条目的顶部线
+        if (topDivider) {
+            Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(1.dp).background(c.border))
+        }
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
@@ -103,7 +133,7 @@ fun VanCollapseItem(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
                 ) { state?.toggle?.invoke(name) }
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(titlePadding ?: PaddingValues(horizontal = 16.dp, vertical = 12.dp)),
         ) {
             if (iconSlot != null) {
                 iconSlot()
@@ -118,8 +148,8 @@ fun VanCollapseItem(
                     title,
                     style = TextStyle(
                         color = if (disabled) c.textTertiary else c.textPrimary,
-                        fontSize = 14.sp,
-                        lineHeight = 24.sp,
+                        fontSize = vantDimens.fontSizeMd,
+                        lineHeight = vantDimens.cellLineHeight,
                         textAlign = TextAlign.Center,
                     ),
                     modifier = Modifier.weight(1f),
@@ -131,6 +161,11 @@ fun VanCollapseItem(
                 color = c.textTertiary,
             )
         }
+        // Vant `__title:after` 只在展开时显示（`__title--expanded:after{display:block}`）；
+        //   页面覆写 `right:0` ⇒ 左缩进 16dp、右到边。
+        if (titleDivider && expanded) {
+            Box(Modifier.fillMaxWidth().padding(start = 16.dp).height(1.dp).background(c.border))
+        }
         AnimatedVisibility(
             visible = expanded,
             enter = expandVertically(tween(200)),
@@ -139,14 +174,18 @@ fun VanCollapseItem(
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .background(c.bgCard)
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                    .background(contentColor ?: c.bgCard)
+                    .padding(contentPadding ?: PaddingValues(horizontal = 16.dp, vertical = 12.dp)),
             ) {
                 content()
             }
         }
+        // web `.van-collapse-item{padding-bottom:4px}` —— 分隔线**之前**的留白
+        if (contentBottomGap > 0.dp) Spacer(Modifier.height(contentBottomGap))
         if (showBorder) {
             Box(Modifier.fillMaxWidth().height(1.dp).background(c.border))
         }
+        // web `.van-collapse-item{margin-bottom:20px}` —— 分隔线**之后**的外边距
+        if (bottomSpacing > 0.dp) Spacer(Modifier.height(bottomSpacing))
     }
 }

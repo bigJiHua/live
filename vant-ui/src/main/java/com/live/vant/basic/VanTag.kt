@@ -19,6 +19,8 @@ import androidx.compose.ui.unit.sp
 import com.live.vant.icon.VanIcon
 import com.live.vant.theme.LocalVantColors
 import com.live.vant.theme.LocalVantDimens
+import com.live.vant.theme.baseOf
+import com.live.vant.theme.fontSp
 
 enum class VanTagType { Default, Primary, Success, Warning, Danger }
 enum class VanTagSize { Small, Medium, Large }
@@ -89,12 +91,12 @@ fun VanTag(
     ) {
         androidx.compose.foundation.text.BasicText(
             text,
-            style = TextStyle(color = fg, fontSize = fontSize, lineHeight = 16.sp),
+            style = TextStyle(color = fg, fontSize = fontSize, lineHeight = tokens.fontSp(16f)),
         )
         if (closeable) {
             VanIcon(
                 name = "cross",
-                size = fontSize,
+                size = tokens.baseOf(fontSize),
                 color = fg,
                 modifier = Modifier.padding(start = 2.dp).clickable { onClose?.invoke() },
             )

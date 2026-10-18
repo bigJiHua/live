@@ -18,16 +18,25 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.live.finance.data.model.FlowRow
 import com.live.finance.theme.LocalAppColors
+import com.live.finance.theme.scaledLineHeight
+import com.live.finance.theme.scaledSp
 import com.live.finance.ui.common.Money
 import com.live.finance.ui.common.MoneyColor
 import com.live.finance.ui.common.currencySymbol
 import com.live.finance.ui.common.isRepay
 
-/** 通用文本（Vant 字号/字重约定）。 */
+/**
+ * 通用文本（Vant 字号/字重约定）。
+ *
+ * [sizeSp] 传的是 **基准字号**（= web px 按 §7.9 提档后的值），实际渲染经 `scaledSp()` 叠加
+ * 设置页「文字大小」档位的偏移（**标准三档 = 现状 -2sp**，每档进退 1sp ⇒ 五档 = 现状），[lineHeight] 同幅偏移以免挤行。
+ * 旁路本函数直接写 `BasicText` 的地方请一律用 `com.live.finance.theme.scaledSp(Nf)` 取字号。
+ */
 @Composable
 fun FText(
     text: String,
@@ -35,7 +44,20 @@ fun FText(
     weight: FontWeight = FontWeight.Normal,
     color: Color,
     modifier: Modifier = Modifier,
-) = BasicText(text, modifier, TextStyle(color = color, fontSize = sizeSp.sp, fontWeight = weight))
+    maxLines: Int = Int.MAX_VALUE,
+    overflow: androidx.compose.ui.text.style.TextOverflow = androidx.compose.ui.text.style.TextOverflow.Clip,
+    lineHeight: TextUnit = TextUnit.Unspecified,
+    /** CSS `letter-spacing`（web 卡号 / 尾号胶囊用它，例：`.card-number{letter-spacing:2px}`）。 */
+    letterSpacing: TextUnit = TextUnit.Unspecified,
+) = BasicText(
+    text, modifier,
+    TextStyle(
+        color = color, fontSize = scaledSp(sizeSp), fontWeight = weight,
+        lineHeight = scaledLineHeight(lineHeight),
+        letterSpacing = letterSpacing,
+    ),
+    maxLines = maxLines, overflow = overflow,
+)
 
 /** 单个流水行（收入/支出）。 */
 @Composable
@@ -52,17 +74,17 @@ fun FlowItemRow(row: FlowRow, onClick: () -> Unit) {
     ) {
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                FText(if (repay) "信用卡还款" else row.categoryName, 15f, FontWeight.Medium,
+                FText(if (repay) "信用卡还款" else row.categoryName, 16f, FontWeight.Medium,
                     if (repay) colors.textTertiary else colors.textPrimary)
                 if (row.isTransfer) {
                     Box(
                         Modifier.padding(start = 6.dp).background(colors.primaryLight)
                             .padding(horizontal = 6.dp, vertical = 1.dp),
-                    ) { FText("转账", 10f, FontWeight.Normal, colors.primary) }
+                    ) { FText("转账", 12f, FontWeight.Normal, colors.primary) }
                 }
             }
             FText(
-                row.bankLabel, 11f, FontWeight.Normal, colors.textTertiary,
+                row.bankLabel, 12f, FontWeight.Normal, colors.textTertiary,
                 modifier = Modifier.padding(top = 2.dp).horizontalScroll(rememberScrollState()),
             )
         }
@@ -70,11 +92,11 @@ fun FlowItemRow(row: FlowRow, onClick: () -> Unit) {
             val sym = if (row.currency == "CNY") "" else currencySymbol(row.currency)
             FText(
                 Money.signed(row.amount, row.isIncome).let { if (sym.isEmpty()) it else "${if (row.isIncome) "+" else "-"}$sym${Money.format(row.amount)}" },
-                16f, FontWeight.SemiBold,
+                18f, FontWeight.SemiBold,
                 if (repay) colors.textTertiary else if (row.isIncome) MoneyColor.income else MoneyColor.expense,
             )
-            if (row.currency != "CNY") FText(row.currency, 10f, FontWeight.Normal, colors.textTertiary)
-            FText(row.time, 10f, FontWeight.Normal, colors.textTertiary)
+            if (row.currency != "CNY") FText(row.currency, 12f, FontWeight.Normal, colors.textTertiary)
+            FText(row.time, 12f, FontWeight.Normal, colors.textTertiary)
         }
     }
     Spacer(Modifier.height(0.5.dp))

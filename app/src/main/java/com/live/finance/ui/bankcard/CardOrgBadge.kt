@@ -133,6 +133,8 @@ private fun Mastercard(filled: Boolean) {
             "mastercard",
             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 2.dp),
             style = TextStyle(
+                // ⚠ 7sp **不参与** 7.9 的移动端字号提档：这是品牌 logo 的图形资产
+                // （80×50 画布上按 web CSS 精确排布），10 个 Bold 斜体字符提到 12sp 会撑出容器。
                 color = textColor, fontSize = 7.sp, fontWeight = FontWeight.Bold,
                 fontStyle = FontStyle.Italic, letterSpacing = 1.sp,
                 platformStyle = PlatformTextStyle(includeFontPadding = false),

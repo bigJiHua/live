@@ -16,7 +16,6 @@ data class SalaryMonthDay(
     val parttimeIncomes: List<Double> = emptyList(),
 ) {
     val parttimeTotal: Double get() = parttimeIncomes.sum()
-    val parttimeCount: Int get() = parttimeIncomes.count { it != 0.0 }
 }
 
 /** 月度统计（对应 web /work/salary/month）。 */

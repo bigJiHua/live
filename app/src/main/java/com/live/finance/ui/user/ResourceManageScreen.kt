@@ -16,19 +16,18 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import com.live.finance.core.nav.Routes
 import com.live.finance.theme.LocalAppColors
+import com.live.finance.theme.VanGrayFixed
 import com.live.finance.ui.common.ScreenScaffold
 import com.live.finance.ui.flow.FText
 import com.live.vant.icon.VanIcon
 
 /** 页面里硬编码的箭头色（web `ResourceManage.vue` 的 `#right-icon` 用 `color="#969799"`）。 */
-private val MANAGE_ARROW = Color(0xFF969799)
 
 /**
  * 文件资源管理（资源类型入口）—— 1:1 复刻 web `src/views/User/resource/ResourceManage.vue`：
@@ -41,14 +40,9 @@ fun ResourceManageScreen(nav: NavHostController) {
 
     ScreenScaffold { inner ->
         Column(inner.verticalScroll(rememberScrollState())) {
-            // 页面标题（web 在全局 nav-bar 上；原生沿用各页自绘标题的约定）
-            FText(
-                "文件资源管理", 18f, FontWeight.Bold, colors.textPrimary,
-                Modifier.padding(16.dp),
-            )
             Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 16.dp)) {
                 FText(
-                    "资源类型", 13f, FontWeight.Medium, colors.textTertiary,
+                    "资源类型", 14f, FontWeight.Medium, colors.textTertiary,
                     Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
                 )
                 Column(
@@ -87,11 +81,11 @@ private fun ResourceTypeCell(title: String, label: String, icon: String, onClick
             modifier = Modifier.padding(end = 10.dp),
         )
         Column(Modifier.weight(1f)) {
-            FText(title, 14f, FontWeight.Normal, colors.textPrimary)
+            FText(title, 16f, FontWeight.Normal, colors.textPrimary)
             Spacer(Modifier.height(4.dp)) // .app-cell__label{ margin-top: 4px }
             FText(label, 12f, FontWeight.Normal, colors.textTertiary)
         }
-        VanIcon(name = "arrow", size = 16.sp, color = MANAGE_ARROW)
+        VanIcon(name = "arrow", size = 16.sp, color = VanGrayFixed)
     }
     Box(Modifier.fillMaxWidth().height(1.dp).background(colors.border))
 }

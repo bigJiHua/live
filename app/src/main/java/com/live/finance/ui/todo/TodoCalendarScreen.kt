@@ -3,11 +3,13 @@ package com.live.finance.ui.todo
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -25,6 +27,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,11 +44,16 @@ import androidx.navigation.NavHostController
 import com.live.finance.App
 import com.live.finance.core.nav.Routes
 import com.live.finance.core.net.ApiResult
+import com.live.finance.core.net.failMessage
 import com.live.finance.data.model.NewTodo
 import com.live.finance.data.model.Todo
 import com.live.finance.data.model.TodoCalendarMonth
 import com.live.finance.theme.LocalAppColors
+import com.live.finance.theme.vanBlue
+import com.live.finance.theme.vanGreen
 import com.live.finance.theme.LocalAppTokens
+import com.live.finance.theme.VanPurpleFixed
+import com.live.finance.theme.scaledSp
 import com.live.finance.ui.common.AppButton
 import com.live.finance.ui.common.AppButtonSize
 import com.live.finance.ui.common.AppButtonType
@@ -63,6 +71,8 @@ import com.live.vant.feedback.VanActionSheet
 import com.live.vant.feedback.VanConfirmDialog
 import com.live.vant.feedback.VanPopup
 import com.live.vant.feedback.VanPopupPosition
+import com.live.vant.feedback.VanPullRefresh
+import com.live.vant.feedback.rememberVanPullRefreshState
 import com.live.vant.form.VanPicker
 import com.live.vant.form.VanPickerOption
 import com.live.vant.form.VanRadio
@@ -73,14 +83,14 @@ import com.live.vant.icon.VanIcon
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
+import com.live.finance.core.net.showFail
+import com.live.vant.feedback.VanToastType
 
 /** 紫色（web `--van-purple`，用于「事件提醒」标签）。 */
-private val VanPurple = Color(0xFF7232DD)
-/** 蓝色（web `--van-blue`，用于「计划」分区图标与分期「待入账」）。 */
-private val VanBlue = Color(0xFF1989FA)
-private val VanOrange = Color(0xFFFF976A)
-private val VanGreen = Color(0xFF07C160)
-private val VanRed = Color(0xFFEE0A24)
+// 已废弃：红色改走 `colors.danger`（`--van-danger-color` 在 `:root`）、
+// 橙色改走 `colors.warning`（`--van-warning-color` 在 `:root`）、
+// 蓝色改走 `vanBlue()`（`--van-blue` 只在深色块，浅色 #1989fa）—— web `Todo/Calendar.vue:94/731/1240`。
+
 
 /** 新增/编辑事件表单（web `newEvent` / `editEvent`）。 */
 private data class EventForm(
@@ -114,15 +124,17 @@ fun TodoCalendarScreen(nav: NavHostController) {
     val tokens = LocalAppTokens.current
     // web `.header .van-icon{color: var(--van-green,#07c160)}`：浅色 = Vant 默认 #07c160，
     // **深色**被 style.css 重定向到 `--theme-success`（与 SALARY_GREEN 同款规则）
-    val headerGreen = if (tokens.isDark) colors.success else VanGreen
+    val headerGreen = vanGreen()
     val toast = LocalVanToastController.current
     val graph = App.of(LocalContext.current).graph
     val scope = rememberCoroutineScope()
 
     val today = remember { LocalDate.now() }
-    var year by remember { mutableIntStateOf(today.year) }
-    var month by remember { mutableIntStateOf(today.monthValue) }        // 1-12
-    var selectedDate by remember { mutableStateOf(today.toString()) }
+    // web 该页非 keep-alive，但组件被缓存 ⇒ 从「管理固定支出 / 账单列表」返回时年月与选中日**保留**；
+    // 原生用 rememberSaveable 才能等价（remember 会在返回时把年月重置回今天）。
+    var year by rememberSaveable { mutableIntStateOf(today.year) }
+    var month by rememberSaveable { mutableIntStateOf(today.monthValue) }        // 1-12
+    var selectedDate by rememberSaveable { mutableStateOf(today.toString()) }
     var showMonthPicker by remember { mutableStateOf(false) }
     var showAirplane by remember { mutableStateOf(false) }               // 默认隐藏小飞机
 
@@ -150,7 +162,10 @@ fun TodoCalendarScreen(nav: NavHostController) {
 
     suspend fun loadSelectedDateEvents() {
         loadingEvents = true
-        val list = (graph.todo.listByDate(selectedDate) as? ApiResult.Ok)?.data ?: emptyList()
+        val res = graph.todo.listByDate(selectedDate)
+        val list = (res as? ApiResult.Ok)?.data ?: emptyList()
+        // web `loadSelectedDateEvents` 的 catch → showToast("加载事件失败")
+        if (res !is ApiResult.Ok) toast.show("加载事件失败", VanToastType.Fail)
         // web：二次过滤 happen_date，再把「当日固定支出/分期事件」并进来
         selectedEvents = list.filter { it.happenDate == selectedDate } + recurringOfDay(selectedDate)
         loadingEvents = false
@@ -158,7 +173,10 @@ fun TodoCalendarScreen(nav: NavHostController) {
 
     suspend fun reloadAll() {
         loading = true
-        calendarMonth = (graph.todo.calendarMonth(year, month) as? ApiResult.Ok)?.data ?: TodoCalendarMonth()
+        val calRes = graph.todo.calendarMonth(year, month)
+        calendarMonth = (calRes as? ApiResult.Ok)?.data ?: TodoCalendarMonth()
+        // web `loadCalendarMonth` 的 catch → showToast("加载日历失败")
+        if (calRes !is ApiResult.Ok) toast.show("加载日历失败", VanToastType.Fail)
         reminders = (graph.todo.reminders(year, month) as? ApiResult.Ok)?.data ?: emptyList()
         loading = false
         loadSelectedDateEvents()
@@ -201,137 +219,176 @@ fun TodoCalendarScreen(nav: NavHostController) {
     val installmentEvents = selectedEvents.filter { it.categoryId == "installment" }
     val otherEvents = selectedEvents.filter { it.categoryId != "installment" }
 
-    fun reloadFromUi() = scope.launch { reloadAll() }
+    // ── 下拉刷新（web `<van-pull-refresh v-model="refreshing" @refresh="loadSelectedDateEvents">`）──
+    // ⚠ 与 web 的唯一偏差：web 只把「事件列表」包进 pull-refresh（下拉时页头+日历不动）；
+    //   APP 的 VanPullRefresh 本体是 `Box(fillMaxSize().clipToBounds())`，**必须有界高度**，
+    //   而列表是 wrap-content 嵌在整页 verticalScroll 里（子级约束 maxHeight = Infinity）⇒ 只能整页包，
+    //   与项目其它 11 个列表页（DiaryListScreen / FlowListScreen …）同一模式。
+    //   折中：isChildAtTop 限定「页面滚到顶」才触发 —— web 也是 window.scrollTop === 0 才触发，行为一致。
+    val scroll = rememberScrollState()
+    val refreshState = rememberVanPullRefreshState()
 
     // ── 页头 / 日历 / 事件列表 ──
     ScreenScaffold { inner ->
-        Column(inner.verticalScroll(rememberScrollState()).background(colors.bgPage)) {
-            // ① 页头（web .header：padding 16、上下月图标 18px，上一月绿色、下一月三级色）
-            Row(
-                Modifier.fillMaxWidth().background(colors.bgCard).padding(16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                VanIcon(
-                    name = "arrow-left", size = 18.sp, color = headerGreen,
-                    modifier = Modifier.padding(6.dp), onClick = { prevMonth(year, month) { y, m -> year = y; month = m } },
-                )
+        VanPullRefresh(
+            state = refreshState,
+            isChildAtTop = { scroll.value == 0 },
+            onRefresh = {
+                scope.launch {
+                    loadSelectedDateEvents()
+                    refreshState.finishRefresh()
+                }
+            },
+            // ScreenScaffold 交给 content 的 `inner` 本身就是 `Modifier.fillMaxSize()`，
+            // 且它的根 Box 已经铺好 bgPage ⇒ 不必再外套一层 Box / 再设一次背景
+            // （与 RecurringListScreen / DiaryListScreen 等既有列表页同一写法）。
+            modifier = inner,
+        ) {
+            Column(Modifier.fillMaxSize().verticalScroll(scroll)) {
+                // ① 页头（web .header：padding 16、上下月图标 18px，上一月绿色、下一月三级色）
                 Row(
-                    modifier = Modifier.clickable { showMonthPicker = true },
+                    Modifier.fillMaxWidth().background(colors.bgCard).padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    FText("${year}年${month}月", 18f, FontWeight.SemiBold, colors.textPrimary)
-                    Spacer(Modifier.width(4.dp))
-                    VanIcon(name = "arrow-down", size = 18.sp, color = headerGreen)
-                }
-                VanIcon(
-                    name = "arrow", size = 18.sp, color = colors.textTertiary,
-                    modifier = Modifier.padding(6.dp), onClick = { nextMonth(year, month) { y, m -> year = y; month = m } },
-                )
-            }
-
-            // ② 日历（web <CalendarGrid variant="todo" show-header=false card=false collapsible>）
-            Box(Modifier.fillMaxWidth().background(colors.bgCard)) {
-                if (loading) {
-                    Box(Modifier.fillMaxWidth().height(300.dp), contentAlignment = Alignment.Center) {
-                        VanLoading(size = 32.sp, text = "加载中...")
+                    VanIcon(
+                        name = "arrow-left", size = 18.sp, color = headerGreen,
+                        modifier = Modifier.padding(6.dp), onClick = { prevMonth(year, month) { y, m -> year = y; month = m } },
+                    )
+                    Row(
+                        modifier = Modifier.clickable { showMonthPicker = true },
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        FText("${year}年${month}月", 18f, FontWeight.SemiBold, colors.textPrimary)
+                        Spacer(Modifier.width(4.dp))
+                        VanIcon(name = "arrow-down", size = 18.sp, color = headerGreen)
                     }
-                } else {
-                    TodoCalendarGrid(
-                        year = year,
-                        month = month,
-                        selectedDate = selectedDate,
-                        dataset = dataset,
-                        reminderBanner = banner,
-                        onSelect = { selectedDate = it },
-                        onGoToday = {
-                            year = today.year
-                            month = today.monthValue
-                            selectedDate = today.toString()
-                            reloadFromUi()
-                        },
-                        reminderAction = {
-                            VanIcon(
-                                name = if (showAirplane) "eye-o" else "closed-eye",
-                                size = 16.sp, color = tokens.primary,
-                                modifier = Modifier.padding(2.dp),
-                                onClick = { showAirplane = !showAirplane },
-                            )
-                        },
+                    VanIcon(
+                        name = "arrow", size = 18.sp, color = colors.textTertiary,
+                        modifier = Modifier.padding(6.dp), onClick = { nextMonth(year, month) { y, m -> year = y; month = m } },
                     )
                 }
-            }
 
-            // ③ 事件列表（web .event-list：radius 16 顶、padding 16、margin-top 8）
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(top = 8.dp)
-                    .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
-                    .background(colors.bgCard)
-                    .padding(16.dp)
-                    .heightIn(min = 200.dp),
-            ) {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    FText(formatSelectedDate(selectedDate), 15f, FontWeight.SemiBold, colors.textPrimary)
-                    if (selectedEvents.isNotEmpty()) {
-                        Spacer(Modifier.width(8.dp))
-                        FText("${selectedEvents.size}个计划", 13f, FontWeight.Normal, colors.textTertiary)
-                    }
-                    Spacer(Modifier.weight(1f))
-                    // web .add-btn：主色描边胶囊 + 8% 主色底 + plus
-                    Row(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(tokens.primary.copy(alpha = 0.08f))
-                            .border(1.dp, tokens.primary, RoundedCornerShape(16.dp))
-                            .clickable {
-                                form = EventForm()
-                                showAddPopup = true
-                            }
-                            .padding(horizontal = 12.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(3.dp),
-                    ) {
-                        VanIcon(name = "plus", size = 13.sp, color = tokens.primary)
-                        FText("添加", 13f, FontWeight.SemiBold, tokens.primary)
+                // ② 日历（web <CalendarGrid variant="todo" show-header=false card=false collapsible>）
+                Box(Modifier.fillMaxWidth().background(colors.bgCard)) {
+                    if (loading) {
+                        Box(Modifier.fillMaxWidth().height(300.dp), contentAlignment = Alignment.Center) {
+                            VanLoading(size = 32.sp, text = "加载中...")
+                        }
+                    } else {
+                        TodoCalendarGrid(
+                            year = year,
+                            month = month,
+                            selectedDate = selectedDate,
+                            dataset = dataset,
+                            reminderBanner = banner,
+                            onSelect = { selectedDate = it },
+                            onGoToday = {
+                                year = today.year
+                                month = today.monthValue
+                                selectedDate = today.toString()
+                                // ⚠ 这里**不能**调 reloadAll()（web `goToday` 也只刷当日事件）：
+                                //   reloadAll 会把 loading 置 true ⇒ 网格被「加载中」替换后重新挂载，
+                                //   表现为整个页面刷新，且折叠态 / 提醒横幅折叠态 / 滚动位置一并复位。
+                                //   当日事件由 LaunchedEffect(selectedDate) 刷；跨月的整月数据由
+                                //   LaunchedEffect(year, month) → reloadAll() 刷（它末尾也会刷一次当日事件）。
+                            },
+                            reminderAction = {
+                                // ⚠ `VanIcon` 内部是 `modifier.then(clickable)` ⇒ 传进去的 padding 在 clickable **外面**，
+                                //   点了 padding 不会触发。要放大点击区必须**外包一个 Box 自己 clickable**。
+                                //   真机反馈「眼睛太小、点击面太小易误触」⇒ 32dp 点击盒 + 18.sp 图标（与铃铛同大）。
+                                Box(
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .clickable(
+                                            interactionSource = remember { MutableInteractionSource() },
+                                            indication = null,
+                                        ) { showAirplane = !showAirplane },
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                VanIcon(
+                                    name = if (showAirplane) "eye-o" else "closed-eye",
+                                    // 铃铛（TodoCalendarGrid 提醒条左侧）是 18.sp，但 `closed-eye` 字形本身**扁且小**，
+                                    // 同写 18.sp 时视觉上明显比铃铛/箭头小一截 ⇒ 这里给到 20.sp 做视觉配平。
+                                    size = 20.sp, color = tokens.primary,
+                                )
+                                }
+                            },
+                        )
                     }
                 }
-                Spacer(Modifier.height(16.dp))
 
-                when {
-                    loadingEvents -> Box(Modifier.fillMaxWidth().padding(vertical = 20.dp), contentAlignment = Alignment.Center) {
-                        VanLoading(size = 24.sp, text = "加载中...")
+                // ③ 事件列表（web .event-list：radius 16 顶、padding 16、margin-top 8）
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp)
+                        .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+                        .background(colors.bgCard)
+                        .padding(16.dp)
+                        .heightIn(min = 200.dp),
+                ) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        FText(formatSelectedDate(selectedDate), 16f, FontWeight.SemiBold, colors.textPrimary)
+                        if (selectedEvents.isNotEmpty()) {
+                            Spacer(Modifier.width(8.dp))
+                            FText("${selectedEvents.size}个计划", 14f, FontWeight.Normal, colors.textTertiary)
+                        }
+                        Spacer(Modifier.weight(1f))
+                        // web .add-btn：主色描边胶囊 + 8% 主色底 + plus
+                        Row(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(tokens.primary.copy(alpha = 0.08f))
+                                .border(1.dp, tokens.primary, RoundedCornerShape(16.dp))
+                                .clickable {
+                                    form = EventForm()
+                                    showAddPopup = true
+                                }
+                                .padding(horizontal = 12.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(3.dp),
+                        ) {
+                            VanIcon(name = "plus", size = 13.sp, color = tokens.primary)
+                            FText("添加", 14f, FontWeight.SemiBold, tokens.primary)
+                        }
                     }
-                    selectedEvents.isEmpty() -> VanEmpty(description = "暂无计划", image = "search")
-                    else -> {
-                        // 消费分期分区
-                        if (installmentEvents.isNotEmpty()) {
-                            Column(Modifier.fillMaxWidth().padding(bottom = 14.dp)) {
-                                SectionHeader("bill-o", VanRed, "消费分期")
-                                installmentEvents.forEach { e ->
-                                    InstallmentItem(event = e) {
-                                        if (nav.graph.findNode(Routes.CREDIT_CENTER) != null) nav.navigate(Routes.CREDIT_CENTER)
-                                        else toast.show("该页面尚未实现")
+                    Spacer(Modifier.height(16.dp))
+
+                    when {
+                        loadingEvents -> Box(Modifier.fillMaxWidth().padding(vertical = 20.dp), contentAlignment = Alignment.Center) {
+                            VanLoading(size = 24.sp, text = "加载中...")
+                        }
+                        selectedEvents.isEmpty() -> VanEmpty(description = "暂无计划", image = "search")
+                        else -> {
+                            // 消费分期分区
+                            if (installmentEvents.isNotEmpty()) {
+                                Column(Modifier.fillMaxWidth().padding(bottom = 14.dp)) {
+                                    SectionHeader("bill-o", colors.danger, "消费分期")
+                                    installmentEvents.forEach { e ->
+                                        InstallmentItem(event = e) {
+                                            if (nav.graph.findNode(Routes.CREDIT_CENTER) != null) nav.navigate(Routes.CREDIT_CENTER)
+                                            else toast.show("该页面尚未实现")
+                                        }
+                                    }
+                                }
+                            }
+                            // 计划分区
+                            if (otherEvents.isNotEmpty()) {
+                                Column(Modifier.fillMaxWidth().padding(bottom = 14.dp)) {
+                                    if (installmentEvents.isNotEmpty()) SectionHeader("todo-list-o", vanBlue(), "计划")
+                                    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                        otherEvents.forEach { e ->
+                                            OtherEventItem(event = e, onClick = { actionEvent = e })
+                                        }
                                     }
                                 }
                             }
                         }
-                        // 计划分区
-                        if (otherEvents.isNotEmpty()) {
-                            Column(Modifier.fillMaxWidth().padding(bottom = 14.dp)) {
-                                if (installmentEvents.isNotEmpty()) SectionHeader("todo-list-o", VanBlue, "计划")
-                                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                    otherEvents.forEach { e ->
-                                        OtherEventItem(event = e, onClick = { actionEvent = e })
-                                    }
-                                }
-                            }
-                        }
                     }
                 }
+                Spacer(Modifier.height(120.dp))   // web .page-calendar { padding-bottom: 120px }
             }
-            Spacer(Modifier.height(120.dp))   // web .page-calendar { padding-bottom: 120px }
         }
     }
 
@@ -386,8 +443,8 @@ fun TodoCalendarScreen(nav: NavHostController) {
                                 showAddPopup = false
                                 reloadAll()
                             }
-                            is ApiResult.Fail -> toast.show(r.message.ifBlank { "添加失败" })
-                            else -> toast.show("添加失败")
+                            is ApiResult.Fail -> toast.show(r.message.ifBlank { "添加失败" }, VanToastType.Fail)
+                            else -> toast.showFail(r, "添加失败")
                         }
                     }
                 }
@@ -423,8 +480,8 @@ fun TodoCalendarScreen(nav: NavHostController) {
                                 showEditPopup = false
                                 reloadAll()
                             }
-                            is ApiResult.Fail -> toast.show(r.message.ifBlank { "保存失败" })
-                            else -> toast.show("保存失败")
+                            is ApiResult.Fail -> toast.show(r.message.ifBlank { "保存失败" }, VanToastType.Fail)
+                            else -> toast.showFail(r, "保存失败")
                         }
                     }
                 }
@@ -490,8 +547,8 @@ fun TodoCalendarScreen(nav: NavHostController) {
                                 toast.success("操作成功")
                                 reloadAll()
                             }
-                            is ApiResult.Fail -> toast.show(r.message.ifBlank { "操作失败" })
-                            else -> toast.show("操作失败")
+                            is ApiResult.Fail -> toast.show(r.message.ifBlank { "操作失败" }, VanToastType.Fail)
+                            else -> toast.showFail(r, "操作失败")
                         }
                     }
                 }
@@ -521,8 +578,8 @@ fun TodoCalendarScreen(nav: NavHostController) {
                                     toast.success("操作成功")
                                     reloadAll()
                                 }
-                                is ApiResult.Fail -> toast.show(r.message.ifBlank { "操作失败" })
-                                else -> toast.show("操作失败")
+                                is ApiResult.Fail -> toast.show(r.message.ifBlank { "操作失败" }, VanToastType.Fail)
+                                else -> toast.showFail(r, "操作失败")
                             }
                         }
                     }
@@ -539,7 +596,7 @@ fun TodoCalendarScreen(nav: NavHostController) {
                     )
                     showEditPopup = true
                 }
-                options += ActionOption("删除", color = VanRed) {
+                options += ActionOption("删除", color = colors.danger) {
                     pendingConfirm = PendingConfirm("确认删除", "确定要删除这条计划吗？") {
                         scope.launch {
                             val r = graph.todo.delete(event.id)
@@ -548,8 +605,8 @@ fun TodoCalendarScreen(nav: NavHostController) {
                                     toast.success("删除成功")
                                     reloadAll()
                                 }
-                                is ApiResult.Fail -> toast.show(r.message.ifBlank { "删除失败" })
-                                else -> toast.show("删除失败")
+                                is ApiResult.Fail -> toast.show(r.message.ifBlank { "删除失败" }, VanToastType.Fail)
+                                else -> toast.showFail(r, "删除失败")
                             }
                         }
                     }
@@ -647,7 +704,7 @@ private fun SectionHeader(icon: String, iconColor: Color, text: String) {
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         VanIcon(name = icon, size = 16.sp, color = iconColor)
-        FText(text, 14f, FontWeight.SemiBold, LocalAppColors.current.textPrimary)
+        FText(text, 16f, FontWeight.SemiBold, LocalAppColors.current.textPrimary)
     }
 }
 
@@ -665,10 +722,10 @@ private fun InstallmentItem(event: Todo, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // web `.inst-item { border-left: 3px solid --van-danger-color; padding-left: 9px }`
-        Box(Modifier.width(3.dp).height(34.dp).background(VanRed, RoundedCornerShape(2.dp)))
+        Box(Modifier.width(3.dp).height(34.dp).background(colors.danger, RoundedCornerShape(2.dp)))
         Spacer(Modifier.width(9.dp))
         Column(Modifier.weight(1f)) {
-            FText(event.content, 14f, FontWeight.Normal, colors.textPrimary)
+            FText(event.content, 16f, FontWeight.Normal, colors.textPrimary)
             Spacer(Modifier.height(6.dp))   // web .event-meta { margin-top: 6px }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 VanTag(text = "消费分期", type = VanTagType.Danger, size = VanTagSize.Small)
@@ -686,18 +743,21 @@ private fun InstStatusTag(event: Todo) {
     val colors = LocalAppColors.current
     val (text, fg, bg) = when {
         event.isVoid -> Triple("超过期限", colors.textTertiary, Color(0x0D000000))
-        event.monthStatus == "entered" -> Triple("已入账", VanGreen, VanGreen.copy(alpha = 0.1f))
-        event.monthOverdue -> Triple("逾期未还", VanRed, VanRed.copy(alpha = 0.1f))
-        event.monthStatus == "entering" -> Triple("入账中", VanOrange, VanOrange.copy(alpha = 0.12f))
-        event.monthStatus == "done" -> Triple("已还", VanGreen, VanGreen.copy(alpha = 0.1f))
-        else -> Triple("待入账", VanBlue, VanBlue.copy(alpha = 0.1f))
+        // web `Todo/Calendar.vue:1240-1245` `.inst-tag.*`（文字色全是 **`:root` 里的 Vant 官方别名**：
+        // 两模式都跟主题；只有 `pending` 用的是业务别名 `--van-blue`，浅色 #1989fa / 深色 --theme-primary）。
+        // 背景色全是页面里写死的**裸 rgba**。
+        event.monthStatus == "entered" -> Triple("已入账", colors.success, Color(0x1A07C160))
+        event.monthOverdue -> Triple("逾期未还", colors.danger, Color(0x1AEE0A24))
+        event.monthStatus == "entering" -> Triple("入账中", colors.warning, Color(0x1FFF976A))
+        event.monthStatus == "done" -> Triple("已还", colors.success, Color(0x1A07C160))
+        else -> Triple("待入账", vanBlue(), Color(0x1A1989FA))
     }
     Box(
         Modifier
             .background(bg, RoundedCornerShape(4.dp))
             .padding(horizontal = 6.dp, vertical = 1.dp),
     ) {
-        FText(text, 11f, FontWeight.Medium, fg)
+        FText(text, 12f, FontWeight.Medium, fg)
     }
 }
 
@@ -722,19 +782,19 @@ private fun OtherEventItem(event: Todo, onClick: () -> Unit) {
                     event.content,
                     style = TextStyle(
                         color = colors.textPrimary,
-                        fontSize = 14.sp,
+                        fontSize = scaledSp(16f),
                         textDecoration = TextDecoration.LineThrough,
                     ),
                 )
             } else {
-                FText(event.content, 14f, FontWeight.Normal, colors.textPrimary)
+                FText(event.content, 16f, FontWeight.Normal, colors.textPrimary)
             }
             Spacer(Modifier.height(6.dp))
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (event.source == "recurring" && event.amount > 0) {
                     VanTag(text = "固定支出", type = VanTagType.Warning, size = VanTagSize.Small)
                 } else if (event.source == "recurring") {
-                    VanTag(text = "事件提醒", size = VanTagSize.Small, color = VanPurple, textColor = Color.White)
+                    VanTag(text = "事件提醒", size = VanTagSize.Small, color = VanPurpleFixed, textColor = Color.White)
                 }
                 if (event.eventType.isNotBlank() && event.eventType != "fixed_expense") {
                     VanTag(text = eventTypeName(event.eventType), type = VanTagType.Primary, size = VanTagSize.Small)
@@ -799,8 +859,8 @@ private fun EventFormPopup(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                FText(title, 16f, FontWeight.SemiBold, colors.textPrimary)
-                if (subtitle != null) FText(subtitle, 14f, FontWeight.Normal, colors.textSecondary)
+                FText(title, 18f, FontWeight.SemiBold, colors.textPrimary)
+                if (subtitle != null) FText(subtitle, 16f, FontWeight.Normal, colors.textSecondary)
             }
             AppField(
                 value = form.content,
@@ -814,7 +874,7 @@ private fun EventFormPopup(
                         Box(
                             Modifier
                                 .border(1.dp, tokens.danger, RoundedCornerShape(4.dp))
-                                .background(VanRed.copy(alpha = 0.08f), RoundedCornerShape(4.dp))
+                                .background(colors.danger.copy(alpha = 0.08f), RoundedCornerShape(4.dp))
                                 .padding(horizontal = 8.dp),
                         ) { FText("必填", 12f, FontWeight.SemiBold, tokens.danger) }
                     }
@@ -861,7 +921,7 @@ private fun EventFormPopup(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    FText("提前天数", 13f, FontWeight.Normal, colors.textSecondary)
+                    FText("提前天数", 14f, FontWeight.Normal, colors.textSecondary)
                     VanStepper(
                         value = form.remindDays,
                         onValueChange = { onFormChange(form.copy(remindDays = it)) },
@@ -898,7 +958,7 @@ private fun EventFormPopup(
 private fun RadioField(label: String, content: @Composable () -> Unit) {
     val colors = LocalAppColors.current
     Column(Modifier.fillMaxWidth().background(colors.bgCard).padding(horizontal = 16.dp, vertical = 10.dp)) {
-        FText(label, 13f, FontWeight.Normal, colors.textSecondary)
+        FText(label, 14f, FontWeight.Normal, colors.textSecondary)
         Spacer(Modifier.height(6.dp))
         content()
     }
@@ -914,7 +974,7 @@ private fun SwitchField(label: String, checked: Boolean, onChange: (Boolean) -> 
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        FText(label, 13f, FontWeight.Normal, colors.textSecondary)
+        FText(label, 14f, FontWeight.Normal, colors.textSecondary)
         VanSwitch(checked = checked, onCheckedChange = onChange)
     }
     Box(Modifier.fillMaxWidth().height(1.dp).background(colors.border))

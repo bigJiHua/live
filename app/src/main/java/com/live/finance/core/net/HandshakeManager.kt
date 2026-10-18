@@ -40,23 +40,36 @@ class HandshakeManager(
         if (hasKey()) return@withLock Result.success(aesKey!!)
         runCatching {
             withContext(Dispatchers.IO) {
-                val url = AppConfig.url(AppConfig.HANDSHAKE_PATH) + "?fp=" + device.fp
-                val req = Request.Builder().url(url).get().apply {
-                    device.headers().forEach { (k, v) -> header(k, v) }
-                }.build()
-                client.newCall(req).execute().use { resp ->
-                    val text = resp.body?.string() ?: ""
-                    val obj = runCatching { gson.fromJson(text, JsonObject::class.java) }
-                        .getOrNull() ?: JsonObject()
-                    if (obj.get("status")?.asInt == 200) {
-                        val k = obj.get("key")?.asString ?: error("握手未返回 key")
-                        aesKey = k
-                        rsaPublicKey = obj.get("rsaPublicKey")?.asString
-                        expireAt = System.currentTimeMillis() + 2 * 60 * 60 * 1000L
-                        k
-                    } else {
-                        error("Handshake Failed: ${obj.get("message")?.asString}")
+                // 🔄 P2-18（2026-10-08）：握手通道 8401 一次性自愈。
+                //   sendOnce() 每次重建请求 ⇒ 全新 nonce（device.headers() 的约定）。
+                //   被判重放时重发一次；仍失败才 error（对齐 web handshake.js 的 axiosWithNonceRetry）。
+                fun sendOnce(): JsonObject {
+                    // 🛡 2026-10-17：构建期无默认站点；未接入时 AppConfig.url() 会拼出相对路径，
+                    //   Request.Builder().url(...) 抛 IllegalArgumentException。
+                    //   这里显式失败（外层 runCatching 会吞掉并 invalidate），避免无意义的重试。
+                    if (!AppConfig.hasSite) error("尚未接入站点")
+                    val url = AppConfig.url(AppConfig.HANDSHAKE_PATH) + "?fp=" + device.fp
+                    val req = Request.Builder().url(url).get().apply {
+                        device.headers().forEach { (k, v) -> header(k, v) }
+                    }.build()
+                    return client.newCall(req).execute().use { resp ->
+                        val text = resp.body?.string() ?: ""
+                        runCatching { gson.fromJson(text, JsonObject::class.java) }
+                            .getOrNull() ?: JsonObject()
                     }
+                }
+                var obj = sendOnce()
+                if (obj.get("code")?.takeIf { !it.isJsonNull }?.asInt == AppConfig.Pin.NONCE_REPLAY) {
+                    obj = sendOnce()
+                }
+                if (obj.get("status")?.asInt == 200) {
+                    val k = obj.get("key")?.asString ?: error("握手未返回 key")
+                    aesKey = k
+                    rsaPublicKey = obj.get("rsaPublicKey")?.asString
+                    expireAt = System.currentTimeMillis() + 2 * 60 * 60 * 1000L
+                    k
+                } else {
+                    error("Handshake Failed: ${obj.get("message")?.asString}")
                 }
             }
         }.onFailure { invalidate() }

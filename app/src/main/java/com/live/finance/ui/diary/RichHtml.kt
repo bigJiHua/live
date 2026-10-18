@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
@@ -29,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.live.finance.data.model.htmlToPlain
 import com.live.finance.theme.LocalAppColors
+import com.live.finance.theme.LocalFontOffsetSp
 import com.live.finance.ui.flow.FText
 
 /**
@@ -71,7 +73,7 @@ private val RE_LINE_HEIGHT = Regex("""line-height\s*:\s*([0-9.]+)""", RegexOptio
 private val RE_NUM_ENTITY = Regex("""&#(x?[0-9a-fA-F]+);""")
 
 /** HTML → 渲染块列表（纯函数，便于单测/预览）。 */
-internal fun parseRichHtml(html: String): List<RichBlock> {
+internal fun parseRichHtml(html: String, fontOff: Float = 0f): List<RichBlock> {
     if (html.isBlank()) return emptyList()
 
     val out = mutableListOf<RichBlock>()
@@ -190,7 +192,7 @@ internal fun parseRichHtml(html: String): List<RichBlock> {
             !closing && name == "span" -> {
                 val px = RE_FONT_SIZE.find(attrs)?.groupValues?.get(1)?.toFloatOrNull()
                 val lh = RE_LINE_HEIGHT.find(attrs)?.groupValues?.get(1)?.toFloatOrNull()?.takeIf { it in 0.8f..3f }
-                if (px != null) pushInline(name, SpanStyle(fontSize = px.sp)) else if (cur == null && lh != null) begin(RichBlockKind.Para, lh = lh)
+                if (px != null) pushInline(name, SpanStyle(fontSize = (px + fontOff).sp)) else if (cur == null && lh != null) begin(RichBlockKind.Para, lh = lh)
             }
             closing && name == "span" -> popInline(name)
 
@@ -293,7 +295,10 @@ fun RichContent(
     paraGap: Dp = 8.dp,
 ) {
     val colors = LocalAppColors.current
-    val blocks = remember(html) { parseRichHtml(html) }
+    // 档位偏移只在这里叠一次：下面各块的字号都由 [bodySp] 按比例派生，勿再各自加
+    val fontOff = LocalFontOffsetSp.current
+    val bodySp = baseSizeSp + fontOff
+    val blocks = remember(html, fontOff) { parseRichHtml(html, fontOff) }
     if (blocks.isEmpty()) {
         val plain = remember(html) { htmlToPlain(html) }
         if (plain.isNotEmpty()) FText(plain, baseSizeSp, FontWeight.Normal, colors.textPrimary, modifier)
@@ -323,8 +328,8 @@ fun RichContent(
                             b.text,
                             style = TextStyle(
                                 color = colors.textSecondary,
-                                fontSize = baseSizeSp.sp,
-                                lineHeight = (baseSizeSp * 1.6f).sp,
+                                fontSize = bodySp.sp,
+                                lineHeight = (bodySp * 1.6f).sp,
                             ),
                         )
                     }
@@ -342,8 +347,8 @@ fun RichContent(
                             b.text.text,
                             style = TextStyle(
                                 color = colors.textPrimary,
-                                fontSize = (baseSizeSp * 0.92f).sp,
-                                lineHeight = (baseSizeSp * 0.92f * 1.5f).sp,
+                                fontSize = (bodySp * 0.92f).sp,
+                                lineHeight = (bodySp * 0.92f * 1.5f).sp,
                                 fontFamily = FontFamily.Monospace,
                             ),
                         )
@@ -357,7 +362,7 @@ fun RichContent(
                         3 -> 1.16f
                         else -> 1.06f
                     }
-                    val size = baseSizeSp * factor
+                    val size = bodySp * factor
                     BasicText(
                         b.text,
                         style = TextStyle(
@@ -375,17 +380,17 @@ fun RichContent(
                         b.marker.ifEmpty { "• " },
                         style = TextStyle(
                             color = colors.textPrimary,
-                            fontSize = baseSizeSp.sp,
-                            lineHeight = (baseSizeSp * 1.6f).sp,
+                            fontSize = bodySp.sp,
+                            lineHeight = (bodySp * 1.6f).sp,
                         ),
-                        modifier = Modifier.width(22.dp),
+                        modifier = Modifier.widthIn(min = 22.dp),
                     )
                     BasicText(
                         b.text,
                         style = TextStyle(
                             color = colors.textPrimary,
-                            fontSize = baseSizeSp.sp,
-                            lineHeight = (baseSizeSp * (b.lineHeight.takeIf { it > 0f } ?: 1.6f)).sp,
+                            fontSize = bodySp.sp,
+                            lineHeight = (bodySp * (b.lineHeight.takeIf { it > 0f } ?: 1.6f)).sp,
                         ),
                         modifier = Modifier.weight(1f),
                     )
@@ -395,8 +400,8 @@ fun RichContent(
                     b.text,
                     style = TextStyle(
                         color = colors.textPrimary,
-                        fontSize = baseSizeSp.sp,
-                        lineHeight = (baseSizeSp * (b.lineHeight.takeIf { it > 0f } ?: 1.6f)).sp,
+                        fontSize = bodySp.sp,
+                        lineHeight = (bodySp * (b.lineHeight.takeIf { it > 0f } ?: 1.6f)).sp,
                     ),
                     modifier = Modifier.fillMaxWidth().padding(bottom = paraGap),
                 )

@@ -26,6 +26,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.live.vant.icon.VanIcon
+import com.live.vant.theme.vantDimens
 import com.live.vant.theme.LocalVantColors
 import com.live.vant.theme.LocalVantDimens
 
@@ -150,8 +151,8 @@ private fun LabelText(
             label,
             style = TextStyle(
                 color = if (disabled) c.textTertiary else c.textPrimary,
-                fontSize = 14.sp,
-                lineHeight = 24.sp,
+                fontSize = vantDimens.fontSizeMd,
+                lineHeight = vantDimens.cellLineHeight,
             ),
         )
     }

@@ -49,6 +49,7 @@ import com.live.vant.feedback.VanPopup
 import com.live.vant.form.VanPicker
 import com.live.vant.form.VanPickerOption
 import kotlinx.coroutines.launch
+import com.live.vant.feedback.VanToastType
 
 /**
  * 固定资产详情 —— 一比一复刻 web `views/Finance/fixedAsset/Detail.vue`。
@@ -82,7 +83,7 @@ fun FixedAssetDetailScreen(nav: NavHostController, id: String) {
 
     LaunchedEffect(id) {
         if (id.isBlank()) {
-            toast.show("参数错误")
+            toast.show("参数错误", VanToastType.Fail)
             nav.popBackStack()
         } else {
             loadDetail()
@@ -97,7 +98,7 @@ fun FixedAssetDetailScreen(nav: NavHostController, id: String) {
                 }
 
                 asset == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    FText("资产不存在", 14f, FontWeight.Normal, colors.textTertiary)
+                    FText("资产不存在", 16f, FontWeight.Normal, colors.textTertiary)
                 }
 
                 else -> {
@@ -219,7 +220,7 @@ fun FixedAssetDetailScreen(nav: NavHostController, id: String) {
                                 toast.success("状态变更成功")
                                 loadDetail()
                             }
-                            else -> toast.show("变更失败")
+                            else -> toast.show("变更失败", VanToastType.Fail)
                         }
                     }
                 }
@@ -241,7 +242,7 @@ fun FixedAssetDetailScreen(nav: NavHostController, id: String) {
                         toast.success("删除成功")
                         nav.popBackStack()
                     }
-                    else -> toast.show("删除失败")
+                    else -> toast.show("删除失败", VanToastType.Fail)
                 }
             }
         },
@@ -259,7 +260,7 @@ private fun DetailGroup(title: String, content: @Composable () -> Unit) {
     val colors = LocalAppColors.current
     Column(Modifier.fillMaxWidth()) {
         FText(
-            title, 14f, FontWeight.Normal, colors.textSecondary,
+            title, 16f, FontWeight.Normal, colors.textSecondary,
             Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp),
         )
         Column(

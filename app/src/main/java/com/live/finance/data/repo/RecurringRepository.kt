@@ -7,6 +7,7 @@ import com.live.finance.core.net.ApiClient
 import com.live.finance.core.net.ApiResult
 import com.live.finance.core.net.map
 import com.live.finance.core.net.toResult
+import com.live.finance.data.model.InstallmentAbortResult
 import com.live.finance.data.model.InstallmentRow
 import com.live.finance.data.model.Recurring
 import com.live.finance.data.model.RecurringCatStat
@@ -24,8 +25,8 @@ interface RecurringRepository {
     suspend fun update(id: String, body: JsonObject): ApiResult<Unit>
     /** 删除：DELETE /recurring/:id */
     suspend fun delete(id: String): ApiResult<Unit>
-    /** 月状态（入账/跳过/改额）：PUT /recurring/:id/month-status {month,status,amount?} */
-    suspend fun updateMonthStatus(id: String, month: String, status: String, amount: Double? = null): ApiResult<Unit>
+    /** 月状态（标记已处理/跳过/改额+备注）：PUT /recurring/:id/month-status {month,status,amount?,remark?} */
+    suspend fun updateMonthStatus(id: String, month: String, status: String, amount: Double? = null, remark: String? = null): ApiResult<Unit>
 
     // —— 分期相关（独立特性，保留兼容 ——
     suspend fun installments(): ApiResult<List<Recurring>>
@@ -33,7 +34,7 @@ interface RecurringRepository {
     suspend fun abort(id: String, month: String): ApiResult<Unit>
     suspend fun installmentRows(): ApiResult<List<InstallmentRow>>
     suspend fun createInstallment(body: JsonObject): ApiResult<Unit>
-    suspend fun abortMonths(id: String, months: List<String>): ApiResult<Unit>
+    suspend fun abortMonths(id: String, months: List<String>): ApiResult<InstallmentAbortResult>
 }
 
 class FakeRecurringRepository : RecurringRepository {
@@ -107,14 +108,21 @@ class FakeRecurringRepository : RecurringRepository {
 
     override suspend fun delete(id: String): ApiResult<Unit> { seed.removeIf { it.id == id }; return ApiResult.Ok(Unit, "已删除") }
 
-    override suspend fun updateMonthStatus(id: String, month: String, status: String, amount: Double?): ApiResult<Unit> {
+    override suspend fun updateMonthStatus(id: String, month: String, status: String, amount: Double?, remark: String?): ApiResult<Unit> {
         val i = seed.indexOfFirst { it.id == id }
         if (i >= 0) {
             val old = seed[i]
             val mr = old.monthRecords.toMutableMap()
             val cur = mr[month] ?: RecurringMonth()
-            mr[month] = cur.copy(status = status, planDate = cur.planDate.ifEmpty { month + "-01" }, amount = amount ?: cur.amount, actualAmount = if (status == "entered") (amount ?: cur.amount) else cur.actualAmount)
-            seed[i] = old.copy(monthRecords = mr, monthStatus = status, monthAmount = amount ?: old.monthAmount)
+            val next = cur.copy(
+                status = status,
+                planDate = cur.planDate.ifEmpty { month + "-01" },
+                amount = amount ?: cur.amount,
+                actualAmount = if (status == "done") (amount ?: cur.amount) else cur.actualAmount,
+                remark = remark ?: cur.remark,
+            )
+            mr[month] = next
+            seed[i] = old.copy(monthRecords = mr, monthStatus = status, monthRecord = next, monthAmount = amount ?: old.monthAmount)
         }
         return ApiResult.Ok(Unit, "已更新")
     }
@@ -122,15 +130,16 @@ class FakeRecurringRepository : RecurringRepository {
     // 分期兼容（桩）
     override suspend fun installments(): ApiResult<List<Recurring>> = ApiResult.Ok(
         listOf(
-            Recurring("in1", "手机分期", 4999.0, categoryName = "分期", accountName = "招商银行", accountLast4 = "6621", cycle = "month", totalPeriods = 12, enteredPeriods = 5),
-            Recurring("in2", "电脑分期", 8999.0, categoryName = "分期", accountName = "花呗", cycle = "month", totalPeriods = 6, enteredPeriods = 6),
+            Recurring("in1", "手机分期", 4999.0, categoryName = "分期", accountName = "招商银行", accountLast4 = "6621", cycle = "month", repeatCount = 12),
+            Recurring("in2", "电脑分期", 8999.0, categoryName = "分期", accountName = "花呗", cycle = "month", repeatCount = 6),
         ), ""
     )
     override suspend fun enter(id: String, month: String): ApiResult<Unit> = ApiResult.Ok(Unit, "已入账")
     override suspend fun abort(id: String, month: String): ApiResult<Unit> = ApiResult.Ok(Unit, "已中止")
     override suspend fun installmentRows(): ApiResult<List<InstallmentRow>> = ApiResult.Ok(emptyList(), "")
     override suspend fun createInstallment(body: JsonObject): ApiResult<Unit> = ApiResult.Ok(Unit, "分期创建成功")
-    override suspend fun abortMonths(id: String, months: List<String>): ApiResult<Unit> = ApiResult.Ok(Unit, "已中止${months.size}期")
+    override suspend fun abortMonths(id: String, months: List<String>): ApiResult<InstallmentAbortResult> =
+        ApiResult.Ok(InstallmentAbortResult(aborted = months), "已中止${months.size}期")
 }
 
 class RemoteRecurringRepository(private val client: ApiClient) : RecurringRepository {
@@ -160,8 +169,13 @@ class RemoteRecurringRepository(private val client: ApiClient) : RecurringReposi
     override suspend fun create(body: JsonObject): ApiResult<Unit> = client.post("/recurring", body).toResult().map { }
     override suspend fun update(id: String, body: JsonObject): ApiResult<Unit> = client.put("/recurring/$id", body).toResult().map { }
     override suspend fun delete(id: String): ApiResult<Unit> = client.delete("/recurring/$id").toResult().map { }
-    override suspend fun updateMonthStatus(id: String, month: String, status: String, amount: Double?): ApiResult<Unit> {
-        val b = JsonObject().apply { addProperty("month", month); addProperty("status", status); amount?.let { addProperty("amount", it) } }
+    override suspend fun updateMonthStatus(id: String, month: String, status: String, amount: Double?, remark: String?): ApiResult<Unit> {
+        val b = JsonObject().apply {
+            addProperty("month", month)
+            addProperty("status", status)
+            amount?.let { addProperty("amount", it) }
+            remark?.let { addProperty("remark", it) }
+        }
         return client.put("/recurring/$id/month-status", b).toResult().map { }
     }
 
@@ -177,23 +191,33 @@ class RemoteRecurringRepository(private val client: ApiClient) : RecurringReposi
                 .map { el -> InstallmentRow.fromJson(el.asJsonObject) }
         }
     override suspend fun createInstallment(body: JsonObject): ApiResult<Unit> = client.post("/recurring", body).toResult().map { }
-    override suspend fun abortMonths(id: String, months: List<String>): ApiResult<Unit> =
-        client.post("/recurring/$id/abort", JsonObject().apply { add("months", JsonArray().apply { months.forEach { add(it) } }) }).toResult().map { }
+    override suspend fun abortMonths(id: String, months: List<String>): ApiResult<InstallmentAbortResult> =
+        client.post("/recurring/$id/abort", JsonObject().apply { add("months", JsonArray().apply { months.forEach { add(it) } }) })
+            .toResult().map { data ->
+                val o = data as? JsonObject
+                InstallmentAbortResult(
+                    aborted = o?.getAsJsonArray("aborted")?.map { it.asString } ?: emptyList(),
+                    skipped = o?.getAsJsonArray("skipped")?.mapNotNull { el ->
+                        val s = el as? JsonObject ?: return@mapNotNull null
+                        (s.get("month")?.asString.orEmpty()) to (s.get("reason")?.asString.orEmpty())
+                    } ?: emptyList(),
+                    finished = o?.get("finished")?.asBoolean ?: false,
+                )
+            }
 
     private fun parseRows(data: JsonElement?): List<Recurring> =
         (when (data) { is JsonArray -> data; is JsonObject -> data.getAsJsonArray("list") ?: JsonArray(); else -> JsonArray() })
             .map { el ->
                 val o = el.asJsonObject
-                val (total, entered) = records(o)
                 Recurring(
                     id = str(o, "id"), name = str(o, "name"), amount = dbl(o, "amount"),
                     categoryId = str(o, "category_id"), categoryName = str(o, "category_name"),
                     accountId = str(o, "account_id"), accountName = str(o, "account_name"), accountLast4 = str(o, "account_last4"),
                     cycle = str(o, "cycle"), dayOfCycle = dbl(o, "day_of_cycle").toInt(), monthOfCycle = dbl(o, "month_of_cycle").toInt(),
                     endDate = str(o, "end_date"), remark = str(o, "remark"), isActive = o.get("is_active")?.asInt != 0,
-                    status = str(o, "status"), totalPeriods = total, enteredPeriods = entered,
+                    status = str(o, "status"), repeatCount = int(o, "repeat_count"),
                     monthStatus = str(o, "month_status"), monthAmount = dbl(o, "month_amount"), happenDate = str(o, "happen_date"),
-                    monthRecords = monthRecords(o),
+                    monthRecord = monthRecord(o), monthRecords = monthRecords(o),
                 )
             }
 
@@ -207,7 +231,7 @@ class RemoteRecurringRepository(private val client: ApiClient) : RecurringReposi
                     val m = v.asJsonObject
                     res[k] = RecurringMonth(
                         status = str(m, "status"), planDate = str(m, "plan_date"), occurDate = str(m, "occur_date"),
-                        amount = dbl(m, "amount"), actualAmount = dbl(m, "actual_amount"),
+                        amount = dbl(m, "amount"), actualAmount = dbl(m, "actual_amount"), remark = str(m, "remark"),
                     )
                 }
             }
@@ -215,14 +239,12 @@ class RemoteRecurringRepository(private val client: ApiClient) : RecurringReposi
         return res
     }
 
-    private fun records(o: JsonObject): Pair<Int, Int> {
-        val arr = if (o.has("month_records") && o.get("month_records").isJsonArray) o.getAsJsonArray("month_records") else JsonArray()
-        var entered = 0
-        for (el in arr) {
-            val st = if (el.isJsonObject && el.asJsonObject.has("status") && !el.asJsonObject.get("status").isJsonNull) el.asJsonObject.get("status").asString else ""
-            if (st == "entered" || st == "done") entered++
-        }
-        return Pair(arr.size(), entered)
+    /** month_record：JSON 对象（单条，选中月份）→ {month,status,amount,remark,...}。 */
+    private fun monthRecord(o: JsonObject): RecurringMonth? {
+        val mr = o.get("month_record") ?: return null
+        if (!mr.isJsonObject) return null
+        val m = mr.asJsonObject
+        return RecurringMonth(status = str(m, "status"), amount = dbl(m, "amount"), remark = str(m, "remark"))
     }
 }
 

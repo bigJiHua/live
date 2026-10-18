@@ -28,6 +28,8 @@ import androidx.compose.ui.unit.sp
 import com.live.vant.icon.VanIcon
 import com.live.vant.theme.LocalVantColors
 import com.live.vant.theme.LocalVantDimens
+import com.live.vant.theme.fontSp
+import com.live.vant.theme.vantDimens
 
 enum class VanButtonType { Default, Primary, Success, Warning, Danger, Info }
 enum class VanButtonSize { Large, Normal, Small, Mini }
@@ -93,11 +95,14 @@ fun VanButton(
         VanButtonSize.Small -> 32.dp
         VanButtonSize.Mini -> 24.dp
     }
-    val fontSize = when (size) {
-        VanButtonSize.Large, VanButtonSize.Normal -> 16.sp
-        VanButtonSize.Small -> 12.sp
-        VanButtonSize.Mini -> 10.sp
+    // 基准字号（**不随「文字大小」档位变**）：按钮里的图标按它算，跟 §7.9「图标不动」一致
+    val fontSizeSp = when (size) {
+        VanButtonSize.Large, VanButtonSize.Normal -> 16f
+        VanButtonSize.Small -> 12f
+        VanButtonSize.Mini -> 10f
     }
+    // 文字才叠档位偏移
+    val fontSize = tokens.fontSp(fontSizeSp)
     val hPadding = when (size) {
         VanButtonSize.Large, VanButtonSize.Normal -> 15.dp
         VanButtonSize.Small -> tokens.paddingXs
@@ -130,7 +135,7 @@ fun VanButton(
                 VanLoading(size = 20.sp, color = fg)
                 if (text.isNotEmpty()) Box(Modifier.padding(start = 4.dp)) { VanButtonLabel(text, fg, fontSize) }
             } else if (icon != null) {
-                VanIcon(name = icon, size = fontSize * 1.2f, color = fg)
+                VanIcon(name = icon, size = (fontSizeSp * 1.2f).sp, color = fg)
                 if (text.isNotEmpty()) Box(Modifier.padding(start = 4.dp)) { VanButtonLabel(text, fg, fontSize) }
             } else {
                 VanButtonLabel(text, fg, fontSize)
@@ -166,7 +171,7 @@ fun VanButton(
 internal fun VanButtonLabel(text: String, color: Color, size: TextUnit) {
     androidx.compose.foundation.text.BasicText(
         text,
-        style = TextStyle(color = color, fontSize = size, lineHeight = 19.sp),
+        style = TextStyle(color = color, fontSize = size, lineHeight = vantDimens.fontSp(19f)),
     )
 }
 

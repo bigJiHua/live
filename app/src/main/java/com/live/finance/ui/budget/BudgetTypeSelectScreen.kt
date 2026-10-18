@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -25,6 +26,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import com.live.finance.core.nav.Routes
+import com.live.finance.theme.LocalAppColors
+import com.live.finance.theme.vanOrange
+import com.live.finance.theme.vanRed
+import com.live.finance.theme.vanGreen
 import com.live.finance.ui.common.ScreenScaffold
 import com.live.finance.ui.flow.FText
 import com.live.vant.icon.VanIcon
@@ -35,6 +40,7 @@ import com.live.vant.icon.VanIcon
  */
 @Composable
 fun BudgetTypeSelectScreen(nav: NavHostController) {
+    val colors = LocalAppColors.current
     ScreenScaffold { inner ->
         Column(
             inner.fillMaxSize().padding(16.dp),
@@ -44,7 +50,7 @@ fun BudgetTypeSelectScreen(nav: NavHostController) {
                 TypeCard(
                     title = "购物预算", desc = "电子产品、日用品等购物计划",
                     icon = "shopping-cart-o",
-                    iconBg = Brush.linearGradient(listOf(Color(0xFFFF6034), Color(0xFFEE0A24))),
+                    iconBg = Brush.linearGradient(listOf(vanRed(Color(0xFFFF6034)), colors.danger)),
                     modifier = Modifier.weight(1f),
                     onClick = { nav.navigate(Routes.BUDGET_SHOPPING) },
                 )
@@ -59,22 +65,41 @@ fun BudgetTypeSelectScreen(nav: NavHostController) {
             // 餐饮横条（web eat-card）
             Row(
                 Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
-                    .background(com.live.finance.theme.LocalAppColors.current.bgCard)
+                    .background(colors.bgCard)
                     .clickable { nav.navigate(Routes.BUDGET_EAT) }
                     .padding(20.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(
                     Modifier.size(48.dp).clip(CircleShape)
-                        .background(Brush.linearGradient(listOf(Color(0xFFFF976A), Color(0xFFEE0A24)))),
+                        .background(Brush.linearGradient(listOf(vanOrange(), colors.danger))),
                     contentAlignment = Alignment.Center,
                 ) { VanIcon("fire-o", size = 24.sp, color = Color.White) }
                 Column(Modifier.weight(1f).padding(start = 16.dp)) {
-                    FText("餐饮预算", 16f, FontWeight.SemiBold,
-                        com.live.finance.theme.LocalAppColors.current.textPrimary)
+                    FText("餐饮预算", 18f, FontWeight.SemiBold,
+                        colors.textPrimary)
                     Spacer(Modifier.height(4.dp))
                     FText("日常餐饮开销控制", 12f,
                         color = com.live.finance.theme.LocalAppColors.current.textTertiary)
+                }
+            }
+
+            // 周期色条图例（第四十五轮新增、第五十二轮修正）：
+            // ⚠ web 三个表单的周期选择器只有 月/季/年 —— 样式里的 .日/.周 是防御性 class，
+            //   实际数据永远不会出现，图例只列三种真实周期
+            Spacer(Modifier.height(12.dp))
+            FText("周期状态提示：", 14f, FontWeight.SemiBold, colors.textPrimary)
+            Column(Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                listOf("月", "季", "年").forEach { c ->
+                    Row(verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Box(
+                            Modifier.width(4.dp).height(20.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(BudgetShared.cycleColor(c, colors, vanGreen())),
+                        )
+                        FText(BudgetShared.cycleName(c), 13f, color = colors.textSecondary)
+                    }
                 }
             }
         }
@@ -102,7 +127,7 @@ private fun TypeCard(
             contentAlignment = Alignment.Center,
         ) { VanIcon(icon, size = 28.sp, color = Color.White) }
         Spacer(Modifier.height(12.dp))
-        FText(title, 16f, FontWeight.SemiBold, colors.textPrimary)
+        FText(title, 18f, FontWeight.SemiBold, colors.textPrimary)
         Spacer(Modifier.height(4.dp))
         FText(desc, 12f, color = colors.textTertiary)
     }

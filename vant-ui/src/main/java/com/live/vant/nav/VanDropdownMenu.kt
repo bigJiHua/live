@@ -79,7 +79,7 @@ fun VanDropdownMenu(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         androidx.compose.foundation.text.BasicText(
                             item.title,
-                            style = TextStyle(color = titleColor, fontSize = 15.sp, lineHeight = 22.sp),
+                            style = TextStyle(color = titleColor, fontSize = 16.sp, lineHeight = 22.sp),
                         )
                         Spacer(Modifier.width(4.dp))
                         VanIcon(
@@ -136,7 +136,7 @@ fun VanDropdownMenu(
                                 option.text,
                                 style = TextStyle(
                                     color = if (option.disabled) c.textTertiary else if (selected) c.primary else c.textPrimary,
-                                    fontSize = 14.sp,
+                                    fontSize = 16.sp,
                                 ),
                             )
                         }

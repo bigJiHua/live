@@ -83,7 +83,6 @@ data class Budget(
     /** 出行类型提交时前端算好的折合总额（web Travel submit 的 total_expense）。 */
     val totalExpense: Double = 0.0,
 ) {
-    val remain: Double get() = budgetAmount - usedAmount
     /** 进度 0..1（按金额，封顶 1）。 */
     val ratio: Float get() = if (budgetAmount <= 0) 0f else (usedAmount / budgetAmount).toFloat().coerceIn(0f, 1f)
 }

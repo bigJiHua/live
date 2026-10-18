@@ -1,7 +1,8 @@
 # APP（vant-android）项目架构与接手指南
 
 > 目的：让新接手的同学在半小时内读懂 `APP/` 原生安卓工程的架构、每个模块与关键文件的职责，并知道如何构建、运行与扩展。
-> 最后更新：2026-09-15。配套文档：`vant-components-inventory.md`（Vant 组件复刻清单）、`web-audit-pages.md`（web 原有功能/样式逐页参考，供按页重构 UI）。
+> 最后更新：2026-10-18（**已实测编译通过**，见第 9.3 / 第 10 章；10 月变更：BYO-backend 站点地址、发布签名、版本号转正已并入）。
+> **配套文档**：`项目构造书.md`（**接手首选**：文件↔源文件对照表、改造操作手册、注意事项、P0–P3 坑清单）、`vant-components-inventory.md`（Vant 组件复刻清单）、`web-audit-pages.md`（web 原有功能/样式逐页参考，供按页重构 UI）、`workflow.md`（单轮改造工作流）。
 
 ---
 
@@ -30,9 +31,9 @@
 | 协程 | `kotlinx-coroutines-android` 1.8.1 |
 | 本地存储 | `datastore-preferences` 1.1.1（存 token/指纹/会话，替代 SharedPreferences） |
 | 图片 | 由 `vant-ui` 通过 `coil` 传递引入 |
-| versionName | `0.1.0-wave0` |
+| versionName | `2.1.0`（versionCode `20100`；对齐生产 H5 套壳 App 的 `webview-APP/manifest.json`） |
 
-> 仓库 `D:\Code\live` 整体**未纳入 git**，所有代码在磁盘上，接手后第一步建议纳入版本管理（见 §12）。
+> 仓库 `APP/` **本身就是 git 仓库**（`web/`、`api/` 等各自独立）。接手第一步先看 `git status`；**若读写导致乱码或文件缺失，不要擅自 `git` 恢复，先问负责人**。
 
 ---
 
@@ -45,8 +46,8 @@ APP/
 ├── gradle.properties          # JVM 参数、AndroidX、kotlin 风格
 ├── gradlew / gradlew.bat      # Gradle 包装器（无本地 Gradle 也能构建）
 ├── gradle/                    # Gradle wrapper 文件
-├── vant-ui/                   # 【模块1】Vant 组件复刻库（纯 Compose，43 个 .kt）
-├── app/                       # 【模块2】业务 App（com.live.finance，75 个 .kt）
+├── vant-ui/                   # 【模块1】Vant 组件复刻库（纯 Compose，49 个 .kt / ≈7,988 行，其中 Van* 组件 45 类）
+├── app/                       # 【模块2】业务 App（com.live.finance，main 下 187 个 .kt / ≈51,321 行）
 ├── demo/                      # 【模块3】组件可视化演示 App（仅依赖 vant-ui）
 └── docs/                      # 文档（本文件 + 组件清单 + web 审计）
 ```
@@ -60,22 +61,24 @@ APP/
 **职责**：用 Compose 复刻 web 里实际用到的 Vant 4 组件，形成可复用 UI 底座。业务层不应再写底层控件。
 **包名**：`com.live.vant`。**形态**：Android Library（`com.android.library`）。
 **主题对齐**：`theme/` 下的颜色/尺寸与 `web/style.css` 的 `--van-*` 覆盖**逐一对齐**（主色 `#3a66e0` 等），深色模式同样支持。
+**字号例外**：2026-09-18 起全工程文本按「移动端最佳」提档到**全偶数阶梯** `12 / 14 / 16 / 18 / 20 / 24`（对应 web 的 `<12→12`、13→14、14/15→16、16/17→18），`VantDimens` 的 `fontSizeXs/Md/Lg` = 12/16/18 —— 这是**唯一主动偏离「CSS px → sp 1:1」的地方**，依据是审计 M3 type scale、iOS HIG 与国内主流 App（微信/支付宝）后的结论；图标字号、键盘按键与 badge/pivot 类装饰文字一律保持 Vant 出厂值。完整口径与脚本见 `项目构造书.md` §7.9。
 
 ### 4.1 文件清单（按分组）
 
 | 分组（包路径） | 文件 | 对应 Vant 组件 |
 |---|---|---|
-| `basic/` | `VanButton` `VanCell` `VanCellGroup` `VanDivider` `VanEmpty` `VanImage` `VanLoading` `VanNoticeBar` `VanOverlay` `VanProgress` `VanSkeleton` `VanTag` | Button / Cell / CellGroup / Divider / Empty / Image / Loading / NoticeBar / Overlay / Progress / Skeleton / Tag |
-| `feedback/` | `VanActionSheet` `VanDialog` `VanImagePreview` `VanList` `VanPopup` `VanPullRefresh` `VanToast` | ActionSheet / Dialog / ImagePreview / List / Popup / PullRefresh / Toast |
-| `form/` | `VanCheckbox` `VanDatePicker` `VanField` `VanNumberKeyboard` `VanPasswordInput` `VanPicker` `VanRadio` `VanSearch` `VanStepper` `VanUploader` | Checkbox / DatePicker / Field / NumberKeyboard / PasswordInput / Picker / Radio / Search / Stepper / Uploader |
+| `basic/` | `VanButton` `VanCell` `VanCellGroup` `VanDivider` `VanEmpty` `VanImage` `VanLoading` `VanNoticeBar` `VanOverlay` `VanProgress`(含 `VanCircle`) `VanSkeleton` `VanTag` | Button / Cell / CellGroup / Divider / Empty / Image / Loading / NoticeBar / Overlay / Progress / Circle / Skeleton / Tag |
+| `feedback/` | `VanActionSheet` `VanDialog`(含 `VanConfirmDialog`/`VanAlertDialog`) `VanImagePreview` `VanList`(含 `VanListFooter`) `VanPopup` `VanPullRefresh` `VanToast`(`VanToastHost`) | ActionSheet / Dialog / ImagePreview / List / Popup / PullRefresh / Toast |
+| `form/` | `VanCheckbox` `VanDatePicker`(含 `VanDatetimePicker`) `VanField` `VanNumberKeyboard` `VanPasswordInput` `VanPicker` `VanRadio` `VanSearch` `VanStepper`(含 `VanSwitch` ⚠) `VanUploader`；`VanSafeKeyboard` `VanSecureKeyboard` `VanSimpleKeyboard` | Checkbox / DatePicker / Field / NumberKeyboard / PasswordInput / Picker / Radio / Search / Stepper / Switch / Uploader ／ 另加 3 个自研安全键盘（对应 web `components/KeyBoard/*`） |
 | `icon/` | `VanIcon` `VantIconCodes` | Icon（259 个码点字体提取到 `VantIconCodes`） |
 | `layout/` | `VanRowCol` | Row / Col 栅格 |
-| `nav/` | `VanCollapse` `VanDropdownMenu` `VanNavBar` `VanTabbar` `VanTabs` | Collapse / DropdownMenu / NavBar / Tabbar / Tabs |
+| `nav/` | `VanCollapse`(含 `VanCollapseItem`) `VanDropdownMenu` `VanNavBar` `VanTabbar` `VanTabs` | Collapse / CollapseItem / DropdownMenu / NavBar / Tabbar / Tabs |
 | `other/` | `VanCalendar` `VanSwipe` | Calendar / Swipe |
 | `theme/` | `VantColors` `VantDimens` `VantTheme` | 颜色/尺寸/主题对象（含 light & dark） |
 | （根） | `PathExt.kt` | Compose `Modifier` 扩展工具 |
 
-> 完整组件能力对照见 `docs/vant-components-inventory.md`。
+> 共 **49 个 `.kt` / ≈7,988 行**（其中 `Van*` 组件文件 45 个）。完整组件能力与使用统计见 `docs/vant-components-inventory.md`；逐组件文件↔Vant 对照见 `docs/项目构造书.md` §5.1。
+> ⚠ 两个易错点：`VanSwitch` 与 `VanStepper` 同文件、`VanCircle` 与 `VanProgress` 同文件。
 
 ---
 
@@ -88,64 +91,79 @@ APP/
 
 | 文件 | 职责 |
 |---|---|
-| `MainActivity.kt` | 安卓入口 Activity，setContent 挂 `App` |
-| `App.kt` | 应用根 Composable，初始化 `AppGraph`、主题、`AppRoot` 导航 |
-| `ui/AppRoot.kt` | **导航装配中心**：`NavHost` 注册所有路由目的地（约 26 个已接 + 大量占位常量） |
-| `core/nav/Routes.kt` | 路由常量集中定义（约 90 个，绝大多数暂无对应屏幕） |
+| `MainActivity.kt` | 安卓入口 Activity，`setContent { AppRoot() }` |
+| `App.kt` | **Application**：创建并持有 `AppGraph`（`App.of(context).graph`），启动时 `graph.init()` |
+| `ui/AppRoot.kt` | **导航装配中心**：`NavHost` 注册路由目的地（已接 **80 处**）；同时注入主题 / Toast / PIN 弹窗宿主 |
+| `core/nav/Routes.kt` | 路由常量集中定义（85 个，绝大多数已接屏幕） |
+| `ui/main/GlobalNavBar.kt` | **全局顶部导航栏**（第七轮）：复刻 web `MainLayout` 的 `van-nav-bar`——标题 / 返回（含 web 的 `cNum` 计数怪癖）/ 回首页 / lock 锁定链路 |
+| `core/nav/RouteTitles.kt` | 顶栏标题表（**80 条**，逐条取 web `router/map.js` 的 `meta.title`；含 PIN 设置 mode 与预算编辑态两处按参数分叉） |
 
 ### 5.2 core（基础设施）
 
 | 文件 | 职责 |
 |---|---|
-| `AppConfig.kt` | 全局配置：`useFake`（是否走假数据）、读取 `BuildConfig.BASE_URL`/`USE_FAKE` |
+| `AppConfig.kt` | 全局配置：`useFake`（是否走假数据）、**运行时站点地址**（`baseUrl` / `siteUrl`，由用户在登录页「接入站点」输入并持久化到 `store/SiteStore.kt`）、`fullFileUrl()` 拼接；**不再读 `BuildConfig.BASE_URL`**（10-17 起 BYO-backend） |
+| `store/SiteStore.kt` | 站点接入信息持久化（API 地址 / 分享 URL），启动时由 `App.kt` 读回并覆盖 `AppConfig` |
 | `ThemeStore.kt` | 主题状态（亮/暗、主色）集中管理，跨屏共享 |
 | `PinCoordinator.kt` | PIN 码锁屏协调（与 `SecurityRepository` 配合） |
 | `TimeFmt.kt` | 时间格式化工具 |
 | `crypto/AesCbc.kt` | AES-256-CBC 加解密（与 web 后端密钥派生一致） |
 | `crypto/RsaUtil.kt` | RSA 工具（握手公钥、PIN 密文） |
-| `net/ApiClient.kt` | **网络核心**：Retrofit+OkHttp，封装握手、加密信封（`{_p}`）、GET 明文/写操作加密、KEY_ERR/401 自动重握手 |
+| `net/ApiClient.kt` | **网络核心**：Retrofit+OkHttp，封装握手、加密信封（`{_p}`）、GET 明文/写操作加密、KEY_ERR/401 自动重握手；**未接入站点时直接守卫拦截**（不把空 baseUrl 丢给 OkHttp） |
+| `net/SiteProbe.kt` | 「接入站点」探测（校验用户输入的 API 地址可用性 / 握手可达） |
+| `net/ClientContext.kt` | 客户端请求上下文（时间戳 / nonce / 自定义 UA 等公共头） |
 | `net/HandshakeManager.kt` | 与后端握手流程（拿会话密钥、指纹注册） |
 | `net/Envelope.kt` | 前后端标准信封 `{status,message,data}` 解析 |
 | `net/DeviceProfile.kt` | 设备指纹（`X-FP-ID` 等）采集 |
+| `security/DeviceRiskInspector.kt` | 设备风险信号采集（上报 `/security/risk-report`） |
+| `security/RsaUtil.kt` | 安全键盘字符级 RSA 加解密 |
+| `loc/GpsLocation.kt` | 定位（对应 web 的 IP 定位/逆地理能力） |
+| `BankIconCache.kt` | 银行图标缓存（列表滚动不重复下载） |
 | `store/SessionStore.kt` | 登录会话（token/用户态），基于 DataStore |
 | `di/AppGraph.kt` | **手写 DI**：按 `useFake` 决定注入 `FakeXxxRepository` 还是 `RemoteXxxRepository` |
 
 ### 5.3 data（模型 + 仓库，双实现）
 
-- `model/`（17 个）：`AssetRegister` `Balance` `Bill` `Card` `Category` `FixedBudget` `Foreign` `Fund` `LoginLog` `Models`(聚合根) `Moment` `Pool` `Recurring` `Repay` `Resource` `Stats` `TodoJob`。
-- `repo/`（19 个，每个均 **Fake + Remote 双实现**，靠 `AppGraph` 切换）：`AssetRepository` `AuthRepository` `BalanceRepository` `BillRepository` `CardRepository` `CategoryRepository` `DataRepository` `FixedBudgetRepository` `FlowRepository` `ForeignRepository` `FundRepository` `LoginLogRepository` `MomentRepository` `PoolRepository` `RecurringRepository` `RepayRepository` `ResourceRepository` `SecurityRepository` `TodoWorkRepository`。
-- 双实现机制：`AppConfig.useFake == true` 时所有仓库返回本地写死的演示数据（**无需后端即可跑通主干**）；`false` 时走 `ApiClient` 连真后端。
+- `model/`（**21 个**）：`AssetRegister` `Balance` `Bill` `Card` `Category` `DbAdmin` `FixedBudget` `Foreign` `Fund` `GeoPlace` `Installment` `LoginLog` `Models`(聚合根) `Moment` `Pool` `Recurring` `Repay` `Resource` `Salary` `Stats` `TodoJob`。
+- `repo/`（**20 个**，每个均 **Fake + Remote 双实现**，靠 `AppGraph` 切换）：`AssetRepository` `AuthRepository` `BalanceRepository` `BillRepository` `CardRepository` `CategoryRepository` `DataRepository` `FixedBudgetRepository` `FlowRepository` `ForeignRepository` `FundRepository` `GeoRepository` `LoginLogRepository` `MomentRepository` `PoolRepository` `RecurringRepository` `RepayRepository` `ResourceRepository` `SecurityRepository` `TodoWorkRepository`。
+- 双实现机制：`AppConfig.useFake == true` 时所有仓库返回本地写死的演示数据（无需后端即可跑通主干）；`false` 时走 `ApiClient` 连真后端。**注意：第八轮起两个 flavor 的 `USE_FAKE` 都是 `false`，即默认全走真实接口，Fake 分支保留备用。**
 
 ### 5.4 theme
 
 | 文件 | 职责 |
 |---|---|
+| `theme/ThemePreset.kt` | 10 套主题预设（对齐 web `useUiTheme.js`） |
+| `theme/AppTokens.kt` | 解析后的 token 集（颜色/字号/圆角/阴影），`resolveTokens(choice, isDark)` |
+| `theme/MoneyColors.kt` | 收支金额配色模式（对齐 web `useMoneyColor.js`） |
 | `theme/AppTheme.kt` | 业务层 Compose `MaterialTheme` 包装，桥接 `vant-ui` 的主题色 |
 
-### 5.5 ui（屏幕，按业务域分包，43 个 .kt）
+### 5.5 ui（屏幕，按业务域分包，**118 个 .kt / ≈43,150 行**）
 
-| 业务域（包） | 屏幕文件 | 路由/状态 |
+| 业务域（包） | 屏幕 / 文件 | 状态 |
 |---|---|---|
-| `auth/` | `LoginScreen` | 登录 ✅ |
-| `main/` | `MainScreen` | 主壳（底部 3 Tab：首页/账本/我的）✅ |
-| `home/` | `HomeScreen` | 首页 ✅ |
-| `finance/` | `FinanceScreen` | 账本主页 ✅ |
-| `account/` | `AddTransactionScreen` `AccountStructureScreen` `BalanceFlowScreen` | 记账 ✅ / 账户结构 ✅ / 余额流水 ⬜占位 |
-| `flow/` | `FlowListScreen` `FlowDetailScreen` `CalendarScreen` `FlowItemView`(复用项) | 流水列表 ✅ / 详情 ✅ / 日历 ✅ |
-| `asset/` | `AssetListScreen` | 资产列表 ✅（登记/编辑/走势占位） |
-| `fixed/` | `FixedAssetListScreen` | 固定资产 ✅（回收站/详情/编辑占位） |
-| `recurring/` | `RecurringListScreen` | 固定支出 ✅ |
-| `budget/` | `BudgetListScreen` | 预算 ✅（类型/明细占位） |
-| `report/` | `StatsOverviewScreen` `MonthlyTrendScreen` `FundScreen` | 收支概览 ✅ / 月度趋势 ✅ / 基金 ✅（筛选/卡流水/转账/负债/理财子页占位） |
-| `bankcard/` | `CardListScreen` `CardEditScreen` `BillListScreen` `RepayListScreen` `LimitManageScreen` `InstallmentListScreen` `ForeignScreen` | 卡列表 ✅ / 卡编辑 ✅ / 账单 ✅ / 还款 ✅ / 额度 ✅ / 分期列表 ✅ / 外币 ✅（中心/分期创建/账单详情/台账/还款增改占位） |
-| `todo/` | `TodoListScreen` | 待办日历 ✅ |
-| `work/` | `JobListScreen` | 工作/工资 ✅（日历/日明细/月统计占位） |
-| `diary/` | `DiaryListScreen` `DiaryAddScreen` | 动态列表 ✅ / 发布 ⬜占位 |
-| `user/` | `UserScreen` `AppSettingsScreen` `CategoryManageScreen` `ProfileEditScreen` `PinSetupScreen` `ResourceListScreen` | 我的 ✅ / 设置 ✅ / 分类管理 ✅ / 资料编辑 ✅ / PIN设置 ⬜ / 资源 ⬜ |
-| `data/` | `DataManageScreen` `LoginLogScreen` | 数据管理 ✅ / 登录日志 ✅（校验/导入/导出/备份占位） |
-| `error/` | `Error429Screen` | 频率限制页 ✅ |
+| `auth/` | `LoginScreen` | ✅ |
+| `main/` | `MainScreen`（主壳 + 底部玻璃岛 Tabbar）、`GlobalNavBar`（全局顶栏，挂在 `AppRoot` 的 `Column` 顶部）、`PinVerifyDialog`、`HomeExitDialog` | ✅ |
+| `home/` | `HomeScreen`（首页看板、今日预估薪酬卡、待办提醒入口） | ✅ |
+| `finance/` | `FinanceScreen`（账本主页） | ✅ |
+| `account/` | `AddTransactionScreen` `QuickAddScreen` `AccountStructureScreen` `BalanceFlowScreen` `CardFlowScreen` `RecordShared` | ✅ 全部 |
+| `flow/` | `FlowListScreen` `FlowDetailScreen` `CalendarScreen` `FlowItemView` `FlowCards` | ✅ |
+| `asset/` | `AssetListScreen` `AssetEditorScreen`(登记/编辑两用) `AssetTrendScreen` `AssetShared` | ✅ |
+| `fixed/` | `FixedAssetListScreen` `FixedAssetDetailScreen` `FixedAssetEditScreen` `FixedAssetRecycleBinScreen` `FixedAssetForm` `FixedAssetImagePicker` `FixedFormat` | ✅ |
+| `recurring/` | `RecurringListScreen`（固定支出 + 固定事件两用） | ✅ |
+| `budget/` | `BudgetListScreen` `BudgetTypeSelectScreen` `BudgetFormScreen`(买/行/吃) `BudgetDetailScreen` `BudgetShared` | ✅ |
+| `report/` | `ReportCenterScreen` `StatsOverviewScreen` `MonthlyTrendScreen` `CategoryRatioScreen` `FlowFilterScreen` `TransferListScreen` `DebtOverviewScreen` + 理财子域 `FundScreen`(总览) `FundRegisterScreen` `FundTrendScreen` `FundDailyScreen` `FundEarningsScreen` + `FundUi` `FundCalendar`（共 14 个文件） | ✅ |
+| `bankcard/` | `CardManageScreen` `CardAddScreen` `CardEditScreen` `CreditFullScreen` `CreditCenterScreen` `InstallmentCreateScreen` `InstallmentListScreen` `LimitManageScreen` `ForeignScreen` `BillListScreen` `BillDetailScreen` `BillLedgerScreen` `RepayListScreen` `RepayDetailScreen` `RepayAddScreen` `RepayEditScreen` + `CardFormShared` `CardStackView` `CardOrgBadge` + 卡页 WebView `CardWebScreen` `CardWebView` `CardDebugLog`（共 22 个文件；原 `CardListScreen` 已删，功能由 `CardManageScreen` 承载） | ✅ |
+| `todo/` | `TodoCalendarGrid`（Todo / 流水 / 工资三处共享） `TodoCalendarScreen` | ✅ |
+| `work/` | `JobListScreen` `SalaryCalendarScreen` `SalaryDayScreen` `SalaryStatScreen` | ✅ |
+| `diary/` | `DiaryListScreen` `DiaryAddScreen` `DiaryDetailScreen` `DiaryRichEditorWebView` `RichHtml` `ShareDetailScreen`（公开分享页，已落地） | ✅ |
+| `user/` | `UserScreen` `AppSettingsScreen` `CategoryManageScreen` `ProfileEditScreen` `PinManageScreen` `PinSetupScreen` `ResourceManageScreen` `ResourceListScreen` | ✅ |
+| `data/` | `DataManageScreen` `DbCheckScreen` `DbExportScreen` `DbImportScreen` `DbBackupScreen` `LoginLogScreen` `LoginAnomaly` | ✅ |
+| `error/` | `Error429Screen` | ✅ |
+| `common/` | `Ui`(ScreenScaffold + 模糊/YearMonthSaver 等公共件) `AppButton` `AppCell` `AppField` `AppTag` `AppDialogShell` `BankIconView` `CssShadow` `Money` `Format` `FlowGrouping` `Upload` | 通用件（12 个） |
+| `common/chart/` | `BarChart` `LineChart` `DonutChart` `DualAxisChart` `MiniChart` `ChartUtils` | 自绘图表（替代 web 的 echarts，6 个） |
 
-> 已接 ~27 屏 / 占位 ~63 路由。完整 web→APP 路由对照见 `docs/web-audit-pages.md` §18。
+> **路由实况**：`Routes.kt` 有 85 个常量，`AppRoot.kt` 已注册 **80 处 `composable(...)`**（web 侧 `router` 现有 96 条 `path:` 声明，含 redirect）；**未接仅 `CARD_FLOW`**（web 自身死页面，见 `项目构造书.md` 附录判定）。`DIARY_SHARE` 已有 `ui/diary/ShareDetailScreen.kt` 落地。
+> **逐页 web ↔ 原生对照见 `docs/项目构造书.md` 第 5 章**；完整路由对照另见 `docs/web-audit-pages.md` §18。
 
 ---
 
@@ -157,10 +175,11 @@ APP/
 
 ## 7. 数据与网络架构
 
-### 7.1 双数据源（fake / prod）
-- `app/build.gradle.kts` 定义两个 **productFlavor**：`fake`（本地假数据，无需后端）和 `prod`（连真后端）。
-- `fake`：`BASE_URL=http://10.0.2.2:666/`（模拟器访问本机后端）、`USE_FAKE=true`。
-- `prod`：`BASE_URL=http://192.168.0.103:666/`（**局域网后端，上线前需改 `https://live.jihau.top`**）、`USE_FAKE=false`。
+### 7.1 双数据源（fake / prod）与「用户自带后端」（BYO-backend）
+- **2026-09-18 第八轮起：两个变体都走真实接口**（`fake` / `prod` 的 `USE_FAKE` 均为 `false`）；`FakeXxxRepository` 全部保留作离线兜底（把某 flavor 的 `USE_FAKE` 改回 `true` 即可）。
+- **2026-10-17 起：APK 内不再带任何后端地址** —— `API_BASE_URL` / `SITE_URL` 这类 `buildConfigField` 已彻底移除（`app/build.gradle.kts` 有显式禁令注释）。站点地址由用户在登录页「**接入站点**」输入，经 `SiteProbe` 探测后持久化到 `store/SiteStore.kt`，启动时由 `App.kt` 读回覆盖 `AppConfig.baseUrl` / `siteUrl`；未接入时 `ApiClient` 直接守卫拦截，分享入口阻断（`DiaryDetailScreen`）。
+- 因此两个 **productFlavor** 不再靠地址区分，差异仅为包名后缀与版本号后缀：`fake` → `applicationIdSuffix = ".fake"` + `versionNameSuffix = "-fake"`；`prod` → 正式包名/版本。
+- 可选的安全项：`gradle.properties` 的 `API_HOST`（证书域名，留空则 networkSecurityConfig 不做域名白名单）与 `API_PINNED_SHA256`（证书指纹，Let's Encrypt 请留空）；`BuildConfig.ENABLE_PINNING` 由「指纹是否非空」推导（`enablePinning = apiPinnedSha.isNotBlank()`）。
 - Android Studio 的 **Build Variants** 面板可切换 `appFake` / `appProd`。
 
 ### 7.2 网络协议（与 web 后端等价）
@@ -191,33 +210,43 @@ APP/
 ### 9.2 命令
 ```bash
 # 用包装器构建（无需预装 Gradle）
-./gradlew :app:assembleFakeDebug      # 假数据 debug 包，可离线跑
-./gradlew :app:assembleProdDebug      # 连真后端 debug 包
+./gradlew :app:assembleFakeDebug      # fake 变体（包名 .fake 后缀；地址由用户在登录页接入）
+./gradlew :app:assembleProdDebug      # prod 变体（正式包名 2.1.0）
+./gradlew :app:assembleProdRelease    # 正式 release 包（需配签名，见 docs/docs/app/release-signing.md）
 ./gradlew :demo:assembleDebug         # 组件演示包
 ./gradlew :app:installFakeDebug        # 构建并安装到设备
 ```
 
 ### 9.3 关键坑点（接手必读）
-1. **从未在本机 assemble 验证过**：当前环境无 Android SDK，仅用自定义 Kotlin 编译器 harness 做了类型检查（0 错误）。首次交付前务必在 Android Studio 真机/模拟器跑一次 `:demo` 与 `:app` 的 fake 变体，确认可编译可启动。
-2. **prod BASE_URL 是局域网地址**：上线前改 `https://live.jihau.top`（并确认 HTTPS + 加密隧道）。
-3. **`D:\Code\live` 不是 git 仓库**：整目录未纳入版本管理，先 `git init`/并入现有仓库再动手，避免丢失。
+1. **构建环境（2026-09-18 实测通过）**：JDK 17（本机 `D:\Java_JDK`）+ Android SDK 34（`local.properties` 的 `sdk.dir`）+ `GRADLE_USER_HOME=D:/Google/Android-gradle`（离线缓存，须显式设置）。
+   实测结果：`:vant-ui:compileDebugKotlin`、`:app:compileProdDebugKotlin`、`:app:compileFakeDebugKotlin` 强制全量重编 **0 错误 / BUILD SUCCESSFUL**；三个包（prod、fake、demo）均已产出 APK。命令与判读方式见 `docs/项目构造书.md` 第 0 章与第 11 章。
+2. **后端地址是运行时输入**（BYO-backend，2026-10-17 起）：APK 内不再注入 `BASE_URL`/`SITE_URL`，不要再把地址写回 `build.gradle.kts`；联调时在登录页「接入站点」填地址即可。HTTPS 与证书锁定走 `API_HOST` / `API_PINNED_SHA256`（留空即关闭域名白名单与 Pinning）。
+3. **`APP/` 已纳入 git**（仓库根即 `APP/`；`web/`、`api/` 等是各自独立的仓库/目录）。动手前先看工作树状态；**若读写导致乱码或文件缺失，不要擅自 `git` 恢复，先问负责人**。
 4. **DataStore 存储**：会话 token 在 `core/store/SessionStore.kt`，卸载重装即清空；调试时别只清 app 缓存。
+5. **并行构建会撞产物竞态**：与 Android Studio / 其他会话同时跑 Gradle，可能报 `dexBuilder…desugar_graph…系统找不到指定的路径`（常伴 `Detected multiple Kotlin daemon sessions`）——**属环境竞态而非代码错误**，错峰重跑即绿。
 
 ---
 
-## 10. 当前进度（Wave-0 主干）
+## 10. 当前进度（2026-10-18 核对）
 
 **已完成（真实代码、非桩）**
-- 组件库 `vant-ui`：45 类组件 + 7 类函数式 API 全部复刻，主题对齐 web。
-- 业务骨架：导航闭环、登录、主壳 3 Tab。
-- 已接屏幕：流水(列表/详情/日历)、记账、卡列表/编辑、账单、还款、额度、分期列表、外币、资产、固定资产、预算、报表概览/月度趋势/基金、待办、工作、动态列表、用户/设置/分类/资料、数据管理/登录日志、429 页。
-- 网络层：握手 + AES 加密信封 + 双 flavor 切换，协议与 web 后端等价。
+- 组件库 `vant-ui`：**49 个 `.kt`（其中 `Van*` 组件 45 类）** + 7 类函数式 API，另加 3 个自研安全键盘；主题（10 预设 + 收支色 + 明暗）对齐 web。
+- 业务骨架：单 Activity + Navigation 闭环、登录（安全键盘 / 掩码 / 闪烁光标）**+ 登录页「接入站点」**（BYO-backend）、主壳 3 Tab（底部玻璃岛）。
+- **已接 80 处路由目的地**（`AppRoot.kt` 的 `composable(...)`；web 侧 `router` 现有 96 条 `path:` 声明，含 redirect），覆盖 14 个业务域：流水(列表/详情/日历)、记账/快速登记/账户结构/余额流水/卡流水、资产(列表/登记/编辑/走势)、固定资产(列表/详情/编辑/回收站)、固定支出/固定事件、预算(列表/类型选择/三类型表单/详情)、报表(中心/概览/月度趋势/类目占比/流水筛选/转账/负债)、理财(总览/登记/走势/日结/收益)、银行卡(管理/新增/编辑/信用卡全功能/中心/分期/额度/外币)、账单(列表/详情/台账)、还款(列表/详情/增改)、待办日历、工作薪酬(设置/日历/日明细/月统计)、动态(列表/发布/详情/分享详情)、我的/资料编辑/分类管理/PIN 管理/资源管理/应用设置、数据管理(首页 + 5 子页)/登录日志、429 页。
+- 网络层：握手 + AES 加密信封 + 双 flavor 切换，协议与 web 后端等价；PIN `8303` 拦截链路（route-verify 令牌重发）已落地；**站点地址运行时输入 + 可选证书锁定**（10-17）。
+- 规模：`app/src/main` **187 个 `.kt` / ≈51,321 行**（`ui/` 118 个 / ≈43,150 行，含 6 个自绘图表）；`data/model` 21、`data/repo` 20；`vant-ui` ≈7,988 行；`demo` 2 个。
+
+**实测结论（截至 2026-10-18）**
+- 编译验证持续通过（最近轮次均 `BUILD SUCCESSFUL`、0 条 `e:`）；历史实测：强制全量重编 0 错误（2026-09-18，2m30s，44 个任务真实执行）。
+- 现有产物（`app/build/outputs/apk/`）：`app-prod-release.apk`（**10-18，6.37 MB，已签名**）、`app-prod-debug.apk`（10-17，19.75 MB）、`app-fake-debug.apk`（10-12，17.81 MB）。
+- ✅ **编译与打包已验证；真机安装与运行验证仍由使用者完成。**
 
 **缺失 / 风险**
-- 二级页面大量占位：报表明细（分类占比/卡流水/转账/负债）、预算类型（购物/旅行/餐饮）、数据管理（校验/导入/导出/备份）、PIN 管理/设置、资源库、信用卡中心/分期创建、账单详情/台账、还款增改、日记发布/详情、工资日历/日明细/月统计。
-- 加密握手/限流/指纹**未与真后端联调**（协议实现齐全但未经验证）。
-- 无自动化测试、无 lint/CI。
-- 与安全键盘/PIN 前端骨架一致，但端到端安全链路未验。
+- 未接路由 1 条：`CARD_FLOW`（web 自身死页面，见 `项目构造书.md` 附录判定；另有 `Routes.CARD_*` 三常量共用 `CardManageScreen`）。
+- 非 1:1 复用 1 处：银行分类管理复用分类管理屏（web 是卡片网格 + 银行图标上传）。
+- 结构性差距：报表选月用 `VanPicker` 而非月历弹层；日历网格缺「账 / 还」角标；图表（web 用 echarts）为自绘（`ui/common/chart/`）。
+- 端到端安全链路（PIN 全链路、429 限流兜底、设备指纹漂移）建议上线前完整走一遍。
+- 无业务自动化测试（`tests/` 下无 `.kt`）、无 lint/CI。
 
 ---
 
@@ -238,13 +267,17 @@ APP/
 
 ---
 
-## 12. 上线前清单（建议拍板）
+## 12. 上线前清单
 
-- [ ] 纳入 git 版本管理（`D:\Code\ive` 父目录或单独仓库）。
-- [ ] Android Studio 真机 `assembleFakeDebug` + `assembleProdDebug` 验证可编译可启动。
-- [ ] prod `BASE_URL` 改 `https://live.jihau.top`，确认 HTTPS + 加密隧道。
-- [ ] 与真后端联调：握手、AES 信封、限流 429、PIN/安全键盘。
-- [ ] 补占位路由（优先级建议：报表明细 > PIN/安全域 > 数据管理 > 日记二级 > 工资）。
+- [x] 纳入 git 版本管理（`APP/` 仓库；当前 HEAD 见 `git log`）。
+- [x] `:app:assembleFakeDebug` + `:app:assembleProdDebug` 编译通过（2026-09-18 起持续通过）。
+- [x] **版本号转正**：`versionName 2.1.0` / `versionCode 20100`（对齐 H5 套壳包的版本线）。
+- [x] **发布签名**：`release.jks` 与 `gradle.properties` 的 `RELEASE_KEYSTORE`/口令（本机或 `~/.gradle/gradle.properties`，**不入库**）；已产出 `app-prod-release.apk`（10-18）。步骤见 `D:\Code\live\APP-RELEASE-SIGNING.md`（正式版：`Docs/docs/app/release-signing.md`）。
+- [x] **站点地址改为运行时输入**（BYO-backend）：APK 内不含任何后端地址与分享域名。
+- [ ] 混淆规则（R8/ProGuard）核对：确认不破坏 Gson 模型与反射字段。
+- [ ] 真机安装运行验证（`prod` release 包 + `fake` 调试包各一遍）。
+- [ ] 与真后端联调：接入站点 → 握手、AES 信封、限流 429、PIN / 安全键盘全链路。
+- [ ] 可选安全项按需配置：`API_HOST`（域名锁定）、`API_PINNED_SHA256`（仅自签/固定 CA 才填）。
 - [ ] 与 `webview-APP` 路线二选一或明确并存策略。
 
 ---
@@ -253,6 +286,7 @@ APP/
 
 | 文档 | 内容 |
 |---|---|
+| `docs/项目构造书.md` | **接手首选**：完整施工图 + 交接书（文件↔源文件对照表、改造操作手册、注意事项、P0–P3 坑清单、域契约速查、上线清单） |
 | `docs/PROJECT-ARCHITECTURE.md`（本文件） | 架构、模块、文件/文件夹全介绍、构建运行、扩展指引 |
-| `docs/vant-components-inventory.md` | `vant-ui` 复刻的 Vant 组件能力清单（45 类 + 函数式 API） |
-| `docs/web-audit-pages.md` | web 原有功能/样式逐页面参考（约 95 页 + 组件 + 主题变量 + web→APP 路由对照），重构 UI 的规格书 |
+| `docs/vant-components-inventory.md` | `vant-ui` 复刻的 Vant 组件能力清单（45 类 `Van*` + 函数式 API） |
+| `docs/web-audit-pages.md` | web 原有功能/样式逐页面参考（逐页 + 组件 + 主题变量 + web→APP 路由对照），重构 UI 的规格书 |

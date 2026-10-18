@@ -1,6 +1,5 @@
 package com.live.finance.ui.bankcard
 
-import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -10,10 +9,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -24,8 +23,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -33,9 +32,13 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import com.live.finance.App
 import com.live.finance.core.net.ApiResult
+import com.live.finance.core.net.failMessage
+import com.live.finance.core.net.failToastType
 import com.live.finance.data.model.Category
 import com.live.finance.data.repo.NewCard
 import com.live.finance.theme.LocalAppColors
+import com.live.finance.ui.common.AppButton
+import com.live.finance.ui.common.AppButtonType
 import com.live.finance.ui.common.ScreenScaffold
 import com.live.finance.ui.flow.FText
 import com.live.vant.feedback.VanPopup
@@ -45,6 +48,8 @@ import com.live.vant.form.VanNumberKeyboard
 import com.live.vant.icon.VanIcon
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import com.live.vant.feedback.LocalVanToastController
+import com.live.vant.feedback.VanToastType
 
 /** `card/Add.vue` 的 formData（原文初始值）。 */
 private data class CardAddForm(
@@ -104,8 +109,8 @@ fun CardAddScreen(nav: NavHostController) {
 
     val binExpected = binExpectedLength(form.cardOrg)
 
-    fun toast(m: String) = Toast.makeText(context, m, Toast.LENGTH_SHORT).show()
-
+    val vanToast = LocalVanToastController.current
+    fun toast(m: String, type: VanToastType = VanToastType.Text) = vanToast.show(m, type)
     /** 选卡组织联动（Add 独有）：BIN 前缀 + 卡号长度 + 过期日期。 */
     fun onOrgPicked(org: String) {
         val cfg = CARD_ORG_BIN_PREFIX[org]
@@ -127,11 +132,18 @@ fun CardAddScreen(nav: NavHostController) {
     }
 
     fun submit() {
+        // web `card/Add.vue`：`app-form` 的 rules 按**字段顺序**校验（native-type=submit 触发）
         if (form.bankId.isBlank()) { toast("请选择银行"); return }
-        validateLast4(); validateCardBin()
-        if (form.last4No.isBlank() || form.last4No.length != 4) { toast("请输入4位卡号"); return }
+        if (form.cardOrg.isBlank()) { toast("请选择卡组织"); return }
+        if (form.cardLength.isBlank()) { toast("请选择卡号长度"); return }
         if (form.cardBin.isBlank()) { toast("请输入卡BIN"); return }
+        if (form.last4No.isBlank()) { toast("请输入4位卡号"); return }
         if (form.openDate.isBlank()) { toast("请选择开卡日期"); return }
+        // web `onSubmit` 的两条长度校验：**只 toast + return，不清空字段**
+        //   （`validateLast4No` / `validateCardBin` 里那句清空只挂在「数字键盘关闭」上，不在提交路径）
+        // —— 旧实现调了那两个函数，导致提交时填错的字段被静默清空。
+        if (form.last4No.isNotEmpty() && form.last4No.length != 4) { toast("卡号后4位必须为4位数字"); return }
+        if (form.cardBin.isNotEmpty() && form.cardBin.length < 6) { toast("卡BIN必须至少6位数字"); return }
         submitting = true
         scope.launch {
             val p = NewCard(
@@ -145,9 +157,9 @@ fun CardAddScreen(nav: NavHostController) {
                 omitBlankOptional = true,
             )
             when (val r = graph.card.createNew(p)) {
-                is ApiResult.Ok -> { toast("添加成功"); nav.popBackStack() }
-                is ApiResult.Fail -> toast(r.message.ifBlank { "添加失败" })
-                else -> toast("添加失败")
+                is ApiResult.Ok -> { toast("添加成功", VanToastType.Success); nav.popBackStack() }
+                is ApiResult.Fail -> toast(r.message.ifBlank { "添加失败" }, VanToastType.Fail)
+                else -> toast(r.failMessage("添加失败"), r.failToastType())
             }
             submitting = false
         }
@@ -156,7 +168,6 @@ fun CardAddScreen(nav: NavHostController) {
     Box(Modifier.fillMaxSize().background(colors.bgPage)) {
         ScreenScaffold { inner ->
             Column(Modifier.fillMaxSize().then(inner)) {
-                BankTopBar(title = "添加卡片", onBack = { nav.popBackStack() })
                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
                     // ===== 基本信息 =====
                     FormSection(title = "基本信息", requiredHint = true) {
@@ -176,8 +187,9 @@ fun CardAddScreen(nav: NavHostController) {
                         InputRow("卡片别名", form.alias, { form = form.copy(alias = it) }, "如：工资卡、留学卡")
                     }
                     // ===== 外观 =====
+                    // web 的颜色区**没有 label**（分区标题「外观」即其标题），且是独立的 `.color-section` 白块
                     FormSection(title = "外观") {
-                        ColorPickerRow("卡片颜色", form.color, { form = form.copy(color = it) }, border = false)
+                        ColorPickerRow(value = form.color, onSelect = { form = form.copy(color = it) }, border = false)
                     }
                     // ===== 设置 =====
                     FormSection(title = "设置") {
@@ -191,30 +203,33 @@ fun CardAddScreen(nav: NavHostController) {
                         InputRow("标签", form.tag, { form = form.copy(tag = it) }, "如：日常消费、出国使用")
                         InputRow("备注", form.remark, { form = form.copy(remark = it) }, "其他备注信息", border = false)
                     }
-                    Spacer(Modifier.height(24.dp))
+                    // web `.submit-btn-wrap{ margin: 32px 16px }` —— 提交按钮**在滚动流里**跟着表单走，
+                    // **不是**固定在底部（旧实现是自绘的固定底栏按钮，结构不符；且 web 用的是
+                    // `app-button type=primary block round :loading`，loading 态由按钮自身承担）。
+                    Spacer(Modifier.height(32.dp))
+                    AppButton(
+                        text = "保存借记卡",
+                        onClick = { submit() },
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        type = AppButtonType.Primary,
+                        block = true,
+                        round = true,
+                        loading = submitting,
+                        disabled = submitting,
+                    )
+                    Spacer(Modifier.height(32.dp)) // .submit-btn-wrap 的下外边距
+                    Spacer(Modifier.height(40.dp)) // .page-add-card{ padding-bottom: 40px }
                 }
-                // 提交
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp)
-                        .height(48.dp)
-                        .clip(RoundedCornerShape(24.dp))
-                        .background(if (submitting) colors.primary.copy(alpha = 0.6f) else colors.primary)
-                        .clickable(enabled = !submitting) { submit() },
-                    contentAlignment = Alignment.Center,
-                ) { FText(if (submitting) "保存中…" else "保存借记卡", 16f, FontWeight.SemiBold, Color.White) }
             }
         }
 
         // ===== 弹层 =====
         BankPickerSheet(showBank, banks, { b -> form = form.copy(bankId = b.id, bankName = b.name); showBank = false }, { showBank = false })
-        PickerSheet(showOrg, CARD_ORG_COLUMNS, CARD_ORG_COLUMNS.indexOf(form.cardOrg).coerceAtLeast(0), null,
-            { idx -> onOrgPicked(CARD_ORG_COLUMNS[idx]); showOrg = false }, { showOrg = false })
-        IndexedPickerSheet(showLength, CARD_LENGTH_COLUMNS, form.cardLength, null,
+        OrgPickerSheet(showOrg, form.cardOrg, { org -> onOrgPicked(org); showOrg = false }, { showOrg = false })
+        IndexedPickerSheet(showLength, CARD_LENGTH_COLUMNS, form.cardLength, "选择卡号长度",
             { v -> form = form.copy(cardLength = v); showLength = false }, { showLength = false })
-        PickerSheet(showLevel, CARD_LEVEL_ADD, CARD_LEVEL_ADD.indexOf(form.cardLevel).coerceAtLeast(0), null,
-            { idx -> form = form.copy(cardLevel = CARD_LEVEL_ADD[idx]); showLevel = false }, { showLevel = false })
+        PickerSheet(showLevel, CARD_LEVEL_COLUMNS, CARD_LEVEL_COLUMNS.indexOf(form.cardLevel).coerceAtLeast(0), null,
+            { idx -> form = form.copy(cardLevel = CARD_LEVEL_COLUMNS[idx]); showLevel = false }, { showLevel = false })
         PickerSheet(showMainSub, MAIN_SUB_COLUMNS, MAIN_SUB_COLUMNS.indexOf(form.mainSub).coerceAtLeast(0), null,
             { idx -> form = form.copy(mainSub = MAIN_SUB_COLUMNS[idx]); showMainSub = false }, { showMainSub = false })
         IndexedPickerSheet(showCurrency, CURRENCY_COLUMNS, form.currency, "选择币种",
@@ -279,21 +294,6 @@ fun parseYm(s: String): LocalDate {
 
 fun ymdOf(d: LocalDate): String = "%04d-%02d-%02d".format(d.year, d.monthValue, d.dayOfMonth)
 
-/** 通用顶部栏（web 由 MainLayout 全局提供，原生各页自绘）。 */
-@Composable
-fun BankTopBar(title: String, onBack: () -> Unit) {
-    val colors = LocalAppColors.current
-    Row(
-        Modifier.fillMaxWidth().height(46.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(Modifier.clickable { onBack() }.padding(horizontal = 12.dp, vertical = 8.dp)) {
-            VanIcon("arrow-left", size = 20.sp, color = colors.textPrimary)
-        }
-        FText(title, 17f, FontWeight.SemiBold, colors.textPrimary, Modifier.weight(1f))
-        Spacer(Modifier.width(44.dp))
-    }
-}
 
 /** 日期选择弹层（web `van-date-picker`）。 */
 @Composable

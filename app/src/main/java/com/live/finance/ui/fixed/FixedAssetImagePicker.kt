@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.sp
 import com.live.finance.App
 import com.live.finance.core.AppConfig
 import com.live.finance.core.net.ApiResult
+import com.live.finance.core.net.failMessage
 import com.live.finance.data.model.Resource
 import com.live.finance.theme.LocalAppColors
 import com.live.finance.ui.common.compressUriToJpeg
@@ -53,6 +54,8 @@ import com.live.vant.icon.VanIcon
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.live.finance.core.net.showFail
+import com.live.vant.feedback.VanToastType
 
 /** 资产图片的资源库 busType（web `getAssetImageList` / `uploadAssetImage` 均用 `product`）。 */
 internal const val BUS_TYPE_PRODUCT = "product"
@@ -90,7 +93,7 @@ internal fun FixedAssetImagePickerPopup(
         imageList = when (val r = graph.resource.list(BUS_TYPE_PRODUCT, "", 100, 0)) {
             is ApiResult.Ok -> r.data.orEmpty()
             else -> {
-                toast.show("加载图片失败")
+                toast.showFail(r, "加载图片失败")
                 emptyList()
             }
         }
@@ -116,13 +119,13 @@ internal fun FixedAssetImagePickerPopup(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                FText("选择资产图片", 17f, FontWeight.SemiBold, colors.textPrimary)
+                FText("选择资产图片", 18f, FontWeight.SemiBold, colors.textPrimary)
                 Box(Modifier.clickable(onClick = onDismiss).padding(4.dp)) {
                     VanIcon(name = "cross", size = 18.sp, color = colors.textTertiary)
                 }
             }
 
-            FText("上传新图片", 14f, FontWeight.Normal, colors.textSecondary)
+            FText("上传新图片", 16f, FontWeight.Normal, colors.textSecondary)
             Spacer(Modifier.height(8.dp))
 
             val uploadPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
@@ -133,7 +136,7 @@ internal fun FixedAssetImagePickerPopup(
                     val f = withContext(Dispatchers.IO) { compressUriToJpeg(ctx, uri, maxSide = 1920) }
                     if (f == null) {
                         imageUploading = false
-                        toast.show("上传失败")
+                        toast.show("上传失败", VanToastType.Fail)
                         return@launch
                     }
                     val r = graph.client.uploadRaw(
@@ -146,7 +149,7 @@ internal fun FixedAssetImagePickerPopup(
                             toast.success("上传成功")
                             loadImageList()
                         }
-                        else -> toast.show("上传失败")
+                        else -> toast.showFail(r, "上传失败")
                     }
                 }
             }
@@ -186,7 +189,7 @@ internal fun FixedAssetImagePickerPopup(
                 }
 
                 imageList.isEmpty() -> Box(Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
-                    FText("暂无图片", 14f, FontWeight.Normal, colors.textSecondary)
+                    FText("暂无图片", 16f, FontWeight.Normal, colors.textSecondary)
                 }
 
                 else -> Column(Modifier.fillMaxWidth()) {

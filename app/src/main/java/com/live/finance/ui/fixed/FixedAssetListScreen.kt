@@ -45,7 +45,9 @@ import com.live.finance.core.nav.Routes
 import com.live.finance.core.net.ApiResult
 import com.live.finance.data.model.FixedAsset
 import com.live.finance.theme.LocalAppColors
+import com.live.vant.basic.VanEmpty
 import com.live.finance.theme.LocalAppTokens
+import com.live.finance.theme.scaledSp
 import com.live.finance.ui.common.AppButton
 import com.live.finance.ui.common.AppButtonType
 import com.live.finance.ui.common.ScreenScaffold
@@ -235,7 +237,7 @@ private fun StatsCard(
 private fun StatCell(label: String, value: String, modifier: Modifier, valueAlpha: Float) {
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         FText(label, 12f, FontWeight.Normal, Color.White.copy(alpha = 0.85f))
-        FText(value, 16f, FontWeight.Bold, Color.White.copy(alpha = valueAlpha))
+        FText(value, 18f, FontWeight.Bold, Color.White.copy(alpha = valueAlpha))
     }
 }
 
@@ -279,7 +281,7 @@ private fun AssetCard(a: FixedAsset, onClick: () -> Unit) {
                     modifier = Modifier.weight(1f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    style = TextStyle(color = colors.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold),
+                    style = TextStyle(color = colors.textPrimary, fontSize = scaledSp(16f), fontWeight = FontWeight.SemiBold),
                 )
                 VanTag(text = a.statusLabel, type = a.statusTagType.toVanTagType(), size = VanTagSize.Small)
             }
@@ -294,12 +296,12 @@ private fun AssetCard(a: FixedAsset, onClick: () -> Unit) {
             // .card-footer{margin-top 6; gap 8}：折旧两行 + 已使用 / 每日成本 / 折旧完毕
             Column(Modifier.fillMaxWidth().padding(top = 6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    if (a.monthDeprec > 0) FText("月折旧 ¥${fixed2(a.monthDeprec)}", 11f, FontWeight.Normal, colors.textTertiary)
-                    if (a.totalDeprec > 0) FText("累计折旧 ¥${fixed2(a.totalDeprec)}", 11f, FontWeight.Normal, colors.textTertiary)
+                    if (a.monthDeprec > 0) FText("月折旧 ¥${fixed2(a.monthDeprec)}", 12f, FontWeight.Normal, colors.textTertiary)
+                    if (a.totalDeprec > 0) FText("累计折旧 ¥${fixed2(a.totalDeprec)}", 12f, FontWeight.Normal, colors.textTertiary)
                 }
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FText("已使用：${usedTimeLabel(a)}", 11f, FontWeight.Normal, tokens.primary)
-                    FText("每日成本 ¥${dailyCost(a)}", 11f, FontWeight.Normal, colors.danger)
+                    FText("已使用：${usedTimeLabel(a)}", 12f, FontWeight.Normal, tokens.primary)
+                    FText("每日成本 ¥${dailyCost(a)}", 12f, FontWeight.Normal, colors.danger)
                     if (a.deprecFinished) {
                         VanTag(text = "折旧完毕", type = VanTagType.Success, size = VanTagSize.Small, plain = true)
                     }
@@ -316,7 +318,7 @@ private fun InfoRow(label: String, value: String, valueColor: androidx.compose.u
     val colors = LocalAppColors.current
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         FText(label, 12f, FontWeight.Normal, colors.textTertiary)
-        FText(value, 13f, FontWeight.SemiBold, valueColor)
+        FText(value, 14f, FontWeight.SemiBold, valueColor)
     }
 }
 
@@ -326,14 +328,14 @@ private fun InfoRow(label: String, value: String, valueColor: androidx.compose.u
  */
 @Composable
 private fun FixedEmpty(descriptionColor: androidx.compose.ui.graphics.Color) {
-    Column(
-        Modifier.fillMaxWidth().padding(top = 32.dp, bottom = 32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Box(Modifier.size(160.dp))
-        Spacer(Modifier.height(16.dp))
-        FText("暂无固定资产", 14f, FontWeight.Normal, descriptionColor)
-    }
+    // web `fixedAsset/List.vue:100`：
+    //   <van-empty description="暂无固定资产"><template #image><van-icon name="albums-o" size="60" /></template></van-empty>
+    // 旧实现是「160dp 空白 Box + 一行文字」手搓的，且**漏了那张 60px 的 albums-o 图标**。
+    // 图标色取 Vant `.van-empty__image{ color: var(--van-gray-5) }` = #c8c9cc（Vant 空态图是固定浅灰，不跟主题）。
+    VanEmpty(
+        description = "暂无固定资产",
+        imageSlot = { VanIcon("albums-o", size = 60.sp, color = androidx.compose.ui.graphics.Color(0xFFC8C9CC)) },
+    )
 }
 
 /** web `getStatusType` → `app-tag` 的 type（原生用 [com.live.vant.basic.VanTag]）。 */

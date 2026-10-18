@@ -1,5 +1,6 @@
 package com.live.finance.ui.account
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -53,6 +54,7 @@ import com.live.finance.ui.common.MoneyColor
 import com.live.finance.ui.common.ScreenScaffold
 import com.live.finance.ui.flow.FText
 import com.live.vant.basic.VanEmpty
+import com.live.vant.basic.VanSkeleton
 import com.live.vant.feedback.VanPopup
 import com.live.vant.feedback.VanPopupPosition
 import com.live.vant.feedback.VanPullRefresh
@@ -60,9 +62,9 @@ import com.live.vant.feedback.rememberVanPullRefreshState
 import com.live.vant.form.VanPicker
 import com.live.vant.form.VanPickerOption
 import com.live.vant.icon.VanIcon
-import com.live.vant.nav.VanNavBar
 import com.live.vant.nav.VanTabItem
 import com.live.vant.nav.VanTabs
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.util.Calendar
@@ -73,7 +75,15 @@ import java.util.Calendar
  * 按日分组流水（还款行置灰，外币金额带币种 tag）→ 下拉刷新 + 分页（20 条/页）。
  */
 @Composable
-fun CardFlowScreen(nav: NavHostController, cardId: String) {
+@OptIn(ExperimentalFoundationApi::class)   // stickyHeader（置顶块）
+fun CardFlowScreen(
+    nav: NavHostController,
+    cardId: String,
+    /** web `Number(route.query.year) || now.year()` —— 0/缺省 = 本年（`CardFlow.vue:177`） */
+    yearArg: Int = 0,
+    /** web `Number(route.query.month) || now.month()+1`（`CardFlow.vue:178`） */
+    monthArg: Int = 0,
+) {
     val colors = LocalAppColors.current
     val graph = App.of(LocalContext.current).graph
     val scope = rememberCoroutineScope()
@@ -88,21 +98,30 @@ fun CardFlowScreen(nav: NavHostController, cardId: String) {
     var filterType by remember { mutableStateOf("all") }
     var showDatePicker by remember { mutableStateOf(false) }
     val now = remember { Calendar.getInstance() }
-    var year by remember { mutableStateOf(now.get(Calendar.YEAR)) }
-    var month by remember { mutableStateOf(now.get(Calendar.MONTH) + 1) }
+    // URL 入参优先（web `?year=&month=`），缺省或非法落回本月
+    var year by remember { mutableStateOf(if (yearArg > 0) yearArg else now.get(Calendar.YEAR)) }
+    var month by remember {
+        mutableStateOf(if (monthArg in 1..12) monthArg else now.get(Calendar.MONTH) + 1)
+    }
 
     val rows = remember { mutableStateListOf<FlowRow>() }
     var page by remember { mutableStateOf(1) }
     var finished by remember { mutableStateOf(false) }
     var requesting by remember { mutableStateOf(false) }
+    /** 整表重新加载中（web `loading`）—— 期间列表区显示**骨架屏**，不要直接落到「暂无流水记录」。 */
+    var loading by remember { mutableStateOf(false) }
     var summaryIncome by remember { mutableStateOf(0.0) }
     var summaryExpense by remember { mutableStateOf(0.0) }
     var hasSummary by remember { mutableStateOf(false) }
 
     val limit = 20
-    val monthFirst = remember(year, month) { LocalDate.of(year, month, 1) }
-    val startDate = monthFirst.toString()
-    val endDate = monthFirst.withDayOfMonth(monthFirst.lengthOfMonth()).toString()
+    // ⚠ 区间必须**在调用时现算**（函数），不能存成组合期的局部 val：
+    //   `onRefresh()` 与月份选择器的 `onConfirm` 是同一 lambda 里「先改 year/month 再刷新」，
+    //   闭包捕获的是**上一次组合**的 startDate/endDate ⇒ 拉的还是上个月的数据，而标题已经换新月份，
+    //   表现就是负责人说的「选择月份后未能及时加载，下拉刷新才出来」。
+    fun monthFirst(): LocalDate = LocalDate.of(year, month, 1)
+    fun startDate(): String = monthFirst().toString()
+    fun endDate(): String = monthFirst().withDayOfMonth(monthFirst().lengthOfMonth()).toString()
 
     // ===== web getCardDisplayText / getCardBankIcon / getCardBankName =====
     fun bankOf(card: Card): Category? = banks.firstOrNull { it.id == card.bankId }
@@ -119,7 +138,11 @@ fun CardFlowScreen(nav: NavHostController, cardId: String) {
         }
     }
     fun bankIconOf(card: Card): String = bankOf(card)?.iconUrl.orEmpty()
-    fun bankNameOf(card: Card): String = bankOf(card)?.name ?: card.bankName
+    // ⚠ 必须像 web 那样按「空串」逐级兜底（web `getCardBankName = bank?.name || bank?.bank_name || card.bank_name`）：
+    //   原来用 `?:` 只判 null ⇒ 字典里有这条银行但 `name` 是空串时返回 ""，
+    //   `BankIconView` 的 `if (initial.isNotEmpty())` 就不画首字 ⇒ logo 位只剩一个 16dp 空块（负责人「缺少文字/银行logo展示位」）。
+    fun bankNameOf(card: Card): String =
+        bankOf(card)?.name?.ifBlank { null } ?: card.bankName.ifBlank { null } ?: ""
 
     // web availableCards：弹层只列【借记卡】
     val pickerCards = run {
@@ -136,12 +159,15 @@ fun CardFlowScreen(nav: NavHostController, cardId: String) {
         else -> null
     }
 
-    fun onRefresh() {
-        val card = selectedCard ?: return
+    /** 刷新首页 + 摘要。**返回协程 Job** 给下拉刷新 `join()` 用（否则 `finishRefresh()` 会同帧收起转圈）。 */
+    fun onRefresh(): Job? {
+        val card = selectedCard ?: return null
         page = 1; finished = false
-        scope.launch {
+        // web `loadData(reset=true)` ⇒ `loading = true` ⇒ 列表区显示**骨架屏**（不是空态）
+        loading = true
+        return scope.launch {
             // 摘要：当月全量（limit=10000）汇总，与分页列表分离（web loadSummary）
-            when (val s = graph.flow.listByCard(card.id, 1, 10000, startDate, endDate)) {
+            when (val s = graph.flow.listByCard(card.id, 1, 10000, startDate(), endDate())) {
                 is ApiResult.Ok -> {
                     val data = s.data.orEmpty()
                     summaryIncome = data.filter { it.direction == 1 }.sumOf { it.amount }
@@ -151,7 +177,7 @@ fun CardFlowScreen(nav: NavHostController, cardId: String) {
                 else -> hasSummary = false
             }
             requesting = true
-            when (val r = graph.flow.listByCard(card.id, 1, limit, startDate, endDate, directionFilter())) {
+            when (val r = graph.flow.listByCard(card.id, 1, limit, startDate(), endDate(), directionFilter())) {
                 is ApiResult.Ok -> {
                     val data = r.data.orEmpty()
                     rows.clear(); rows.addAll(data)
@@ -161,6 +187,7 @@ fun CardFlowScreen(nav: NavHostController, cardId: String) {
                 else -> finished = true
             }
             requesting = false
+            loading = false
         }
     }
 
@@ -177,7 +204,7 @@ fun CardFlowScreen(nav: NavHostController, cardId: String) {
         if (!needLoadMore) return@LaunchedEffect
         val card = selectedCard ?: return@LaunchedEffect
         requesting = true
-        when (val r = graph.flow.listByCard(card.id, page, limit, startDate, endDate, directionFilter())) {
+        when (val r = graph.flow.listByCard(card.id, page, limit, startDate(), endDate(), directionFilter())) {
             is ApiResult.Ok -> {
                 val data = r.data.orEmpty()
                 rows.addAll(data)
@@ -189,12 +216,16 @@ fun CardFlowScreen(nav: NavHostController, cardId: String) {
         requesting = false
     }
 
+    // 唯一的数据入口：选卡 / 换月都走这里（**不在** 选择器 onConfirm 里再调一次，避免重复请求 ——
+    //   第十八轮刚处理过一次「重复请求 + 卡死」的同类问题）。
+    LaunchedEffect(selectedCard, year, month) { onRefresh() }
+
     LaunchedEffect(Unit) {
         cards = (graph.card.list(null) as? ApiResult.Ok)?.data ?: emptyList()
         banks = (graph.category.list("bank") as? ApiResult.Ok)?.data ?: emptyList()
-        // web onMounted：路由 cardId 预选（任意卡类型）
+        // web onMounted：路由 cardId 预选（任意卡类型）；实际拉数交给上面那个 LaunchedEffect
         if (cardId.isNotBlank()) {
-            cards.firstOrNull { it.id == cardId }?.let { selectedCard = it; onRefresh() }
+            cards.firstOrNull { it.id == cardId }?.let { selectedCard = it }
         }
     }
 
@@ -214,11 +245,16 @@ fun CardFlowScreen(nav: NavHostController, cardId: String) {
 
     ScreenScaffold { inner ->
         Column(inner.fillMaxSize()) {
-            com.live.vant.nav.VanNavBar(title = "银行卡收支明细", leftArrow = true, onClickLeft = { nav.popBackStack() })
             VanPullRefresh(
                 state = refreshState,
                 isChildAtTop = { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0 },
-                onRefresh = { scope.launch { onRefresh(); refreshState.finishRefresh() } },
+                onRefresh = {
+                    // 必须等这一次请求真的结束再收刷新头：原来 `scope.launch { onRefresh(); finishRefresh() }`
+                    //   里 onRefresh 只是"又起了一个协程"就立刻返回 ⇒ finishRefresh 同帧把 Loading→Normal，
+                    //   转圈一闪就没、isTouchable 立刻恢复，连着下拉会并发多个请求抢 rows/page。
+                    //   web 是 `Promise.all(...).finally(() => refreshing = false)`（CardFlow.vue:242）。
+                    scope.launch { onRefresh()?.join(); refreshState.finishRefresh() }
+                },
                 modifier = Modifier.weight(1f),
             ) {
                 LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
@@ -229,19 +265,27 @@ fun CardFlowScreen(nav: NavHostController, cardId: String) {
                                 .padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            FText("请选择银行卡", 13f, color = colors.textTertiary)
+                            FText("请选择银行卡", 14f, color = colors.textTertiary)
                             Spacer(Modifier.width(8.dp))
+                            // web 这行是 `app-cell`：`.app-cell__body{flex:1}` 把值整组推到**右边**，
+                            //   `.app-cell__value{flex-shrink:0; text-align:right}` + 紧跟 right-icon，
+                            //   并且 app-cell 自己还有 16px 横向内缩（叠加外层 .card-selector 的 16 ⇒ 右缘距屏幕 32）。
+                            //   原生原来是 `weight(1f)` + 文本再 weight(1f) ⇒ 值贴着 label 靠左、中间一大空档。
                             Row(
-                                Modifier.weight(1f).clickable { showCardPicker = true }.padding(vertical = 10.dp),
+                                Modifier.weight(1f).clickable { showCardPicker = true }
+                                    .padding(vertical = 10.dp).padding(end = 16.dp),
                                 verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.End,
                             ) {
                                 val card = selectedCard
                                 if (card == null) {
-                                    FText("请选择银行卡", 14f, color = colors.textTertiary, modifier = Modifier.weight(1f))
+                                    FText("请选择银行卡", 16f, color = colors.textTertiary)
                                 } else {
                                     BankIconView(bankIconOf(card), bankNameOf(card), size = 16.dp, rounded = 2.dp)
                                     Spacer(Modifier.width(4.dp))
-                                    FText(displayText(card), 14f, color = colors.textPrimary, modifier = Modifier.weight(1f))
+                                    FText(displayText(card), 16f, color = colors.textPrimary,
+                                        modifier = Modifier.weight(1f, fill = false), maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                                 }
                                 VanIcon("arrow", size = 14.sp, color = colors.textTertiary)
                             }
@@ -256,7 +300,14 @@ fun CardFlowScreen(nav: NavHostController, cardId: String) {
                         }
                     } else {
                         // ===== 筛选条（web .filter-bar：tabs shrink + 月份筛选）=====
-                        item {
+                        // ⚠ 用 stickyHeader 而**不是 item**：负责人要求「这一块 Tab 顶部置顶、下面列表滚动」
+                        //   （2026-09-19）。Vant 侧等价做法是给 van-tabs 加 `sticky`，web 这版没加，
+                        //   但原生列表是可滚动容器，不置顶会让筛选条跟着划走。
+                        stickyHeader {
+                            // 置顶块 = 筛选条 + 摘要，两者钉在一起，流水列表从下方滚过。
+                            //   外层必须铺 bgPage：摘要四周那 8dp 留白要露出页面底色（web `.stats-summary{margin:8px 16px}`），
+                            //   且钉顶后它会盖在滚动的列表之上，不透明才不透字。
+                            Column(Modifier.fillMaxWidth().background(colors.bgPage)) {
                             Row(
                                 Modifier.fillMaxWidth().background(colors.bgCard).padding(horizontal = 16.dp, vertical = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically,
@@ -270,6 +321,10 @@ fun CardFlowScreen(nav: NavHostController, cardId: String) {
                                         VanTabItem("expense", "支出"),
                                     ),
                                     shrink = true,
+                                    // web `.filter-bar{background:var(--theme-bg-secondary)}` 与
+                                    //   `.van-tabs__nav{background:var(--van-tabs-nav-background)}` 在
+                                    //   深色下不是同一个值 ⇒ 显式对齐，避免筛选条上出现一条深色接缝。
+                                    navBackground = colors.bgCard,
                                     modifier = Modifier.weight(1f),
                                     content = { },
                                 )
@@ -280,32 +335,36 @@ fun CardFlowScreen(nav: NavHostController, cardId: String) {
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                                 ) {
-                                    FText("${year}年${month}月", 13f, color = colors.textSecondary)
+                                    FText("${year}年${month}月", 14f, color = colors.textSecondary)
                                     VanIcon("arrow-down", size = 12.sp, color = colors.textSecondary)
                                 }
                             }
-                        }
 
-                        // ===== 摘要（web .stats-summary）=====
-                        if (hasSummary) {
-                            item {
+                            // ===== 摘要（web .stats-summary）=====
+                            //   与筛选条同处一个 stickyHeader ⇒ 一起钉顶（负责人 2026-09-19 要求；
+                            //   web 这页本来没有 sticky，属**安卓侧有意偏离**，web 不同步）。
+                            if (hasSummary) {
                                 Row(
                                     Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
                                         .clip(RoundedCornerShape(12.dp)).background(colors.bgCard).padding(16.dp),
                                     horizontalArrangement = Arrangement.SpaceAround,
                                 ) {
                                     SummaryItem("收入", "+${Money.format(summaryIncome)}", MoneyColor.income)
-                                    SummaryItem("支出", "-${Money.format(summaryExpense)}", colors.textPrimary)
+                                    // web `.summary-item .expense{color:var(--money-expense)}` ⇒ 钱色（red-in 下＝绿）。
+                                    //   流水行那条才是黑：`.item-right .expense{color:var(--theme-text-primary)}`（见 FlowLine），
+                                    //   两处之前都写成 textPrimary，所以「支出」跟着收入一起变色/不变色的观感与 web 不同。
+                                    SummaryItem("支出", "-${Money.format(summaryExpense)}", MoneyColor.expense)
                                     SummaryItem("笔数", "${rows.size}", colors.textPrimary)
                                 }
                             }
+                            } // Column：置顶块（筛选条 + 摘要）
                         }
 
                         // ===== 按日分组流水 =====
                         grouped.forEach { (date, items) ->
                             item(key = "h_$date") {
                                 Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
-                                    FText(dateHeaderText(date), 13f, color = colors.textSecondary,
+                                    FText(dateHeaderText(date), 14f, color = colors.textSecondary,
                                         modifier = Modifier.fillMaxWidth().background(colors.bgPage)
                                             .padding(horizontal = 16.dp, vertical = 8.dp))
                                 }
@@ -317,7 +376,24 @@ fun CardFlowScreen(nav: NavHostController, cardId: String) {
                             }
                         }
 
-                        if (rows.isEmpty() && !requesting) {
+                        if (loading) {
+                            // web：`<van-skeleton :row="3" v-for="i in 5" class="skeleton-item" />`
+                            //   5 个骨架块，整体包在 `van-cell-group inset`（白卡、radius 8）里，每块 padding 16。
+                            item {
+                                Column(
+                                    Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                                        .clip(RoundedCornerShape(8.dp)).background(colors.bgCard),
+                                ) {
+                                    repeat(5) {
+                                        VanSkeleton(
+                                            loading = true,
+                                            row = 3,
+                                            modifier = Modifier.padding(16.dp),
+                                        ) { }
+                                    }
+                                }
+                            }
+                        } else if (rows.isEmpty() && !requesting) {
                             item {
                                 Box(Modifier.fillMaxWidth().padding(top = 40.dp), contentAlignment = Alignment.Center) {
                                     VanEmpty(description = "暂无流水记录")
@@ -349,7 +425,7 @@ fun CardFlowScreen(nav: NavHostController, cardId: String) {
                     Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    FText("选择银行卡或信用卡", 16f, FontWeight.SemiBold, colors.textPrimary)
+                    FText("选择银行卡或信用卡", 18f, FontWeight.SemiBold, colors.textPrimary)
                     VanIcon("cross", size = 20.sp, color = colors.textTertiary,
                         modifier = Modifier.clickable { showCardPicker = false })
                 }
@@ -363,7 +439,7 @@ fun CardFlowScreen(nav: NavHostController, cardId: String) {
                 ) {
                     if (pickerCards.isEmpty()) {
                         Box(Modifier.fillMaxWidth().padding(vertical = 30.dp), contentAlignment = Alignment.Center) {
-                            FText("未找到匹配的银行卡", 14f, color = colors.textTertiary)
+                            FText("未找到匹配的银行卡", 16f, color = colors.textTertiary)
                         }
                     }
                     pickerCards.forEach { card ->
@@ -380,7 +456,7 @@ fun CardFlowScreen(nav: NavHostController, cardId: String) {
                         ) {
                             BankIconView(bankIconOf(card), bankNameOf(card), size = 20.dp, rounded = 3.dp)
                             Spacer(Modifier.width(10.dp))
-                            FText(displayText(card), 14f, color = colors.textPrimary, modifier = Modifier.weight(1f))
+                            FText(displayText(card), 16f, color = colors.textPrimary, modifier = Modifier.weight(1f))
                             if (active) VanIcon("success", size = 16.sp, color = colors.success)
                         }
                     }
@@ -404,7 +480,8 @@ fun CardFlowScreen(nav: NavHostController, cardId: String) {
                     (vals[0] as? Int)?.let { year = it }
                     (vals[1] as? Int)?.let { month = it }
                     showDatePicker = false
-                    onRefresh()   // web onPickerConfirm
+                    // 不在此处再调 onRefresh()：`LaunchedEffect(selectedCard, year, month)` 会负责拉，
+                    //   这里重复调会多一次请求（且正是"选了月份没生效"的旧写法留下的双重触发隐患）。
                 },
                 onCancel = { showDatePicker = false },
             )
@@ -417,7 +494,7 @@ private fun SummaryItem(label: String, value: String, color: androidx.compose.ui
     val colors = LocalAppColors.current
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         FText(label, 12f, color = colors.textTertiary)
-        FText(value, 16f, FontWeight.Bold, color)
+        FText(value, 18f, FontWeight.Bold, color)
     }
 }
 
@@ -428,7 +505,10 @@ private fun FlowLine(item: FlowRow, showDivider: Boolean, onClick: () -> Unit) {
     val isRepay = item.categoryId == "CATEGORY_REPAY"
     Column(Modifier.fillMaxWidth().background(colors.bgCard).alpha(if (isRepay) 0.55f else 1f)) {
         Row(
-            Modifier.fillMaxWidth().padding(start = 16.dp).padding(vertical = 14.dp)
+            // web `.flow-item{ padding:14px 16px; margin-left:16px }` ⇒ **内容左边距 32、右边距 16**。
+            //   旧实现只有 `start = 16` 且**完全没有 end**，表现为「内容贴左、金额贴右屏幕边」
+            //   （2026-09-19 反馈「金额太靠近屏幕左侧，右侧需要收窄，宽度与上方对齐」）。
+            Modifier.fillMaxWidth().padding(start = 32.dp, end = 16.dp).padding(vertical = 14.dp)
                 .clickable { onClick() },
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -439,7 +519,7 @@ private fun FlowLine(item: FlowRow, showDivider: Boolean, onClick: () -> Unit) {
             Column(Modifier.weight(1f)) {
                 FText(
                     if (isRepay) "信用卡还款" else item.categoryName.ifBlank { "未知分类" },
-                    15f, FontWeight.Medium, colors.textPrimary,
+                    16f, FontWeight.Medium, colors.textPrimary,
                 )
                 Spacer(Modifier.height(4.dp))
                 FText("${item.payMethod.ifBlank { "-" }} · ${item.time}", 12f, color = colors.textTertiary)
@@ -450,7 +530,7 @@ private fun FlowLine(item: FlowRow, showDivider: Boolean, onClick: () -> Unit) {
                         FText(symbolOf(item.currency), 12f, color = colors.textTertiary, modifier = Modifier.padding(end = 2.dp))
                     }
                     FText(
-                        "${if (item.direction == 1) "+" else "-"}${Money.format(item.amount)}", 16f, FontWeight.Bold,
+                        "${if (item.direction == 1) "+" else "-"}${Money.format(item.amount)}", 18f, FontWeight.Bold,
                         if (item.direction == 1) MoneyColor.income else colors.textPrimary,
                     )
                 }

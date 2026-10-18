@@ -8,3 +8,17 @@ captures/
 .externalNativeBuild
 .cxx
 local.properties
+
+# 签名密钥库（安全整改 P2-20，2026-10-08）
+# 私钥绝不能入库 —— 泄露即可伪造任意「官方签名」的 APK
+*.jks
+*.keystore
+*.p12
+*.key
+
+# 签名口令也可能被误提交（gradle.properties 里已加警告，这里做兜底）
+keystore.properties
+*.properties.local
+
+# 过程性文档/审计报告不入库（2026-10-18 审计后拍板：新增文档一律先进 docs/temp/）
+docs/temp/

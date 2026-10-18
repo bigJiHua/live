@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -29,8 +30,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -41,6 +42,10 @@ import com.live.finance.core.nav.Routes
 import com.live.finance.core.net.ApiResult
 import com.live.finance.data.model.User
 import com.live.finance.theme.LocalAppColors
+import com.live.finance.theme.VanGreenBgFixed
+import com.live.finance.theme.vanGreen
+import com.live.finance.theme.VanGrayFixed
+import com.live.finance.theme.scaledSp
 import com.live.finance.ui.common.AppButton
 import com.live.finance.ui.common.AppButtonType
 import com.live.finance.ui.common.AppCell
@@ -57,7 +62,6 @@ import kotlinx.coroutines.launch
 private const val DEFAULT_AVATAR = "https://fastly.jsdelivr.net/npm/@vant/assets/cat.jpeg"
 
 /** 个人信息卡右上角箭头色：web 硬编码 `color="#969799"`（不受深浅色影响）。 */
-private val ARROW_COLOR = Color(0xFF969799)
 
 /**
  * 「我的」页 —— 一比一复刻 web `src/views/User/index.vue`（含其私有样式与 AppCell/AppButton 底座度量）。
@@ -70,7 +74,6 @@ private val ARROW_COLOR = Color(0xFF969799)
  */
 @Composable
 fun UserScreen(nav: NavHostController) {
-    val colors = LocalAppColors.current
     val ctx = LocalContext.current
     val toast = LocalVanToastController.current
     val graph = App.of(ctx).graph
@@ -137,6 +140,22 @@ fun UserScreen(nav: NavHostController) {
                     center = true,
                     onClick = { nav.navigate(Routes.PIN_MANAGE) },
                 )
+                // web `showDemoInfo`（VITE_APP_DEMO）→ 原生以 fake 演示变体等价
+                if (AppConfig.useFake) {
+                    Box(
+                        Modifier.fillMaxWidth().background(VanGreenBgFixed)
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                    ) {
+                        // web `User/index.vue:36-40`：`color: var(--van-green, #07c160)`、
+                        // `background: var(--van-green-bg, #f0f9eb)`、字号 13px。
+                        // ⚠ `--van-green` 只在深色模式 = --theme-success，浅色走 fallback #07c160；
+                        //   `--van-green-bg` 深色 = #f0f9eb、浅色 fallback 也正好是 #f0f9eb → 底色两模式同值。
+                        BasicText(
+                            "当前 PIN 码为 123456",
+                            style = TextStyle(color = vanGreen(), fontSize = scaledSp(13f)),
+                        )
+                    }
+                }
             }
 
             // ===== 3. 系统管理 =====
@@ -229,9 +248,9 @@ private fun MineProfileCard(
         Column(Modifier.weight(1f)) {
             FText(username, 20f, FontWeight.Bold, colors.textPrimary)
             Spacer(Modifier.height(4.dp)) // .nickname-row margin-bottom: 4px
-            FText("邮箱： $email", 13f, FontWeight.Normal, colors.textTertiary)
+            FText("邮箱： $email", 14f, FontWeight.Normal, colors.textTertiary)
         }
-        VanIcon(name = "arrow", size = 16.sp, color = ARROW_COLOR)
+        VanIcon(name = "arrow", size = 16.sp, color = VanGrayFixed)
     }
 }
 
@@ -240,7 +259,7 @@ private fun MineProfileCard(
 private fun MineSectionTitle(text: String) {
     FText(
         text,
-        13f,
+        14f,
         FontWeight.Medium,
         LocalAppColors.current.textTertiary,
         Modifier

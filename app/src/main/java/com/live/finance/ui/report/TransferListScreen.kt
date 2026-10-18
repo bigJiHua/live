@@ -36,6 +36,7 @@ import com.live.finance.data.model.Card
 import com.live.finance.data.model.Category
 import com.live.finance.data.model.TransferRow
 import com.live.finance.theme.LocalAppColors
+import com.live.finance.theme.scaledSp
 import com.live.finance.ui.common.MoneyColor
 import com.live.finance.ui.common.ScreenScaffold
 import com.live.finance.ui.flow.FText
@@ -115,10 +116,9 @@ fun TransferListScreen(nav: NavHostController) {
 
     ScreenScaffold { inner ->
         Column(inner.fillMaxSize()) {
-            com.live.vant.nav.VanNavBar(title = "转账明细查询", leftArrow = true, onClickLeft = { nav.popBackStack() })
             if (loading) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    FText("加载中…", 14f, color = colors.textTertiary)
+                    FText("加载中…", 16f, color = colors.textTertiary)
                 }
             } else {
                 LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
@@ -127,7 +127,7 @@ fun TransferListScreen(nav: NavHostController) {
                             Column(Modifier.fillMaxWidth().padding(vertical = 12.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally) {
                                 FText("笔数", 12f, color = colors.textTertiary)
-                                FText("$total", 16f, FontWeight.Bold, colors.textPrimary)
+                                FText("$total", 18f, FontWeight.Bold, colors.textPrimary)
                             }
                         }
                     }
@@ -138,7 +138,7 @@ fun TransferListScreen(nav: NavHostController) {
                                 .padding(horizontal = 16.dp, vertical = 14.dp),
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                FText(cardText(item.fromCardId), 14f, color = colors.textPrimary,
+                                FText(cardText(item.fromCardId), 16f, color = colors.textPrimary,
                                     modifier = Modifier.weight(1f))
                                 VanIcon("arrow", size = 14.sp, color = colors.textTertiary)
                                 FTextA(cardText(item.toCardId), 14f, colors.textPrimary,
@@ -146,12 +146,12 @@ fun TransferListScreen(nav: NavHostController) {
                             }
                             Spacer(Modifier.height(8.dp))
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                FText("-¥${abbrevTransfer(item.amount)}", 16f, FontWeight.Bold, MoneyColor.expense)
+                                FText("-¥${abbrevTransfer(item.amount)}", 18f, FontWeight.Bold, MoneyColor.expense)
                                 FText(item.transDate, 12f, color = colors.textTertiary)
                             }
                             if (item.remark.isNotEmpty() && item.remark != "转账") {
                                 Spacer(Modifier.height(6.dp))
-                                FText(item.remark, 11f, color = colors.textTertiary)
+                                FText(item.remark, 12f, color = colors.textTertiary)
                             }
                         }
                     }
@@ -194,5 +194,5 @@ private fun FTextA(
     textAlign: androidx.compose.ui.text.style.TextAlign = androidx.compose.ui.text.style.TextAlign.Start,
 ) = androidx.compose.foundation.text.BasicText(
     text, modifier,
-    androidx.compose.ui.text.TextStyle(color = color, fontSize = sizeSp.sp, fontWeight = weight, textAlign = textAlign),
+    androidx.compose.ui.text.TextStyle(color = color, fontSize = scaledSp(sizeSp), fontWeight = weight, textAlign = textAlign),
 )

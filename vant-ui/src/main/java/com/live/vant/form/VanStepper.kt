@@ -18,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.KeyboardType
@@ -172,8 +173,19 @@ fun VanSwitch(
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
-                .offset(x = offset + padding, y = padding)
+                // ⚠ 只补 x，**不要**再写 `y = padding`：外层 `contentAlignment = CenterStart` 已经把旋钮
+                //    垂直居中了，再叠 2dp 会让它贴到轨道下沿（上 4 / 下 0，看着像陷进去）。
+                //    web 是 `.van-switch__node { top: 2px }` ⇒ 上下各留 2px。
+                .offset(x = offset + padding)
                 .size(node)
+                // `.van-switch__node { box-shadow: 0 3px 1px 0 rgba(0,0,0,.05) }`（浅色下让白旋钮与浅灰轨道分层）
+                .shadow(
+                    elevation = 3.dp,
+                    shape = androidx.compose.foundation.shape.CircleShape,
+                    clip = false,
+                    ambientColor = Color(0x0D000000),
+                    spotColor = Color(0x0D000000),
+                )
                 .background(Color.White, androidx.compose.foundation.shape.CircleShape),
         ) {
             if (loading) {

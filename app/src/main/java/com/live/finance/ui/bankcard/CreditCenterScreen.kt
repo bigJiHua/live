@@ -36,17 +36,26 @@ import com.live.finance.App
 import com.live.finance.core.net.ApiResult
 import com.live.finance.core.nav.Routes
 import com.live.finance.theme.LocalAppColors
+import com.live.finance.theme.SemanticRole
+import com.live.finance.theme.LocalAppTokens
+import com.live.finance.theme.VanPurpleFixed
+import com.live.finance.theme.vanBlue
+import com.live.finance.theme.vanGreen
 import com.live.finance.ui.flow.FText
 import com.live.vant.icon.VanIcon
 
 /** 信用卡专项功能行。 */
 private data class FuncRow(val title: String, val desc: String, val icon: String, val color: Color, val route: String)
 
-private val Blue = Color(0xFF1989FA)
-private val Red = Color(0xFFEE0A24)
-private val Green = Color(0xFF07C160)
-private val Purple = Color(0xFF7232DD)
-private val Gold = Color(0xFFFFB300)
+// web `CreditCenter.vue:249-265` `.func-icon.{blue,red,orange,green,teal}`：
+//   red    `var(--van-danger-color)` → **:root 有定义** = --theme-danger → 两模式跟主题
+//   blue   `var(--van-blue, #1989fa)` → 只在**深色** = --theme-primary，浅色 #1989fa
+//   green  `var(--van-green, #07c160)` → 只在**深色** = --theme-success，浅色 #07c160
+//   orange `var(--van-orange, #ff976a)` → 两模式同值 #ff976a
+//   teal   裸 `#009688`
+// ⚠ 判据详见 `theme/VanPalette.kt`：业务那套 `--van-green/blue/...` 只写在
+//   `[data-theme-mode="dark"]` 里，**浅色模式变量不存在、走行内 fallback**。
+private val Gold = Color(0xFFFFB300)     // 裸 hex
 
 /**
  * 信用卡专项 —— 一比一复刻 web `views/BankCard/CreditCenter.vue`。
@@ -68,26 +77,30 @@ fun CreditCenterScreen(nav: NavHostController) {
         }
     }
 
-    val sections = remember {
+    // ⚠⚠ web 的 `.func-icon <color>` 走 `html[data-theme-mono="1"]` 规则：
+    //   非「绿/蓝/靛」三套主题时，语义彩色图标**统一变成 --theme-primary**。
+    //   原生对应 [AppTokens.semanticIcon]；旧实现直接写死 vanBlue()/vanGreen()/danger/Purple/Gold
+    //   ⇒ 换到 mono 主题后这些图标**颜色不变**（负责人反馈的「切主题 Icon 不跟」就是这个）。
+    val tokens = LocalAppTokens.current
+    val sections = remember(tokens) {
         listOf(
-            "卡片管理" to listOf(FuncRow("我的卡片", "查看所有信用卡", "card", Blue, Routes.CARD_CREDIT)),
+            "卡片管理" to listOf(FuncRow("我的卡片", "查看所有信用卡", "card", tokens.semanticIcon(SemanticRole.Blue), Routes.CARD_CREDIT)),
             "账单与还款" to listOf(
-                FuncRow("账单列表", "查看所有信用卡账单", "todo-list-o", Red, Routes.BILL_LIST),
-                FuncRow("还款记录", "查看所有还款记录", "paid", Green, Routes.REPAY_LIST),
+                FuncRow("账单列表", "查看所有信用卡账单", "todo-list-o", tokens.semanticIcon(SemanticRole.Red), Routes.BILL_LIST),
+                FuncRow("还款记录", "查看所有还款记录", "paid", tokens.semanticIcon(SemanticRole.Green), Routes.REPAY_LIST),
             ),
             "分期管理" to listOf(
-                FuncRow("创建分期", "新建信用卡分期", "plus", Purple, Routes.CREDIT_INSTALLMENT),
-                FuncRow("分期列表", "查看所有分期记录", "bill-o", Purple, Routes.CREDIT_INSTALLMENT_LIST),
+                FuncRow("创建分期", "新建信用卡分期", "plus", tokens.semanticIcon(SemanticRole.Purple), Routes.CREDIT_INSTALLMENT),
+                FuncRow("分期列表", "查看所有分期记录", "bill-o", tokens.semanticIcon(SemanticRole.Purple), Routes.CREDIT_INSTALLMENT_LIST),
             ),
             "额度与外币" to listOf(
-                FuncRow("额度与共享池管理", "固定/临时额度独立设置 · 同银行共享额度", "gold-coin-o", Gold, Routes.CREDIT_LIMIT_MANAGE),
-                FuncRow("外币消费登记对账", "按银行实际结算汇率入账", "exchange", Gold, Routes.CREDIT_FOREIGN_REGISTER),
+                FuncRow("额度与共享池管理", "固定/临时额度独立设置 · 同银行共享额度", "gold-coin-o", tokens.semanticIcon(SemanticRole.Gold), Routes.CREDIT_LIMIT_MANAGE),
+                FuncRow("外币消费登记对账", "按银行实际结算汇率入账", "exchange", tokens.semanticIcon(SemanticRole.Gold), Routes.CREDIT_FOREIGN_REGISTER),
             ),
         )
     }
 
     ScreenBody { inner ->
-        BankTopBar(title = "信用卡专项", onBack = { nav.popBackStack() })
         Column(Modifier.fillMaxSize().then(inner).verticalScroll(rememberScrollState()).padding(16.dp)) {
             // 头部统计卡
             Column(
@@ -101,29 +114,32 @@ fun CreditCenterScreen(nav: NavHostController) {
                     FText("信用卡专项", 20f, FontWeight.SemiBold, Color.White)
                 }
                 Spacer(Modifier.height(20.dp))
-                Row {
-                    StatItem("卡片数量", "$cardCount", Modifier.weight(1f)) { nav.navigate(Routes.CARD_CREDIT) }
-                    StatItem("待还账单", "$billCount", Modifier.weight(1f)) { nav.navigate(Routes.BILL_LIST) }
+                // `.header-stats{display:flex; gap:40px}`：两项**按内容自然宽**、固定 40px 间距，
+                // 不是等分撑满（旧实现用 weight(1f) 把两项拉到了两端）
+                Row(horizontalArrangement = Arrangement.spacedBy(40.dp)) {
+                    StatItem("卡片数量", "$cardCount") { nav.navigate(Routes.CARD_CREDIT) }
+                    StatItem("待还账单", "$billCount") { nav.navigate(Routes.BILL_LIST) }
                 }
             }
             Spacer(Modifier.height(20.dp))
             sections.forEach { (sectionTitle, rows) ->
                 Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(colors.bgCard).padding(16.dp)) {
-                    FText(sectionTitle, 14f, FontWeight.SemiBold, colors.textPrimary, modifier = Modifier.padding(start = 4.dp, bottom = 12.dp))
+                    FText(sectionTitle, 16f, FontWeight.SemiBold, colors.textPrimary, modifier = Modifier.padding(start = 4.dp, bottom = 12.dp))
                     rows.forEach { row ->
                         Row(
                             Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
                                 .clickable { nav.navigate(row.route) }.padding(horizontal = 8.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Box(
-                                Modifier.size(44.dp).clip(RoundedCornerShape(12.dp))
-                                    .background(row.color.copy(alpha = 0.12f)),
-                                contentAlignment = Alignment.Center,
-                            ) { VanIcon(row.icon, size = 22.sp, color = row.color) }
+                            // `.func-icon{width:44px;height:44px;border-radius:12px;font-size:22px}`
+                            // ⚠ web 的 `.func-icon` **只有 color、没有 background**（44×44 是个透明占位盒），
+                            // 颜色由 `.func-icon.blue/red/green/...` 逐项覆写。旧实现额外铺了一层 12% 底色，不符。
+                            Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) {
+                                VanIcon(row.icon, size = 22.sp, color = row.color)
+                            }
                             Spacer(Modifier.width(12.dp))
                             Column(Modifier.weight(1f)) {
-                                FText(row.title, 15f, FontWeight.Medium, colors.textPrimary)
+                                FText(row.title, 16f, FontWeight.Medium, colors.textPrimary)
                                 Spacer(Modifier.height(2.dp))
                                 FText(row.desc, 12f, color = colors.textTertiary)
                             }
@@ -139,8 +155,8 @@ fun CreditCenterScreen(nav: NavHostController) {
 }
 
 @Composable
-private fun StatItem(label: String, value: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Column(modifier.clickable { onClick() }) {
+private fun StatItem(label: String, value: String, onClick: () -> Unit) {
+    Column(Modifier.clickable { onClick() }) {
         FText(value, 28f, FontWeight.Bold, Color.White)
         Spacer(Modifier.height(4.dp))
         FText(label, 12f, color = Color.White.copy(alpha = 0.8f))

@@ -49,6 +49,7 @@ data class DbExportTask(
     val id: String = "",
     val type: String = "",           // export_table / export_full_database / system_backup
     val status: String = "",         // pending / running / completed / failed / cancelled
+    val reuseExisting: Boolean = false,  // 202 复用已有同类任务（后端并发保护）
     val tableName: String = "",
     val tableSize: Long = 0L,
     val progress: Int = 0,
@@ -93,7 +94,6 @@ data class DbSqlImportResult(
     val backupFile: String = "",
     val backupTimestamp: String = "",
 ) {
-    val allOk: Boolean get() = errorCount == 0
 }
 
 data class DbSqlImportError(val index: Int = 0, val sql: String = "", val message: String = "")
@@ -108,7 +108,6 @@ data class DbBackupFile(
     val createdAt: String = "",
     val type: String = "",
 ) {
-    val isZip: Boolean get() = type == "zip" || filename.endsWith(".zip")
 }
 
 /**

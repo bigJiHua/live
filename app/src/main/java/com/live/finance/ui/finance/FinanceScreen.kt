@@ -43,11 +43,13 @@ import androidx.navigation.NavHostController
 import com.live.finance.App
 import com.live.finance.core.nav.Routes
 import com.live.finance.core.net.ApiResult
+import com.live.finance.core.net.failMessage
 import com.live.finance.data.model.MonthStats
 import com.live.finance.theme.AppTokens
 import com.live.finance.theme.LocalAppColors
 import com.live.finance.theme.LocalAppTokens
 import com.live.finance.theme.SemanticRole
+import com.live.finance.theme.scaledSp
 import com.live.finance.ui.common.AppButton
 import com.live.finance.ui.common.AppButtonSize
 import com.live.finance.ui.common.AppButtonType
@@ -64,6 +66,7 @@ import com.live.vant.form.VanPicker
 import com.live.vant.form.VanPickerOption
 import com.live.vant.icon.VanIcon
 import java.util.Calendar
+import com.live.finance.core.net.showFail
 
 /**
  * 账本首页 —— 逐像素对齐 web `web/src/views/Finance/index.vue`（+ 全局 `style.css` 的 `.app-card`）。
@@ -111,7 +114,7 @@ fun FinanceScreen(nav: NavHostController) {
                 nav.navigate(Routes.LOGIN) { popUpTo(Routes.MAIN) { inclusive = true } }
             }
             ApiResult.RateLimited -> nav.navigate(Routes.ERROR_429)  // 429 → window.location.href = "/429"
-            else -> toast.show("加载失败")  // 其余（含 Fail）→ web loadMonthStats 的 catch 分支
+            else -> toast.showFail(r, "加载失败")  // 其余（含 Fail）→ web loadMonthStats 的 catch 分支
         }
     }
 
@@ -119,7 +122,11 @@ fun FinanceScreen(nav: NavHostController) {
         Column(
             inner
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 8.dp),  // web .page-finance { padding: 8px 16px }
+                // web `.page-finance { padding: 8px 16px }`
+                // ⚠ **底部要留出悬浮玻璃岛的空间**：岛 `height:60dp` + `bottom:20dp` ⇒ 遮挡屏幕底部约 80dp。
+                //   主布局 `MainScreen` 现在内容区是**整屏高**（不再压 90dp），所以底部让位由各 Tab 页自己做。
+                //   否则滚到底时「财务把控中心」最后一行（理财管理等）会被岛盖住（2026-09-19 真机反馈「固定高度理财管理被遮挡」）。
+                .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 90.dp),
         ) {
             // ───────── ① 月度收支头卡（web .app-card.finance-header） ─────────
             WebCard(
@@ -144,7 +151,7 @@ fun FinanceScreen(nav: NavHostController) {
                 ) {
                     BasicText(
                         text = monthLabel(year, month),
-                        style = TextStyle(color = colors.textSecondary, fontSize = 14.sp),
+                        style = TextStyle(color = colors.textSecondary, fontSize = scaledSp(16f)),
                     )
                     Spacer(Modifier.width(4.dp))  // web gap: 4px
                     VanIcon(name = "arrow-down", size = 14.sp, color = colors.textSecondary)
@@ -172,7 +179,7 @@ fun FinanceScreen(nav: NavHostController) {
                     Row {
                         FText("结余：", 12f, FontWeight.Normal, colors.textTertiary, Modifier.alignByBaseline())
                         // .net-assets .val：14px / 500（覆盖 num-font 的 bold）
-                        FText("￥${Money.abbrev(stats.balance)}", 14f, FontWeight.Medium, colors.textPrimary, Modifier.alignByBaseline())
+                        FText("￥${Money.abbrev(stats.balance)}", 16f, FontWeight.Medium, colors.textPrimary, Modifier.alignByBaseline())
                     }
                     // app-button plain size=small type=primary icon=plus + .quick-add-btn（0 15px / 32 / radius 8）
                     AppButton(
@@ -197,7 +204,7 @@ fun FinanceScreen(nav: NavHostController) {
                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 16.dp),
             ) {
                 FText(
-                    "财务把控中心", 14f, FontWeight.Bold, colors.textPrimary,
+                    "财务把控中心", 16f, FontWeight.Bold, colors.textPrimary,
                     Modifier.padding(start = 10.dp).padding(bottom = 15.dp),
                 )
                 // app-grid：repeat(3, minmax(0,1fr))，无 gap；13 项 → 4 整行 + 末行 1 项（左对齐）
@@ -312,7 +319,7 @@ private fun GridCell(entry: GridEntry, modifier: Modifier, onClick: () -> Unit) 
             color = entry.color,
             modifier = Modifier.padding(bottom = 16.dp),
         )
-        FText(entry.label, 13f, FontWeight.Normal, colors.textSecondary)
+        FText(entry.label, 14f, FontWeight.Normal, colors.textSecondary)
     }
 }
 

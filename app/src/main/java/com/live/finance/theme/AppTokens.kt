@@ -1,6 +1,7 @@
 package com.live.finance.theme
 
 import androidx.compose.ui.graphics.Color
+import com.live.vant.theme.ToastPalette
 import com.live.vant.theme.VantColors
 
 /**
@@ -63,6 +64,17 @@ data class AppTokens(
         role == SemanticRole.Gray -> textTertiary
         else -> role.fixed
     }
+
+    /**
+     * 「带自定义基色」的语义色：monochrome 主题下统一成主色，否则用 [base]。
+     *
+     * 用于那些 web 里**组件内 scoped 样式覆盖了颜色类默认色**的场景 —— 例如
+     * `Work/SalaryStat.vue` 的 `.detail-value.blue{color:rgba(255,255,255,.92)}`、
+     * `.detail-value.orange{color:#ffae78}`，它们带 `.blue`/`.orange` 类所以**同样命中**
+     * `html[data-theme-mono="1"] .blue{color:var(--theme-primary) !important}`，
+     * 但非单色时的基色不是 `--theme-primary` / `--van-orange`，故不能直接用 [semanticIcon]。
+     */
+    fun semanticOr(base: Color): Color = if (monochrome) primary else base
 }
 
 // ── web useUiTheme.js 的默认值常量（预设未覆盖时按深浅取） ──
@@ -148,6 +160,8 @@ fun resolveTokens(choice: String, systemDark: Boolean): AppTokens {
         warningText = statusText.warning,
         dangerText = statusText.danger,
         infoText = statusText.info,
+        // 消息弹窗：独立配色，只跟深浅走（web `:root` / `[data-theme-mode="dark"]` 的 --toast-*）
+        toast = if (dark) ToastPalette.Dark else ToastPalette.Light,
     )
 
     return AppTokens(

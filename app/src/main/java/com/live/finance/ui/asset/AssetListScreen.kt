@@ -1,6 +1,5 @@
 package com.live.finance.ui.asset
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -27,25 +26,23 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.drawText
-import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import com.live.finance.App
 import com.live.finance.core.nav.Routes
 import com.live.finance.core.net.ApiResult
+import com.live.finance.core.net.failMessage
 import com.live.finance.data.model.AssetRegister
 import com.live.finance.theme.LocalAppColors
+import com.live.finance.ui.common.chart.MiniChart
+import com.live.finance.theme.VanGreenFixed
+import com.live.finance.theme.VanGrayFixed
 import com.live.finance.ui.common.AppButton
 import com.live.finance.ui.common.AppButtonSize
 import com.live.finance.ui.common.AppButtonType
@@ -61,13 +58,12 @@ import com.live.vant.nav.VanCollapse
 import com.live.vant.nav.VanCollapseItem
 import kotlinx.coroutines.launch
 import kotlin.math.abs
+import com.live.finance.core.net.showFail
+import com.live.vant.feedback.VanToastType
 
 /** mini 折线主色（web 硬编码 #3b82f6，不跟随主题）。 */
 private val CHART_BLUE = Color(0xFF3B82F6)
-private val LABEL_GRAY = Color(0xFF969799)
-private val GRID_LINE = Color(0xFFECEEF1)
 /** web `.offshore-amount .convert { color: var(--van-green) }` 硬编码绿。 */
-private val CONVERT_GREEN = Color(0xFF07C160)
 
 /**
  * 登记记录（web `views/Finance/assets/List.vue`）：
@@ -92,7 +88,7 @@ fun AssetListScreen(nav: NavHostController) {
         loading = true
         rows = when (val r = repo.list()) {
             is ApiResult.Ok -> r.data ?: emptyList()
-            else -> { toast.show("加载失败"); emptyList() }
+            else -> { toast.showFail(r, "加载失败"); emptyList() }
         }
         loading = false
     }
@@ -182,13 +178,13 @@ fun AssetListScreen(nav: NavHostController) {
             if (r != null) {
                 scope.launch {
                     when (val res = repo.delete(r.id)) {
-                        is ApiResult.Ok -> { toast.show("删除成功"); load() }
+                        is ApiResult.Ok -> { toast.show("删除成功", VanToastType.Success); load() }
                         is ApiResult.Unauthorized -> nav.navigate(Routes.LOGIN) {
                             popUpTo(Routes.MAIN) { inclusive = true }
                         }
                         is ApiResult.RateLimited -> nav.navigate(Routes.ERROR_429)
-                        is ApiResult.Fail -> toast.show(res.message.ifEmpty { "删除失败" })
-                        else -> toast.show("删除失败")
+                        is ApiResult.Fail -> toast.show(res.message.ifEmpty { "删除失败" }, VanToastType.Fail)
+                        else -> toast.showFail(res, "删除失败")
                     }
                 }
             }
@@ -236,18 +232,18 @@ private fun RecordCard(
         Column(Modifier.padding(16.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically) {
-                FText("总资产", 14f, color = colors.textSecondary)
+                FText("总资产", 16f, color = colors.textSecondary)
                 FText("¥${abbrev2(r.totalBalance)}", 24f, FontWeight.Bold, colors.textPrimary)
             }
             Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     FText("资产合计", 12f, color = colors.textTertiary)
-                    FText("¥${abbrev2(r.totalAsset)}", 14f, FontWeight.Medium, colors.textPrimary)
+                    FText("¥${abbrev2(r.totalAsset)}", 16f, FontWeight.Medium, colors.textPrimary)
                 }
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     FText("信用卡欠款", 12f, color = colors.textTertiary)
-                    FText("-¥${abbrev2(r.creditDebt)}", 14f, FontWeight.Medium, colors.danger)
+                    FText("-¥${abbrev2(r.creditDebt)}", 16f, FontWeight.Medium, colors.danger)
                 }
             }
         }
@@ -287,7 +283,7 @@ private fun DateLine(label: String, value: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         VanIcon("clock-o", size = 12.sp, color = colors.textTertiary)
         FText("$label：", 12f, color = colors.textSecondary, modifier = Modifier.padding(start = 4.dp))
-        FText(value, 10f, color = colors.textPrimary)
+        FText(value, 12f, color = colors.textPrimary)
     }
 }
 
@@ -298,8 +294,12 @@ private fun DetailContent(r: AssetRegister) {
     Column(Modifier.padding(vertical = 8.dp)) {
         if (d != null) {
             if (d.balance.isNotEmpty()) {
+                // web `assets/List.vue:731` `.region-domestic { border-left-color: var(--van-green) }`
+                // （境外是 `--theme-primary`）。⚠ 这里 **没写 fallback**，浅色模式下变量不存在 →
+                // `border-left-color` 取初始值 currentColor（即随文字色），属 web 的隐性表现差异；
+                // 原生按视觉意图写死 #07c160（= 深色的 --theme-success 默认值）。
                 DetailSection("境内资产", "总计 ¥${abbrev2(AssetShared.balanceTotal(d))}",
-                    barColor = CONVERT_GREEN) {
+                    barColor = VanGreenFixed) {
                     d.balance.forEach { item ->
                         DetailRow(
                             name = item.customName.ifEmpty { AssetShared.balanceName(item.type) },
@@ -317,12 +317,15 @@ private fun DetailContent(r: AssetRegister) {
                         Row(Modifier.fillMaxWidth().padding(vertical = 3.dp),
                             horizontalArrangement = Arrangement.SpaceBetween) {
                             FText(item.customName.ifEmpty { AssetShared.offshoreName(item.type) },
-                                13f, color = colors.textSecondary, modifier = Modifier.weight(1f))
+                                14f, color = colors.textSecondary, modifier = Modifier.weight(1f))
                             Row {
                                 FText("${item.currency} ${abbrev2(item.amount)}",
-                                    13f, color = colors.textSecondary)
+                                    14f, color = colors.textSecondary)
+                                // web `assets/List.vue:782` `.offshore-amount .convert { color: var(--van-green) }`
+                                // ⚠ 同样**无 fallback**：浅色下 `color` 是可继承属性 → 取**继承值**（≈文字色）。
+                                //   原生按意图写死 #07c160。
                                 if (valid) FText("  ≈ ¥${abbrev2(cny)}",
-                                    13f, color = CONVERT_GREEN)
+                                    14f, color = VanGreenFixed)
                             }
                         }
                     }
@@ -356,7 +359,7 @@ private fun DetailContent(r: AssetRegister) {
                 }
             }
         } else {
-            FText("无明细数据", 13f, color = colors.textTertiary)
+            FText("无明细数据", 14f, color = colors.textTertiary)
         }
     }
 }
@@ -372,8 +375,8 @@ private fun DetailSection(title: String, total: String, barColor: Color, content
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(Modifier.width(4.dp).height(16.dp).background(barColor))
-            FText(title, 14f, FontWeight.Bold, colors.textPrimary, modifier = Modifier.weight(1f).padding(start = 6.dp))
-            FText(total, 13f, FontWeight.SemiBold, colors.textPrimary)
+            FText(title, 16f, FontWeight.Bold, colors.textPrimary, modifier = Modifier.weight(1f).padding(start = 6.dp))
+            FText(total, 14f, FontWeight.SemiBold, colors.textPrimary)
         }
         Spacer(Modifier.height(8.dp))
         Column(Modifier.padding(start = 2.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) { content() }
@@ -389,9 +392,9 @@ private fun DetailSectionTitle(text: String) {
 @Composable
 private fun DetailRow(name: String, value: String, valueColor: Color = LocalAppColors.current.textSecondary) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        FText(name, 13f, color = LocalAppColors.current.textSecondary,
+        FText(name, 14f, color = LocalAppColors.current.textSecondary,
             modifier = Modifier.weight(1f).padding(end = 12.dp))
-        FText(value, 13f, color = valueColor)
+        FText(value, 14f, color = valueColor)
     }
 }
 
@@ -409,8 +412,8 @@ private fun MiniTrendCard(points: List<Pair<String, Double>>, onGoTrend: () -> U
             Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            FText("总资产走势", 14f, FontWeight.SemiBold, colors.textPrimary)
-            FText("最新 ¥${abbrev2(latest)}", 13f, FontWeight.SemiBold, colors.primary,
+            FText("总资产走势", 16f, FontWeight.SemiBold, colors.textPrimary)
+            FText("最新 ¥${abbrev2(latest)}", 14f, FontWeight.SemiBold, colors.primary,
                 modifier = Modifier.weight(1f).padding(start = 12.dp))
             Row(
                 Modifier.clip(RoundedCornerShape(14.dp)).clickable { onGoTrend() }
@@ -422,94 +425,15 @@ private fun MiniTrendCard(points: List<Pair<String, Double>>, onGoTrend: () -> U
                     modifier = Modifier.padding(start = 4.dp))
             }
         }
-        MiniLineChart(points, modifier = Modifier.fillMaxWidth().height(110.dp))
-    }
-}
-
-/**
- * mini 折线（web echarts 配置的 Compose Canvas 近似）：
- * 平滑线、圆点、8% 蓝面积、2 条横网格、y 轴万/亿缩略标签、x 轴稀疏日期。
- */
-@Composable
-private fun MiniLineChart(points: List<Pair<String, Double>>, modifier: Modifier) {
-    val textMeasurer = rememberTextMeasurer()
-    val labelStyle = TextStyle(color = LABEL_GRAY, fontSize = 9.sp)
-    Canvas(modifier) {
-        if (points.size < 2) return@Canvas
-        val padL = 38f; val padR = 10f; val padT = 8f; val padB = 20f
-        val w = size.width - padL - padR
-        val h = size.height - padT - padB
-        val values = points.map { it.second }
-        var maxV = values.maxOrNull() ?: 1.0
-        var minV = values.minOrNull() ?: 0.0
-        if (maxV == minV) { maxV += 1.0; minV -= 1.0 }
-        val pad = (maxV - minV) * 0.1f
-        maxV += pad; minV -= pad
-        if (minV < 0 && (values.minOrNull() ?: 0.0) >= 0) minV = 0.0
-
-        fun x(i: Int) = padL + if (points.size == 1) w / 2 else w * i / (points.size - 1)
-        fun y(v: Double) = padT + h * (1f - ((v - minV) / (maxV - minV)).toFloat())
-
-        // 横网格 2 条
-        repeat(3) { i ->
-            val gy = padT + h * i / 2f
-            drawLine(GRID_LINE, Offset(padL, gy), Offset(size.width - padR, gy), strokeWidth = 1f)
-        }
-        // y 轴标签（顶/底）
-        listOf(maxV, (maxV + minV) / 2, minV).forEachIndexed { i, v ->
-            val r = textMeasurer.measure(miniLabel(v), labelStyle)
-            drawText(r, topLeft = Offset(0f, when (i) {
-                0 -> 0f; 2 -> size.height - padB - r.size.height; else -> h / 2 - r.size.height / 2
-            }))
-        }
-
-        val linePath = Path()
-        val areaPath = Path()
-        val pts = points.indices.map { Offset(x(it), y(points[it].second)) }
-        pts.forEachIndexed { i, p ->
-            if (i == 0) {
-                linePath.moveTo(p.x, p.y)
-                areaPath.moveTo(p.x, padT + h)
-                areaPath.lineTo(p.x, p.y)
-            } else {
-                val prev = pts[i - 1]
-                val midX = (prev.x + p.x) / 2f
-                // 二次贝塞尔近似 echarts smooth
-                linePath.cubicTo(midX, prev.y, midX, p.y, p.x, p.y)
-                areaPath.cubicTo(midX, prev.y, midX, p.y, p.x, p.y)
-            }
-        }
-        val last = pts.last()
-        areaPath.lineTo(last.x, padT + h)
-        areaPath.close()
-        drawPath(areaPath, Color(0x1A3B82F6))
-        drawPath(linePath, CHART_BLUE, style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round))
-        pts.forEach { drawCircle(CHART_BLUE, radius = 4f / 2f, center = it) }
-
-        // x 轴：首/中/尾日期（hideOverlap 近似），显示 M/D
-        val idxs = when {
-            points.size <= 3 -> points.indices.toList()
-            else -> listOf(0, points.size / 2, points.size - 1)
-        }
-        idxs.forEach { i ->
-            val date = points[i].first.take(10).let {
-                val p = it.split("-")
-                if (p.size == 3) "${p[1].toInt()}/${p[2].toInt()}" else it
-            }
-            val r = textMeasurer.measure(date, labelStyle)
-            drawText(r, topLeft = Offset(x(i) - r.size.width / 2f, size.height - padB + 2f))
-        }
-    }
-}
-
-/** web List mini 图 y 轴标签：≥亿 1 位小数、≥万 1 位、否则取整。 */
-private fun miniLabel(v: Double): String {
-    val n = v
-    val a = abs(n)
-    return when {
-        a >= 1e8 -> String.format(java.util.Locale.US, "%.1f亿", n / 1e8)
-        a >= 1e4 -> String.format(java.util.Locale.US, "%.1f万", n / 1e4)
-        else -> Math.round(n).toString()
+        MiniChart(
+            points = points.map { it.second },
+            // web List.vue 的 xAxis.formatter 是 `v => v`，data 就是完整日期串 miniDates
+            // ⇒ 原生此前把 date 丢了，X 轴画的是数值序号，与 web 观感完全不一致
+            dates = points.map { it.first },
+            color = CHART_BLUE,
+            showArea = true,
+            modifier = Modifier.fillMaxWidth().height(110.dp),
+        )
     }
 }
 

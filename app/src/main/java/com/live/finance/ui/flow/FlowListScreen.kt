@@ -51,6 +51,7 @@ import com.live.finance.data.model.Card
 import com.live.finance.data.model.Category
 import com.live.finance.data.model.FlowRow
 import com.live.finance.theme.LocalAppColors
+import com.live.finance.theme.VanGreenFixed
 import com.live.finance.theme.LocalAppTokens
 import com.live.finance.ui.common.FlowDayGroup
 import com.live.finance.ui.common.FlowItem
@@ -74,6 +75,7 @@ import com.live.vant.form.VanPickerOption
 import com.live.vant.icon.VanIcon
 import java.time.LocalDate
 import kotlinx.coroutines.launch
+import com.live.vant.feedback.VanToastType
 
 /** web `Money` 无关：本页金额一律 `toFixed(2)`（见 [flowAmount2]）。 */
 private const val LIMIT = 20
@@ -162,7 +164,7 @@ fun FlowListScreen(nav: NavHostController) {
             val r = graph.flow.list(year, month, direction = dir, page = p, limit = LIMIT)
             if (r !is ApiResult.Ok) {
                 finished = true
-                toast.show("加载失败")                 // web catch → showToast('加载失败')
+                toast.show("加载失败", VanToastType.Fail)                 // web catch → showToast('加载失败')
                 return
             }
             val data = r.data.orEmpty()
@@ -446,7 +448,7 @@ private fun SummaryKv(label: String, value: String, valueColor: Color, modifier:
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        FText(label, 11f, FontWeight.Normal, colors.textTertiary)
+        FText(label, 12f, FontWeight.Normal, colors.textTertiary)
         FText(value, 19f, FontWeight.Bold, valueColor)
     }
 }
@@ -482,7 +484,7 @@ private fun FilterTabs(current: String, onPick: (String) -> Unit) {
                     .clickable { onPick(key) }
                     .padding(vertical = 7.dp),
             ) {
-                FText(label, 13f, FontWeight.Medium, if (active) Color.White else colors.textTertiary)
+                FText(label, 14f, FontWeight.Medium, if (active) Color.White else colors.textTertiary)
             }
         }
     }

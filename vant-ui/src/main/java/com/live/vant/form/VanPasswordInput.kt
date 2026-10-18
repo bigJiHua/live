@@ -57,7 +57,8 @@ fun VanPasswordInput(
             Modifier
                 .padding(horizontal = gutter)
                 .defaultMinSize(minHeight = 50.dp)
-                .border(1.dp, c.border, RoundedCornerShape(6.dp))
+                // web 原版用 c.border(#EBEDF0) 太浅、真机上几乎看不见，按用户要求加强为 textTertiary
+                .border(1.dp, c.textTertiary, RoundedCornerShape(6.dp))
                 .background(c.bgCard, RoundedCornerShape(6.dp)),
         ) {
             repeat(length) { i ->
@@ -74,7 +75,7 @@ fun VanPasswordInput(
                                 .align(Alignment.CenterStart)
                                 .width(1.dp)
                                 .fillMaxHeight()
-                                .background(c.border),
+                                .background(c.textTertiary),
                         )
                     }
                     val filled = i < value.length

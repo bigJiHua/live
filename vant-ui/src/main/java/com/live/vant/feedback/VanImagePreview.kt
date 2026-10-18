@@ -27,6 +27,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import com.live.vant.icon.VanIcon
+import com.live.vant.theme.vantDimens
 import kotlinx.coroutines.flow.distinctUntilChanged
 
 /**
@@ -76,7 +77,7 @@ fun VanImagePreview(
                 Box(Modifier.fillMaxWidth().padding(top = 12.dp), contentAlignment = Alignment.Center) {
                     androidx.compose.foundation.text.BasicText(
                         "${pagerState.currentPage + 1}/${images.size}",
-                        style = TextStyle(color = Color.White, fontSize = 14.sp, lineHeight = 20.sp),
+                        style = TextStyle(color = Color.White, fontSize = vantDimens.fontSizeMd, lineHeight = vantDimens.lineHeightMd),
                     )
                 }
             }

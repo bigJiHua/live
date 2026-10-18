@@ -38,6 +38,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.compose.foundation.text.BasicText
 import com.live.vant.icon.VanIcon
 import com.live.vant.theme.LocalVantColors
+import com.live.vant.theme.vantDimens
 import com.live.vant.theme.VantColors
 import java.time.LocalDate
 import java.time.YearMonth
@@ -171,7 +172,7 @@ fun VanCalendar(
                         ) {
                             BasicText(
                                 title,
-                                style = TextStyle(color = c.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold),
+                                style = TextStyle(color = c.textPrimary, fontSize = vantDimens.fontSizeLg, fontWeight = FontWeight.SemiBold),
                             )
                         }
                         // 副标题行：44 高 / 14px / 600，内容 = 当前可见月
@@ -181,7 +182,7 @@ fun VanCalendar(
                         ) {
                             BasicText(
                                 MonthTitleFmt.format(visibleMonth.atDay(1)),
-                                style = TextStyle(color = c.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold),
+                                style = TextStyle(color = c.textPrimary, fontSize = vantDimens.fontSizeMd, fontWeight = FontWeight.SemiBold),
                             )
                         }
                     }
@@ -209,7 +210,7 @@ fun VanCalendar(
                     names.forEach { n ->
                         Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
                             // web 覆盖 `--van-calendar-weekdays-text-color: var(--theme-text-secondary)`（style.css:120）
-                            BasicText(n, style = TextStyle(color = c.textSecondary, fontSize = 12.sp))
+                            BasicText(n, style = TextStyle(color = c.textSecondary, fontSize = vantDimens.fontSizeSm))
                         }
                     }
                 }
@@ -228,7 +229,7 @@ fun VanCalendar(
                                 ) {
                                     BasicText(
                                         MonthTitleFmt.format(ym.atDay(1)),
-                                        style = TextStyle(color = c.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold),
+                                        style = TextStyle(color = c.textPrimary, fontSize = vantDimens.fontSizeMd, fontWeight = FontWeight.SemiBold),
                                     )
                                 }
                             }
@@ -296,7 +297,7 @@ fun VanCalendar(
                                                                     BasicText(
                                                                         dayNum.toString(),
                                                                         // web 覆盖 `--van-calendar-selected-day-text-color: var(--theme-button-primary-text)`（style.css:124）
-                                                                        style = TextStyle(color = c.buttonPrimaryText, fontSize = 16.sp),
+                                                                        style = TextStyle(color = c.buttonPrimaryText, fontSize = vantDimens.fontSizeLg),
                                                                     )
                                                                 }
                                                             }
@@ -313,7 +314,7 @@ fun VanCalendar(
                                                                     BasicText(
                                                                         dayNum.toString(),
                                                                         // 区间中段文字 = `--van-calendar-range-middle-color: var(--theme-text-primary)`（style.css:128）
-                                                                        style = TextStyle(color = c.textPrimary, fontSize = 16.sp),
+                                                                        style = TextStyle(color = c.textPrimary, fontSize = vantDimens.fontSizeLg),
                                                                     )
                                                                 }
                                                             }
@@ -329,19 +330,29 @@ fun VanCalendar(
                                                                     BasicText(
                                                                         dayNum.toString(),
                                                                         // 同上：选中文字 = `--van-calendar-selected-day-text-color: var(--theme-button-primary-text)`
-                                                                        style = TextStyle(color = c.buttonPrimaryText, fontSize = 16.sp),
+                                                                        style = TextStyle(color = c.buttonPrimaryText, fontSize = vantDimens.fontSizeLg),
                                                                     )
                                                                 }
                                                             }
                                                             else -> {
-                                                                BasicText(
-                                                                    dayNum.toString(),
-                                                                    style = TextStyle(
-                                                                        color = if (disabled) c.textTertiary else c.textPrimary,
-                                                                        fontSize = 16.sp,
-                                                                    ),
-                                                                    modifier = Modifier.clickable(enabled = !disabled) { pickDay(day) },
-                                                                )
+                                                                // ⚠ 整格可点：这里以前是 `BasicText(modifier = Modifier.clickable{})` ⇒
+                                                                //   命中区只有数字本身（≈18sp 见方），点格子空白没反应、
+                                                                //   还容易误选相邻日 —— 负责人报「选择日期范围错误」的另一半成因。
+                                                                //   与 inRange / selected 分支一致，用 matchParentSize() 铺满整格。
+                                                                Box(
+                                                                    contentAlignment = Alignment.Center,
+                                                                    modifier = Modifier
+                                                                        .matchParentSize()
+                                                                        .clickable(enabled = !disabled) { pickDay(day) },
+                                                                ) {
+                                                                    BasicText(
+                                                                        dayNum.toString(),
+                                                                        style = TextStyle(
+                                                                            color = if (disabled) c.textTertiary else c.textPrimary,
+                                                                            fontSize = vantDimens.fontSizeLg,
+                                                                        ),
+                                                                    )
+                                                                }
                                                             }
                                                         }
                                                     }
@@ -376,7 +387,7 @@ fun VanCalendar(
                         BasicText(
                             confirmText,
                             // web 覆盖 `--van-calendar-confirm-button-color: var(--theme-button-primary-text)`（style.css:132）
-                            style = TextStyle(color = c.buttonPrimaryText, fontSize = 16.sp),
+                            style = TextStyle(color = c.buttonPrimaryText, fontSize = vantDimens.fontSizeLg),
                         )
                     }
                 }

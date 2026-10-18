@@ -24,6 +24,8 @@ data class Repay(
     val billNeedRepay: Double = 0.0,
     val repayCardAlias: String = "",
     val repayCardLast4: String = "",
+    val updateTime: String = "",       // update_time（详情页「更新时间」，末位追加以兼容位置实参）
+    val createTime: String = "",       // create_time（详情页「还款时间」—— web repay/Detail 取的就是它，非 repay_time）
 ) {
     val dateLabel: String get() = com.live.finance.core.TimeFmt.date(time)
     val hhmm: String get() = com.live.finance.core.TimeFmt.hm(time)
@@ -31,18 +33,4 @@ data class Repay(
     /** 卡片展示名（web：card_alias || `****${card_last4}`）。 */
     val cardLabel: String
         get() = cardAlias.ifBlank { if (cardLast4.isNotBlank()) "****$cardLast4" else "信用卡" }
-
-    /** 还款方式中文（对齐 web 的 cash/bank_card/balance 文案）。 */
-    val methodLabel: String
-        get() = when (method) {
-            "cash" -> "现金"
-            "bank_card" -> "借记卡"
-            "balance" -> "余额"
-            "card" -> "本卡"
-            else -> method.ifBlank { "—" }
-        }
-
-    /** 来源卡展示（bank_card 时才有，web repay/Detail 展示）。 */
-    val repayCardLabel: String
-        get() = repayCardAlias.ifBlank { if (repayCardLast4.isNotBlank()) "****$repayCardLast4" else "" }
 }

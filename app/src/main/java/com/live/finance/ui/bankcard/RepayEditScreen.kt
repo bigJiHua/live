@@ -1,6 +1,5 @@
 package com.live.finance.ui.bankcard
 
-import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -34,6 +33,8 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import com.live.finance.App
 import com.live.finance.core.net.ApiResult
+import com.live.finance.core.net.failMessage
+import com.live.finance.core.net.failToastType
 import com.live.finance.data.model.Repay
 import com.live.finance.theme.LocalAppColors
 import com.live.finance.ui.common.AppButton
@@ -43,13 +44,16 @@ import com.live.finance.ui.common.Money
 import com.live.finance.ui.common.ScreenScaffold
 import com.live.finance.ui.flow.FText
 import com.live.vant.basic.VanLoading
+import com.live.vant.basic.VanSkeleton
 import com.live.vant.feedback.VanConfirmDialog
 import com.live.vant.feedback.VanPopup
-import com.live.vant.form.VanDatePicker
 import com.live.vant.form.VanPicker
 import com.live.vant.form.vanPickerColumnsOf
+import com.live.vant.icon.VanIcon
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import com.live.vant.feedback.LocalVanToastController
+import com.live.vant.feedback.VanToastType
 
 /** 编辑还款记录 —— 一比一复刻 web `views/BankCard/repay/Edit.vue`。 */
 @Composable
@@ -67,12 +71,11 @@ fun RepayEditScreen(nav: NavHostController, repayId: String = "") {
     var timePart by remember { mutableStateOf("00:00") }
     var remark by remember { mutableStateOf("") }
     var showDatePicker by remember { mutableStateOf(false) }
-    var showTimePicker by remember { mutableStateOf(false) }
     var showDelete by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
 
-    fun toast(m: String) = Toast.makeText(context, m, Toast.LENGTH_SHORT).show()
-
+    val vanToast = LocalVanToastController.current
+    fun toast(m: String, type: VanToastType = VanToastType.Text) = vanToast.show(m, type)
     LaunchedEffect(repayId) {
         when (val r = graph.repay.detail(repayId)) {
             is ApiResult.Ok -> {
@@ -85,7 +88,7 @@ fun RepayEditScreen(nav: NavHostController, repayId: String = "") {
                 if (dt.length >= 16) timePart = dt.substring(11, 16)
                 remark = d.remark
             }
-            else -> { toast("缺少还款记录ID"); nav.popBackStack() }
+            else -> { toast(r.failMessage("缺少还款记录ID"), r.failToastType()); nav.popBackStack() }
         }
         loading = false
     }
@@ -99,9 +102,9 @@ fun RepayEditScreen(nav: NavHostController, repayId: String = "") {
             saving = true
             val r = graph.repay.update(d.id, amt, method, "$datePart $timePart:00", remark)
             when (r) {
-                is ApiResult.Ok -> { toast("保存成功"); nav.popBackStack() }
-                is ApiResult.Fail -> toast(r.message.ifBlank { "保存失败" })
-                else -> toast("保存失败")
+                is ApiResult.Ok -> { toast("保存成功", VanToastType.Success); nav.popBackStack() }
+                is ApiResult.Fail -> toast(r.message.ifBlank { "保存失败" }, VanToastType.Fail)
+                else -> toast(r.failMessage("保存失败"), r.failToastType())
             }
             saving = false
         }
@@ -109,46 +112,66 @@ fun RepayEditScreen(nav: NavHostController, repayId: String = "") {
 
     ScreenScaffold { inner ->
         if (loading) {
-            Box(Modifier.fillMaxSize().then(inner), contentAlignment = Alignment.Center) { VanLoading() }
+            // web `repay/Edit.vue` 的 loading 是**骨架屏** `<van-skeleton title :row="8" />`
+            //   （注意：本页**没有** `van-overlay` + 转圈，与 repay/Detail.vue 不同 ⇒ 这里也别加遮罩）。
+            Box(Modifier.fillMaxSize().then(inner)) {
+                VanSkeleton(loading = true, row = 8, title = true) { }
+            }
         } else {
             Column(Modifier.fillMaxSize().then(inner).background(colors.bgPage)) {
-                BankTopBar(title = "编辑还款记录", onBack = { nav.popBackStack() })
+                // ⚠ web 是**两个** `.form-section`：「还款信息」与「备注」各自一张 inset 白卡、各带标题
+                //   （旧实现把「备注」塞进了「还款信息」的卡里，结构不符）。
+                //   `.form-section{ margin-top:12px }` + `.section-title{ padding:16px 16px 8px }` ⇒ 标题上方 28dp。
                 Column(Modifier.padding(top = 12.dp)) {
-                    FText("还款信息", 14f, color = colors.textTertiary, modifier = Modifier.padding(start = 16.dp, bottom = 8.dp))
+                    FText("还款信息", 16f, color = colors.textTertiary, modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp))
                     Column(Modifier.padding(horizontal = 16.dp).clip(RoundedCornerShape(8.dp)).background(colors.bgCard)) {
-                        InputLine("还款金额", amount, "请输入还款金额") { amount = it }
-                        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            FText("还款方式", 14f, color = colors.textPrimary)
-                            Spacer(Modifier.width(24.dp))
-                            listOf("转账", "自动扣款", "柜台还款").forEach { m ->
-                                val selected = method == m
-                                Row(
-                                    Modifier.padding(end = 18.dp).clickable { method = m },
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Box(
-                                        Modifier.size(18.dp).clip(CircleShape)
-                                            .background(if (selected) colors.primary else Color.Transparent)
-                                            .border(1.dp, if (selected) colors.primary else colors.border, CircleShape),
-                                        contentAlignment = Alignment.Center,
+                        // web 三行都是 `app-field`：**label 在上、控件在下**（旧实现把 label 放在左边，结构不符）
+                        InputRow("还款金额", amount, { amount = it }, "请输入还款金额")
+                        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
+                            FText("还款方式", 14f, color = colors.textSecondary) // .app-field__label{13px→14; text-secondary}
+                            Spacer(Modifier.height(6.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                listOf("转账", "自动扣款", "柜台还款").forEach { m ->
+                                    val selected = method == m
+                                    Row(
+                                        Modifier.padding(end = 18.dp).clickable { method = m },
+                                        verticalAlignment = Alignment.CenterVertically,
                                     ) {
-                                        if (selected) {
-                                            Box(Modifier.size(8.dp).clip(CircleShape).background(colors.primary))
+                                        Box(
+                                            Modifier.size(18.dp).clip(CircleShape)
+                                                .background(if (selected) colors.primary else Color.Transparent)
+                                                .border(1.dp, if (selected) colors.primary else colors.border, CircleShape),
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            if (selected) {
+                                                Box(Modifier.size(8.dp).clip(CircleShape).background(colors.primary))
+                                            }
                                         }
+                                        Spacer(Modifier.width(4.dp))
+                                        FText(if (m == "柜台还款") "柜台" else m, 16f, color = colors.textPrimary)
                                     }
-                                    Spacer(Modifier.width(4.dp))
-                                    FText(if (m == "柜台还款") "柜台" else m, 14f, color = colors.textPrimary)
                                 }
                             }
                         }
-                        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp).clickable { showDatePicker = true }, verticalAlignment = Alignment.CenterVertically) {
-                            FText("还款时间", 14f, color = colors.textPrimary)
-                            Spacer(Modifier.weight(1f))
-                            FText("$datePart $timePart", 14f, color = colors.textPrimary)
-                            Spacer(Modifier.width(6.dp))
-                            FText("›", 16f, color = colors.textTertiary)
+                        Box(Modifier.fillMaxWidth().height(1.dp).background(colors.border)) // app-field 底边线
+                        Column(
+                            Modifier.fillMaxWidth().clickable { showDatePicker = true }
+                                .padding(horizontal = 16.dp, vertical = 10.dp),
+                        ) {
+                            FText("还款时间", 14f, color = colors.textSecondary)
+                            Spacer(Modifier.height(6.dp))
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                FText("$datePart $timePart", 16f, color = colors.textPrimary, modifier = Modifier.weight(1f))
+                                // web `is-link` 的右箭头（旧实现用的是「›」字符）
+                                VanIcon("arrow", size = 14.sp, color = colors.textTertiary)
+                            }
                         }
-                        InputLine("备注", remark, "可选填写备注信息") { remark = it }
+                    }
+                }
+                Column(Modifier.padding(top = 12.dp)) {
+                    FText("备注", 16f, color = colors.textTertiary, modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp))
+                    Column(Modifier.padding(horizontal = 16.dp).clip(RoundedCornerShape(8.dp)).background(colors.bgCard)) {
+                        InputRow("备注", remark, { remark = it }, "可选填写备注信息", border = false)
                     }
                 }
                 Column(Modifier.padding(horizontal = 16.dp, vertical = 32.dp)) {
@@ -156,35 +179,41 @@ fun RepayEditScreen(nav: NavHostController, repayId: String = "") {
                     Spacer(Modifier.height(12.dp))
                     AppButton(text = "删除还款记录", onClick = { showDelete = true }, type = AppButtonType.Danger, plain = true, block = true, round = true)
                 }
+                Spacer(Modifier.height(40.dp)) // .page-repay-edit{ padding-bottom: 40px }
             }
         }
     }
 
     if (showDatePicker) {
+        // web `van-datetime-picker type="datetime" title="选择日期时间"`：单个弹层一次选齐年月日时分
+        val yearBase = datePart.year - 50
+        val years = (yearBase..(datePart.year + 10)).map { "${it}年" }
+        val months = (1..12).map { "${it}月" }
+        val days = (1..31).map { "${it}日" }
+        val hours = (0..23).map { "${it}时" }
+        val minutes = (0..59).map { "${it}分" }
+        val selHour = timePart.substringBefore(":").toIntOrNull() ?: 0
+        val selMin = timePart.substringAfter(":").toIntOrNull() ?: 0
         VanPopup(show = true, onDismissRequest = { showDatePicker = false }) {
-            VanDatePicker(
-                type = "date",
-                value = datePart,
-                onValueChange = { },
-                title = "选择日期",
-                onConfirm = { datePart = it; showDatePicker = false },
-                onCancel = { showDatePicker = false },
-            )
-        }
-    }
-    if (showTimePicker) {
-        VanPopup(show = true, onDismissRequest = { showTimePicker = false }) {
             VanPicker(
-                columns = vanPickerColumnsOf((0..23).map { "${it}时" }, (0..59).map { "${it}分" }),
-                value = listOf((timePart.substringBefore(":").toIntOrNull() ?: 0), (timePart.substringAfter(":").toIntOrNull() ?: 0)),
-                title = "选择时间",
+                columns = vanPickerColumnsOf(years, months, days, hours, minutes),
+                value = listOf(
+                    (datePart.year - yearBase).coerceIn(0, years.size - 1),
+                    (datePart.monthValue - 1).coerceIn(0, 11),
+                    (datePart.dayOfMonth - 1).coerceIn(0, 30),
+                    selHour.coerceIn(0, 23),
+                    selMin.coerceIn(0, 59),
+                ),
+                title = "选择日期时间",
                 onConfirm = { sel, _ ->
-                    val h = "%02d".format(sel.getOrNull(0) ?: 0)
-                    val m = "%02d".format(sel.getOrNull(1) ?: 0)
-                    timePart = "$h:$m"
-                    showTimePicker = false
+                    val y = yearBase + (sel.getOrNull(0) ?: 0)
+                    val mo = (sel.getOrNull(1) ?: 0) + 1
+                    val dy = (sel.getOrNull(2) ?: 0) + 1
+                    datePart = runCatching { LocalDate.of(y, mo, dy) }.getOrDefault(datePart)
+                    timePart = "%02d:%02d".format(sel.getOrNull(3) ?: 0, sel.getOrNull(4) ?: 0)
+                    showDatePicker = false
                 },
-                onCancel = { showTimePicker = false },
+                onCancel = { showDatePicker = false },
             )
         }
     }
@@ -197,9 +226,9 @@ fun RepayEditScreen(nav: NavHostController, repayId: String = "") {
             showDelete = false
             scope.launch {
                 when (val r = graph.repay.delete(repayId)) {
-                    is ApiResult.Ok -> { toast("删除成功"); nav.popBackStack() }
-                    is ApiResult.Fail -> toast(r.message.ifBlank { "删除失败" })
-                    else -> toast("删除失败")
+                    is ApiResult.Ok -> { toast("删除成功", VanToastType.Success); nav.popBackStack() }
+                    is ApiResult.Fail -> toast(r.message.ifBlank { "删除失败" }, VanToastType.Fail)
+                    else -> toast(r.failMessage("删除失败"), r.failToastType())
                 }
             }
         },
@@ -208,12 +237,3 @@ fun RepayEditScreen(nav: NavHostController, repayId: String = "") {
     )
 }
 
-@Composable
-private fun InputLine(label: String, value: String, placeholder: String, onChange: (String) -> Unit) {
-    val colors = LocalAppColors.current
-    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-        FText(label, 14f, color = colors.textPrimary)
-        Spacer(Modifier.width(24.dp))
-        AppField(value = value, onValueChange = onChange, placeholder = placeholder, border = false, modifier = Modifier.weight(1f))
-    }
-}

@@ -5,10 +5,13 @@ import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.live.finance.core.net.ApiClient
 import com.live.finance.core.net.ApiResult
+import com.live.finance.core.net.Envelope
 import com.live.finance.core.net.map
 import com.live.finance.core.net.toResult
 import com.live.finance.data.model.Moment
 import com.live.finance.data.model.MomentImage
+import com.live.finance.data.model.MomentShareDetail
+import com.live.finance.data.model.ShareViewResult
 
 /** 分页结果（后端 `data = {list, total, page, pageSize, totalPages}`）。 */
 data class MomentPage(val list: List<Moment>, val total: Int, val totalPages: Int)
@@ -32,18 +35,31 @@ interface MomentRepository {
 
     suspend fun batchDetail(ids: List<String>): ApiResult<List<Moment>>
 
-    /** 发布：`images` 传**相对路径**（后端包成 `[{url}]`），`locationName` 空则不传位置。 */
+    /**
+     * 发布：`images` 传**相对路径**（后端包成 `[{url}]`），`locationName` 空则不传位置。
+     * 位置对象对齐 web `momentApi.create({ location: {name, lat, lng, type} })`：
+     * `locationName` 为展示名（不含 emoji 前缀），`locationType` 取 `gps` / `ip`。
+     */
     suspend fun create(
         content: String,
         images: List<String> = emptyList(),
         mood: String = "",
         locationName: String = "",
+        lat: Double = 0.0,
+        lng: Double = 0.0,
+        locationType: String = "",
     ): ApiResult<Unit>
 
     /** [action]：`open`（回 token+password）/ `close` / `token`（仅刷新 token，密码不变）。 */
     suspend fun share(id: String, action: String, duration: Int = 1): ApiResult<MomentShare?>
 
     suspend fun delete(id: String): ApiResult<Unit>
+
+    /** 公开分享页（无需登录）· token 模式：`GET /share/{token}`。 */
+    suspend fun viewShare(token: String): ShareViewResult
+
+    /** 公开分享页 · 密码模式：`POST /share/password {id, pw}`（明文，见 `AppConfig.SKIP_ENCRYPT_URLS`）。 */
+    suspend fun verifySharePassword(id: String, pw: String): ShareViewResult
 }
 
 class FakeMomentRepository : MomentRepository {
@@ -87,7 +103,7 @@ class FakeMomentRepository : MomentRepository {
     override suspend fun batchDetail(ids: List<String>): ApiResult<List<Moment>> =
         ApiResult.Ok(seed.filter { ids.contains(it.id) }.sortedBy { it.createTime }, "")
 
-    override suspend fun create(content: String, images: List<String>, mood: String, locationName: String): ApiResult<Unit> {
+    override suspend fun create(content: String, images: List<String>, mood: String, locationName: String, lat: Double, lng: Double, locationType: String): ApiResult<Unit> {
         seed.add(
             0,
             Moment(
@@ -122,6 +138,32 @@ class FakeMomentRepository : MomentRepository {
     override suspend fun delete(id: String): ApiResult<Unit> {
         seed.removeAll { it.id == id }
         return ApiResult.Ok(Unit, "删除成功")
+    }
+
+    // 假数据口径：任何非空 token 都能看到第一条动态；密码固定 123456（与真后端的 6 位数字校验一致）
+    override suspend fun viewShare(token: String): ShareViewResult {
+        if (token.isBlank()) return ShareViewResult(400, "链接无效或已损坏")
+        return ShareViewResult(200, "", fakeShareDetail(), retryAfterSec = 0)
+    }
+
+    override suspend fun verifySharePassword(id: String, pw: String): ShareViewResult {
+        if (pw != "123456") return ShareViewResult(403, "密码错误，还剩 4 次机会")
+        return ShareViewResult(200, "", fakeShareDetail(id))
+    }
+
+    private fun fakeShareDetail(id: String = "m1"): MomentShareDetail {
+        val m = seed.firstOrNull { it.id == id } ?: seed.first()
+        return MomentShareDetail(
+            id = m.id,
+            content = m.content,
+            images = m.images,
+            mood = m.mood,
+            locationName = m.locationName,
+            createTime = m.createTime,
+            authorName = "我",
+            // token 模式才有过期时间（这里给 24 小时后，用于展示「N小时后过期」）
+            expireAt = java.time.Instant.now().plusSeconds(24 * 3600).toString(),
+        )
     }
 }
 
@@ -165,13 +207,21 @@ class RemoteMomentRepository(private val client: ApiClient) : MomentRepository {
         images: List<String>,
         mood: String,
         locationName: String,
+        lat: Double,
+        lng: Double,
+        locationType: String,
     ): ApiResult<Unit> {
         val body = JsonObject().apply {
             addProperty("content", content) // 快速模式纯文本；精准模式是 HTML（原生降级为纯文本）
             add("images", JsonArray().apply { images.forEach { add(JsonObject().apply { addProperty("url", it) }) } })
             if (mood.isNotBlank()) addProperty("mood", mood)
             if (locationName.isNotBlank()) {
-                add("location", JsonObject().apply { addProperty("name", locationName) })
+                add("location", JsonObject().apply {
+                    addProperty("name", locationName)
+                    addProperty("lat", lat)
+                    addProperty("lng", lng)
+                    if (locationType.isNotBlank()) addProperty("type", locationType)
+                })
             }
             add("visibleType", JsonObject().apply { addProperty("vt", 0); addProperty("vs", 0); addProperty("pw", 0) })
         }
@@ -200,6 +250,35 @@ class RemoteMomentRepository(private val client: ApiClient) : MomentRepository {
 
     override suspend fun delete(id: String): ApiResult<Unit> =
         client.delete("/moment/$id").toResult().map { }
+
+    override suspend fun viewShare(token: String): ShareViewResult = runCatching {
+        // token 是 JWT 串（含 `.` 与 `-`），仍按 web 的 encodeURIComponent 语义编码，避免特殊字符截断路径
+        val enc = java.net.URLEncoder.encode(token, "UTF-8")
+        toShareResult(client.get("/share/$enc"))
+    }.getOrElse { ShareViewResult(-1, "网络异常，请重试") }
+
+    override suspend fun verifySharePassword(id: String, pw: String): ShareViewResult = runCatching {
+        val body = JsonObject().apply {
+            addProperty("id", id)
+            addProperty("pw", pw)
+        }
+        // ⚠ 明文：后端 controller 直接读 `req.body`，路径已在 `AppConfig.SKIP_ENCRYPT_URLS` 白名单内
+        toShareResult(client.post("/share/password", body))
+    }.getOrElse { ShareViewResult(-1, "网络异常，请重试") }
+
+    /**
+     * 分享接口**不走** `Envelope.toResult()`：它的 403/404/410/429 全在业务体里（HTTP 仍是 200），
+     * 而 `toResult()` 会把 429 折成不带文案的 `RateLimited`，后端「还剩 N 次机会」就没了。
+     */
+    private fun toShareResult(env: Envelope): ShareViewResult {
+        val status = if (env.status == 0) env.httpStatus.let { if (it in 200..299) 500 else it } else env.status
+        return ShareViewResult(
+            status = status,
+            message = env.message,
+            detail = if (status == 200) parseShareDetail(env.data) else null,
+            retryAfterSec = env.root?.get("retryAfter")?.takeIf { !it.isJsonNull }?.asInt ?: 0,
+        )
+    }
 
     // ───────────────────────── 解析 ─────────────────────────
 
@@ -236,6 +315,24 @@ class RemoteMomentRepository(private val client: ApiClient) : MomentRepository {
             vt = int(o.get("visible_type")?.takeIf { it.isJsonObject }?.asJsonObject, "vt"),
             vs = int(o.get("visible_type")?.takeIf { it.isJsonObject }?.asJsonObject, "vs"),
             pw = str(o.get("visible_type")?.takeIf { it.isJsonObject }?.asJsonObject, "pw"),
+        )
+    }
+
+    /** 分享接口 `data` → [MomentShareDetail]（字段比登录态的 [Moment] 少，且 `author`/`expire_at` 是它独有的）。 */
+    private fun parseShareDetail(data: JsonElement?): MomentShareDetail {
+        val o = data as? JsonObject ?: return MomentShareDetail()
+        return MomentShareDetail(
+            id = str(o, "id"),
+            content = str(o, "content"),
+            images = parseImages(o.get("img_url")),
+            mood = when (val m = o.get("mood")) {
+                null -> ""
+                else -> if (m.isJsonNull) "" else if (m.isJsonPrimitive) m.asString else str(m.asJsonObject, "name")
+            },
+            locationName = (o.get("location") as? JsonObject)?.let { str(it, "name") } ?: "",
+            createTime = str(o, "create_time"),
+            authorName = (o.get("author") as? JsonObject)?.let { str(it, "name") }?.ifBlank { "ta" } ?: "ta",
+            expireAt = str(o, "expire_at"),
         )
     }
 

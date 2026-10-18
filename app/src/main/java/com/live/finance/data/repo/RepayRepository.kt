@@ -170,6 +170,8 @@ class RemoteRepayRepository(private val client: ApiClient) : RepayRepository {
         method = str(o, "repay_method"),
         repayCardId = str(o, "repay_card_id"),
         time = str(o, "repay_time"),
+        updateTime = str(o, "update_time"),
+        createTime = str(o, "create_time"),
         remark = str(o, "remark"),
         accountId = str(o, "account_id"),
         cardAlias = str(o, "card_alias"),

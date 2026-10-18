@@ -1,6 +1,5 @@
 package com.live.finance.ui.bankcard
 
-import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -36,6 +35,8 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import com.live.finance.App
 import com.live.finance.core.net.ApiResult
+import com.live.finance.core.net.failMessage
+import com.live.finance.core.net.failToastType
 import com.live.finance.data.model.Card
 import com.live.finance.data.model.Foreign
 import com.live.finance.data.model.ForeignHistory
@@ -54,6 +55,8 @@ import com.live.vant.feedback.VanPopup
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import com.live.vant.feedback.LocalVanToastController
+import com.live.vant.feedback.VanToastType
 
 /** 对账目标（web openReconcile 组装的编辑对象，含历史 pending 行的伪对象）。 */
 private data class RecTarget(
@@ -91,13 +94,13 @@ fun ForeignScreen(nav: NavHostController) {
     var showCardFilter by remember { mutableStateOf(false) }
     var showRangeFilter by remember { mutableStateOf(false) }
 
-    fun toast(m: String) = Toast.makeText(context, m, Toast.LENGTH_SHORT).show()
-
+    val vanToast = LocalVanToastController.current
+    fun toast(m: String, type: VanToastType = VanToastType.Text) = vanToast.show(m, type)
     fun loadData() {
         scope.launch {
             when (val r = graph.card.list("credit")) { is ApiResult.Ok -> cards = r.data.orEmpty(); else -> Unit }
             when (val r = graph.foreign.pending()) { is ApiResult.Ok -> pending = r.data.orEmpty(); else -> Unit }
-            when (val r = graph.foreign.list()) { is ApiResult.Ok -> all = r.data.orEmpty(); else -> toast("加载失败") }
+            when (val r = graph.foreign.list()) { is ApiResult.Ok -> all = r.data.orEmpty(); else -> toast(r.failMessage("加载失败"), r.failToastType()) }
         }
     }
 
@@ -108,7 +111,7 @@ fun ForeignScreen(nav: NavHostController) {
             val endDate = LocalDate.now().format(DateTimeFormatter.ISO_DATE)
             when (val r = graph.foreign.history(hisCardId.ifBlank { null }, startDate, endDate)) {
                 is ApiResult.Ok -> history = r.data.orEmpty()
-                is ApiResult.Fail -> toast("加载历史流水失败")
+                is ApiResult.Fail -> toast("加载历史流水失败", VanToastType.Fail)
                 else -> Unit
             }
         }
@@ -131,9 +134,9 @@ fun ForeignScreen(nav: NavHostController) {
         val rmb = recRmb.toDoubleOrNull() ?: 0.0
         scope.launch {
             when (val r = graph.foreign.reconcile(t.id, rate, rmb, "", "")) {
-                is ApiResult.Ok -> { toast("已对账，账单已同步"); showReconcile = false; loadData(); loadHistory() }
-                is ApiResult.Fail -> toast(r.message.ifBlank { "对账失败" })
-                else -> toast("对账失败")
+                is ApiResult.Ok -> { toast("已对账，账单已同步", VanToastType.Success); showReconcile = false; loadData(); loadHistory() }
+                is ApiResult.Fail -> toast(r.message.ifBlank { "对账失败" }, VanToastType.Fail)
+                else -> toast(r.failMessage("对账失败"), r.failToastType())
             }
         }
     }
@@ -142,9 +145,9 @@ fun ForeignScreen(nav: NavHostController) {
         if (item.accountId.isBlank()) return
         scope.launch {
             when (val r = graph.foreign.register(item.accountId)) {
-                is ApiResult.Ok -> { toast("已登记为待对账"); loadData(); loadHistory() }
-                is ApiResult.Fail -> toast(r.message.ifBlank { "登记失败" })
-                else -> toast("登记失败")
+                is ApiResult.Ok -> { toast("已登记为待对账", VanToastType.Success); loadData(); loadHistory() }
+                is ApiResult.Fail -> toast(r.message.ifBlank { "登记失败" }, VanToastType.Fail)
+                else -> toast(r.failMessage("登记失败"), r.failToastType())
             }
         }
     }
@@ -162,9 +165,14 @@ fun ForeignScreen(nav: NavHostController) {
     ScreenScaffold { inner ->
         LazyColumn(state = listState, modifier = Modifier.fillMaxSize().then(inner)) {
             item {
-                BankTopBar(title = "外币消费登记对账", onBack = { nav.popBackStack() })
                 // 提示条（web `.tips`，含加粗「实际结算汇率」段）
-                Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp).clip(RoundedCornerShape(8.dp)).background(colors.bgCard).padding(12.dp)) {
+                // web `.tips{ margin:12px; padding:10px 12px; font-size:12px; line-height:1.6;
+                    //   color:text-secondary; background:bg-secondary; border-radius:8px }`
+                    // —— 旧实现内边距用了 12 全向（web 是上下 10、左右 12），且缺 margin 的上下 12。
+                    Column(
+                        Modifier.fillMaxWidth().padding(12.dp).clip(RoundedCornerShape(8.dp))
+                            .background(colors.bgCard).padding(horizontal = 12.dp, vertical = 10.dp),
+                    ) {
                     FText("外币消费入账以银行 App 实际结算汇率 为准。登记后请在还款对账时补全实际汇率/人民币，账单才计入。", 12f, color = colors.textSecondary)
                 }
                 // 页签
@@ -176,7 +184,7 @@ fun ForeignScreen(nav: NavHostController) {
                                 .background(if (active) colors.primary else colors.bgCard)
                                 .clickable { tab = i }.padding(vertical = 10.dp),
                             contentAlignment = Alignment.Center,
-                        ) { FText(t, 13f, FontWeight.Medium, if (active) Color.White else colors.textPrimary) }
+                        ) { FText(t, 14f, FontWeight.Medium, if (active) Color.White else colors.textPrimary) }
                     }
                 }
             }
@@ -191,7 +199,7 @@ fun ForeignScreen(nav: NavHostController) {
                             .clickable { openReconcile(it0.id, it0.currency, it0.foreignAmount, it0.registeredRate) }
                             .padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
-                                FText("${it0.currency} · ${cardName(it0.cardId)}", 14f, FontWeight.Medium, colors.textPrimary)
+                                FText("${it0.currency} · ${cardName(it0.cardId)}", 16f, FontWeight.Medium, colors.textPrimary)
                                 Spacer(Modifier.height(2.dp))
                                 FText("原币 ${Money.formatMoney(it0.foreignAmount)} @ ${Money.formatMoney(it0.registeredRate)}", 12f, color = colors.textTertiary)
                             }
@@ -212,7 +220,7 @@ fun ForeignScreen(nav: NavHostController) {
                         val reconciled = it0.status == "reconciled"
                         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 5.dp).clip(RoundedCornerShape(8.dp)).background(colors.bgCard).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
-                                FText("${it0.currency} · ${cardName(it0.cardId)}", 14f, FontWeight.Medium, colors.textPrimary)
+                                FText("${it0.currency} · ${cardName(it0.cardId)}", 16f, FontWeight.Medium, colors.textPrimary)
                                 Spacer(Modifier.height(2.dp))
                                 FText("原币 ${Money.formatMoney(it0.foreignAmount)}", 12f, color = colors.textTertiary)
                             }
@@ -253,7 +261,7 @@ fun ForeignScreen(nav: NavHostController) {
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Column(Modifier.weight(1f)) {
-                                FText(cardName(h.cardId), 14f, FontWeight.Medium, colors.textPrimary)
+                                FText(cardName(h.cardId), 16f, FontWeight.Medium, colors.textPrimary)
                                 Spacer(Modifier.height(2.dp))
                                 FText("${h.transDate.ifBlank { "--" }} · 原币 ${Money.formatMoney(h.amount)} @ ${Money.formatMoney(h.exchangeRate)}", 12f, color = colors.textTertiary)
                             }
@@ -283,7 +291,7 @@ fun ForeignScreen(nav: NavHostController) {
                     }
                 }
             }
-            item { Spacer(Modifier.height(32.dp)) }
+            item { Spacer(Modifier.height(12.dp)) } // web `.section{ padding: 4px 0 12px }`（页面本身无 padding-bottom）
         }
     }
 
@@ -291,7 +299,7 @@ fun ForeignScreen(nav: NavHostController) {
     if (showReconcile && recTarget != null) {
         VanPopup(show = true, onDismissRequest = { showReconcile = false }) {
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)).background(colors.bgCard).padding(16.dp)) {
-                FText("外币对账", 16f, FontWeight.SemiBold, colors.textPrimary, modifier = Modifier.padding(bottom = 8.dp))
+                FText("${recTarget!!.currency} · 实际结算对账", 18f, FontWeight.SemiBold, colors.textPrimary, modifier = Modifier.padding(bottom = 8.dp))
                 FText("原币金额：${Money.formatMoney(recTarget!!.foreignAmount)} ${recTarget!!.currency}", 12f, color = colors.textSecondary)
                 FText("登记汇率：${Money.formatMoney(recTarget!!.registeredRate)}（每100外币）", 12f, color = colors.textSecondary)
                 Spacer(Modifier.height(8.dp))
@@ -302,8 +310,8 @@ fun ForeignScreen(nav: NavHostController) {
                 if (rate != 0.0) {
                     val preview = if (rmb > 0) rmb else (recTarget!!.foreignAmount * rate) / 100
                     Row(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-                        FText("预计入账：", 14f, color = colors.textPrimary)
-                        FText("¥${Money.formatMoney(preview)}", 14f, FontWeight.SemiBold, colors.primary)
+                        FText("预计入账：", 16f, color = colors.textPrimary)
+                        FText("¥${Money.formatMoney(preview)}", 16f, FontWeight.SemiBold, colors.primary)
                     }
                 }
                 Spacer(Modifier.height(8.dp))
@@ -340,7 +348,7 @@ private fun FilterChip(text: String, modifier: Modifier = Modifier, onClick: () 
             .clickable { onClick() }.padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        FText(text, 13f, color = colors.textPrimary, modifier = Modifier.weight(1f))
+        FText(text, 14f, color = colors.textPrimary, modifier = Modifier.weight(1f))
         FText("▾", 12f, color = colors.textTertiary)
     }
 }

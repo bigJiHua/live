@@ -40,6 +40,10 @@ import com.live.finance.data.model.Category
 import com.live.finance.data.model.FlowRow
 import com.live.finance.theme.LocalAppColors
 import com.live.finance.theme.LocalAppTokens
+import com.live.finance.theme.VanGreenFixed
+import com.live.finance.theme.VanOrangeFixed
+import com.live.finance.theme.scaledSp
+import com.live.finance.theme.vanGreen
 import com.live.finance.ui.common.BankIconView
 import com.live.finance.ui.common.FlowItem
 import com.live.finance.ui.common.FlowKind
@@ -57,12 +61,6 @@ import com.live.finance.ui.common.isRepay
 import com.live.vant.icon.VanIcon
 import java.time.LocalDate
 import java.util.Locale
-
-/** web `--van-green`（buildVars 不覆盖它，两模式同值）。 */
-val VanGreenFixed = Color(0xFF07C160)
-
-/** web `--van-orange`（同理，固定值）。 */
-val VanOrangeFixed = Color(0xFFFF976A)
 
 /** web `formatAmount = Number(amount).toFixed(2)`：**无千分位**、四舍五入两位小数。 */
 fun flowAmount2(value: Double): String = String.format(Locale.US, "%.2f", value)
@@ -115,7 +113,7 @@ private fun InstTag() {
             .background(Color(0x24FF976A), RoundedCornerShape(4.dp))
             .padding(horizontal = 5.dp),
     ) {
-        FText("分期", 11f, FontWeight.Medium, colors.warning)
+        FText("分期", 12f, FontWeight.Medium, colors.warning)
     }
 }
 
@@ -136,7 +134,7 @@ private fun BankChip(row: FlowRow, cards: List<Card>, banks: List<Category>) {
             name = flowCardBankName(row, cards, banks),
             size = 12.dp,
         )
-        FText(flowCardNameById(row.cardId, cards, banks), 10f, FontWeight.Normal, colors.textSecondary)
+        FText(flowCardNameById(row.cardId, cards, banks), 12f, FontWeight.Normal, colors.textSecondary)
     }
 }
 
@@ -183,7 +181,7 @@ fun FlowCardRow(
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     FText(
-                        flowCategoryName(row), 14f, FontWeight.Medium,
+                        flowCategoryName(row), 16f, FontWeight.Medium,
                         if (dim) colors.textTertiary else colors.textPrimary,
                     )
                     if (isInstallmentFlow(row)) InstTag()
@@ -192,7 +190,7 @@ fun FlowCardRow(
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     FText(
                         flowPayMethod(row) + if (badged) " · " + flowTime(row.createTime) else "",
-                        11f, FontWeight.Normal, colors.textTertiary,
+                        12f, FontWeight.Normal, colors.textTertiary,
                     )
                     if (row.cardId.isNotEmpty() && row.cardId != "xxxx" && row.cardId != "yyyy") {
                         BankChip(row, cards, banks)
@@ -202,13 +200,13 @@ fun FlowCardRow(
             Column(horizontalAlignment = Alignment.End, modifier = Modifier.padding(start = 10.dp)) {
                 Row(verticalAlignment = Alignment.Bottom) {
                     if (isForeignCurrency(row)) {
-                        FText(currencySymbol(row.currency), 15f, FontWeight.Medium, amtColor, Modifier.padding(end = 1.dp))
+                        FText(currencySymbol(row.currency), 16f, FontWeight.Medium, amtColor, Modifier.padding(end = 1.dp))
                     }
                     FText((if (income) "+" else "-") + flowAmount2(row.amount), 18f, FontWeight.Bold, amtColor)
                 }
                 if (!badged) {
                     Spacer(Modifier.height(2.dp))
-                    FText(flowTime(row.createTime), 10f, FontWeight.Normal, colors.textTertiary)
+                    FText(flowTime(row.createTime), 12f, FontWeight.Normal, colors.textTertiary)
                 }
             }
         }
@@ -227,7 +225,7 @@ fun FlowCardRow(
             ) {
                 FText(
                     if (income) "给我转账" else "对外转账",
-                    9f, FontWeight.SemiBold,
+                    12f, FontWeight.SemiBold,
                     if (income) VanGreenFixed else VanOrangeFixed,
                 )
             }
@@ -260,7 +258,7 @@ fun FlowDayHeaderRow(date: String, income: Double, expense: Double) {
             )
         }
         Row(Modifier.weight(1f), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FText(flowDayHeader(date), 15f, FontWeight.SemiBold, colors.textPrimary)
+            FText(flowDayHeader(date), 16f, FontWeight.SemiBold, colors.textPrimary)
             FText(flowWeekday(date), 12f, FontWeight.Normal, colors.textTertiary)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -324,20 +322,20 @@ fun FlowPairedBlock(
                 .padding(horizontal = 14.dp, vertical = 5.dp),
         ) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                FText(flowTime(expense.createTime), 11f, FontWeight.Normal, colors.textTertiary)
+                FText(flowTime(expense.createTime), 12f, FontWeight.Normal, colors.textTertiary)
                 if (reversal) {
                     // web 冲正标签：`text-decoration: line-through`
                     BasicText(
                         labelText,
                         style = TextStyle(
-                            color = labelColor, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
+                            color = labelColor, fontSize = scaledSp(12f), fontWeight = FontWeight.SemiBold,
                             textDecoration = TextDecoration.LineThrough,
                         ),
                     )
                 } else {
-                    FText(labelText, 11f, FontWeight.SemiBold, labelColor)
+                    FText(labelText, 12f, FontWeight.SemiBold, labelColor)
                 }
-                FText(flowTime(income.createTime), 11f, FontWeight.Normal, colors.textTertiary)
+                FText(flowTime(income.createTime), 12f, FontWeight.Normal, colors.textTertiary)
             }
             Row(
                 Modifier.fillMaxWidth().padding(bottom = 4.dp),
@@ -357,14 +355,14 @@ fun FlowPairedBlock(
                 Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
                     BasicText(
                         flowCardNameById(expense.cardId, cards, banks).ifEmpty { flowCompactCardLabel(expense, cards) },
-                        style = TextStyle(color = bankColor, fontSize = 11.sp),
+                        style = TextStyle(color = bankColor, fontSize = scaledSp(12f)),
                         maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )
                 }
                 Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
                     BasicText(
                         flowCardNameById(income.cardId, cards, banks).ifEmpty { flowCompactCardLabel(income, cards) },
-                        style = TextStyle(color = bankColor, fontSize = 11.sp),
+                        style = TextStyle(color = bankColor, fontSize = scaledSp(12f)),
                         maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )
                 }
@@ -396,16 +394,21 @@ private fun PairedDetailLine(row: FlowRow, isExpense: Boolean, onDetail: (FlowRo
             Modifier
                 .padding(end = 10.dp)
                 .size(7.dp)
-                .background(if (isExpense) MoneyColor.expense else VanGreenFixed, CircleShape),
+                // web `List.vue:1339-1340`：`.tfd-dot.out`(支出) = `var(--van-danger-color, #ee0a24)`、
+                // `.tfd-dot.in`(收入) = `var(--van-green, #07c160)` —— **与 MoneyColor 是两套口径**：
+                // 圆点固定「支出红 / 收入绿」，不随「红收绿支/红出绿收」设置变。
+                // `--van-danger-color` 在 `:root` → 两模式跟主题；`--van-green` **只在深色**跟主题（浅色 #07c160）。
+                // ⚠ 原实现写成 `if (isExpense) MoneyColor.expense else VanGreenFixed`，支出色反了（默认模式是绿）。
+                .background(if (isExpense) colors.danger else vanGreen(), CircleShape),
         )
         Column(Modifier.weight(1f)) {
-            FText(flowCategoryName(row), 13f, FontWeight.Medium, colors.textPrimary)
+            FText(flowCategoryName(row), 14f, FontWeight.Medium, colors.textPrimary)
             Spacer(Modifier.height(1.dp))
-            FText(flowPayMethod(row) + " · " + flowTime(row.createTime), 11f, FontWeight.Normal, colors.textTertiary)
+            FText(flowPayMethod(row) + " · " + flowTime(row.createTime), 12f, FontWeight.Normal, colors.textTertiary)
         }
         FText(
             (if (isExpense) "-" else "+") + flowAmount2(row.amount),
-            15f, FontWeight.SemiBold,
+            16f, FontWeight.SemiBold,
             if (isExpense) MoneyColor.expense else MoneyColor.income,
             Modifier.padding(start = 8.dp),
         )

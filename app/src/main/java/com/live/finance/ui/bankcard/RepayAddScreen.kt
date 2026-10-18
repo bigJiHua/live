@@ -1,6 +1,5 @@
 package com.live.finance.ui.bankcard
 
-import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -36,6 +35,7 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import com.live.finance.App
 import com.live.finance.core.net.ApiResult
+import com.live.finance.core.net.failMessage
 import com.live.finance.data.model.Bill
 import com.live.finance.data.model.Card
 import com.live.finance.data.model.Category
@@ -60,6 +60,9 @@ import com.live.vant.form.VanSearch
 import com.live.vant.form.vanPickerColumnsOf
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import com.live.vant.feedback.LocalVanToastController
+import com.live.vant.feedback.VanToastType
+import com.live.finance.core.net.showFail
 
 /** 还款方式（web repayMethods：value/文案 原文）。 */
 private val REPAY_METHODS = listOf("cash" to "现金还款", "bank_card" to "借记卡还款", "balance" to "余额还款")
@@ -97,8 +100,8 @@ fun RepayAddScreen(nav: NavHostController, billId: String = "", mergePoolId: Str
     var showKeyboard by remember { mutableStateOf(false) }
     var submitting by remember { mutableStateOf(false) }
 
-    fun toast(m: String) = Toast.makeText(context, m, Toast.LENGTH_SHORT).show()
-
+    val vanToast = LocalVanToastController.current
+    fun toast(m: String, type: VanToastType = VanToastType.Text) = vanToast.show(m, type)
     // 弹窗互斥：同一时刻只允许一个弹层/键盘（防窗口堆叠导致的「两弹窗叠加 + 页面卡死」）
     fun closeOverlays(except: String = "") {
         if (except != "method") showMethod = false
@@ -147,7 +150,16 @@ fun RepayAddScreen(nav: NavHostController, billId: String = "", mergePoolId: Str
                     cardName = listOf(b.cardAlias.ifBlank { "信用卡" }, no).filter { it.isNotBlank() }.joinToString(" ")
                     billName = "欠款 ¥${Money.formatMoney(oweAmount)}"
                 }
-                else -> { toast("加载失败"); nav.popBackStack(); return@LaunchedEffect }
+                // ⚠ r 可空（runCatching().getOrNull()：抛异常时为 null）⇒ 必须分两支处理。
+                //   非空：按 ApiResult 自动分色（网络/5xx → 灰，业务失败 → 红）。
+                //   null：ApiClient 已把传输层异常收成 Network 了，能冒到这里的都是解析/逻辑异常 ⇒ 红。
+                // ⚠ 本文件的 `toast(...)` 是**本地 helper**（`fun toast(m, type) = vanToast.show(...)`），
+                //   不是 controller ⇒ 调扩展函数要用 `vanToast`。
+                else -> {
+                    if (r != null) vanToast.showFail(r, "加载失败") else toast("加载失败", VanToastType.Fail)
+                    nav.popBackStack()
+                    return@LaunchedEffect
+                }
             }
         }
         loading = false
@@ -159,7 +171,7 @@ fun RepayAddScreen(nav: NavHostController, billId: String = "", mergePoolId: Str
             if (!isMergeMode) {
                 val amt = repayAmount.toDoubleOrNull() ?: 0.0
                 if (amt <= 0) { toast("请输入还款金额"); return@launch }
-                if (amt > oweAmount) { toast("还款金额不能超过欠款 ¥${Money.formatMoney(oweAmount)}"); return@launch }
+                if (amt > oweAmount) { toast("还款金额不能超过欠款 ¥${Money.formatMoney(oweAmount)}", VanToastType.Fail); return@launch }
             }
             if (repayMethod == "bank_card" && methodCardId.isBlank()) { toast("请选择还款银行卡"); return@launch }
             submitting = true
@@ -179,7 +191,7 @@ fun RepayAddScreen(nav: NavHostController, billId: String = "", mergePoolId: Str
             }
             when (r) {
                 is ApiResult.Ok -> { toast(if (isMergeMode) "合并还款成功" else "添加成功"); nav.popBackStack() }
-                is ApiResult.Fail -> toast(r.message.ifBlank { if (isMergeMode) "合并还款失败" else "添加失败" })
+                is ApiResult.Fail -> toast(r.message.ifBlank { if (isMergeMode) "合并还款失败" else "添加失败" }, VanToastType.Fail)
                 else -> toast(if (isMergeMode) "合并还款失败" else "添加失败")
             }
             submitting = false
@@ -188,7 +200,6 @@ fun RepayAddScreen(nav: NavHostController, billId: String = "", mergePoolId: Str
 
     ScreenScaffold { inner ->
         Column(Modifier.fillMaxSize().then(inner).background(colors.bgPage)) {
-            BankTopBar(title = if (isMergeMode) "合并还款" else "新增还款", onBack = { nav.popBackStack() })
             if (loading) {
                 Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) { VanLoading() }
             } else {
@@ -201,51 +212,81 @@ fun RepayAddScreen(nav: NavHostController, billId: String = "", mergePoolId: Str
                         ) {
                             VanIcon("warning-o", size = 14.sp, color = Color(0xFFED6A0C))
                             Spacer(Modifier.width(8.dp))
-                            FText("信报合一共享池：本次还款将一次性结清该银行共享池内全部卡的欠款", 13f, color = Color(0xFFED6A0C), modifier = Modifier.weight(1f))
+                            // `.merge-notice{ font-size:13px→14; color:#ed6a0c; line-height:1.5 }`
+                            FText("信报合一共享池：本次还款将一次性结清该银行共享池内全部卡的欠款",
+                                14f, color = Color(0xFFED6A0C),
+                                modifier = Modifier.weight(1f), lineHeight = 21.sp)
                         }
                         Spacer(Modifier.height(12.dp))
                     }
-                    FormSection {
-                        ReadonlyRow(label = if (isMergeMode) "共享池（信报合一）" else "信用卡", value = cardName, arrow = false)
-                        ReadonlyRow(label = if (isMergeMode) "共享额度" else "账单", value = billName, arrow = false)
+                    // web 该区**有标题**「关联信息」（旧实现漏了），且两个只读行带
+                    //   `.readonly-field{ background: var(--theme-bg-primary) }` —— 灰底（整张卡都灰）。
+                    FormSection("关联信息") {
+                        Column(Modifier.fillMaxWidth().background(colors.bgPage)) {
+                            ReadonlyRow(label = if (isMergeMode) "共享池（信报合一）" else "信用卡", value = cardName, arrow = false)
+                            ReadonlyRow(label = if (isMergeMode) "共享额度" else "账单", value = billName, arrow = false, border = false)
+                        }
                     }
                     if (oweAmount <= 0) {
-                        Box(Modifier.fillMaxWidth().padding(vertical = 24.dp), contentAlignment = Alignment.Center) {
-                            FText("该笔账单已结清，无需还款", 15f, FontWeight.Medium, colors.primary)
+                        // ⚠ web 这一支**同样有**「还款信息」小标题，且提示语是放在 `van-cell-group inset`
+                        //   **白卡**里的（旧实现既没标题也没白卡，只有一句浮在页面底色上的字）。
+                        //   `.cleared-notice{ padding:24px 16px; text-align:center; font-size:15px→16f;
+                        //   color: theme-primary }`（无 font-weight）。
+                        FormSection("还款信息") {
+                            Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 24.dp), contentAlignment = Alignment.Center) {
+                                FText("该笔账单已结清，无需还款", 16f, color = colors.primary)
+                            }
                         }
                     } else {
                         FormSection("还款信息") {
-                            Row(
+                            // web 是 `app-field label="还款金额"`（**label 在上、值在下**），右槽
+                            // `.repay-amount-actions{ display:inline-flex; gap:8px }` 里放「全额还款」按钮 +「元」。
+                            // —— 旧实现 label 在左、「全额还款」单独占一行，两处结构都不符；
+                            //    且值字号应为 `.app-field__input` 的 14px→**16**（旧用了 20）。
+                            Column(
                                 Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)
                                     .then(if (!isMergeMode) Modifier.clickable { closeOverlays("keyboard"); showKeyboard = true } else Modifier),
-                                verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                FText("还款金额", 14f, color = colors.textPrimary)
-                                Spacer(Modifier.weight(1f))
-                                FText(if (isMergeMode) Money.formatMoney(oweAmount) else repayAmount.ifBlank { "0" }, 20f, FontWeight.SemiBold, colors.textPrimary)
-                                Spacer(Modifier.width(8.dp))
-                                FText("元", 13f, color = colors.textTertiary)
-                            }
-                            if (!isMergeMode) {
-                                Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 10.dp), horizontalArrangement = Arrangement.End) {
-                                    AppButton(
-                                        text = "全额还款",
-                                        onClick = { repayAmount = Money.formatMoney(oweAmount) },
-                                        type = AppButtonType.Primary, size = AppButtonSize.Small, plain = true,
+                                FText("还款金额", 14f, color = colors.textSecondary)
+                                Spacer(Modifier.height(6.dp))
+                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                    FText(
+                                        if (isMergeMode) Money.formatMoney(oweAmount) else repayAmount.ifBlank { "0" },
+                                        16f, color = colors.textPrimary, modifier = Modifier.weight(1f),
                                     )
+                                    if (!isMergeMode) {
+                                        AppButton(
+                                            text = "全额还款",
+                                            onClick = { repayAmount = Money.formatMoney(oweAmount) },
+                                            type = AppButtonType.Primary, size = AppButtonSize.Small, plain = true,
+                                        )
+                                        Spacer(Modifier.width(8.dp)) // .repay-amount-actions{ gap: 8px }
+                                    }
+                                    FText("元", 16f, color = colors.textSecondary)
                                 }
                             }
+                            Box(Modifier.fillMaxWidth().height(1.dp).background(colors.border))
                             ReadonlyRow("还款方式", repayMethodLabel(repayMethod), onClick = { closeOverlays("method"); showMethod = true })
                             if (repayMethod == "bank_card") {
-                                ReadonlyRow("还款银行卡", debitCardLabel(methodCardId, debitCards, banks), "请选择还款银行卡") { closeOverlays("debit"); showDebitPicker = true }
+                                // ⚠⚠ **必须写 `onClick = { }`，不能用尾随 lambda**（2026-09-21 卡死根因）。
+                                //   `ReadonlyRow` 的**最后一个参数**是 `trailing: (@Composable () -> Unit)?`，
+                                //   尾随 lambda 按 Kotlin 规则绑到**最后一个参数**，于是
+                                //   ① `onClick` 仍是 null ⇒ 整行**点不动**；
+                                //   ② 那段代码被当成 `trailing` 在**组合期被直接调用** ⇒ 每次重组都写
+                                //      `showDatePicker = true` / `showDebitPicker = true`，两行互相把对方的
+                                //      标志翻来翻去 ⇒ **无限重组**（表现为「自动弹出日期选择 + 整个 APP 卡死」）。
+                                ReadonlyRow("还款银行卡", debitCardLabel(methodCardId, debitCards, banks), "请选择还款银行卡", onClick = { closeOverlays("debit"); showDebitPicker = true })
                             }
-                            ReadonlyRow("还款时间", repayTime, "请选择") { closeOverlays("date"); showDatePicker = true }
+                            ReadonlyRow("还款时间", repayTime, "请选择", onClick = { closeOverlays("date"); showDatePicker = true })
                         }
                         FormSection("备注") {
+                            // web `<app-field label="备注" type="textarea" rows="2">` —— **有 label**
+                            // （旧实现漏了 label；textarea 多行本工程的 AppField 无等价物，按单行处理）
                             AppField(
                                 value = remark, onValueChange = { remark = it },
+                                label = "备注",
                                 placeholder = "可选填写备注信息", border = false,
-                                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
                             )
                         }
                         Column(Modifier.padding(horizontal = 16.dp, vertical = 32.dp)) {
@@ -287,14 +328,26 @@ fun RepayAddScreen(nav: NavHostController, billId: String = "", mergePoolId: Str
         )
     }
     if (showDatePicker) {
+        // ⚠⚠ **注意**：「打开即自动弹日期选择 + 卡死」的真正根因**不是这里**，而是上面两行
+        //    `ReadonlyRow` 的尾随 lambda 误绑到 `trailing`（2026-09-21 用反汇编确认）——
+        //    那段代码在**组合期**执行，与「还款银行卡」行互相翻转标志 ⇒ 无限重组。
+        //    这里的 pending 值写法是**另一个**独立问题（滚轮写不回 / 确认拿到旧值），保留。
+        // ⚠⚠ **曾经严重 BUG**：`VanDatePicker` 是**完全受控**组件（`value` + `onValueChange`），
+        //    旧实现传了空的 `onValueChange = { }` ⇒ 滚轮的新位置**永远写不回状态** ⇒
+        //    拨轮立刻被弹回原位（像卡死），「确认」拿到的还是旧值；再叠加 `VanPopup` 在最上层，
+        //    表现为「日期选择无法取消/确认，整个 APP 卡死、按返回无效」（2026-09-19 真机反馈）。
+        // 正确做法：弹层内持有 pending 值，滚动即时回写，确认时才落到 `repayTime`。
+        var pendingDate by remember {
+            mutableStateOf(runCatching { LocalDate.parse(repayTime) }.getOrDefault(LocalDate.now()))
+        }
         VanPopup(show = true, onDismissRequest = { showDatePicker = false }) {
             VanDatePicker(
                 type = "date",
-                value = runCatching { LocalDate.parse(repayTime) }.getOrDefault(LocalDate.now()),
-                onValueChange = { },
+                value = pendingDate,
+                onValueChange = { pendingDate = it },
                 minDate = LocalDate.of(2020, 1, 1), maxDate = LocalDate.now(),
                 title = "选择日期",
-                onConfirm = { repayTime = it.toString(); showDatePicker = false },
+                onConfirm = { d -> repayTime = d.toString(); showDatePicker = false },
                 onCancel = { showDatePicker = false },
             )
         }
@@ -361,7 +414,7 @@ private fun DebitCardPicker(
     }
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)).background(colors.bgCard)) {
         Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            FText("选择还款银行卡", 16f, FontWeight.SemiBold, colors.textPrimary, modifier = Modifier.weight(1f))
+            FText("选择还款银行卡", 18f, FontWeight.SemiBold, colors.textPrimary, modifier = Modifier.weight(1f))
             VanIcon("cross", size = 18.sp, color = colors.textTertiary, onClick = { onClose() })
         }
         VanSearch(value = keyword, onValueChange = onKeyword, placeholder = "搜索银行")
@@ -369,7 +422,7 @@ private fun DebitCardPicker(
             if (filtered.isEmpty()) {
                 item {
                     Box(Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
-                        FText("未找到匹配的银行卡", 14f, color = colors.textTertiary)
+                        FText("未找到匹配的银行卡", 16f, color = colors.textTertiary)
                     }
                 }
             }
@@ -382,7 +435,7 @@ private fun DebitCardPicker(
                     Modifier.fillMaxWidth().clickable { onPick(c.id) }.padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    FText(label, 14f, color = colors.textPrimary, modifier = Modifier.weight(1f))
+                    FText(label, 16f, color = colors.textPrimary, modifier = Modifier.weight(1f))
                     if (selectedId == c.id) VanIcon("success", size = 16.sp, color = colors.primary)
                 }
             }

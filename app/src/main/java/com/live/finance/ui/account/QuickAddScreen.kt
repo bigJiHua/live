@@ -1,5 +1,6 @@
 package com.live.finance.ui.account
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -53,6 +54,7 @@ import com.live.finance.data.model.Card
 import com.live.finance.data.model.Category
 import com.live.finance.theme.LocalAppColors
 import com.live.finance.theme.LocalAppTokens
+import com.live.finance.theme.scaledSp
 import com.live.finance.ui.common.AppButton
 import com.live.finance.ui.common.AppButtonSize
 import com.live.finance.ui.common.AppButtonType
@@ -106,6 +108,9 @@ fun QuickAddScreen(nav: NavHostController) {
     // ── 向导状态 ──
     var step by remember { mutableIntStateOf(1) }
     val stepLabels = listOf("方向", "分类", "账户", "金额", "确认")
+
+    // 系统返回键：向导内步进回退（与步骤条左箭头一致）；第 1 步时放行，正常退出页面
+    BackHandler(enabled = step > 1) { step -= 1 }
 
     // ── 表单（对应 web form ref）──
     var type by remember { mutableStateOf<RecordType?>(null) }
@@ -528,7 +533,7 @@ fun QuickAddScreen(nav: NavHostController) {
                                     ) {
                                         VanIcon(name = "balance-o", size = 28.sp, color = BankIconDebit)
                                         Spacer(Modifier.width(8.dp))
-                                        FText("余额", 16f, FontWeight.SemiBold, tokens.primary)
+                                        FText("余额", 18f, FontWeight.SemiBold, tokens.primary)
                                     }
                                 }
                                 Box(Modifier.fillMaxWidth().padding(vertical = 4.dp), contentAlignment = Alignment.Center) {
@@ -623,7 +628,7 @@ fun QuickAddScreen(nav: NavHostController) {
                                     .padding(horizontal = 12.dp, vertical = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                FText(currency.label, 13f, FontWeight.Normal, colors.textPrimary)
+                                FText(currency.label, 14f, FontWeight.Normal, colors.textPrimary)
                                 Spacer(Modifier.width(4.dp))
                                 VanIcon(name = "arrow-down", size = 13.sp, color = colors.textPrimary)
                             }
@@ -645,7 +650,7 @@ fun QuickAddScreen(nav: NavHostController) {
                             if (currency.code != "CNY" && amount.isNotBlank()) {
                                 FText(
                                     "约 ¥ ${Money.formatMoney(exchangedCny(amount, exchangeRate, currency))}",
-                                    13f, FontWeight.Normal, tokens.primary,
+                                    14f, FontWeight.Normal, tokens.primary,
                                 )
                             }
                             if (currency.code != "CNY") {
@@ -658,15 +663,15 @@ fun QuickAddScreen(nav: NavHostController) {
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 ) {
-                                    FText("汇率", 14f, FontWeight.Normal, colors.textSecondary)
+                                    FText("汇率", 16f, FontWeight.Normal, colors.textSecondary)
                                     Box(Modifier.weight(1f)) {
                                         if (exchangeRate.isEmpty()) {
-                                            FText("如: 684.5125", 15f, FontWeight.Normal, colors.textTertiary)
+                                            FText("如: 684.5125", 16f, FontWeight.Normal, colors.textTertiary)
                                         }
                                         BasicTextField(
                                             value = exchangeRate,
                                             onValueChange = { exchangeRate = filterRateInput(it) },
-                                            textStyle = TextStyle(color = colors.textPrimary, fontSize = 15.sp),
+                                            textStyle = TextStyle(color = colors.textPrimary, fontSize = scaledSp(16f)),
                                             cursorBrush = SolidColor(tokens.primary),
                                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                             singleLine = true,
@@ -696,15 +701,15 @@ fun QuickAddScreen(nav: NavHostController) {
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
-                                FText("转给", 15f, FontWeight.SemiBold, colors.textPrimary)
+                                FText("转给", 16f, FontWeight.SemiBold, colors.textPrimary)
                                 Box(Modifier.weight(1f)) {
                                     if (payee.isEmpty()) {
-                                        FText("请输入收款人（必填）", 15f, FontWeight.Normal, colors.textTertiary)
+                                        FText("请输入收款人（必填）", 16f, FontWeight.Normal, colors.textTertiary)
                                     }
                                     BasicTextField(
                                         value = payee,
                                         onValueChange = { payee = it.take(30) },
-                                        textStyle = TextStyle(color = colors.textPrimary, fontSize = 15.sp),
+                                        textStyle = TextStyle(color = colors.textPrimary, fontSize = scaledSp(16f)),
                                         cursorBrush = SolidColor(tokens.primary),
                                         singleLine = true,
                                         modifier = Modifier.fillMaxWidth(),
@@ -866,7 +871,7 @@ private fun StepBar(
                     }
                     FText(
                         label,
-                        10f,
+                        12f,
                         if (active) FontWeight.SemiBold else FontWeight.Normal,
                         if (active || done) tokens.primary else colors.textTertiary,
                     )
@@ -906,7 +911,7 @@ private fun StepTitle(text: String) {
 @Composable
 private fun EmptyTip(text: String) {
     Box(Modifier.fillMaxWidth().padding(top = 24.dp), contentAlignment = Alignment.Center) {
-        FText(text, 13f, FontWeight.Normal, LocalAppColors.current.textTertiary)
+        FText(text, 14f, FontWeight.Normal, LocalAppColors.current.textTertiary)
     }
 }
 
@@ -950,7 +955,7 @@ private fun BigButton(
             FText(label, labelSize, FontWeight.SemiBold, colors.textPrimary)
             if (!sub.isNullOrEmpty()) {
                 Spacer(Modifier.height(3.dp))
-                FText(sub, 11f, FontWeight.Normal, colors.textTertiary)
+                FText(sub, 12f, FontWeight.Normal, colors.textTertiary)
             }
         }
     }
@@ -966,7 +971,7 @@ private fun SideLabel(text: String, icon: String, color: Color, alignEnd: Boolea
     ) {
         VanIcon(name = icon, size = 14.sp, color = color)
         Spacer(Modifier.width(4.dp))
-        FText(text, 13f, FontWeight.SemiBold, color)
+        FText(text, 14f, FontWeight.SemiBold, color)
     }
 }
 
@@ -996,7 +1001,7 @@ private fun CardTypeTab(text: String, active: Boolean, modifier: Modifier, onCli
             .clickable(onClick = onClick)
             .padding(vertical = 8.dp),
     ) {
-        FText(text, 14f, if (active) FontWeight.SemiBold else FontWeight.Normal, if (active) Color.White else colors.textSecondary)
+        FText(text, 16f, if (active) FontWeight.SemiBold else FontWeight.Normal, if (active) Color.White else colors.textSecondary)
     }
 }
 
@@ -1071,20 +1076,25 @@ private fun QuickCardTile(
                 )
             }
             if (iconUrl.isNotBlank()) {
+                // 背景透明：VanImage 的 loading/error 盒默认会涂一层不透明 bgPage（暗色主题下即黑色），
+                // 会盖住下层兜底图标；透明后失败/加载中才露得出兜底 bankcard 图标（对齐 web #error 插槽）。
                 VanImage(
                     src = AppConfig.fullFileUrl(iconUrl),
                     width = 28.dp,
                     height = 28.dp,
+                    radius = 5.dp,
+                    backgroundColor = Color.Transparent,
+                    showLoading = false,
                     showError = false,
                 )
             }
         }
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                FText(cardLast4(card), 13f, FontWeight.Bold, colors.textPrimary)
-                FText(cardTypeText(card.cardType), 11f, FontWeight.Normal, colors.textTertiary)
+                FText(cardLast4(card), 14f, FontWeight.Bold, colors.textPrimary)
+                FText(cardTypeText(card.cardType), 12f, FontWeight.Normal, colors.textTertiary)
             }
-            FText(bankNameOf(banks, card.bankId), 10f, FontWeight.Normal, colors.textTertiary, Modifier.padding(top = 2.dp))
+            FText(bankNameOf(banks, card.bankId), 12f, FontWeight.Normal, colors.textTertiary, Modifier.padding(top = 2.dp))
         }
         if (selected) VanIcon(name = "success", size = 18.sp, color = checkColor)
     }
@@ -1131,11 +1141,11 @@ private fun SummaryRow(label: String, value: String, first: Boolean = false, amo
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            FText(label, 14f, FontWeight.Normal, colors.textTertiary)
+            FText(label, 16f, FontWeight.Normal, colors.textTertiary)
             if (amount) {
                 FText(value, 24f, FontWeight.Bold, colors.danger)
             } else {
-                FText(value, 14f, FontWeight.Medium, colors.textPrimary)
+                FText(value, 16f, FontWeight.Medium, colors.textPrimary)
             }
         }
     }

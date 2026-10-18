@@ -46,6 +46,15 @@ data class VantColors(
     val switchOff: Color = Color(0x29787880),
     /** --van-toast-background rgba(0,0,0,.7) */
     val toastBg: Color = Color(0xB3000000),
+    /**
+     * 消息弹窗（Toast）配色板 —— **独立于主题语义色**，对齐 web `style.css` 的 `--toast-*`。
+     *
+     * ⚠ 故意**不复用** [success]/[warning]/[danger]/[info]：那四个是「跟随主题」的语义色，
+     * 全站标签/图表/通知条/收支绿都在用；调消息弹窗的观感不应该牵连它们。
+     * 形态是「极浅 tint 卡片 + accent 色圆环图标」，语义色那套（亮底 + 白字）根本不适用。
+     * 深浅两套见 [ToastPalette.Light] / [ToastPalette.Dark]。
+     */
+    val toast: ToastPalette = ToastPalette.Light,
     /** --van-button-default-border-color */
     val buttonDefaultBorder: Color = Color(0xFFDCDEE0),
     /** van-icon 继承的 currentColor 兜底色 */
@@ -130,5 +139,7 @@ object VantDarkColors {
         tabbarGlassBg = Color(0x8C121216),
         tabbarGlassBorder = Color(0x1FFFFFFF),
         tabbarText = Color(0xFFB0B0B0),
+        // 消息弹窗在深色下换成深色 tint 那套（web [data-theme-mode="dark"] 的 --toast-*）
+        toast = ToastPalette.Dark,
     )
 }

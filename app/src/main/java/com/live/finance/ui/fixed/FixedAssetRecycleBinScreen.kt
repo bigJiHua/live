@@ -39,6 +39,7 @@ import com.live.finance.core.AppConfig
 import com.live.finance.core.net.ApiResult
 import com.live.finance.data.model.FixedAsset
 import com.live.finance.theme.LocalAppColors
+import com.live.finance.theme.scaledSp
 import com.live.finance.ui.common.AppButton
 import com.live.finance.ui.common.AppButtonSize
 import com.live.finance.ui.common.AppButtonType
@@ -51,6 +52,7 @@ import com.live.vant.feedback.LocalVanToastController
 import com.live.vant.feedback.VanConfirmDialog
 import com.live.vant.icon.VanIcon
 import kotlinx.coroutines.launch
+import com.live.vant.feedback.VanToastType
 
 /**
  * 固定资产回收站 —— 一比一复刻 web `views/Finance/fixedAsset/components/RecycleBin.vue`
@@ -101,7 +103,7 @@ fun FixedAssetRecycleBinScreen(nav: NavHostController) {
                     .padding(horizontal = 16.dp, vertical = 12.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                FText("${list.size} 个已删除资产", 14f, FontWeight.Normal, colors.textTertiary)
+                FText("${list.size} 个已删除资产", 16f, FontWeight.Normal, colors.textTertiary)
             }
             Spacer(Modifier.height(12.dp))
 
@@ -142,7 +144,7 @@ fun FixedAssetRecycleBinScreen(nav: NavHostController) {
                             toast.success("恢复成功")
                             loadList()
                         }
-                        else -> toast.show("恢复失败")
+                        else -> toast.show("恢复失败", VanToastType.Fail)
                     }
                 }
             }
@@ -166,7 +168,7 @@ fun FixedAssetRecycleBinScreen(nav: NavHostController) {
                             toast.success("删除成功")
                             loadList()
                         }
-                        else -> toast.show("删除失败")
+                        else -> toast.show("删除失败", VanToastType.Fail)
                     }
                 }
             }
@@ -209,7 +211,7 @@ private fun RecycleCard(item: FixedAsset, onRestore: () -> Unit, onDelete: () ->
                 modifier = Modifier.fillMaxWidth(),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                style = TextStyle(color = colors.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold),
+                style = TextStyle(color = colors.textPrimary, fontSize = scaledSp(16f), fontWeight = FontWeight.SemiBold),
             )
             if (item.tag.isNotEmpty()) {
                 FText(item.tag, 12f, FontWeight.Normal, colors.textTertiary, Modifier.padding(top = 2.dp))

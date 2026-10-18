@@ -37,6 +37,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
 import com.live.vant.theme.LocalVantColors
+import com.live.vant.theme.rememberKeyHaptic
 import kotlin.random.Random
 
 /**
@@ -58,7 +59,8 @@ private val ABC_ROWS = listOf(
 private val NUM_ROWS = listOf(
     listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "0"),
     listOf("!", "@", "#", "$", "%", "^", "&", "*", "(", ")"),
-    listOf("-", "_", "+", "=", ",", ".", "?", ":", "'", "\""),
+    // 末尾 "/"（2026-10-14 站点分发适配）：登录页站点输入走本键盘，URL 需要 / 符号
+    listOf("-", "_", "+", "=", ",", ".", "?", ":", "'", "\"", "/"),
     listOf("switch", ".", "space", "login"),
 )
 
@@ -100,12 +102,15 @@ fun VanSecureKeyboard(
             window?.setDimAmount(0f)
             onDispose { prevDim?.let { window?.setDimAmount(it) } }
         }
-        Box(contentAlignment = Alignment.BottomCenter, modifier = Modifier.fillMaxSize()) {
-            // 点外收起遮罩（透明，无压暗），对应 web login-container @click 关闭键盘（target===currentTarget）。
-            // 因 Dialog setDimAmount(0f) 已关系统 dim，这里自己画一层可点收起的透明遮罩。
+        Column(Modifier.fillMaxSize()) {
+            // 点外收起区：**只覆盖键盘面板之上**的空白（透明、不压暗）。
+            // web 的判定是 `.login-container @click` 且要求 `event.target === event.currentTarget`
+            // —— 点在键盘内部（含工具栏/键行之间 6px 缝、键与键的间隙）都不算「外部」，不收键盘。
+            // 早先这里画的是 `fillMaxSize()` 的兄弟遮罩，其命中区盖住了面板，导致点键缝就被收起。
             Box(
                 Modifier
-                    .fillMaxSize()
+                    .weight(1f)
+                    .fillMaxWidth()
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
@@ -209,6 +214,7 @@ private fun RowScope.Key(
     onKey: (String) -> Unit,
 ) {
     val c = LocalVantColors.current
+    val haptic = rememberKeyHaptic()
     val isFn = k == "shift" || k == "switch" || k == "del"
     val isLogin = k == "login"
     val isSpace = k == "space"
@@ -230,7 +236,7 @@ private fun RowScope.Key(
                     m.clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
-                    ) { onKey(k) }
+                    ) { haptic(); onKey(k) }
                 } else {
                     m
                 }

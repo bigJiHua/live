@@ -42,7 +42,7 @@ import com.live.vant.theme.LocalVantDimens
  */
 @Composable
 fun VanNoticeBar(
-    text: String,
+    text: String = "",
     modifier: Modifier = Modifier,
     color: Color = LocalVantColors.current.noticeText,
     background: Color = LocalVantColors.current.noticeBg,
@@ -53,6 +53,13 @@ fun VanNoticeBar(
     speed: Float = 50f, // px/s，对应 --van-notice-bar-speed
     onClosed: (() -> Unit)? = null,
     onClick: (() -> Unit)? = null,
+    /**
+     * 自定义内容槽 —— 对应 web `<van-notice-bar>` 的默认插槽：
+     * `DebtOverview.vue:44-51` 往里塞的是**多色 span 组合**（`卡名·日期` + 红/橙/绿状态字），
+     * 单个 `text` 参数表达不了。传了它就替掉内部 BasicText（滚动动画那套同时失效，
+     * 因为轮播由调用方自己驱动 —— web 也是靠内层 `van-swipe vertical :autoplay="4000"`）。
+     */
+    content: (@Composable () -> Unit)? = null,
 ) {
     val tokens = LocalVantDimens.current
     var visible by remember { mutableStateOf(true) }
@@ -96,7 +103,9 @@ fun VanNoticeBar(
                 .clipToBounds(),
             contentAlignment = Alignment.CenterStart,
         ) {
-            if (shouldScroll && !wrapable) {
+            if (content != null) {
+                content()
+            } else if (shouldScroll && !wrapable) {
                 androidx.compose.foundation.text.BasicText(
                     text,
                     style = TextStyle(color = color, fontSize = tokens.fontSizeMd, lineHeight = tokens.lineHeightLg),

@@ -45,9 +45,12 @@ import androidx.navigation.NavHostController
 import com.live.finance.App
 import com.live.finance.core.nav.Routes
 import com.live.finance.core.net.ApiResult
+import com.live.finance.core.net.failMessage
 import com.live.finance.data.model.DbExportTask
 import com.live.finance.data.model.DbTableStatus
 import com.live.finance.theme.LocalAppColors
+import com.live.finance.theme.scaledSp
+import com.live.finance.theme.vanGreen
 import com.live.finance.ui.common.AppButton
 import com.live.finance.ui.common.AppButtonSize
 import com.live.finance.ui.common.AppButtonType
@@ -69,6 +72,7 @@ import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import com.live.finance.core.net.showFail
 
 /**
  * 导出数据库/表 —— 一比一复刻 web `views/Finance/data/DbExport.vue`。
@@ -135,7 +139,8 @@ fun DbExportScreen(nav: NavHostController) {
         tableStatus = status.associateBy { it.name }
         totalRows = status.sumOf { it.rowCount }
         val err = (listRes as? ApiResult.Fail)?.message ?: (statusRes as? ApiResult.Fail)?.message
-        if (err != null) toast.show(err)
+        // web `loadTables` 的 catch → showToast({ message: "加载表数据失败", type: "fail" })
+        if (err != null) toast.fail("加载表数据失败")
     }
 
     // 终态处理（轮询与手动刷新共用）
@@ -156,24 +161,26 @@ fun DbExportScreen(nav: NavHostController) {
             isAsyncTask = false
             statusType = "danger"; statusText = "导出失败"
             exportCompleted = true
-            toast.show(t.error.ifBlank { "导出失败" })
+            toast.fail(t.error.ifBlank { "导出失败" })
             true
         }
         "cancelled" -> {
             isAsyncTask = false
             statusType = "warning"; statusText = "已取消"
             exportCompleted = true
-            toast.show("任务已取消")
+            toast.warning("任务已取消")
             true
         }
         else -> false
     }
 
     // 5 秒轮询（web `setInterval(..., 5000)`）
+    // ⚠ **先查再等**（与备份页同一个坑）：原来 `delay(5_000)` 在前 ⇒ 进度块出现后头 5 秒恒为 0%，
+    //   任务若很快完成就成了「0% → 直接完成」，中间毫无反馈。改成先请求、再 delay。
     LaunchedEffect(currentTaskId, isAsyncTask) {
         if (!isAsyncTask || currentTaskId.isEmpty()) return@LaunchedEffect
         while (true) {
-            delay(5_000)
+            var done = false
             when (val r = graph.data.taskStatus(currentTaskId)) {
                 is ApiResult.Ok -> {
                     val t = r.data
@@ -181,13 +188,16 @@ fun DbExportScreen(nav: NavHostController) {
                         isAsyncTask = false
                         statusType = "danger"; statusText = "任务丢失"
                         exportCompleted = true
-                        break
+                        done = true
+                    } else {
+                        asyncProgress = t.progress
+                        if (applyTaskTerminal(t)) done = true
                     }
-                    asyncProgress = t.progress
-                    if (applyTaskTerminal(t)) break
                 }
                 else -> Unit   // web 轮询异常只打日志，不打断
             }
+            if (done) break
+            delay(5_000)
         }
     }
 
@@ -211,7 +221,9 @@ fun DbExportScreen(nav: NavHostController) {
                         currentTaskId = t.id
                         isAsyncTask = true
                         statusType = "warning"; statusText = "后台导出中..."
-                        toast.show("导出任务已提交，后台处理中...")
+                        // web：reuseExisting 复用已有任务 → warning，否则 success
+                        if (t.reuseExisting) toast.warning("已有导出任务正在执行，自动加入监控")
+                        else toast.success("导出任务已提交，后台处理中...")
                     } else if (t != null && t.resultFilename.isNotEmpty()) {
                         // 兜底：同步返回（兼容旧版后端）
                         exportTime = nowText()
@@ -223,7 +235,7 @@ fun DbExportScreen(nav: NavHostController) {
                     } else {
                         statusType = "danger"; statusText = "导出失败"
                         exportCompleted = true
-                        toast.show(r.message.ifBlank { "导出失败" })
+                        toast.fail(r.message.ifBlank { "导出失败" })
                     }
                 }
                 is ApiResult.NeedPin -> {
@@ -232,11 +244,11 @@ fun DbExportScreen(nav: NavHostController) {
                 }
                 is ApiResult.Fail -> {
                     statusType = "danger"; statusText = "导出失败"; exportCompleted = true
-                    toast.show(r.message.ifBlank { "导出失败" })
+                    toast.fail(r.message.ifBlank { "导出失败" })
                 }
                 else -> {
                     statusType = "danger"; statusText = "导出失败"; exportCompleted = true
-                    toast.show("导出失败")
+                    toast.showFail(r, "导出失败")
                 }
             }
         }
@@ -255,23 +267,26 @@ fun DbExportScreen(nav: NavHostController) {
                     true
                 }.getOrDefault(false)
             }
-            if (ok) toast.success("下载已开始") else toast.show("下载失败：写入失败")
+            if (ok) toast.success("下载已开始") else toast.fail("下载失败：写入失败")
         }
     }
 
     fun handleDownload() {
         if (resultFilename.isEmpty()) {
-            toast.show("没有可下载的文件")
+            toast.fail("没有可下载的文件")
             return
         }
         scope.launch {
+            // 与备份页同一处：原生要**先把整文件取回内存**再弹 SAF，期间必须有反馈（否则点了像没反应）
+            toast.loading("正在准备文件...")
             when (val r = graph.data.downloadBackup(resultFilename)) {
                 is ApiResult.Ok -> {
                     pendingBytes = r.data ?: ByteArray(0)
+                    toast.close()
                     saveLauncher.launch(resultFilename)
                 }
-                is ApiResult.Fail -> toast.show("下载失败：${r.message}")
-                else -> toast.show("下载失败：未知错误")
+                is ApiResult.Fail -> { toast.close(); toast.fail("下载失败：${r.message}") }
+                else -> { toast.close(); toast.showFail(r, "下载失败：未知错误") }
             }
         }
     }
@@ -286,10 +301,10 @@ fun DbExportScreen(nav: NavHostController) {
         ) {
             // 头部卡（图标是绿色 #07c160，不是主色）
             Card16 {
-                VanIcon(name = "arrow-down", size = 48.sp, color = DB_GREEN)
+                VanIcon(name = "arrow-down", size = 48.sp, color = vanGreen())
                 Spacer(Modifier.height(12.dp))
                 FText("导出数据库/表", 20f, FontWeight.Bold, colors.textPrimary, Modifier.padding(bottom = 8.dp))
-                FText("将数据库或指定表数据导出为文件", 14f, FontWeight.Normal, colors.textTertiary)
+                FText("将数据库或指定表数据导出为文件", 16f, FontWeight.Normal, colors.textTertiary)
             }
             Spacer(Modifier.height(20.dp))
 
@@ -379,9 +394,9 @@ fun DbExportScreen(nav: NavHostController) {
                                 when (graph.data.cancelTask(currentTaskId)) {
                                     is ApiResult.Ok -> {
                                         isAsyncTask = false
-                                        toast.show("已取消导出")
+                                        toast.warning("已取消导出")
                                     }
-                                    else -> toast.show("取消失败")
+                                    else -> toast.fail("取消失败")
                                 }
                             }
                         },
@@ -403,7 +418,7 @@ fun DbExportScreen(nav: NavHostController) {
                     AppCell(title = "进度", value = "$asyncProgress%")
                     VanProgress(
                         percentage = asyncProgress.toFloat(),
-                        color = DB_GREEN,
+                        color = vanGreen(),
                         strokeWidth = 12.dp,
                         showPivot = true,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -458,7 +473,7 @@ fun DbExportScreen(nav: NavHostController) {
                             border = false,
                             rightIcon = {
                                 FText(
-                                    "点击下载", 14f, FontWeight.Normal, colors.primary,
+                                    "点击下载", 16f, FontWeight.Normal, colors.primary,
                                     Modifier.clickable { handleDownload() },
                                     )
                             },
@@ -480,18 +495,17 @@ fun DbExportScreen(nav: NavHostController) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center,
             ) {
-                VanIcon(name = "records", size = 16.sp, color = DB_GREEN)
+                VanIcon(name = "records", size = 16.sp, color = vanGreen())
                 Spacer(Modifier.width(6.dp))
-                FText("查看数据库备份", 14f, FontWeight.Medium, DB_GREEN)
+                FText("查看数据库备份", 16f, FontWeight.Medium, vanGreen())
                 Spacer(Modifier.width(6.dp))
-                VanIcon(name = "arrow", size = 14.sp, color = DB_GREEN)
+                VanIcon(name = "arrow", size = 14.sp, color = vanGreen())
             }
             Spacer(Modifier.height(10.dp))
         }
     }
 }
 
-internal val DB_GREEN = Color(0xFF07C160)
 
 /** 头部卡：`padding 30/0`、`bg secondary`、圆角 16、居中、下方 20。 */
 @Composable
@@ -509,22 +523,35 @@ private fun Card16(content: @Composable () -> Unit) {
 
 /** `.section-title{padding 8/16; 13px; tertiary; weight 500; mb 8}`（数据管理域共用）。 */
 @Composable
+/**
+ * 分区小标题。
+ *
+ * ⚠ 手机适配（他反馈「数据管理子页 item 宽度不对齐 / 收窄」）：web 的 `.section-title{padding:8px 16px}`
+ *   是叠在 `.page-content{padding:16px}` 之上的 ⇒ 标题实际在 **32px**；而**头部卡 `Card16` 在 16px**
+ *   ⇒ 同一页里"卡在 16、标题在 32"，桌面上看不出来，手机上就很扎眼。
+ *   安卓统一到 **16**（去掉这一层的左右 16）⇒ 标题、卡片、按钮全部左对齐到同一条线。
+ */
 internal fun DbGroupTitle(text: String) {
     val colors = LocalAppColors.current
     FText(
-        text, 13f, FontWeight.Medium, colors.textTertiary,
-        Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
+        text, 14f, FontWeight.Medium, colors.textTertiary,
+        Modifier.padding(top = 8.dp, bottom = 8.dp),
     )
 }
 
-/** `van-cell-group inset .app-card`：圆角 12、左右内缩 16、overflow hidden（数据管理域共用）。 */
+/**
+ * `van-cell-group inset .app-card`：圆角 12、overflow hidden（数据管理域共用）。
+ *
+ * ⚠ 手机适配：web 的 `inset` 是 `margin:0 16px` ⇒ 卡片在 32、而头部卡在 16（**两者差 16，不对齐**），
+ *   且行内容只剩 `360−16×2−16×2−16×2 = 264dp`（73%）⇒ 明显收窄。
+ *   安卓统一到 **16**（去掉这层内缩）⇒ 卡片与头部卡同宽（328dp），行内容 296dp（+32dp）。
+ */
 @Composable
 internal fun DbCardGroup(content: @Composable () -> Unit) {
     val colors = LocalAppColors.current
     Column(
         Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(colors.bgCard),
     ) { content() }
@@ -546,13 +573,13 @@ internal fun DbSearchField(value: String, onValueChange: (String) -> Unit) {
         Spacer(Modifier.width(6.dp))
         Box(Modifier.weight(1f)) {
             if (value.isEmpty()) {
-                FText("搜索表名...", 14f, FontWeight.Normal, colors.textPlaceholder)
+                FText("搜索表名...", 16f, FontWeight.Normal, colors.textPlaceholder)
             }
             BasicTextField(
                 value = value,
                 onValueChange = onValueChange,
                 singleLine = true,
-                textStyle = TextStyle(color = colors.textPrimary, fontSize = 14.sp, fontFamily = FontFamily.Default),
+                textStyle = TextStyle(color = colors.textPrimary, fontSize = scaledSp(16f), fontFamily = FontFamily.Default),
                 cursorBrush = SolidColor(colors.primary),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
                 modifier = Modifier.fillMaxWidth(),

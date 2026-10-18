@@ -19,9 +19,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.live.finance.data.model.FundHistory
 import kotlin.math.abs
 import com.live.finance.theme.LocalAppColors
+import com.live.vant.icon.VanIcon
 import com.live.finance.ui.flow.FText
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -81,6 +83,12 @@ fun buildFundCalDays(
             ),
         )
     }
+    // ⚠ 尾部补空格到 7 的倍数。web `.cal-grid{ display:grid; grid-template-columns:repeat(7,1fr) }` 的列数是**固定 7 列**，
+    //   所以最后一行只有 4 天时余下 3 格天然留空；原生用 `chunked(7)` + 每格 `weight(1f)`，
+    //   末行 4 项会各拿 1/4 宽 ⇒ 「28 29 30 31」被拉伸铺满整行（负责人 2026-09-19 反馈的缺占位）。
+    //   web 只补**前置**空格（`:313-315` / `:307-310` 的 `for (let i = 0; i < offset; i++)`），尾部不补；
+    //   原生这边等价做法是把尾部也补成 `inMonth=false` 的空格，让 weight 保持一致。
+    while (cells.size % 7 != 0) cells.add(FundCalDay("", 0, false, null, "", false, false, false))
     return cells
 }
 
@@ -97,11 +105,11 @@ fun FundCalendarLegend() {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             Box(Modifier.width(8.dp).height(8.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(50))
                 .background(colors.bgThird))
-            FText("当日收益", 11f, FontWeight.Normal, colors.textSecondary)
+            FText("当日收益", 12f, FontWeight.Normal, colors.textSecondary)
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            FText("🚩", 11f, FontWeight.Normal, colors.textSecondary)
-            FText("基金买入日 / 增持", 11f, FontWeight.Normal, colors.textSecondary)
+            FText("🚩", 12f, FontWeight.Normal, colors.textSecondary)
+            FText("基金买入日 / 增持", 12f, FontWeight.Normal, colors.textSecondary)
         }
     }
 }
@@ -122,7 +130,7 @@ fun FundCalendar(
         Row(Modifier.fillMaxWidth().padding(bottom = 6.dp)) {
             weekdays.forEach { w ->
                 Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                    FText(w, 11f, FontWeight.Normal, colors.textTertiary)
+                    FText(w, 12f, FontWeight.Normal, colors.textTertiary)
                 }
             }
         }
@@ -156,7 +164,7 @@ fun FundCalendar(
                                 if (day.earnings != null) {
                                     FText(
                                         text = (if (day.earnings >= 0) "+" else "") + day.earningsDisplay,
-                                        sizeSp = 10f, weight = FontWeight.Normal,
+                                        sizeSp = 12f, weight = FontWeight.Normal,
                                         color = if (day.earnings >= 0) colors.danger else colors.success,
                                         modifier = Modifier.padding(top = 2.dp),
                                     )
@@ -178,15 +186,22 @@ fun FundCalHeader(
     onNext: () -> Unit,
 ) {
     val colors = LocalAppColors.current
+    // web `.cal-header{ display:flex; align-items:center; justify-content:center; gap:22px;
+    //   margin:-2px 0 8px }`、`.cal-header .van-icon{ font-size:18px; color:text-secondary; padding:4px }`、
+    //   `.cal-month-title{ font-size:14px→16; font-weight:600; min-width:90px; text-align:center }`
+    // ⚠ 旧实现用 `‹` / `›` **字符**冒充箭头（web 是 `arrow-left` / `arrow` 图标），
+    //   且缺 22px 间距、图标字号也偏大（22 vs 18）。
     Row(
-        Modifier.fillMaxWidth(),
+        Modifier.fillMaxWidth().padding(bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.Center,
+        horizontalArrangement = Arrangement.spacedBy(22.dp, Alignment.CenterHorizontally),
     ) {
-        FText("‹", 22f, FontWeight.Bold, colors.textSecondary, Modifier.clickable { onPrev() }.padding(4.dp))
+        VanIcon("arrow-left", size = 18.sp, color = colors.textSecondary,
+            modifier = Modifier.clickable { onPrev() }.padding(4.dp))
         Box(Modifier.width(90.dp), contentAlignment = Alignment.Center) {
-            FText(title, 14f, FontWeight.SemiBold, colors.textPrimary)
+            FText(title, 16f, FontWeight.SemiBold, colors.textPrimary)
         }
-        FText("›", 22f, FontWeight.Bold, colors.textSecondary, Modifier.clickable { onNext() }.padding(4.dp))
+        VanIcon("arrow", size = 18.sp, color = colors.textSecondary,
+            modifier = Modifier.clickable { onNext() }.padding(4.dp))
     }
 }

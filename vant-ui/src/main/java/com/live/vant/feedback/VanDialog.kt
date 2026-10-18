@@ -28,6 +28,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.live.vant.theme.LocalVantColors
+import com.live.vant.theme.LocalVantDimens
+import com.live.vant.theme.fontSp
 
 /**
  * 复刻 van-dialog（web 项目 showDialog(2) + showConfirmDialog(28) 的声明式形态）。
@@ -53,6 +55,7 @@ fun VanDialog(
 ) {
     if (!show) return
     val c = LocalVantColors.current
+    val d = LocalVantDimens.current
     Dialog(
         onDismissRequest = onDismissRequest,
         properties = DialogProperties(dismissOnClickOutside = true, dismissOnBackPress = true),
@@ -72,7 +75,7 @@ fun VanDialog(
                 ) {
                     androidx.compose.foundation.text.BasicText(
                         title,
-                        style = TextStyle(color = c.textPrimary, fontSize = 16.sp, lineHeight = 24.sp),
+                        style = TextStyle(color = c.textPrimary, fontSize = d.fontSizeLg, lineHeight = d.fontSp(24f)),
                     )
                 }
             }
@@ -94,8 +97,8 @@ fun VanDialog(
                         message,
                         style = TextStyle(
                             color = if (title.isNullOrEmpty()) c.textPrimary else c.textSecondary,
-                            fontSize = 14.sp,
-                            lineHeight = 20.sp,
+                            fontSize = d.fontSizeMd,
+                            lineHeight = d.lineHeightMd,
                             textAlign = TextAlign.Center,
                         ),
                         modifier = Modifier.fillMaxWidth(),
@@ -140,7 +143,7 @@ private fun DialogButton(text: String, color: Color, modifier: Modifier = Modifi
     ) {
         androidx.compose.foundation.text.BasicText(
             text,
-            style = TextStyle(color = color, fontSize = 16.sp),
+            style = TextStyle(color = color, fontSize = LocalVantDimens.current.fontSizeLg),
         )
     }
 }

@@ -35,6 +35,14 @@ interface AuthRepository {
     /** 修改登录密码（PUT /user/password/change，body {oldPassword, newPassword, code}）。 */
     suspend fun changePassword(oldPassword: String, newPassword: String, code: String): ApiResult<Unit>
 
+    /**
+     * 锁定系统（POST /auth/lock-system，web MainLayout 顶栏 lock 图标）。无请求体，
+     * 且该路径在 `AppConfig.SKIP_ENCRYPT_URLS` 内 —— 与 web 一致按明文发送。
+     * 首次调用后端回 `{code:8303, status:200, locked:true}`（由 `ApiClient` 的 pinGate 弹 PIN 框后带票重发），
+     * 已处于锁定态时回 `{status:200, message:"系统已经是锁定状态"}`；两者在原生都归 [ApiResult.Ok]。
+     */
+    suspend fun lockSystem(): ApiResult<Unit>
+
     suspend fun logout()
 }
 
@@ -79,6 +87,8 @@ class FakeAuthRepository(private val session: SessionStore) : AuthRepository {
     override suspend fun changePassword(oldPassword: String, newPassword: String, code: String): ApiResult<Unit> =
         if (code != fakeCode) ApiResult.Fail("验证码错误") else ApiResult.Ok(Unit, "修改成功")
 
+    override suspend fun lockSystem(): ApiResult<Unit> = ApiResult.Ok(Unit, "系统已锁定，下次登录需验证PIN")
+
     override suspend fun logout() { session.clear() }
 }
 
@@ -113,6 +123,19 @@ class RemoteAuthRepository(
         if (result is ApiResult.Ok) {
             // 登录成功信封把 token 放在顶层，且用户字段需另由 /auth/me 获取
             env.root?.get("token")?.asString?.takeIf { it.isNotEmpty() }?.let { session.setToken(it) }
+
+            // 🔎 安全整改 P2-14（2026-10-08）：设备风险信号上报（尽力而为）。
+            //   只落库不拦截 —— 后端 /security/risk-report 语义见 security/controller。
+            //   失败静默：上报不影响登录本身；token 已 set，authGuard 能过。
+            runCatching {
+                val signals = com.live.finance.core.security.DeviceRiskInspector.detect()
+                if (signals.isNotEmpty()) {
+                    val riskBody = JsonObject().apply {
+                        add("signals", JsonArray().apply { signals.forEach { add(it) } })
+                    }
+                    client.post("/security/risk-report", riskBody)
+                }
+            }
         }
         return result
     }
@@ -160,6 +183,9 @@ class RemoteAuthRepository(
         }
         return client.put("/user/password/change", body).toResult().map { }
     }
+
+    override suspend fun lockSystem(): ApiResult<Unit> =
+        client.post("/auth/lock-system").toResult().map { }
 
     override suspend fun logout() { session.clear() }
 }

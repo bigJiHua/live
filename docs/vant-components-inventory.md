@@ -2,9 +2,9 @@
 
 > 扫描范围：`web/src/**/*.vue`、`web/src/**/*.js`（Vant 4.9.22，`main.js` 全量引入）。
 > 统计口径：标签使用次数（`<van-x>`）与函数式 API 调用次数（`showToast` 等）。
-> 日期：2026-09-14。
+> 日期：2026-09-14（**2026-10-18 复核**：web 侧 Vant 组件种类未发生增减，仍为下表 **47 类**；10 月新增的 toast / 安全键盘均为自研实现，不计入 Vant 清单）。
 
-## 一、组件使用排行（45 类组件）
+## 一、组件使用排行（47 类组件）
 
 | # | Vant 组件 | 使用次数 | 项目实际用到的 props / slots / events | 安卓复刻 |
 |---|-----------|---------|----------------------------------------|---------|
@@ -69,6 +69,13 @@
 | `showDialog` | 2 | `VanAlertDialog` / `VanDialog` |
 | `Lazyload` 插件 | 全局 | Coil 天然按需加载（`VanImage`） |
 | `Icon` 组件 | 1 | `VanIcon` |
+
+> ⚠ **2026-09-20 起，web 侧这几个 toast API 已不是 Vant 的**：改为自研
+> `src/utils/toast/index.js`（**导出名与选项名完全沿用 Vant** ⇒ 上表调用次数不变、调用点一行没改）。
+> 安卓侧的对应关系也不变（仍是 `LocalVanToastController`），只是**形态换成了「顶部居中 tint 卡片 +
+> accent 色圆环图标 + 关闭按钮 + 长信息两行」**，配色走 `vant-ui/theme/ToastPalette.kt` 的 `Light`/`Dark`。
+> 详见 `项目构造书.md` §5.1 与 §5.6。
+
 
 ## 三、主题 Token（style.css 覆盖，复刻默认值即此套）
 

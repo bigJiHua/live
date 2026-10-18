@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.sp
 import com.live.vant.icon.VanIcon
 import com.live.vant.theme.LocalVantColors
 import com.live.vant.theme.LocalVantDimens
+import com.live.vant.theme.baseOf
 
 /**
  * 复刻 van-cell（web 项目高频；props：title / value / label / icon / is-link / center / border /
@@ -85,7 +86,7 @@ fun VanCell(
             } else if (icon != null) {
                 VanIcon(
                     name = icon,
-                    size = tokens.fontSizeLg,
+                    size = tokens.baseOf(tokens.fontSizeLg),
                     color = c.textPrimary,
                     modifier = Modifier.padding(end = tokens.paddingXs, top = 4.dp),
                 )
@@ -157,7 +158,7 @@ fun VanCell(
                         "left" -> "arrow-left"
                         else -> "arrow"
                     },
-                    size = tokens.fontSizeLg,
+                    size = tokens.baseOf(tokens.fontSizeLg),
                     color = c.textTertiary,
                     modifier = Modifier.padding(start = 2.dp),
                 )

@@ -1,8 +1,9 @@
 package com.live.finance.ui.bankcard
 
-import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -25,6 +26,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -33,6 +35,8 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import com.live.finance.App
 import com.live.finance.core.net.ApiResult
+import com.live.finance.core.net.failMessage
+import com.live.finance.core.net.failToastType
 import com.live.finance.core.nav.Routes
 import com.live.finance.data.model.Category
 import com.live.finance.data.repo.NewCard
@@ -46,6 +50,8 @@ import com.live.vant.form.VanNumberKeyboard
 import com.live.vant.icon.VanIcon
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import com.live.vant.feedback.LocalVanToastController
+import com.live.vant.feedback.VanToastType
 
 /** `credit/AddFull.vue` 的 formData（原文初始值）。 */
 private data class CreditFullForm(
@@ -108,8 +114,8 @@ fun CreditFullScreen(nav: NavHostController) {
     var showOpenDate by remember { mutableStateOf(false) }
     var showExpireDate by remember { mutableStateOf(false) }
 
-    fun toast(m: String) = Toast.makeText(context, m, Toast.LENGTH_SHORT).show()
-
+    val vanToast = LocalVanToastController.current
+    fun toast(m: String, type: VanToastType = VanToastType.Text) = vanToast.show(m, type)
     LaunchedEffect(Unit) {
         when (val r = graph.category.list("bank")) {
             is ApiResult.Ok -> banks = r.data.orEmpty().filter { it.name.isNotBlank() && it.name.endsWith("银行") }
@@ -126,12 +132,12 @@ fun CreditFullScreen(nav: NavHostController) {
     }
     fun validateLimit(v: String): String {
         val n = v.toDoubleOrNull() ?: return v
-        if (n > 1_000_000) { toast("信用额度不能超过100万"); return "1000000" }
+        if (n > 1_000_000) { toast("信用额度不能超过100万", VanToastType.Fail); return "1000000" }
         return v
     }
     fun validateTempLimit(v: String): String {
         val n = v.toDoubleOrNull() ?: return v
-        if (n > 1_000_000) { toast("临时额度不能超过100万"); return "1000000" }
+        if (n > 1_000_000) { toast("临时额度不能超过100万", VanToastType.Fail); return "1000000" }
         return v
     }
 
@@ -176,11 +182,11 @@ fun CreditFullScreen(nav: NavHostController) {
             )
             when (val r = graph.card.createNew(p)) {
                 is ApiResult.Ok -> {
-                    toast("创建成功！")
+                    toast("创建成功！", VanToastType.Success)
                     if (!nav.popBackStack(Routes.CARD, false)) nav.navigate(Routes.CARD)
                 }
-                is ApiResult.Fail -> toast(r.message.ifBlank { "创建失败，请重试" })
-                else -> toast("创建失败，请重试")
+                is ApiResult.Fail -> toast(r.message.ifBlank { "创建失败，请重试" }, VanToastType.Fail)
+                else -> toast(r.failMessage("创建失败，请重试"), r.failToastType())
             }
             submitting = false
         }
@@ -189,10 +195,9 @@ fun CreditFullScreen(nav: NavHostController) {
     Box(Modifier.fillMaxSize().background(colors.bgPage)) {
         ScreenScaffold { inner ->
             Column(Modifier.fillMaxSize().then(inner)) {
-                BankTopBar(title = "信用卡全功能录入", onBack = { nav.popBackStack() })
                 // 步骤指示
                 Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp), contentAlignment = Alignment.CenterEnd) {
-                    FText("${step + 1} / 4 步", 13f, color = colors.textSecondary)
+                    FText("${step + 1} / 4 步", 14f, color = colors.textSecondary)
                 }
                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
                     when (step) {
@@ -203,29 +208,49 @@ fun CreditFullScreen(nav: NavHostController) {
                     }
                     Spacer(Modifier.height(24.dp))
                 }
-                // 底部按钮
-                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                // web `.footer-bar{ position:fixed; bottom:0; left/right:0; background: var(--theme-bg-secondary);
+                //   padding:12px 16px; display:flex; gap:12px; box-shadow: 0 -2px 10px rgba(0,0,0,.05) }`
+                //   `.footer-bar .van-button{ flex:1; height:44px }`、`.prev-btn{ flex: 0 0 120px }`
+                //   `.next-btn,.submit-btn{ flex:1 }`
+                // —— 旧实现：**无白底/无顶投影**、两键都 weight(1f)（web 的「上一步」是固定 120px）、
+                //    高度 46（应 44）、间距 10（应 12），且「下一步」漏了文字后面的 arrow 图标。
+                Row(
+                    Modifier.fillMaxWidth()
+                        .background(colors.bgCard)
+                        .shadow(10.dp, spotColor = Color(0x0D000000), ambientColor = Color(0x0D000000))
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp), // gap: 12px
+                ) {
                     if (step > 0) {
+                        // `.prev-btn{ flex: 0 0 120px }` + plain app-button（arrow-left + 上一步）
                         Box(
-                            Modifier.weight(1f).height(46.dp).clip(RoundedCornerShape(23.dp)).background(colors.bgCard)
+                            Modifier.width(120.dp).height(44.dp).clip(RoundedCornerShape(22.dp)).background(colors.bgCard)
+                                .border(1.dp, colors.border, RoundedCornerShape(22.dp))
                                 .clickable { step-- },
                             contentAlignment = Alignment.Center,
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 VanIcon("arrow-left", size = 14.sp, color = colors.textPrimary)
                                 Spacer(Modifier.width(6.dp))
-                                FText("上一步", 15f, FontWeight.Medium, colors.textPrimary)
+                                FText("上一步", 16f, FontWeight.Medium, colors.textPrimary)
                             }
                         }
-                        Spacer(Modifier.width(10.dp))
                     }
+                    // `.next-btn/.submit-btn{ flex: 1; height: 44px }`；「下一步」后面带 arrow 图标
                     Box(
-                        Modifier.weight(1f).height(46.dp).clip(RoundedCornerShape(23.dp))
+                        Modifier.weight(1f).height(44.dp).clip(RoundedCornerShape(22.dp))
                             .background(if (submitting) colors.primary.copy(alpha = 0.6f) else colors.primary)
                             .clickable(enabled = !submitting) { if (step < 3) nextStep() else submit() },
                         contentAlignment = Alignment.Center,
                     ) {
-                        FText(if (step < 3) "下一步" else if (submitting) "提交中…" else "提交卡片", 15f, FontWeight.SemiBold, Color.White)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            FText(if (step < 3) "下一步" else "提交卡片", 16f, FontWeight.SemiBold, Color.White)
+                            if (step < 3) {
+                                Spacer(Modifier.width(4.dp))
+                                VanIcon("arrow", size = 14.sp, color = Color.White)
+                            }
+                        }
                     }
                 }
             }
@@ -233,12 +258,12 @@ fun CreditFullScreen(nav: NavHostController) {
 
         // ===== 弹层 =====
         BankPickerSheet(showBank, banks, { b -> form = form.copy(bankId = b.id, bankName = b.name); showBank = false }, { showBank = false })
-        PickerSheet(showLevel, CARD_LEVEL_FULL, CARD_LEVEL_FULL.indexOf(form.cardLevel).coerceAtLeast(0), null,
-            { i -> form = form.copy(cardLevel = CARD_LEVEL_FULL[i]); showLevel = false }, { showLevel = false })
+        PickerSheet(showLevel, CARD_LEVEL_COLUMNS, CARD_LEVEL_COLUMNS.indexOf(form.cardLevel).coerceAtLeast(0), null,
+            { i -> form = form.copy(cardLevel = CARD_LEVEL_COLUMNS[i]); showLevel = false }, { showLevel = false })
         PickerSheet(showMainSub, MAIN_SUB_COLUMNS, MAIN_SUB_COLUMNS.indexOf(form.mainSub).coerceAtLeast(0), null,
             { i -> form = form.copy(mainSub = MAIN_SUB_COLUMNS[i]); showMainSub = false }, { showMainSub = false })
-        PickerSheet(showOrg, CARD_ORG_COLUMNS, CARD_ORG_COLUMNS.indexOf(form.cardOrg).coerceAtLeast(0), null,
-            { i -> form = form.copy(cardOrg = CARD_ORG_COLUMNS[i]); showOrg = false }, { showOrg = false })
+        // 卡组织：web 三页都是**自定义列表** `.org-picker`（图标 + 名称 + 勾），不是滚轮 picker
+        OrgPickerSheet(showOrg, form.cardOrg, { org -> form = form.copy(cardOrg = org); showOrg = false }, { showOrg = false })
         PickerSheet(showStatus, STATUS_COLUMNS, STATUS_COLUMNS.indexOf(form.status).coerceAtLeast(0), null,
             { i -> form = form.copy(status = STATUS_COLUMNS[i]); showStatus = false }, { showStatus = false })
         CreditDateSheet(showOpenDate, "date", form.openDate.ifBlank { todayYmd() }.let { parseYmd(it) }, { showOpenDate = false }) { d ->
@@ -379,7 +404,7 @@ private fun StepConfirm(form: CreditFullForm) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             VanIcon("passed", size = 16.sp, color = colors.success)
             Spacer(Modifier.width(6.dp))
-            FText("请确认卡片信息", 15f, FontWeight.SemiBold, colors.success)
+            FText("请确认卡片信息", 16f, FontWeight.SemiBold, colors.success)
         }
     }
     FormSection(title = "卡片信息") {
@@ -411,8 +436,8 @@ private fun StepConfirm(form: CreditFullForm) {
 private fun ConfirmRow(title: String, value: String, border: Boolean = true) {
     val colors = LocalAppColors.current
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-        FText(title, 14f, color = colors.textSecondary, modifier = Modifier.weight(1f))
-        FText(value, 14f, color = colors.textPrimary)
+        FText(title, 16f, color = colors.textSecondary, modifier = Modifier.weight(1f))
+        FText(value, 16f, color = colors.textPrimary)
     }
     RowDivider(border)
 }

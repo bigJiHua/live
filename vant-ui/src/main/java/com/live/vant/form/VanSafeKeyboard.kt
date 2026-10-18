@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.live.vant.icon.VanIcon
 import com.live.vant.theme.LocalVantColors
+import com.live.vant.theme.rememberKeyHaptic
 import kotlin.random.Random
 
 /**
@@ -154,6 +155,7 @@ private fun SafeKey(
     onKey: (String) -> Unit,
 ) {
     val c = LocalVantColors.current
+    val haptic = rememberKeyHaptic()
     val isFn = k == "del" || k == "close"
     val shape = RoundedCornerShape(12.dp) // .key-item{ border-radius:12px }
     val interaction = remember { MutableInteractionSource() }
@@ -179,7 +181,7 @@ private fun SafeKey(
                     else -> c.bgCard
                 },
             )
-            .clickable(interactionSource = interaction, indication = null) { onKey(k) },
+            .clickable(interactionSource = interaction, indication = null) { haptic(); onKey(k) },
     ) {
         when {
             k == "del" -> androidx.compose.foundation.text.BasicText(

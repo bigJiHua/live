@@ -3,6 +3,7 @@ package com.live.finance.ui.account
 import androidx.navigation.NavHostController
 import com.live.finance.core.nav.Routes
 import com.live.finance.core.net.ApiResult
+import com.live.finance.core.net.failMessage
 import com.live.finance.data.model.Card
 import com.live.finance.data.model.Category
 import com.live.finance.data.repo.NewFlow
@@ -11,6 +12,8 @@ import com.live.vant.feedback.VanToastController
 import java.time.LocalDate
 import java.util.UUID
 import kotlin.math.round
+import com.live.finance.core.net.showFail
+import com.live.vant.feedback.VanToastType
 
 /**
  * 「记一笔」(`Add.vue`) 与「快速登记」(`QuickAdd.vue`) 两页共用的业务规则收口。
@@ -48,8 +51,6 @@ val CURRENCIES: List<CurrencyOption> = listOf(
 )
 
 val DEFAULT_CURRENCY: CurrencyOption = CURRENCIES.first()
-
-fun currencyOf(code: String): CurrencyOption = CURRENCIES.firstOrNull { it.code == code } ?: DEFAULT_CURRENCY
 
 /** picker 文案：`${label} ${symbol}`（web currencyColumns）。 */
 fun currencyPickerText(c: CurrencyOption): String = "${c.label} ${c.symbol}"
@@ -244,7 +245,7 @@ suspend fun submitRecordFlow(
             nav.navigate(Routes.LOGIN) { popUpTo(Routes.MAIN) { inclusive = true } }
         }
         ApiResult.RateLimited -> nav.navigate(Routes.ERROR_429)
-        is ApiResult.Fail -> toast.show(r.message.ifBlank { "提交失败" })
-        else -> toast.show("提交失败")
+        is ApiResult.Fail -> toast.show(r.message.ifBlank { "提交失败" }, VanToastType.Fail)
+        else -> toast.showFail(r, "提交失败")
     }
 }

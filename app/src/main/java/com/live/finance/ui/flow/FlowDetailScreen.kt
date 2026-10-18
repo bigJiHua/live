@@ -42,11 +42,16 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import com.live.finance.App
 import com.live.finance.core.net.ApiResult
+import com.live.finance.core.net.failMessage
 import com.live.finance.data.model.Card
 import com.live.finance.data.model.Category
 import com.live.finance.data.model.FlowRow
 import com.live.finance.theme.LocalAppColors
+import com.live.finance.theme.vanGreenBg
+import com.live.finance.theme.vanGreen
+import com.live.finance.theme.vanOrange
 import com.live.finance.theme.LocalAppTokens
+import com.live.finance.theme.scaledSp
 import com.live.finance.ui.common.AppButton
 import com.live.finance.ui.common.AppButtonSize
 import com.live.finance.ui.common.AppButtonType
@@ -72,6 +77,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.launch
+import com.live.finance.core.net.showFail
+import com.live.vant.feedback.VanToastType
 
 /**
  * 收支详情 —— 一比一复刻 web `views/Finance/flow/Detail.vue`（路由 `/finance/flow/:id`）。
@@ -207,7 +214,7 @@ fun FlowDetailScreen(nav: NavHostController, id: String) {
                                         size = 18.dp,
                                         modifier = Modifier.padding(end = 5.dp),
                                     )
-                                    FText(flowCardText(row, cards, banks), 14f, FontWeight.Normal, colors.textSecondary)
+                                    FText(flowCardText(row, cards, banks), 16f, FontWeight.Normal, colors.textSecondary)
                                 }
                             },
                         )
@@ -233,7 +240,12 @@ fun FlowDetailScreen(nav: NavHostController, id: String) {
                         if (reverseType != null && reverseType != "credit-repay" && reverseType != "transfer-legacy") {
                             DashedActionButton(
                                 text = reverseBtnText(reverseType, row),
-                                color = colors.warning,
+                                // web 是 `var(--theme-warning)`，但金色系深色预设（黑金/藏青金/钛金/暗金）把
+                                //   `status.warning` 定义成 `#c9a05a`，与 `primary #C9A86A` 只差 16 ⇒ 两键糊成
+                                //   同一种金。负责人 2026-09-19 拍板「不要这个效果」⇒ 改走 Vant 自己的橙
+                                //   `--van-orange #ff976a`：**浅色预设下与 web 逐字相同**（web 的 statusComp
+                                //   .light.warning 本来就是 #ff976a），只有深色改为恒橙以保住「警示 ≠ 主色」。
+                                color = vanOrange(),
                                 modifier = Modifier.weight(1f),
                             ) { confirmReverse = true }
                         }
@@ -267,7 +279,7 @@ fun FlowDetailScreen(nav: NavHostController, id: String) {
         VanPopup(show = true, onDismissRequest = { showRemarkPopup = false }, position = VanPopupPosition.Bottom, round = true) {
             Column(Modifier.fillMaxWidth().padding(16.dp)) {
                 PopupHeader("修改备注") { showRemarkPopup = false }
-                FText("请输入新的备注", 14f, FontWeight.Normal, colors.textTertiary, Modifier.padding(bottom = 12.dp))
+                FText("请输入新的备注", 16f, FontWeight.Normal, colors.textTertiary, Modifier.padding(bottom = 12.dp))
                 RemarkTextField(
                     value = editRemark,
                     onValueChange = { editRemark = it },
@@ -309,7 +321,7 @@ fun FlowDetailScreen(nav: NavHostController, id: String) {
         VanPopup(show = true, onDismissRequest = { showCategoryPopup = false }, position = VanPopupPosition.Bottom, round = true) {
             Column(Modifier.fillMaxWidth().padding(16.dp).heightIn(max = 620.dp)) {
                 PopupHeader("选择$dirText") { showCategoryPopup = false }
-                FText("请选择新的$dirText", 14f, FontWeight.Normal, colors.textTertiary, Modifier.padding(bottom = 4.dp))
+                FText("请选择新的$dirText", 16f, FontWeight.Normal, colors.textTertiary, Modifier.padding(bottom = 4.dp))
                 Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
                     categoryList.chunked(3).forEach { rowCats ->
                         Row(
@@ -371,8 +383,8 @@ fun FlowDetailScreen(nav: NavHostController, id: String) {
                         toast.show(res.data?.takeIf { it.isNotBlank() } ?: "冲正成功")
                         nav.popBackStack()          // web：toast 后 router.push('/finance/flow')
                     }
-                    is ApiResult.Fail -> toast.show(res.message.ifBlank { "冲正失败" })
-                    else -> toast.show("冲正失败")
+                    is ApiResult.Fail -> toast.show(res.message.ifBlank { "冲正失败" }, VanToastType.Fail)
+                    else -> toast.showFail(res, "冲正失败")
                 }
             }
         },
@@ -421,7 +433,7 @@ private fun AmountCard(row: FlowRow, cards: List<Card>, banks: List<Category>) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 8.dp)) {
-            FText(if (income) "收入" else "支出", 14f, FontWeight.Normal, Color.White.copy(alpha = 0.9f))
+            FText(if (income) "收入" else "支出", 16f, FontWeight.Normal, Color.White.copy(alpha = 0.9f))
             Box(
                 Modifier
                     .padding(start = 8.dp)
@@ -453,17 +465,17 @@ private fun RemarkRow(remark: String, expanded: Boolean, onToggle: () -> Unit, m
     val canTruncate = remark.length > 30
     Column(modifier.background(colors.bgCard)) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.Top) {
-            Box(Modifier.weight(1f)) { FText("备注", 14f, FontWeight.Normal, colors.textPrimary) }
+            Box(Modifier.weight(1f)) { FText("备注", 16f, FontWeight.Normal, colors.textPrimary) }
             Column(Modifier.weight(1f)) {
                 if (remark.isEmpty()) {
                     // web `.remark-value.is-empty { text-align: right }`
                     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
-                        FText("暂无备注", 14f, FontWeight.Normal, colors.textSecondary)
+                        FText("暂无备注", 16f, FontWeight.Normal, colors.textSecondary)
                     }
                 } else {
                     BasicText(
                         remark,
-                        style = TextStyle(color = colors.textSecondary, fontSize = 14.sp),
+                        style = TextStyle(color = colors.textSecondary, fontSize = scaledSp(16f)),
                         maxLines = if (expanded) Int.MAX_VALUE else 2,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -489,12 +501,12 @@ private fun RemarkTextField(value: String, onValueChange: (String) -> Unit, maxl
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
             Box(Modifier.fillMaxWidth().heightIn(min = 60.dp)) {          // rows=3
                 if (value.isEmpty()) {
-                    FText("请输入备注", 14f, FontWeight.Normal, colors.textTertiary)
+                    FText("请输入备注", 16f, FontWeight.Normal, colors.textTertiary)
                 }
                 BasicTextField(
                     value = value,
                     onValueChange = { onValueChange(if (it.length > maxlength) it.take(maxlength) else it) },
-                    textStyle = TextStyle(color = colors.textPrimary, fontSize = 14.sp),
+                    textStyle = TextStyle(color = colors.textPrimary, fontSize = scaledSp(16f)),
                     cursorBrush = SolidColor(tokens.primary),
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -516,7 +528,7 @@ private fun PopupHeader(title: String, onClose: () -> Unit) {
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        FText(title, 16f, FontWeight.SemiBold, colors.textPrimary)
+        FText(title, 18f, FontWeight.SemiBold, colors.textPrimary)
         VanIcon(name = "cross", size = 20.sp, color = colors.textTertiary, onClick = onClose)
     }
 }
@@ -525,11 +537,14 @@ private fun PopupHeader(title: String, onClose: () -> Unit) {
 @Composable
 private fun CategoryTile(name: String, active: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val colors = LocalAppColors.current
-    val green = Color(0xFF07C160)
+    // web `Detail.vue:847-850`：border = `var(--van-green, #07c160)`、bg = `var(--van-green-bg, #f0fff5)`。
+    // ⚠ `--van-green` / `--van-green-bg` 只在**深色块**有定义 → 浅色走行内 fallback
+    //   （#07c160 / **#f0fff5**），深色才是 --theme-success / #f0f9eb。
+    val green = vanGreen()
     Box(
         modifier = modifier
             .heightIn(min = 64.dp)
-            .background(if (active) Color(0xFFF0FFF5) else Color.Transparent, RoundedCornerShape(10.dp))
+            .background(if (active) vanGreenBg(Color(0xFFF0FFF5)) else Color.Transparent, RoundedCornerShape(10.dp))
             .border(1.dp, if (active) green else colors.border, RoundedCornerShape(10.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 8.dp, vertical = 14.dp),
@@ -538,7 +553,7 @@ private fun CategoryTile(name: String, active: Boolean, modifier: Modifier = Mod
         FText(name, 12f, FontWeight.Normal, colors.textPrimary)
         if (active) {
             Box(Modifier.align(Alignment.TopEnd).padding(4.dp)) {
-                VanIcon(name = "success", size = 14.sp, color = colors.success)
+                VanIcon(name = "success", size = 14.sp, color = vanGreen())
             }
         }
     }
@@ -559,7 +574,7 @@ private fun RepayHint(text: String, color: Color) {
     ) {
         VanIcon(name = "info-o", size = 16.sp, color = color)
         Spacer(Modifier.size(6.dp))
-        FText(text, 13f, FontWeight.Normal, color)
+        FText(text, 14f, FontWeight.Normal, color)
     }
 }
 
@@ -575,7 +590,7 @@ private fun DashedActionButton(text: String, color: Color, modifier: Modifier = 
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        FText(text, 15f, FontWeight.Medium, color)
+        FText(text, 16f, FontWeight.Medium, color)
     }
 }
 

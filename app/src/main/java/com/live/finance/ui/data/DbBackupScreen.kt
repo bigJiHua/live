@@ -2,6 +2,13 @@ package com.live.finance.ui.data
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -31,6 +38,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -40,9 +48,13 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import com.live.finance.App
 import com.live.finance.core.net.ApiResult
+import com.live.finance.core.net.failMessage
 import com.live.finance.data.model.DbBackupFile
 import com.live.finance.data.model.DbSystemBackupGroup
 import com.live.finance.theme.LocalAppColors
+import com.live.finance.theme.scaledSp
+import com.live.finance.theme.vanGreen
+import com.live.finance.theme.vanOrangeBg
 import com.live.finance.ui.common.AppButton
 import com.live.finance.ui.common.AppButtonSize
 import com.live.finance.ui.common.AppButtonType
@@ -64,6 +76,7 @@ import java.time.LocalDateTime
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import com.live.finance.core.net.showFail
 
 /**
  * 数据库备份 —— 一比一复刻 web `views/Finance/data/DbBackup.vue`。
@@ -94,6 +107,8 @@ fun DbBackupScreen(nav: NavHostController) {
 
     var loading by remember { mutableStateOf(false) }
     var backupList by remember { mutableStateOf<List<DbBackupFile>>(emptyList()) }
+    /** 首次加载已完成 ⇒ 之后「刷新列表」**只转按钮**、不再把整列表换成转圈（他反馈刷新体验差）。 */
+    var listReady by remember { mutableStateOf(false) }
 
     var sysLoading by remember { mutableStateOf(false) }
     var sysLoadingList by remember { mutableStateOf(true) }
@@ -104,11 +119,20 @@ fun DbBackupScreen(nav: NavHostController) {
     var backupTaskId by remember { mutableStateOf("") }
     var backupProgress by remember { mutableStateOf(0) }
 
-    suspend fun loadManualBackups() {
+    /**
+     * @param notify true = 刷新完成后给个 toast（他反馈「刷新无提示」）。
+     *   web 的「刷新列表」点完只有加载态、没有任何完成提示，手机上根本看不出有没有刷成功。
+     */
+    suspend fun loadManualBackups(notify: Boolean = false) {
         loading = true
         when (val r = graph.data.backups()) {
-            is ApiResult.Ok -> backupList = r.data.orEmpty()
-            is ApiResult.Fail -> toast.show("加载手动导出记录失败")
+            is ApiResult.Ok -> {
+                backupList = r.data.orEmpty()
+                listReady = true
+                if (notify) toast.success("列表已刷新")
+            }
+            // web：showToast({ message: "加载手动导出记录失败", type: "fail" })
+            is ApiResult.Fail -> toast.fail("加载手动导出记录失败")
             else -> Unit
         }
         loading = false
@@ -134,10 +158,12 @@ fun DbBackupScreen(nav: NavHostController) {
     }
 
     // 5 秒轮询系统备份任务
+    // ⚠ **先查再等**（他反馈「进度无反馈」）：原实现是先 `delay(5_000)` 再请求 ⇒ 进度块出现的头 5 秒
+    //   永远是 0%、进度条一动不动，任务若很快完成更是「0% → 直接完成」，中间毫无反馈。
     LaunchedEffect(backupTaskId, isBackupRunning) {
         if (!isBackupRunning || backupTaskId.isEmpty()) return@LaunchedEffect
         while (true) {
-            delay(5_000)
+            var done = false
             when (val r = graph.data.taskStatus(backupTaskId)) {
                 is ApiResult.Ok -> {
                     val t = r.data
@@ -149,22 +175,24 @@ fun DbBackupScreen(nav: NavHostController) {
                             backupProgress = 100
                             toast.success("系统备份完成！")
                             loadSystemBackups()
-                            break
+                            done = true
                         }
                         "failed" -> {
                             isBackupRunning = false
-                            toast.show(t.error.ifBlank { "系统备份失败" })
-                            break
+                            toast.fail(t.error.ifBlank { "系统备份失败" })
+                            done = true
                         }
                         "cancelled" -> {
                             isBackupRunning = false
-                            toast.show("备份任务已取消")
-                            break
+                            toast.warning("备份任务已取消")
+                            done = true
                         }
                     }
                 }
                 else -> Unit
             }
+            if (done) break
+            delay(5_000)
         }
     }
 
@@ -182,19 +210,24 @@ fun DbBackupScreen(nav: NavHostController) {
                     true
                 }.getOrDefault(false)
             }
-            if (ok) toast.success("下载开始") else toast.show("下载失败")
+            if (ok) toast.success("下载开始") else toast.fail("下载失败")
         }
     }
 
     fun handleDownload(filename: String) {
         scope.launch {
+            // ⚠ 原生差异：web 是 blob 直接落盘（几乎瞬间），原生必须**先把整个文件取回内存**再让用户在
+            //   SAF 里选保存位置 —— 备份文件动辄几 MB～几十 MB，这一步会明显卡住，
+            //   而原来**什么提示都没有**（他反馈「进度无反馈」）⇒ 加 loading 遮挡，取完再关。
+            toast.loading("正在准备文件...")
             when (val r = graph.data.downloadBackup(filename)) {
                 is ApiResult.Ok -> {
                     pendingBytes = r.data ?: ByteArray(0)
                     pendingName = filename
+                    toast.close()
                     saveLauncher.launch(pendingName)
                 }
-                else -> toast.show("下载失败")
+                else -> { toast.close(); toast.showFail(r, "下载失败") }
             }
         }
     }
@@ -212,10 +245,10 @@ fun DbBackupScreen(nav: NavHostController) {
                 Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(colors.bgCard).padding(vertical = 30.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                VanIcon(name = "records", size = 48.sp, color = DB_GREEN)
+                VanIcon(name = "records", size = 48.sp, color = vanGreen())
                 Spacer(Modifier.height(12.dp))
                 FText("数据库备份", 20f, FontWeight.Bold, colors.textPrimary, Modifier.padding(bottom = 8.dp))
-                FText("管理和查看数据库备份文件", 14f, FontWeight.Normal, colors.textTertiary)
+                FText("管理和查看数据库备份文件", 16f, FontWeight.Normal, colors.textTertiary)
             }
             Spacer(Modifier.height(20.dp))
 
@@ -235,16 +268,18 @@ fun DbBackupScreen(nav: NavHostController) {
                                             isBackupRunning = true
                                             backupTaskId = t.id
                                             backupProgress = 0
-                                            toast.show("系统备份任务已提交，后台处理中...")
+                                            // web：reuseExisting 复用已有任务 → warning，否则 success
+                                            if (t.reuseExisting) toast.warning("已有备份任务执行中，自动加入监控")
+                                            else toast.success("系统备份任务已提交，后台处理中...")
                                         } else {
                                             // 兼容旧版同步返回
                                             toast.success("系统备份成功")
                                             loadSystemBackups()
                                         }
                                     }
-                                    is ApiResult.Fail -> toast.show(r.message.ifBlank { "系统备份失败" })
+                                    is ApiResult.Fail -> toast.fail(r.message.ifBlank { "系统备份失败" })
                                     is ApiResult.NeedPin -> toast.show("需先验证 PIN")
-                                    else -> toast.show("系统备份失败")
+                                    else -> toast.showFail(r, "系统备份失败")
                                 }
                                 sysLoading = false
                             }
@@ -269,7 +304,7 @@ fun DbBackupScreen(nav: NavHostController) {
                     AppCellValue("进度", "$backupProgress%")
                     VanProgress(
                         percentage = backupProgress.toFloat(),
-                        color = DB_GREEN,
+                        color = vanGreen(),
                         strokeWidth = 12.dp,
                         showPivot = true,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -278,7 +313,8 @@ fun DbBackupScreen(nav: NavHostController) {
                         AppButton(
                             text = "刷新备份列表",
                             icon = "replay",
-                            onClick = { scope.launch { loadSystemBackups() } },
+                            // 刷新完给个提示（他反馈「刷新无提示」）
+                            onClick = { scope.launch { loadSystemBackups(); toast.success("备份列表已刷新") } },
                             type = AppButtonType.Default,
                             size = AppButtonSize.Small,
                             block = true,
@@ -320,7 +356,7 @@ fun DbBackupScreen(nav: NavHostController) {
             AppButton(
                 text = "刷新列表",
                 icon = "replay",
-                onClick = { scope.launch { loadManualBackups() } },
+                onClick = { scope.launch { loadManualBackups(notify = true) } },
                 type = AppButtonType.Primary,
                 size = AppButtonSize.Large,
                 block = true,
@@ -329,7 +365,8 @@ fun DbBackupScreen(nav: NavHostController) {
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 0.dp).padding(bottom = 12.dp),
             )
 
-            if (loading) {
+            // ⚠ 只有**首次**加载才整页转圈；之后刷新保留列表（按钮上的 loading 已经在转）
+            if (!listReady && loading) {
                 Box(Modifier.fillMaxWidth().padding(vertical = 30.dp), contentAlignment = Alignment.Center) {
                     VanLoading(size = 24.sp, text = "加载中...")
                 }
@@ -352,7 +389,7 @@ fun DbBackupScreen(nav: NavHostController) {
                                             backupList = backupList.filter { it.filename != item.filename }
                                         }
                                         is ApiResult.NeedPin -> toast.show("需先验证 PIN")
-                                        else -> toast.show("删除失败")
+                                        else -> toast.fail("删除失败")
                                     }
                                 }
                             },
@@ -376,14 +413,32 @@ private fun SysGroup(g: DbSystemBackupGroup, expanded: Boolean, onToggle: () -> 
         ) {
             VanIcon(name = "calendar-o", size = 16.sp, color = colors.primary)
             Spacer(Modifier.width(6.dp))
-            FText(g.date, 14f, FontWeight.Medium, colors.textPrimary)
+            FText(g.date, 16f, FontWeight.Medium, colors.textPrimary)
             Spacer(Modifier.weight(1f))
-            FText("${g.files.size} 个文件", 11f, FontWeight.Normal, colors.textTertiary)
+            FText("${g.files.size} 个文件", 12f, FontWeight.Normal, colors.textTertiary)
             Spacer(Modifier.width(6.dp))
-            VanIcon(name = "arrow", size = 14.sp, color = colors.textTertiary)
+            // web `van-collapse-item__right-icon` 展开时旋转 90°（旧实现箭头永远朝右 ⇒ 看不出展开态）
+            //   Vant 的旋转带 `transition: transform .3s` ⇒ 用 `animateFloatAsState` 补上过渡。
+            val rot by animateFloatAsState(
+                targetValue = if (expanded) 90f else 0f,
+                animationSpec = tween(300),
+                label = "db-backup-arrow",
+            )
+            VanIcon(
+                name = "arrow",
+                size = 14.sp,
+                color = colors.textTertiary,
+                modifier = Modifier.graphicsLayer { rotationZ = rot },
+            )
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(colors.border))
-        if (expanded) {
+        // web `van-collapse` 展开/收起是 `transition: height .3s` 的**平滑动画**；
+        //   旧实现是 `if (expanded)` 直接挂/摘 ⇒ 内容瞬间跳出来（「UI 不适配」的一部分）。
+        AnimatedVisibility(
+            visible = expanded,
+            enter = fadeIn(animationSpec = tween(200)) + expandVertically(animationSpec = tween(300)),
+            exit = fadeOut(animationSpec = tween(200)) + shrinkVertically(animationSpec = tween(300)),
+        ) {
             Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 8.dp)) {
                 g.files.forEach { f -> SysFileRow(f) }
             }
@@ -400,11 +455,16 @@ private fun SysFileRow(f: DbBackupFile) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        // 36×36 类型角标（schema 底透明：`--van-orange-bg` 未定义）
+        // web `DbBackup.vue:454-455` `.sfi-icon.{full,schema}`：
+        //   full   `background: rgba(7,193,96,.1)`（**裸 rgba**，两模式同值）
+        //          `color: var(--van-green)`（深色 = --theme-success）
+        //   schema `background: var(--van-orange-bg)`（**没写 fallback** → 浅色变量不存在 → 透明；深色 = .12）
+        //          `color: var(--van-orange)` = #ff976a（两模式同值）
+        // ⚠ 早期注释写「--van-orange-bg 未定义」方向对但理由错：它**只在深色块**里定义。
         TypeBadge(
             text = if (schema) "结构" else "完整",
-            bg = if (schema) Color.Transparent else DB_GREEN.copy(alpha = 0.1f),
-            fg = if (schema) DB_ORANGE else DB_GREEN,
+            bg = if (schema) vanOrangeBg(Color.Transparent) else Color(0x1A07C160),
+            fg = if (schema) DB_ORANGE else vanGreen(),
             size = 36,
             fontSize = 10f,
         )
@@ -414,30 +474,40 @@ private fun SysFileRow(f: DbBackupFile) {
                 modifier = Modifier.fillMaxWidth(),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                style = TextStyle(color = colors.textPrimary, fontSize = 12.sp, fontWeight = FontWeight.Medium),
+                style = TextStyle(color = colors.textPrimary, fontSize = scaledSp(12f), fontWeight = FontWeight.Medium),
             )
             Row(Modifier.padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FText(backupFileSize(f.size), 11f, FontWeight.Normal, colors.textTertiary)
-                FText(backupTime(f.createdAt), 10f, FontWeight.Normal, colors.textTertiary)
+                FText(backupFileSize(f.size), 12f, FontWeight.Normal, colors.textTertiary)
+                // ⚠ 窄屏适配：时间比大小长得多，不给 weight 会**顶出容器**（web 靠 flex 收缩），
+                //   这里让时间吃掉剩余宽度并省略号截断。
+                FText(backupTime(f.createdAt), 12f, FontWeight.Normal, colors.textTertiary,
+                    modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
     }
 }
 
-/** 手动导出记录的一行（`.backup-item`：白卡 radius 12、`padding 14/16`、space-between、浅投影）。 */
+/**
+ * 手动导出记录的一行（`.backup-item`：白卡 radius 12、`padding 14/16`、浅投影）。
+ *
+ * ⚠ **手机宽度适配（他反馈「宽度不佳」）**：web 是 `display:flex; justify-content:space-between` 的
+ *   **单行**结构（左：角标 + 文件名/大小/时间；右：下载 + 删除两个按钮）。在桌面够用，
+ *   但手机上两个按钮要占掉约 140dp ⇒ 文件名只剩 100 出头 dp，几乎全被省略号截掉。
+ *   ⇒ 安卓侧改成**两行**：第一行角标 + 文件信息（占满宽），第二行两个按钮**右对齐**
+ *   —— 与本工程账单卡「信息在上、操作在下」的排布一致。
+ */
 @Composable
 private fun ManualBackupItem(item: DbBackupFile, onDownload: () -> Unit, onDelete: () -> Unit) {
     val colors = LocalAppColors.current
     val zip = item.type == "zip"
-    Row(
+    Column(
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .background(colors.bgCard)
             .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             // 40×40 角标（ZIP 底透明：`--van-orange-bg` 未定义）
             TypeBadge(
                 text = if (zip) "ZIP" else "SQL",
@@ -451,20 +521,22 @@ private fun ManualBackupItem(item: DbBackupFile, onDownload: () -> Unit, onDelet
                 BasicText(
                     item.filename,
                     modifier = Modifier.fillMaxWidth(),
-                    maxLines = 1,
+                    maxLines = 2,                      // 宽度让出来了 ⇒ 允许折行显示 2 行
                     overflow = TextOverflow.Ellipsis,
-                    style = TextStyle(color = colors.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium),
+                    style = TextStyle(color = colors.textPrimary, fontSize = scaledSp(14f), fontWeight = FontWeight.Medium),
                 )
-                FText(backupFileSize(item.size), 11f, FontWeight.Normal, colors.textTertiary, Modifier.padding(top = 3.dp))
-                FText(backupTime(item.createdAt), 10f, FontWeight.Normal, colors.textTertiary, Modifier.padding(top = 1.dp))
+                FText(backupFileSize(item.size), 12f, FontWeight.Normal, colors.textTertiary, Modifier.padding(top = 3.dp))
+                FText(backupTime(item.createdAt), 12f, FontWeight.Normal, colors.textTertiary, Modifier.padding(top = 1.dp))
             }
         }
+        Spacer(Modifier.height(10.dp))
         Row(
-            Modifier.padding(start = 12.dp),
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End,
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             AppButton(text = "下载", onClick = onDownload, type = AppButtonType.Primary, size = AppButtonSize.Small, plain = true, round = true)
+            Spacer(Modifier.width(8.dp))
             AppButton(text = "删除", onClick = onDelete, type = AppButtonType.Danger, size = AppButtonSize.Small, plain = true, round = true)
         }
     }
@@ -482,7 +554,7 @@ private fun TypeBadge(text: String, bg: Color, fg: Color, size: Int, fontSize: F
     ) {
         BasicText(
             text,
-            style = TextStyle(color = fg, fontSize = fontSize.sp, fontWeight = FontWeight.Bold, letterSpacing = letterSpacing.sp),
+            style = TextStyle(color = fg, fontSize = scaledSp(fontSize), fontWeight = FontWeight.Bold, letterSpacing = letterSpacing.sp),
         )
     }
 }
@@ -494,7 +566,7 @@ private fun AppCellTagWarning(title: String, text: String) {
         Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        FText(title, 14f, FontWeight.Normal, LocalAppColors.current.textPrimary, Modifier.weight(1f))
+        FText(title, 16f, FontWeight.Normal, LocalAppColors.current.textPrimary, Modifier.weight(1f))
         VanTag(text = text, type = VanTagType.Warning, size = VanTagSize.Large)
     }
 }
@@ -506,12 +578,12 @@ private fun AppCellValue(title: String, value: String) {
         Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        FText(title, 14f, FontWeight.Normal, LocalAppColors.current.textPrimary, Modifier.weight(1f))
-        FText(value, 14f, FontWeight.Normal, LocalAppColors.current.textSecondary)
+        FText(title, 16f, FontWeight.Normal, LocalAppColors.current.textPrimary, Modifier.weight(1f))
+        FText(value, 16f, FontWeight.Normal, LocalAppColors.current.textSecondary)
     }
 }
 
-internal val DB_ORANGE = Color(0xFFFF976A)    // `--van-orange`（Vant 调色板；`--van-orange-bg` 未定义）
+internal val DB_ORANGE = Color(0xFFFF976A)    // `--van-orange`（style.css:158 写死 #ff976a，跟 `--van-orange-bg` 无关）
 
 /** web `formatFileSize`（备份页口径，与导出页一致）。 */
 private fun backupFileSize(bytes: Long): String = when {

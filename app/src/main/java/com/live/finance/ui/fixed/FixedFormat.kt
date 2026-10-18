@@ -103,12 +103,12 @@ internal fun FixedReadonlyField(
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 10.dp),
     ) {
-        FText(label, 13f, FontWeight.Normal, colors.textSecondary)
+        FText(label, 14f, FontWeight.Normal, colors.textSecondary)
         Spacer(Modifier.height(6.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             FText(
                 value.ifEmpty { placeholder },
-                14f, FontWeight.Normal,
+                16f, FontWeight.Normal,
                 if (value.isEmpty()) colors.textTertiary else colors.textPrimary,
                 Modifier.weight(1f),
             )

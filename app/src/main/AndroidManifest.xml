@@ -4,12 +4,23 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
+    <!-- 日记「当前位置」：精确定位（GPS）/ 高德定位（GPS + 后端逆地理）需要；IP 定位不需要 -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <!-- 2026-10-14 站点分发适配：登录页开放任意输入 API 地址（http 系均可）。
+         networkSecurityConfig 的 base-config cleartextTrafficPermitted=true 已优先生效，
+         此处同步放行避免双处口径不一致（明文风险由站点部署方自担，公网仍建议 https）。 -->
     <application
         android:name=".App"
-        android:allowBackup="true"
+        android:allowBackup="false"
+        android:fullBackupContent="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:label="@string/app_name"
+        android:icon="@mipmap/ic_launcher"
         android:supportsRtl="true"
         android:usesCleartextTraffic="true"
+        android:networkSecurityConfig="@xml/network_security_config"
         android:theme="@style/Theme.Live">
 
         <activity

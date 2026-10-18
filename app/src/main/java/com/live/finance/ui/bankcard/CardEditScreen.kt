@@ -1,6 +1,5 @@
 package com.live.finance.ui.bankcard
 
-import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -40,11 +39,18 @@ import androidx.navigation.NavHostController
 import com.live.finance.App
 import com.live.finance.core.AppConfig
 import com.live.finance.core.net.ApiResult
+import com.live.finance.core.net.failMessage
+import com.live.finance.core.net.failToastType
 import com.live.finance.data.model.Card
 import com.live.finance.data.model.Category
 import com.live.finance.data.model.Resource
 import com.live.finance.data.repo.NewCard
 import com.live.finance.theme.LocalAppColors
+import com.live.vant.basic.VanEmpty
+import com.live.finance.theme.vanGreen
+import com.live.finance.ui.common.AppButton
+import com.live.finance.ui.common.AppButtonSize
+import com.live.finance.ui.common.AppButtonType
 import com.live.finance.ui.common.ScreenScaffold
 import com.live.finance.ui.flow.FText
 import com.live.vant.basic.VanImage
@@ -57,6 +63,8 @@ import com.live.vant.form.VanNumberKeyboard
 import com.live.vant.icon.VanIcon
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import com.live.vant.feedback.LocalVanToastController
+import com.live.vant.feedback.VanToastType
 
 /** `card/Edit.vue` 的 formData（原文初始值）。 */
 private data class CardEditForm(
@@ -129,8 +137,8 @@ fun CardEditScreen(nav: NavHostController, cardId: String = "") {
     var images by remember { mutableStateOf<List<Resource>>(emptyList()) }
     var pickedImg by remember { mutableStateOf("") }
 
-    fun toast(m: String) = Toast.makeText(context, m, Toast.LENGTH_SHORT).show()
-
+    val vanToast = LocalVanToastController.current
+    fun toast(m: String, type: VanToastType = VanToastType.Text) = vanToast.show(m, type)
     fun loadDetail() {
         scope.launch {
             loading = true
@@ -157,7 +165,7 @@ fun CardEditScreen(nav: NavHostController, cardId: String = "") {
                         tag = c.tag, remark = c.remark, color = c.displayColor, cardImg = c.cardImg,
                     )
                 }
-                is ApiResult.Fail -> toast(r.message.ifBlank { "加载失败" })
+                is ApiResult.Fail -> toast(r.message.ifBlank { "加载失败" }, VanToastType.Fail)
                 else -> Unit
             }
             loading = false
@@ -197,7 +205,7 @@ fun CardEditScreen(nav: NavHostController, cardId: String = "") {
                     isEditable = !has
                     toast(if (has) "该卡片已有流水记录，账单日和还款日不可修改" else "该卡片暂无流水，可以修改账单日和还款日")
                 }
-                else -> toast("检查失败")
+                else -> toast(r.failMessage("检查失败"), r.failToastType())
             }
             checkLoading = false
         }
@@ -231,9 +239,9 @@ fun CardEditScreen(nav: NavHostController, cardId: String = "") {
         submitting = true
         scope.launch {
             when (val r = graph.card.update(cardId, buildNewCard())) {
-                is ApiResult.Ok -> { toast("保存成功"); nav.popBackStack() }
-                is ApiResult.Fail -> toast(r.message.ifBlank { "保存失败" })
-                else -> toast("保存失败")
+                is ApiResult.Ok -> { toast("保存成功", VanToastType.Success); nav.popBackStack() }
+                is ApiResult.Fail -> toast(r.message.ifBlank { "保存失败" }, VanToastType.Fail)
+                else -> toast(r.failMessage("保存失败"), r.failToastType())
             }
             submitting = false
         }
@@ -243,9 +251,9 @@ fun CardEditScreen(nav: NavHostController, cardId: String = "") {
         submitting = true
         scope.launch {
             when (val r = graph.card.delete(cardId)) {
-                is ApiResult.Ok -> { toast("删除成功"); nav.popBackStack() }
-                is ApiResult.Fail -> toast(r.message.ifBlank { "删除失败" })
-                else -> toast("删除失败")
+                is ApiResult.Ok -> { toast("删除成功", VanToastType.Success); nav.popBackStack() }
+                is ApiResult.Fail -> toast(r.message.ifBlank { "删除失败" }, VanToastType.Fail)
+                else -> toast(r.failMessage("删除失败"), r.failToastType())
             }
             submitting = false
         }
@@ -264,11 +272,17 @@ fun CardEditScreen(nav: NavHostController, cardId: String = "") {
                 Box(Modifier.fillMaxSize().then(inner), contentAlignment = Alignment.Center) { VanLoading() }
             } else {
                 Column(Modifier.fillMaxSize().then(inner)) {
-                    BankTopBar(title = "编辑卡片", onBack = { nav.popBackStack() })
                     Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
                         // 卡片预览
-                        Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
-                            BankCardFace(previewCard, if (form.isCredit) "CREDIT CARD" else "DEBIT CARD", showLast4Suffix = false)
+                        Box(Modifier.fillMaxWidth().padding(16.dp)) { // web `.card-preview{ padding: 16px }`（旧 16/6）
+                            BankCardFace(
+                                previewCard,
+                                if (form.isCredit) "CREDIT CARD" else "DEBIT CARD",
+                                showLast4Suffix = false,
+                                // web `card/Edit.vue:964`：`data.color || '#0052cc'` —— 编辑页兜底是 **#0052cc**，
+                                //   与列表页的「debit 蓝 / credit 红」两套 `default-color` 不是一回事。
+                                defaultColor = Color(0xFF0052CC),
+                            )
                         }
 
                         // ===== 基本信息 =====
@@ -304,37 +318,38 @@ fun CardEditScreen(nav: NavHostController, cardId: String = "") {
                                     onClick = { if (isEditable == true) kbTarget = "repayDay" },
                                     suffix = "日", enabled = isEditable == true,
                                 )
-                                ReadonlyRow("年费", form.annualFee, "请输入", { kbTarget = "annualFee" }, suffix = "元")
-                                InputRow("免年费规则", form.feeFreeRule, { form = form.copy(feeFreeRule = it) }, "如：刷6次免年费")
-                                // 「检查是否可修改」
-                                Column(Modifier.fillMaxWidth().padding(16.dp)) {
-                                    Box(
-                                        Modifier
-                                            .fillMaxWidth()
-                                            .height(36.dp)
-                                            .clip(RoundedCornerShape(18.dp))
-                                            .background(if (isEditable != null) colors.border else colors.primary)
-                                            .clickable(enabled = checkLoading || isEditable == null) { checkEditable() },
-                                        contentAlignment = Alignment.Center,
-                                    ) {
-                                        FText(
-                                            when {
-                                                checkLoading -> "检查中…"
-                                                isEditable == true -> "已解锁"
-                                                isEditable == false -> "已锁定"
-                                                else -> "检查是否可修改"
-                                            },
-                                            13f, FontWeight.Medium, if (isEditable != null) colors.textSecondary else Color.White,
-                                        )
-                                    }
-                                    if (isEditable == false) {
-                                        Spacer(Modifier.height(6.dp))
-                                        FText("有流水记录，不可修改", 12f, color = colors.danger)
-                                    } else if (isEditable == true) {
-                                        Spacer(Modifier.height(6.dp))
-                                        FText("可自由修改", 12f, color = colors.success)
+                                // web `.check-editable{ display:flex; align-items:center; padding:12px 16px; gap:12px }`
+                                //   → **一行**：小号 `app-button` + 右侧 `.check-hint`。
+                                // ⚠ 位置在「还款日」之后、「年费」之前（旧实现排到了本区块最后，顺序不符）。
+                                // ⚠ 提示色：默认 `.check-hint{ color: var(--theme-text-tertiary) }`，
+                                //   只有「可自由修改」那支加 `.text-success{ color: var(--van-green, #07c160) }`
+                                //   —— 旧实现把「不可修改」也染成了 danger，不符。
+                                Row(
+                                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                ) {
+                                    AppButton(
+                                        // web 文案：loading 期间 isEditable 仍是 null ⇒ 显示「检查是否可修改」+ 按钮自身转圈
+                                        text = when {
+                                            isEditable == true -> "已解锁"
+                                            isEditable == false -> "已锁定"
+                                            else -> "检查是否可修改"
+                                        },
+                                        onClick = { checkEditable() },
+                                        type = AppButtonType.Default,
+                                        size = AppButtonSize.Small,
+                                        loading = checkLoading,
+                                        disabled = isEditable != null,
+                                    )
+                                    when (isEditable) {
+                                        false -> FText("有流水记录，不可修改", 12f, color = colors.textTertiary)
+                                        true -> FText("可自由修改", 12f, color = vanGreen())
+                                        else -> Unit
                                     }
                                 }
+                                ReadonlyRow("年费", form.annualFee, "请输入", { kbTarget = "annualFee" }, suffix = "元")
+                                InputRow("免年费规则", form.feeFreeRule, { form = form.copy(feeFreeRule = it) }, "如：刷6次免年费")
                             }
                         }
 
@@ -367,28 +382,29 @@ fun CardEditScreen(nav: NavHostController, cardId: String = "") {
                             InputRow("标签", form.tag, { form = form.copy(tag = it) }, "如：日常消费、出国使用")
                             InputRow("备注", form.remark, { form = form.copy(remark = it) }, "其他备注信息", border = false)
                         }
-                        Spacer(Modifier.height(24.dp))
-                    }
-
-                    // 保存 / 删除
-                    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
-                        Box(
-                            Modifier
-                                .fillMaxWidth().height(48.dp)
-                                .clip(RoundedCornerShape(24.dp))
-                                .background(if (submitting) colors.primary.copy(alpha = 0.6f) else colors.primary)
-                                .clickable(enabled = !submitting) { showSaveConfirm = true },
-                            contentAlignment = Alignment.Center,
-                        ) { FText("保存修改", 16f, FontWeight.SemiBold, Color.White) }
-                        Spacer(Modifier.height(10.dp))
-                        Box(
-                            Modifier
-                                .fillMaxWidth().height(48.dp)
-                                .clip(RoundedCornerShape(24.dp))
-                                .background(colors.bgCard)
-                                .clickable(enabled = !submitting) { showDeleteConfirm = true },
-                            contentAlignment = Alignment.Center,
-                        ) { FText("删除卡片", 16f, FontWeight.SemiBold, colors.danger) }
+                        // web `.submit-btn-wrap{ margin:32px 16px; display:flex; flex-direction:column; gap:12px }`
+                        //   —— 两个按钮都在**滚动流里**（旧实现是自绘的固定底栏），且用 `app-button`
+                        //   （保存 = primary block round；删除 = plain danger block round）。
+                        Spacer(Modifier.height(32.dp))
+                        Column(
+                            Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            AppButton(
+                                text = "保存修改",
+                                onClick = { showSaveConfirm = true },
+                                type = AppButtonType.Primary, block = true, round = true,
+                                loading = submitting, disabled = submitting,
+                            )
+                            AppButton(
+                                text = "删除卡片",
+                                onClick = { showDeleteConfirm = true },
+                                type = AppButtonType.Danger, plain = true, block = true, round = true,
+                                disabled = submitting,
+                            )
+                        }
+                        Spacer(Modifier.height(32.dp)) // .submit-btn-wrap 下外边距
+                        Spacer(Modifier.height(40.dp)) // .page-edit-card{ padding-bottom: 40px }
                     }
                 }
             }
@@ -396,9 +412,10 @@ fun CardEditScreen(nav: NavHostController, cardId: String = "") {
 
         // ===== 弹层 =====
         BankPickerSheet(showBank, banks, { b -> form = form.copy(bankId = b.id, bankName = b.name); showBank = false }, { showBank = false })
-        PickerSheet(showOrg, CARD_ORG_COLUMNS, CARD_ORG_COLUMNS.indexOf(form.cardOrg).coerceAtLeast(0), null,
-            { idx -> val org = CARD_ORG_COLUMNS[idx]; form = form.copy(cardOrg = org, cardLength = (CARD_ORG_LENGTH[org] ?: 16).toString()); showOrg = false },
-            { showOrg = false })
+        // 卡组织：web 三页都是**自定义列表** `.org-picker`（图标 + 名称 + 勾），不是滚轮 picker
+        OrgPickerSheet(showOrg, form.cardOrg, { org ->
+            form = form.copy(cardOrg = org, cardLength = (CARD_ORG_LENGTH[org] ?: 16).toString()); showOrg = false
+        }, { showOrg = false })
         PickerSheet(showMainSub, MAIN_SUB_COLUMNS, MAIN_SUB_COLUMNS.indexOf(form.mainSub).coerceAtLeast(0), null,
             { idx -> form = form.copy(mainSub = MAIN_SUB_COLUMNS[idx]); showMainSub = false }, { showMainSub = false })
         IndexedPickerSheet(showCurrency, CURRENCY_COLUMNS, form.currency, "选择币种",
@@ -448,7 +465,7 @@ fun CardEditScreen(nav: NavHostController, cardId: String = "") {
             VanPopup(show = true, onDismissRequest = { showImagePicker = false }) {
                 Column(Modifier.fillMaxWidth().height(460.dp).background(colors.bgCard)) {
                     Row(Modifier.fillMaxWidth().height(44.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        FText("选择卡面", 16f, FontWeight.Medium, colors.textPrimary, Modifier.weight(1f))
+                        FText("选择卡面", 18f, FontWeight.Medium, colors.textPrimary, Modifier.weight(1f))
                         Box(
                             Modifier.clip(RoundedCornerShape(14.dp)).background(colors.border).clickable { form = form.copy(cardImg = ""); pickedImg = "" }.padding(horizontal = 12.dp, vertical = 5.dp),
                         ) { FText("清空", 12f, color = colors.danger) }
@@ -460,7 +477,8 @@ fun CardEditScreen(nav: NavHostController, cardId: String = "") {
                     if (imageLoading) {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { VanLoading() }
                     } else if (images.isEmpty()) {
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { FText("暂无图片", 14f, color = colors.textTertiary) }
+                        // web `card/Edit.vue:313`：`<van-empty description="暂无图片" image="search" />`
+                        VanEmpty(description = "暂无图片", image = "search")
                     } else {
                         LazyVerticalGrid(
                             columns = GridCells.Fixed(3),

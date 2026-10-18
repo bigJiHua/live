@@ -12,16 +12,6 @@ import com.live.finance.theme.LocalAppColors
 import com.live.finance.ui.flow.FText
 import kotlin.math.abs
 
-/** 任意值转 Double（对齐 web 的 toNumber）。 */
-fun toNum(v: Any?): Double {
-    val n = when (v) {
-        is Number -> v.toDouble()
-        is String -> v.toDoubleOrNull()
-        else -> null
-    }
-    return n ?: 0.0
-}
-
 /** 截断到 digits 位小数并去掉尾随 0（对齐 web trimDecimal）。 */
 fun trimDecimal(value: Double, digits: Int = 3): String {
     val fixed = String.format("%.${digits}f", value)
@@ -61,6 +51,6 @@ fun FundOverviewItem(label: String, value: String, valueColor: androidx.compose.
     val colors = LocalAppColors.current
     Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         FText(label, 12f, FontWeight.Normal, colors.textSecondary)
-        FText(value, 16f, FontWeight.Bold, valueColor ?: colors.textPrimary)
+        FText(value, 18f, FontWeight.Bold, valueColor ?: colors.textPrimary)
     }
 }

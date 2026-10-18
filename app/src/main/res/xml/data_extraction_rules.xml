@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 12+（API 31+）的备份/设备迁移规则（安全整改 P0-3）
+
+  配合 Manifest 的 android:allowBackup="false" 与 android:fullBackupContent="false"：
+  加密后的会话数据（token / 设备指纹）**不允许**被备份或转移到新设备。
+
+  为什么连这层也要写：
+    · Android 12 起 allowBackup=false 在部分厂商 ROM 上仍可能被绕过；
+    · dataExtractionRules 是新版体系的显式声明，语义比 fullBackupContent 更清楚；
+    · 三者一起设才能覆盖「云备份」+「D2D 换机迁移」两条路径。
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <!-- 不备份任何数据：token 绝不能进云端备份 -->
+        <exclude domain="root" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+        <exclude domain="file" />
+    </cloud-backup>
+    <device-transfer>
+        <!-- 换机也不迁移：避免旧机 token 直接落到新机 -->
+        <exclude domain="root" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+        <exclude domain="file" />
+    </device-transfer>
+</data-extraction-rules>

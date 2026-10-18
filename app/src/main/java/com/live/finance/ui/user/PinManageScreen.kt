@@ -2,6 +2,7 @@ package com.live.finance.ui.user
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -37,6 +38,9 @@ import com.live.finance.App
 import com.live.finance.core.nav.Routes
 import com.live.finance.core.net.ApiResult
 import com.live.finance.theme.LocalAppColors
+import com.live.finance.theme.vanGreenBg
+import com.live.finance.theme.vanGreen
+import com.live.finance.theme.VanGrayFixed
 import com.live.finance.ui.common.AppDialogShell
 import com.live.finance.ui.common.PinCells
 import com.live.finance.ui.common.ScreenScaffold
@@ -48,11 +52,19 @@ import com.live.vant.icon.VanIcon
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-// web `User/security/PinManage.vue` 里写死的两套色（均为 var 无定义时的 fallback）
-private val PIN_GREEN = Color(0xFF07C160)     // var(--van-green, #07c160)
-private val PIN_GREEN_BG = Color(0xFFE8F9F0)  // var(--van-green-bg, #e8f9f0)
-private val PIN_ORANGE = Color(0xFFFF976A)    // var(--van-orange) = Vant 默认 #ff976a
-private val PIN_ARROW = Color(0xFF969799)     // 页面里硬编码的 van-icon color
+/**
+ * ⚠ 这里原本按「var 无定义时的 fallback」处理，**前提是错的**。
+ * web `style.css:153` 那一块的注释原文就是「业务语义色别名，供页面直接引用（**跟随主题切换**）」：
+ *   `--van-green: var(--theme-success)`、`--van-blue: var(--theme-primary)`、`--van-red/--van-danger-grad: var(--theme-danger)`
+ *   `--van-orange: #ff976a`、`--van-purple: #7232dd`、`--van-gray: #969799`
+ *   `--van-green-bg: #f0f9eb`、`--van-danger-bg: #fff0f0`、`--van-orange-bg/bg-blue-bg: rgba(...)`
+ * 即：green/blue/red **随主题**（故用 `vanGreen()` 等，不用常量），
+ *     orange/purple/gray 与三个 `-bg` **是写死值**（用常量，且值要抄对）。
+ * 另外 `--van-green-bg` 的固定值是 **`#f0f9eb`**，不是页面 fallback 里的 `#e8f9f0`。
+ */
+// web `PinManage.vue:298`：`background: var(--van-green-bg, #e8f9f0)` —— 深色 #f0f9eb / 浅色 **#e8f9f0**
+private val PIN_GREEN_BG_LIGHT = Color(0xFFE8F9F0)
+private val PIN_ORANGE = Color(0xFFFF976A)    // --van-orange（写死 #ff976a）
 
 /**
  * PIN 码管理页 —— 1:1 复刻 web `src/views/User/security/PinManage.vue`。
@@ -120,17 +132,12 @@ fun PinManageScreen(nav: NavHostController) {
         Column(
             modifier = inner.verticalScroll(rememberScrollState()),
         ) {
-            // 页面标题（web 在全局 nav-bar 上；原生沿用各页自绘标题的约定）
-            FText(
-                "PIN 码管理", 18f, FontWeight.Bold, LocalAppColors.current.textPrimary,
-                Modifier.padding(16.dp),
-            )
             Column(Modifier.padding(horizontal = 16.dp)) { // .manage-content{ padding:16px }
                 PinStatusCard(hasPinSet)
 
                 // 操作选项
                 FText(
-                    "操作选项", 13f, FontWeight.Medium, LocalAppColors.current.textTertiary,
+                    "操作选项", 14f, FontWeight.Medium, LocalAppColors.current.textTertiary,
                     Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
                 )
                 PinGroup {
@@ -199,13 +206,18 @@ fun PinManageScreen(nav: NavHostController) {
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             FText(
-                "请输入当前 PIN 码以确认关闭", 14f, FontWeight.Normal, LocalAppColors.current.textTertiary,
+                "请输入当前 PIN 码以确认关闭", 16f, FontWeight.Normal, LocalAppColors.current.textTertiary,
                 Modifier.padding(bottom = 16.dp),
             )
+            // 聚焦态跟随键盘开合，并允许点击格子重新唤出键盘（收起后唯一的再唤出入口）
             PinCells(
                 value = disablePin,
-                focused = true,
+                focused = showDisableKeyboard,
                 gutter = 10.dp, // :gutter="10"
+                modifier = Modifier.clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                ) { showDisableKeyboard = true },
             )
             if (disableError.isNotEmpty()) {
                 FText(
@@ -242,7 +254,7 @@ private fun PinStatusCard(hasPinSet: Boolean) {
                 VanIcon(
                     name = "shield-o",
                     size = 48.sp, // size="48"
-                    color = if (hasPinSet) PIN_GREEN else PIN_ORANGE,
+                    color = if (hasPinSet) vanGreen() else PIN_ORANGE,
                 )
             }
             Spacer(Modifier.height(16.dp))
@@ -253,7 +265,7 @@ private fun PinStatusCard(hasPinSet: Boolean) {
             Spacer(Modifier.height(8.dp))
             FText(
                 if (hasPinSet) "您的账户已启用 PIN 码保护" else "设置 PIN 码可以更好地保护您的账户安全",
-                14f, FontWeight.Normal, colors.textTertiary,
+                16f, FontWeight.Normal, colors.textTertiary,
                 Modifier.padding(bottom = 16.dp), // .status-info{ margin-bottom:16px }
             )
         }
@@ -264,13 +276,13 @@ private fun PinStatusCard(hasPinSet: Boolean) {
                 .align(Alignment.TopEnd)
                 .padding(top = 16.dp, end = 16.dp)
                 .clip(RoundedCornerShape(12.dp))
-                .background(if (hasPinSet) PIN_GREEN_BG else colors.bgThird)
+                .background(if (hasPinSet) vanGreenBg(PIN_GREEN_BG_LIGHT) else colors.bgThird)
                 .padding(horizontal = 12.dp, vertical = 4.dp),
         ) {
             FText(
                 if (hasPinSet) "已启用" else "已禁用",
                 12f, FontWeight.Medium,
-                if (hasPinSet) PIN_GREEN else colors.textTertiary,
+                if (hasPinSet) vanGreen() else colors.textTertiary,
             )
         }
     }
@@ -306,8 +318,8 @@ private fun PinOptCell(title: String, icon: String, onClick: () -> Unit) {
             color = colors.primary,
             modifier = Modifier.padding(end = 10.dp),
         )
-        FText(title, 14f, FontWeight.Normal, colors.textPrimary, Modifier.weight(1f))
-        VanIcon(name = "arrow", size = 16.sp, color = PIN_ARROW)
+        FText(title, 16f, FontWeight.Normal, colors.textPrimary, Modifier.weight(1f))
+        VanIcon(name = "arrow", size = 16.sp, color = VanGrayFixed)
     }
     Box(Modifier.fillMaxWidth().height(1.dp).background(colors.border))
 }

@@ -19,6 +19,11 @@ object TimeFmt {
         return SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date(ms))
     }
 
+    fun dateTimeSec(ts: String): String {
+        val ms = ts.toLongOrNull() ?: return ts.take(19)
+        return SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date(ms))
+    }
+
     fun date(ts: String): String {
         val ms = ts.toLongOrNull() ?: return ts.take(10)
         return SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(ms))

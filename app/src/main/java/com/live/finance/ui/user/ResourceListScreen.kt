@@ -49,9 +49,13 @@ import androidx.navigation.NavHostController
 import com.live.finance.App
 import com.live.finance.core.AppConfig
 import com.live.finance.core.net.ApiResult
+import com.live.finance.core.net.failMessage
 import com.live.finance.data.model.Resource
 import com.live.finance.data.repo.DeleteOutcome
 import com.live.finance.theme.LocalAppColors
+import com.live.finance.theme.scaledSp
+import com.live.vant.basic.VanEmpty
+import com.live.finance.theme.VanGrayFixed
 import com.live.finance.ui.common.AppDialogShell
 import com.live.finance.ui.common.ScreenScaffold
 import com.live.finance.ui.common.compressUriToJpeg
@@ -75,6 +79,8 @@ import com.live.vant.icon.VanIcon
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.live.finance.core.net.showFail
+import com.live.vant.feedback.VanToastType
 
 /** web 的「上传到 X」映射表（**逐字对齐**：post=动态、product=商品、avatar=头像，其余=资源）。 */
 private fun typeDisplayName(type: String): String = when (type) {
@@ -150,7 +156,8 @@ fun ResourceListScreen(nav: NavHostController, type: String = "other") {
         loading = true
         rows = when (val r = repo.list(busType = type, limit = 100)) {
             is ApiResult.Ok -> r.data ?: emptyList()
-            else -> emptyList()
+            // web `loadResourceList` 的 catch → 「列表加载失败」
+            else -> { toast.showFail(r, "列表加载失败"); emptyList() }
         }
         loading = false
     }
@@ -166,10 +173,12 @@ fun ResourceListScreen(nav: NavHostController, type: String = "other") {
         val key = searchKey.trim()
         scope.launch {
             loading = true
-            rows = if (key.isEmpty()) {
-                (repo.list(busType = type, limit = 100) as? ApiResult.Ok)?.data ?: emptyList()
-            } else {
-                (repo.search(type = type, key = key, limit = 50) as? ApiResult.Ok)?.data ?: emptyList()
+            val res = if (key.isEmpty()) repo.list(busType = type, limit = 100)
+            else repo.search(type = type, key = key, limit = 50)
+            rows = when (res) {
+                is ApiResult.Ok -> res.data ?: emptyList()
+                // web `loadSearchResult` 的 catch → 「搜索失败」
+                else -> { toast.showFail(res, "搜索失败"); emptyList() }
             }
             loading = false
         }
@@ -178,6 +187,8 @@ fun ResourceListScreen(nav: NavHostController, type: String = "other") {
     fun submitUpload() {
         if (picked.isEmpty()) return
         uploading = true
+        // web `handleSubmit`：压缩前先提示（原 web 是 showToast("正在压缩图片...")）
+        toast.show("正在压缩图片...")
         val remark = uploadRemark.trim()
         val tags = uploadTags.toList()
         scope.launch {
@@ -190,12 +201,12 @@ fun ResourceListScreen(nav: NavHostController, type: String = "other") {
             }
             uploading = false
             if (failed == 0) {
-                toast.show("上传成功")
+                toast.show("上传成功", VanToastType.Success)
                 uploadRemark = ""; uploadTags = emptyList(); tagInput = ""; picked = emptyList()
                 showUpload = false
                 reloadKey++
             } else {
-                toast.show("上传失败")
+                toast.show("上传失败", VanToastType.Fail)
             }
         }
     }
@@ -203,9 +214,9 @@ fun ResourceListScreen(nav: NavHostController, type: String = "other") {
     fun submitEdit() {
         scope.launch {
             when (val r = repo.update(editId, editRemark, editTags)) {
-                is ApiResult.Ok -> { toast.show("更新成功"); showEdit = false; reloadKey++ }
-                is ApiResult.Fail -> toast.show(r.message.ifBlank { "更新失败" })
-                else -> toast.show("更新失败")
+                is ApiResult.Ok -> { toast.show("更新成功", VanToastType.Success); showEdit = false; reloadKey++ }
+                is ApiResult.Fail -> toast.show(r.message.ifBlank { "更新失败" }, VanToastType.Fail)
+                else -> toast.showFail(r, "更新失败")
             }
         }
     }
@@ -214,7 +225,7 @@ fun ResourceListScreen(nav: NavHostController, type: String = "other") {
         scope.launch {
             when (val outcome = repo.batchDelete(selected)) {
                 is DeleteOutcome.Ok -> {
-                    toast.show("批量删除成功")
+                    toast.show("批量删除成功", VanToastType.Success)
                     selected = emptyList()
                     // web：PIN 验证后重发可能尚未完成，延迟 600ms 再刷新
                     kotlinx.coroutines.delay(600)
@@ -301,9 +312,8 @@ fun ResourceListScreen(nav: NavHostController, type: String = "other") {
 
         // 空态
         if (!loading && rows.isEmpty()) {
-            Box(Modifier.fillMaxSize().padding(top = 120.dp), contentAlignment = Alignment.TopCenter) {
-                FText("暂无资源", 14f, FontWeight.Normal, colors.textTertiary)
-            }
+            // web `ResourceList.vue:83`：`<van-empty description="暂无资源" image="search" />`
+            VanEmpty(description = "暂无资源", image = "search")
         }
         // 加载遮罩（web van-overlay + 加载中）
         if (loading) {
@@ -311,7 +321,7 @@ fun ResourceListScreen(nav: NavHostController, type: String = "other") {
                 contentAlignment = Alignment.Center,
                 modifier = Modifier.fillMaxSize().background(Color(0x40000000)),
             ) {
-                FText("加载中...", 14f, FontWeight.Normal, Color.White)
+                FText("加载中...", 16f, FontWeight.Normal, Color.White)
             }
         }
     }
@@ -331,7 +341,7 @@ fun ResourceListScreen(nav: NavHostController, type: String = "other") {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 modifier = Modifier.fillMaxWidth().padding(bottom = 20.dp),
             ) {
-                FText("上传到 ${typeDisplayName(type)}", 15f, FontWeight.Bold, colors.textPrimary)
+                FText("上传到 ${typeDisplayName(type)}", 16f, FontWeight.Bold, colors.textPrimary)
                 VanIcon(name = "cross", size = 18.sp, color = colors.textTertiary, onClick = { showUpload = false })
             }
 
@@ -346,9 +356,9 @@ fun ResourceListScreen(nav: NavHostController, type: String = "other") {
                     .clickable { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    VanIcon(name = "photograph", size = 40.sp, color = Color(0xFF969799))
+                    VanIcon(name = "photograph", size = 40.sp, color = VanGrayFixed)
                     Spacer(Modifier.height(6.dp))
-                    FText("点击或拖拽上传", 13f, FontWeight.Normal, colors.textTertiary)
+                    FText("点击或拖拽上传", 14f, FontWeight.Normal, colors.textTertiary)
                 }
             }
 
@@ -557,9 +567,9 @@ private fun ResourceCard(
                 onClick = onPreview,
             )
             Column(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp)) {
-                FText(formatName(item.fileName), 13f, FontWeight.Normal, colors.textPrimary)
+                FText(formatName(item.fileName), 14f, FontWeight.Normal, colors.textPrimary)
                 Spacer(Modifier.height(2.dp))
-                FText(formatSize(item.fileSize), 11f, FontWeight.Normal, colors.textTertiary)
+                FText(formatSize(item.fileSize), 12f, FontWeight.Normal, colors.textTertiary)
                 if (item.remark.isNotBlank()) {
                     Spacer(Modifier.height(4.dp))
                     // `.resource-remark{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap }`
@@ -567,7 +577,7 @@ private fun ResourceCard(
                         item.remark,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        style = TextStyle(color = colors.textSecondary, fontSize = 12.sp),
+                        style = TextStyle(color = colors.textSecondary, fontSize = scaledSp(12f)),
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
@@ -649,17 +659,17 @@ private fun AppFieldBox(
             .background(colors.bgCard)
             .padding(horizontal = 16.dp, vertical = 10.dp),
     ) {
-        FText(label, 13f, FontWeight.Normal, colors.textSecondary, Modifier.padding(bottom = 6.dp))
+        FText(label, 14f, FontWeight.Normal, colors.textSecondary, Modifier.padding(bottom = 6.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.weight(1f)) {
                 if (value.isEmpty()) {
-                    FText(placeholder, 14f, FontWeight.Normal, colors.textTertiary, Modifier.padding(vertical = 2.dp))
+                    FText(placeholder, 16f, FontWeight.Normal, colors.textTertiary, Modifier.padding(vertical = 2.dp))
                 }
                 BasicTextField(
                     value = value,
                     onValueChange = { onValueChange(it.take(maxlength)) },
                     singleLine = true,
-                    textStyle = TextStyle(color = colors.textPrimary, fontSize = 14.sp, lineHeight = 21.sp),
+                    textStyle = TextStyle(color = colors.textPrimary, fontSize = scaledSp(16f), lineHeight = scaledSp(21f)),
                     cursorBrush = SolidColor(colors.primary),
                     modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
                 )

@@ -1,6 +1,5 @@
 package com.live.finance.ui.bankcard
 
-import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,10 +23,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import com.live.finance.App
 import com.live.finance.core.net.ApiResult
+import com.live.finance.core.net.failMessage
+import com.live.finance.core.net.failToastType
 import com.live.finance.core.nav.Routes
 import com.live.finance.data.model.Bill
 import com.live.finance.theme.LocalAppColors
@@ -38,10 +41,14 @@ import com.live.finance.ui.common.Money
 import com.live.finance.ui.common.ScreenScaffold
 import com.live.finance.ui.flow.FText
 import com.live.vant.basic.VanLoading
+import com.live.vant.basic.VanOverlay
+import com.live.vant.basic.VanSkeleton
 import com.live.vant.basic.VanTag
 import com.live.vant.basic.VanTagType
 import com.live.vant.feedback.VanConfirmDialog
 import kotlinx.coroutines.launch
+import com.live.vant.feedback.LocalVanToastController
+import com.live.vant.feedback.VanToastType
 
 /**
  * 信用卡账单详情 —— 一比一复刻 web `views/BankCard/bill/Detail.vue`。
@@ -60,15 +67,17 @@ fun BillDetailScreen(nav: NavHostController, billId: String = "") {
     var bill by remember { mutableStateOf<Bill?>(null) }
     var loading by remember { mutableStateOf(true) }
     var showDelete by remember { mutableStateOf(false) }
+    // 删除互斥：web 删除前 showLoadingToast({forbidClick:true})，原生用早退挡住重复点击
+    var deleting by remember { mutableStateOf(false) }
 
-    fun toast(m: String) = Toast.makeText(context, m, Toast.LENGTH_SHORT).show()
-
+    val vanToast = LocalVanToastController.current
+    fun toast(m: String, type: VanToastType = VanToastType.Text) = vanToast.show(m, type)
     fun load() {
         scope.launch {
             loading = true
             when (val r = graph.bill.detail(billId)) {
                 is ApiResult.Ok -> bill = r.data
-                is ApiResult.Fail -> toast(r.message.ifBlank { "加载失败" })
+                is ApiResult.Fail -> toast(r.message.ifBlank { "加载失败" }, VanToastType.Fail)
                 else -> Unit
             }
             loading = false
@@ -88,10 +97,13 @@ fun BillDetailScreen(nav: NavHostController, billId: String = "") {
     Box(Modifier.fillMaxSize().background(colors.bgPage)) {
         ScreenScaffold { inner ->
             if (loading) {
-                Box(Modifier.fillMaxSize().then(inner), contentAlignment = Alignment.Center) { VanLoading() }
+                // web 的 loading 是**骨架屏** `<van-skeleton title :row="10" />`（不是单纯一个转圈），
+                //   上层再盖 `van-overlay` + 转圈（见下方 ScreenScaffold 之后那一段）。
+                Box(Modifier.fillMaxSize().then(inner)) {
+                    VanSkeleton(loading = true, row = 10, title = true) { }
+                }
             } else if (b != null) {
                 Column(Modifier.fillMaxSize().then(inner)) {
-                    BankTopBar(title = "信用卡账单详情", onBack = { nav.popBackStack() })
                     Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
                         // 卡片信息
                         DetailSection("卡片信息") {
@@ -108,10 +120,14 @@ fun BillDetailScreen(nav: NavHostController, billId: String = "") {
                         }
                         // 账单金额
                         DetailSection("账单金额") {
-                            AppCell(title = "本期账单", value = "¥${Money.formatMoney(b.billAmount)}")
+                            // web `.amount-highlight{ font-weight:600; color: text-primary }`
+                            AppCell(title = "本期账单", value = "¥${Money.formatMoney(b.billAmount)}",
+                                valueColor = colors.textPrimary, valueWeight = FontWeight.SemiBold)
                             AppCell(title = "最低还款", value = "¥${Money.formatMoney(b.minRepay)}")
                             AppCell(title = "已还金额", value = "¥${Money.formatMoney(b.repaid)}")
-                            AppCell(title = "待还金额", value = "¥${Money.formatMoney(b.needRepay)}", valueColor = colors.danger, border = false)
+                            // web `.amount-warning{ font-weight:600; color: var(--van-danger-color,#ee0a24) }`
+                            AppCell(title = "待还金额", value = "¥${Money.formatMoney(b.needRepay)}",
+                                valueColor = colors.danger, valueWeight = FontWeight.SemiBold, border = false)
                         }
                         // 附加信息
                         if (b.tempLimit != 0.0 || b.points != 0.0) {
@@ -132,7 +148,9 @@ fun BillDetailScreen(nav: NavHostController, billId: String = "") {
                             )
                         }
                         // 操作按钮
-                        Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 0.dp, bottom = 0.dp)) {
+                        // web `.action-section{ padding: 24px 16px; flex-direction:column; gap:12px }`
+                        //   —— 上下各 24、按钮间 12（旧实现缺底部 24）
+                        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
                             Spacer(Modifier.height(24.dp))
                             AppButton(
                                 text = "查看流水明细", onClick = { nav.navigate("${Routes.BILL_LEDGER}?id=${b.id}") },
@@ -150,10 +168,20 @@ fun BillDetailScreen(nav: NavHostController, billId: String = "") {
                                     type = AppButtonType.Danger, plain = true, block = true, round = true,
                                 )
                             }
+                            Spacer(Modifier.height(24.dp)) // .action-section 的下内边距
                         }
-                        Spacer(Modifier.height(40.dp))
+                        Spacer(Modifier.height(40.dp)) // .page-bill-detail{ padding-bottom: 40px }
                     }
                 }
+            }
+        }
+
+        // web `van-overlay :show="loading" z-index=2000` + `van-loading size=36px vertical color=#fff`
+        //   （与账单列表页同一套：遮罩 + 转圈作为兄弟节点叠在最上层）
+        VanOverlay(show = loading)
+        if (loading) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                VanLoading(size = 36.sp, vertical = true, color = Color.White, text = "加载中...")
             }
         }
 
@@ -163,13 +191,15 @@ fun BillDetailScreen(nav: NavHostController, billId: String = "") {
             message = "确定要删除这条账单吗？",
             onConfirm = {
                 showDelete = false
+                if (deleting) return@VanConfirmDialog
+                deleting = true
                 scope.launch {
                     when (val r = graph.bill.delete(billId)) {
-                        is ApiResult.Ok -> { toast("删除成功"); nav.popBackStack() }
-                        is ApiResult.Fail -> toast(r.message.ifBlank { "删除失败" })
-                        else -> toast("删除失败")
+                        is ApiResult.Ok -> { toast("删除成功", VanToastType.Success); nav.popBackStack() }
+                        is ApiResult.Fail -> toast(r.message.ifBlank { "删除失败" }, VanToastType.Fail)
+                        else -> toast(r.failMessage("删除失败"), r.failToastType())
                     }
-                }
+                }.invokeOnCompletion { deleting = false }
             },
             onCancel = { showDelete = false },
             onClose = { showDelete = false },
@@ -181,8 +211,10 @@ fun BillDetailScreen(nav: NavHostController, billId: String = "") {
 @Composable
 fun DetailSection(title: String, content: @Composable () -> Unit) {
     val colors = LocalAppColors.current
+    // web `.bill-content{ padding: 12px 0 }` + `.section-title{ padding: 16px 16px 8px }`
+    //   ⇒ 标题上方共 **28dp**（旧实现是 12 + 4 = 16，少了 12）。本件被 BillDetail / RepayDetail 共用。
     Column(Modifier.fillMaxWidth().padding(top = 12.dp)) {
-        FText(title, 14f, color = colors.textTertiary, modifier = Modifier.padding(start = 16.dp, top = 4.dp, bottom = 8.dp))
+        FText(title, 16f, color = colors.textTertiary, modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp))
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).clip(RoundedCornerShape(8.dp)).background(colors.bgCard)) {
             content()
         }
@@ -199,7 +231,7 @@ private fun TagCell(title: String, tagText: String, tagType: VanTagType, border:
         Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        FText(title, 14f, color = colors.textPrimary, modifier = Modifier.weight(1f))
+        FText(title, 16f, color = colors.textPrimary, modifier = Modifier.weight(1f))
         VanTag(text = tagText, type = tagType)
     }
     if (border) {

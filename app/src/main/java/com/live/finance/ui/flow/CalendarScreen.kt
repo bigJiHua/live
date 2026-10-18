@@ -3,8 +3,10 @@ package com.live.finance.ui.flow
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,6 +15,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -22,7 +27,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -37,7 +41,6 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
@@ -48,7 +51,11 @@ import com.live.finance.data.model.Card
 import com.live.finance.data.model.Category
 import com.live.finance.data.model.FlowRow
 import com.live.finance.theme.LocalAppColors
+import com.live.finance.theme.vanBlue
+import com.live.finance.theme.vanBlueBg
+import com.live.finance.theme.vanGreen
 import com.live.finance.theme.LocalAppTokens
+import com.live.finance.theme.scaledSp
 import com.live.finance.ui.common.AppButton
 import com.live.finance.ui.common.AppButtonSize
 import com.live.finance.ui.common.AppButtonType
@@ -74,13 +81,18 @@ import com.live.vant.form.VanPickerOption
 import com.live.vant.icon.VanIcon
 import java.time.LocalDate
 import kotlin.math.abs
-import kotlinx.coroutines.launch
 
-/** web `--van-green`（buildVars 不覆盖，两模式同值）。 */
-private val GreenFixed = Color(0xFF07C160)
-
-/** web `--van-blue`（同上）。 */
-private val BlueFixed = Color(0xFF1989FA)
+/**
+ * ⚠ 这里先后按两种**相反**的错误判据实现过，2026-09-18 才定案，判据见 `theme/VanPalette.kt`：
+ *
+ * - 第一版写死 #07c160 / #1989fa（两模式都不跟主题）—— 深色错。
+ * - 第二版改成两模式都 `colors.success` / `colors.primary` —— 浅色错。
+ *
+ * 真相：`--van-green` / `--van-blue` **只写在 `[data-theme-mode="dark"]` 块里**
+ * （style.css:149-173），浅色模式下变量**根本不存在**，`var(--van-green, #07c160)` 走的是行内
+ * fallback。所以正确实现是「**浅色 #07c160 / 深色 --theme-success**」= `vanGreen()`，
+ * `vanBlue()` 同理。
+ */
 
 /**
  * 每日流水（日历）—— 一比一复刻 web `views/Finance/flow/Calendar.vue`。
@@ -102,12 +114,7 @@ private val BlueFixed = Color(0xFF1989FA)
 fun CalendarScreen(nav: NavHostController, initYear: Int = 0, initMonth: Int = 0) {
     val colors = LocalAppColors.current
     val tokens = LocalAppTokens.current
-    // web `--van-green`/`--van-blue`：浅色取 Vant 默认（#07c160/#1989fa），**深色**被 style.css 重定向到
-    // `--theme-success` / `--theme-primary`（与页头箭头同款规则）
-    val green = if (tokens.isDark) colors.success else GreenFixed
-    val blue = if (tokens.isDark) colors.primary else BlueFixed
     val graph = App.of(LocalContext.current).graph
-    val scope = rememberCoroutineScope()
     val today = remember { LocalDate.now() }
 
     // web 该页在 keep-alive 名单（FinanceFlowCalendar）→ 返回要保留月份/选中日
@@ -233,11 +240,13 @@ fun CalendarScreen(nav: NavHostController, initYear: Int = 0, initMonth: Int = 0
                             onSelect = { selected = it },
                             onGoToday = {
                                 val now = LocalDate.now()
-                                val sameMonth = year == now.year && month == now.monthValue
                                 year = now.year
                                 month = now.monthValue
                                 selected = now.toString()
-                                if (!sameMonth) scope.launch { load() }   // web：仅跨月才重拉
+                                // ⚠ 不要在这里手动 load()：改了 year/month，LaunchedEffect(year, month)
+                                //   必然重启并自己拉一次 ⇒ 两边都拉 = 同一份数据并发请求两次
+                                //   （web `goToday` 也只调一次 loadMonthData）。
+                                //   已经在本月时 LaunchedEffect 不会重启 ⇒ 一次请求都不发，只定位选中日。
                             },
                             variant = CalendarVariant.Flow,
                             collapsible = true,
@@ -312,9 +321,7 @@ private fun DayDetailCard(
     nav: NavHostController,
 ) {
     val colors = LocalAppColors.current
-    val tokens = LocalAppTokens.current
-    val green = if (tokens.isDark) colors.success else GreenFixed
-    val blue = if (tokens.isDark) colors.primary else BlueFixed
+    val green = vanGreen()
     Column(
         Modifier
             .fillMaxWidth()
@@ -331,9 +338,9 @@ private fun DayDetailCard(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            FText(formatDetailDate(selected), 15f, FontWeight.SemiBold, colors.textPrimary)
+            FText(formatDetailDate(selected), 16f, FontWeight.SemiBold, colors.textPrimary)
             FText(
-                signAmount(dayBalance), 14f, FontWeight.SemiBold,
+                signAmount(dayBalance), 16f, FontWeight.SemiBold,
                 if (dayBalance >= 0) MoneyColor.income else MoneyColor.expense,
             )
         }
@@ -385,7 +392,7 @@ private fun PairedSection(
                 title,
                 style = TextStyle(
                     color = lineColor ?: tokens.primary,
-                    fontSize = 12.sp,
+                    fontSize = scaledSp(12f),
                     fontWeight = FontWeight.Medium,
                     letterSpacing = 2.sp,
                 ),
@@ -412,12 +419,13 @@ private fun PairedMiniCard(
 ) {
     val colors = LocalAppColors.current
     val tokens = LocalAppTokens.current
-    val green = if (tokens.isDark) colors.success else GreenFixed
-    val blue = if (tokens.isDark) colors.primary else BlueFixed
+    val green = vanGreen()
+    val blue = vanBlue()
     val expense = item.expense ?: return
     val income = item.income ?: return
     // 三套配色（web `.transfer-row` / `.withdrawal-row` / `.reversal-row`）：
-    // 转账=蓝色虚线 + #f0f7ff 底；提现=绿色实线 + rgba(7,193,96,.06) 底；冲正=灰色虚线 + 三级底 + opacity .72
+    // 转账=`var(--van-blue, #1989fa)` 虚线 + `var(--van-blue-bg, #f0f7ff)` 底；
+    // 提现=绿色实线 + rgba(7,193,96,.06) 底；冲正=灰色虚线 + 三级底 + opacity .72
     val bgColor: Color
     val bdColor: Color
     var isDashed = true
@@ -434,7 +442,7 @@ private fun PairedMiniCard(
             lblColor = colors.textTertiary; bkColor = colors.textTertiary; a = 0.72f
         }
         else -> {
-            bgColor = Color(0xFFF0F7FF); bdColor = blue; isDashed = true
+            bgColor = vanBlueBg(Color(0xFFF0F7FF)); bdColor = blue; isDashed = true
             lblColor = tokens.primary; bkColor = colors.textSecondary; a = 1f
         }
     }
@@ -450,25 +458,50 @@ private fun PairedMiniCard(
             .padding(horizontal = 8.dp, vertical = 6.dp),
     ) {
         Row(Modifier.fillMaxWidth().padding(bottom = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            FText(flowTime(expense.createTime), 10f, FontWeight.Normal, colors.textTertiary)
+            FText(flowTime(expense.createTime), 12f, FontWeight.Normal, colors.textTertiary)
             FText(
                 when (item.kind) {
                     FlowKind.Withdrawal -> "提现"
                     FlowKind.Reversal -> "冲正"
                     else -> "转账"
                 },
-                11f, FontWeight.SemiBold, lblColor,
+                12f, FontWeight.SemiBold, lblColor,
             )
-            FText(flowTime(income.createTime), 10f, FontWeight.Normal, colors.textTertiary)
+            FText(flowTime(income.createTime), 12f, FontWeight.Normal, colors.textTertiary)
         }
         Row(Modifier.fillMaxWidth().padding(bottom = 2.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            FText("-" + Money.abbrev(expense.amount), 16f, FontWeight.Bold, if (item.kind == FlowKind.Reversal) colors.textTertiary else MoneyColor.expense)
-            FText("→", 16f, FontWeight.Bold, lblColor)
-            FText("+" + Money.abbrev(income.amount), 16f, FontWeight.Bold, if (item.kind == FlowKind.Reversal) colors.textTertiary else MoneyColor.income)
+            // ⚠ 转账 / 提现 / 冲正的金额**独立用 16f**，不跟随 §7.9 阶梯（web `.tf-amount` 本来就是 16px，
+            //   按阶梯该提成 18f）。原因是这张卡只有**半屏宽**（`PairedMiniCard` 带 `weight(1f)` 并排），
+            //   18f 时 `-1500.00 → +1500.00` 总宽超出栏宽 ⇒ 右侧 `+1500.00` 会被断成两行（真机反馈）。
+            //   16f 下三段总宽 ≈ 149dp，刚好落在栏宽内。**其余地方的金额（如流水条目的 18f）不受影响。**
+            //   `maxLines = 1` 是兜底：数字中间断行在 web 上不会发生（浏览器不在数字间换行），Compose 会。
+            FText(
+                "-" + Money.abbrev(expense.amount), 16f, FontWeight.Bold,
+                if (item.kind == FlowKind.Reversal) colors.textTertiary else MoneyColor.expense,
+                maxLines = 1,
+            )
+            FText("→", 16f, FontWeight.Bold, lblColor, maxLines = 1)
+            FText(
+                "+" + Money.abbrev(income.amount), 16f, FontWeight.Bold,
+                if (item.kind == FlowKind.Reversal) colors.textTertiary else MoneyColor.income,
+                maxLines = 1,
+            )
         }
+        // web `.tf-line3` / `.wd-line3` / `.rv-line3`：两端各一个 `.xx-bank`，
+        //   `max-width:45%` + `nowrap` + `overflow-x:auto` ⇒ 超宽银行名横向滑动查看。
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            FText(flowCompactBankLabel(expense, cards, banks), 10f, FontWeight.Normal, bkColor, Modifier.weight(1f, fill = false))
-            FText(flowCompactBankLabel(income, cards, banks), 10f, FontWeight.Normal, bkColor, Modifier.weight(1f, fill = false))
+            ScrollableBankLabel(
+                flowCompactBankLabel(expense, cards, banks),
+                bkColor,
+                Modifier.fillMaxWidth(0.45f),
+                alignEnd = false,
+            )
+            ScrollableBankLabel(
+                flowCompactBankLabel(income, cards, banks),
+                bkColor,
+                Modifier.fillMaxWidth(0.45f),
+                alignEnd = false,
+            )
         }
     }
 }
@@ -497,7 +530,7 @@ private fun DayColumn(
         }
         if (items.isEmpty()) {
             Box(Modifier.fillMaxWidth().padding(vertical = 16.dp), contentAlignment = Alignment.Center) {
-                FText("-", 13f, FontWeight.Normal, colors.textTertiary)
+                FText("-", 14f, FontWeight.Normal, colors.textTertiary)
             }
         } else {
             Column(Modifier.fillMaxWidth()) {
@@ -541,19 +574,21 @@ private fun DayColumnItem(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 FText(flowCategoryName(row), 12f, FontWeight.Normal, colors.textPrimary)
                 if (cardType.isNotEmpty()) {
-                    FText(cardType, 9f, FontWeight.Normal, colors.textTertiary, Modifier.padding(start = 2.dp))
+                    FText(cardType, 12f, FontWeight.Normal, colors.textTertiary, Modifier.padding(start = 2.dp))
                 }
             }
-            FText(flowTime(row.createTime), 10f, FontWeight.Normal, colors.textTertiary)
+            FText(flowTime(row.createTime), 12f, FontWeight.Normal, colors.textTertiary)
         }
         val amtColor = if (dim) colors.textTertiary else if (row.isIncome) MoneyColor.income else MoneyColor.expense
         if (wrapAmount) {
             // web `.fi-line2-wrap`：金额占一行，银行标签整行右对齐
             Column(Modifier.fillMaxWidth()) {
-                FText((if (row.isIncome) "+" else "-") + amount, 17f, FontWeight.SemiBold, amtColor)
-                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
-                    FText(flowCompactBankLabel(row, cards, banks), 10f, FontWeight.Normal, colors.textSecondary)
-                }
+                FText((if (row.isIncome) "+" else "-") + amount, 18f, FontWeight.SemiBold, amtColor)
+                ScrollableBankLabel(
+                    flowCompactBankLabel(row, cards, banks),
+                    colors.textSecondary,
+                    Modifier.fillMaxWidth(),
+                )
             }
         } else {
             Row(
@@ -561,17 +596,52 @@ private fun DayColumnItem(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Bottom,
             ) {
-                FText((if (row.isIncome) "+" else "-") + amount, 17f, FontWeight.SemiBold, amtColor)
-                // web `.fi-bank`：10px、右对齐、超宽横向可滑 → 这里用单行省略（等价观感）
-                Box(Modifier.weight(1f).padding(start = 4.dp), contentAlignment = Alignment.CenterEnd) {
-                    BasicText(
-                        flowCompactBankLabel(row, cards, banks),
-                        style = TextStyle(color = colors.textSecondary, fontSize = 10.sp),
-                        maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    )
-                }
+                FText((if (row.isIncome) "+" else "-") + amount, 18f, FontWeight.SemiBold, amtColor)
+                // web `.fi-bank`：10px、右对齐、`nowrap` + `overflow-x:auto`（隐藏滚动条）
+                //   ⇒ 银行名超宽时**横向滑动查看**，不再裁成省略号。
+                ScrollableBankLabel(
+                    flowCompactBankLabel(row, cards, banks),
+                    colors.textSecondary,
+                    Modifier.weight(1f).padding(start = 4.dp),
+                )
             }
         }
+    }
+}
+
+/**
+ * web `.fi-bank` / `.tf-bank` / `.wd-bank` / `.rv-bank` 的等价实现。
+ *
+ * web 这几个 class 都是 `white-space: nowrap` + `overflow-x: auto`（并隐藏滚动条）
+ * ⇒ **银行名超宽时横向滑动查看，而不是裁成省略号**。
+ *
+ * ⚠ Compose 里两个容易写错的点：
+ * 1. `horizontalScroll` 会拿**父约束的 maxWidth 当视口**、并用**无界宽度**测量内容
+ *    ⇒ 外层必须给出确定宽度（`Modifier.weight(1f)` / `fillMaxWidth(0.45f)`），否则内容宽会变成 Infinity。
+ * 2. `widthIn(min = 视口宽)` + `wrapContentWidth(Alignment.End)` 是为了复刻 web 的 `text-align: right`：
+ *    短文本要撑满容器才谈得上靠右；超宽文本则自然变宽、从左侧起可滑。
+ */
+@Composable
+private fun ScrollableBankLabel(
+    text: String,
+    color: Color,
+    modifier: Modifier = Modifier,
+    alignEnd: Boolean = true,
+) {
+    BoxWithConstraints(modifier) {
+        val viewport = maxWidth
+        BasicText(
+            text,
+            modifier = Modifier
+                .horizontalScroll(rememberScrollState())
+                .then(
+                    if (alignEnd) Modifier.widthIn(min = viewport).wrapContentWidth(Alignment.End)
+                    else Modifier,
+                ),
+            style = TextStyle(color = color, fontSize = scaledSp(12f)),
+            maxLines = 1,
+            softWrap = false,
+        )
     }
 }
 

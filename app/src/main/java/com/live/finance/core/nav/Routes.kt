@@ -11,6 +11,12 @@ object Routes {
     const val ERROR_429 = "error429"
     const val DIARY_SHARE = "share/diary/detail"
 
+    /**
+     * 公开分享页路径 —— web 是 `/share/diary/detail?token=…`（token 模式）或 `?id=…`（密码模式），
+     * 两种模式二选一，未用的一方填空串（注册时给 `defaultValue = ""`）。
+     */
+    fun diaryShare(token: String = "", id: String = ""): String = "$DIARY_SHARE?token=$token&id=$id"
+
     // 主外壳（底部 Tabbar）内的顶层 Tab
     const val MAIN = "main"
     const val TAB_HOME = "home"
@@ -52,6 +58,13 @@ object Routes {
     const val REPORT_CATEGORY_RATIO = "finance/report/category-ratio"
     const val REPORT_MONTHLY_TREND = "finance/report/monthly-trend"
     const val REPORT_CARD_FLOW = "finance/report/card-flow"
+    /**
+     * 卡收支流水。web 的 URL 就是 `/finance/report/card-flow?cardId=&year=&month=`
+     * （`CardFlow.vue:177-178` 用 `Number(route.query.year) || now.year()` 初始化月份），
+     * 所以三个参数都可省：传 0 / 空串即"本月 + 未选卡"。
+     */
+    fun cardFlow(cardId: String = "", year: Int = 0, month: Int = 0): String =
+        "$REPORT_CARD_FLOW?cardId=$cardId&year=$year&month=$month"
     const val REPORT_TRANSFER_LIST = "finance/report/transfer-list"
     const val REPORT_DEBT_OVERVIEW = "finance/report/debt-overview"
     const val FUND = "finance/report/fund"
@@ -86,6 +99,9 @@ object Routes {
     const val CARD_EDIT = "card/edit"
     const val CARD_EDIT_PAT = "card/edit/{id}"
     fun cardEdit(id: String) = "card/edit/$id"
+    /** web 的「卡片流水」`BankCard/card/flow/List.vue`（路由名 `CardFlow`）。
+     * ⚠ 该页在 **web 自身就是死页面**：全仓 grep 无任何入口跳它（`Structure.vue` 与 `debit.vue`
+     * 两个「查看消费明细」都跳 `finance/report/card-flow`）。故原生**有意不注册**，不要为「对齐路由表」去补。 */
     const val CARD_FLOW = "card/flow"
     const val CREDIT_CENTER = "credit-center"
     const val CREDIT_INSTALLMENT = "credit-center/installment"

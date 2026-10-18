@@ -1,5 +1,6 @@
 package com.live.vant.feedback
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -57,6 +58,13 @@ fun VanPopup(
     content: @Composable BoxScope.() -> Unit,
 ) {
     if (!show) return
+    // ⚠ **返回键必须能关掉弹层**（2026-09-19 真机反馈「按返回无效」）。
+    //   Comopse 的 `Dialog` 虽然自身处理返回，但：① 它的 `onDismissRequest` 被我们按
+    //   `closeOnClickOverlay` 门控了（`closeOnClickOverlay=false` 时返回同样失效）；
+    //   ② 弹层内还套着别的 `Dialog`（如日期选择器里的滚轮层）时，返回会被内层吃掉。
+    //   这里显式挂一个 `BackHandler`：返回键**一律**关闭当前弹层，与遮罩点击策略解耦。
+    BackHandler { onDismissRequest() }
+
     val c = LocalVantColors.current
     val bg = background ?: c.bgCard
 

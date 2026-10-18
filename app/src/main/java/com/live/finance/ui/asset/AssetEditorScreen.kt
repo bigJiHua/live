@@ -37,6 +37,7 @@ import androidx.navigation.NavHostController
 import com.live.finance.App
 import com.live.finance.core.nav.Routes
 import com.live.finance.core.net.ApiResult
+import com.live.finance.core.net.failMessage
 import com.live.finance.data.model.AssetDetails
 import com.live.finance.data.model.AssetItem
 import com.live.finance.data.model.AssetRegister
@@ -59,6 +60,8 @@ import com.live.vant.form.VanPickerOption
 import com.live.vant.icon.VanIcon
 import kotlinx.coroutines.launch
 import kotlin.math.roundToLong
+import com.live.finance.core.net.showFail
+import com.live.vant.feedback.VanToastType
 
 private enum class AssetKind(val prefix: String, val title: String) {
     BALANCE("bl", "境内资产"),
@@ -135,6 +138,12 @@ fun AssetEditorScreen(
 
     // ===== 预填（编辑 / 复制） =====
     LaunchedEffect(Unit) {
+        // web `initFromApi`：编辑页缺少记录 ID → 提示并返回
+        if (edit && recordId.isNullOrBlank()) {
+            toast.show("缺少记录ID")
+            nav.popBackStack()
+            return@LaunchedEffect
+        }
         val targetId = recordId ?: copyFromId ?: return@LaunchedEffect
         val r = (repo.detail(targetId) as? ApiResult.Ok)?.data
         if (r?.details != null) {
@@ -146,7 +155,7 @@ fun AssetEditorScreen(
                 if (rates.any { it.first == ccy }) setRate(ccy, v)
             }
         } else if (recordId != null) {
-            toast.show("加载数据失败")
+            toast.show("加载数据失败", VanToastType.Fail)
             nav.popBackStack()
             return@LaunchedEffect
         }
@@ -262,8 +271,8 @@ fun AssetEditorScreen(
                     popUpTo(Routes.MAIN) { inclusive = true }
                 }
                 is ApiResult.RateLimited -> nav.navigate(Routes.ERROR_429)
-                is ApiResult.Fail -> toast.show(r.message.ifEmpty { "保存失败" })
-                else -> toast.show("保存失败")
+                is ApiResult.Fail -> toast.show(r.message.ifEmpty { "保存失败" }, VanToastType.Fail)
+                else -> toast.showFail(r, "保存失败")
             }
         }
     }
@@ -332,7 +341,7 @@ fun AssetEditorScreen(
                         onDelete = { ccy ->
                             if (ccy == "HKD") { toast.show("HKD不可删除"); return@RateBlock }
                             if (offshore.any { it.currency == ccy && it.amount > 0 }) {
-                                toast.show("该汇率已被使用，无法删除"); return@RateBlock
+                                toast.show("该汇率已被使用，无法删除", VanToastType.Fail); return@RateBlock
                             }
                             rates.removeAll { it.first == ccy }
                         },
@@ -398,7 +407,7 @@ fun AssetEditorScreen(
 
         if (pageLoading) {
             Box(Modifier.fillMaxSize().background(pageBg), contentAlignment = Alignment.Center) {
-                FText("加载中…", 14f, color = colors.textTertiary)
+                FText("加载中…", 16f, color = colors.textTertiary)
             }
         }
     }
@@ -412,7 +421,7 @@ fun AssetEditorScreen(
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically) {
                     FText((if (editingId != null) "编辑" else "添加") + kind.title,
-                        17f, FontWeight.SemiBold, colors.textPrimary)
+                        18f, FontWeight.SemiBold, colors.textPrimary)
                     VanIcon("cross", size = 20.sp, color = colors.textTertiary,
                         modifier = Modifier.clickable { closePopup() })
                 }
@@ -422,6 +431,8 @@ fun AssetEditorScreen(
                         label = "自定义名称", placeholder = "选填")
                     TypeSelectRow(
                         label = if (kind == AssetKind.OFFSHORE) "账户类型" else "类型",
+                        // web：境内/境外类型 placeholder 都是「选择类型」，负债是「选择卡/账户」（Register.vue:359 / Edit.vue:347）
+                        placeholder = if (kind == AssetKind.DEBT) "选择卡/账户" else "选择类型",
                         value = when (kind) {
                             AssetKind.BALANCE -> AssetShared.balanceName(fType)
                             AssetKind.OFFSHORE -> AssetShared.offshoreName(fType)
@@ -442,8 +453,15 @@ fun AssetEditorScreen(
                         keyboardType = KeyboardType.Number,
                     )
                     if (kind == AssetKind.OFFSHORE) {
-                        AppField(value = AssetShared.offshoreCurrencyOf(fType), onValueChange = {},
-                            label = "币种", placeholder = "自动带出")
+                        // web `assets/Edit.vue:300`：该字段是 `disabled`（币种由类型自动带出）——
+                        // 旧实现只给了空 `onValueChange`，看着能编辑，点了会弹键盘却输入无效。故补 `disabled = true`。
+                        AppField(
+                            value = AssetShared.offshoreCurrencyOf(fType),
+                            onValueChange = {},
+                            label = "币种",
+                            placeholder = "自动带出",
+                            disabled = true,
+                        )
                     } else {
                         AppField(value = fRemark, onValueChange = { fRemark = it.take(50) },
                             label = "备注", placeholder = "选填")
@@ -524,7 +542,7 @@ fun AssetEditorScreen(
         VanPopup(show = true, onDismissRequest = { showAddRate = false },
             position = VanPopupPosition.Bottom, round = true) {
             Column(Modifier.fillMaxWidth().padding(20.dp)) {
-                FText("添加常用汇率", 17f, FontWeight.SemiBold, colors.textPrimary)
+                FText("添加常用汇率", 18f, FontWeight.SemiBold, colors.textPrimary)
                 Spacer(Modifier.height(20.dp))
                 AppField(value = newRateCode,
                     onValueChange = { newRateCode = AssetShared.filterCurrencyCode(it) },
@@ -618,7 +636,7 @@ private fun AssetSectionCard(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            FText(title, 16f, FontWeight.SemiBold, colors.textPrimary)
+            FText(title, 18f, FontWeight.SemiBold, colors.textPrimary)
             VanIcon("plus", size = if (edit) 20.sp else 19.sp, color = addColor,
                 modifier = Modifier.clickable { onAdd() })
         }
@@ -627,7 +645,7 @@ private fun AssetSectionCard(
         Column(Modifier.then(if (edit) Modifier.padding(horizontal = 16.dp) else Modifier.padding(16.dp))) {
             if (isEmpty) {
                 Box(Modifier.fillMaxWidth().padding(vertical = 20.dp), contentAlignment = Alignment.Center) {
-                    FText(emptyText, 13f, color = colors.textTertiary)
+                    FText(emptyText, 14f, color = colors.textTertiary)
                 }
             } else {
                 content()
@@ -640,8 +658,8 @@ private fun AssetSectionCard(
                 Box(Modifier.fillMaxWidth().height(1.dp).background(colors.border))
                 Row(Modifier.fillMaxWidth().padding(vertical = 12.dp),
                     horizontalArrangement = Arrangement.SpaceBetween) {
-                    FText(totalLeft, 14f, color = colors.textSecondary)
-                    FText(totalRight, 14f, FontWeight.SemiBold, totalRightColor)
+                    FText(totalLeft, 16f, color = colors.textSecondary)
+                    FText(totalRight, 16f, FontWeight.SemiBold, totalRightColor)
                 }
             }
         } else {
@@ -649,8 +667,8 @@ private fun AssetSectionCard(
                 Modifier.fillMaxWidth().background(colors.bgThird).padding(horizontal = 16.dp, vertical = 14.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                FText(totalLeft, 14f, FontWeight.Medium, colors.textSecondary)
-                FText(totalRight, 14f, FontWeight.Bold, totalRightColor)
+                FText(totalLeft, 16f, FontWeight.Medium, colors.textSecondary)
+                FText(totalRight, 16f, FontWeight.Bold, totalRightColor)
             }
         }
     }
@@ -680,7 +698,7 @@ private fun EditorItemRow(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                FText(name, 15f, FontWeight.Medium, colors.textPrimary)
+                FText(name, 16f, FontWeight.Medium, colors.textPrimary)
                 if (!remark.isNullOrEmpty() || !currencyLine.isNullOrEmpty()) {
                     Spacer(Modifier.height(if (edit) 4.dp else 3.dp))
                     Row {
@@ -695,7 +713,7 @@ private fun EditorItemRow(
                     }
                 }
             }
-            FText(amountText, 15f, FontWeight.SemiBold, amountColor)
+            FText(amountText, 16f, FontWeight.SemiBold, amountColor)
         }
         if (zeroWarn) {
             Spacer(Modifier.height(4.dp))
@@ -765,7 +783,7 @@ private fun RateCell(
     val colors = LocalAppColors.current
     Row(modifier, verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        FText(ccy, 13f, color = if (edit) colors.textPrimary else colors.textSecondary,
+        FText(ccy, 14f, color = if (edit) colors.textPrimary else colors.textSecondary,
             modifier = Modifier.width(40.dp))
         if (edit) {
             Box(Modifier.weight(1f)) {
@@ -780,7 +798,7 @@ private fun RateCell(
                     .padding(horizontal = 8.dp),
                 contentAlignment = Alignment.CenterEnd,
             ) {
-                FText(value.ifEmpty { "0.0000" }, 14f,
+                FText(value.ifEmpty { "0.0000" }, 16f,
                     color = if (value.isEmpty()) colors.textTertiary else colors.textPrimary)
             }
         }
@@ -792,17 +810,23 @@ private fun RateCell(
 }
 
 @Composable
-private fun TypeSelectRow(label: String, value: String, hasValue: Boolean, onClick: () -> Unit) {
+private fun TypeSelectRow(
+    label: String,
+    value: String,
+    hasValue: Boolean,
+    onClick: () -> Unit,
+    placeholder: String = "选择类型",
+) {
     val colors = LocalAppColors.current
     Column(
         Modifier.fillMaxWidth().background(colors.bgCard)
             .clickable { onClick() }
             .padding(horizontal = 16.dp, vertical = 10.dp),
     ) {
-        FText(label, 13f, color = colors.textSecondary)
+        FText(label, 14f, color = colors.textSecondary)
         Spacer(Modifier.height(6.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            FText(value.ifEmpty { "选择类型" }, 14f,
+            FText(value.ifEmpty { placeholder }, 16f,
                 color = if (hasValue) colors.textPrimary else colors.textTertiary,
                 modifier = Modifier.weight(1f))
             VanIcon("arrow", size = 14.sp, color = colors.textTertiary)

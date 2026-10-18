@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -54,9 +55,12 @@ import androidx.navigation.NavHostController
 import com.live.finance.App
 import com.live.finance.core.AppConfig
 import com.live.finance.core.net.ApiResult
+import com.live.finance.core.net.failMessage
 import com.live.finance.data.model.Category
 import com.live.finance.data.model.Resource
 import com.live.finance.theme.LocalAppColors
+import com.live.finance.theme.scaledSp
+import com.live.finance.theme.vanBlue
 import com.live.finance.ui.common.AppButton
 import com.live.finance.ui.common.AppButtonSize
 import com.live.finance.ui.common.AppButtonType
@@ -64,6 +68,7 @@ import com.live.finance.ui.common.ScreenScaffold
 import com.live.finance.ui.common.WebShadow
 import com.live.finance.ui.common.compressUriToJpeg
 import com.live.finance.ui.common.cssShadow
+import com.live.finance.ui.common.rememberBankIconRequest
 import com.live.finance.ui.flow.FText
 import com.live.vant.basic.VanEmpty
 import com.live.vant.basic.VanImage
@@ -78,6 +83,8 @@ import com.live.vant.nav.VanTabs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.live.finance.core.net.showFail
+import com.live.vant.feedback.VanToastType
 
 /** web `van-tabs` 的四个页签（`<van-tab title="支出" name="expense" />` …）。 */
 private val CATE_TABS = listOf(
@@ -86,6 +93,9 @@ private val CATE_TABS = listOf(
     VanTabItem("asset", "资产"),
     VanTabItem("fixed", "固定资产"),
 )
+
+/** 弹窗底部「取消 / 保存」的最小宽度 —— 用户要求（原来自然宽度太窄）。 */
+private val DIALOG_BTN_MIN_W = 96.dp
 
 /**
  * 分类管理 —— 一比一复刻 web `views/User/category/CategoryManage.vue`。
@@ -102,7 +112,11 @@ private val CATE_TABS = listOf(
  *  - 弹窗 `app-popup position=bottom round`（圆角 16）→ `.dialog-container{padding:20}`、标题 18/600 居中、
  *    `.dialog-form{bg-primary; radius:12; padding:8 0}`、`.dialog-actions{gap:12; margin-top:24}`
  *  - ⚠ `.dialog-actions .van-button{flex:1}` **对 `app-button` 不生效**（app-button 根类名是 `.app-btn`，
- *    不是 `.van-button`）→ 两个按钮是**自然宽度、左对齐**，不是等分满宽。此处按实际渲染复刻。
+ *    不是 `.van-button`）→ web 两个按钮是**自然宽度、左对齐**。
+ *    **本轮按用户要求偏离 web**：改为**右下角**排布 + 各给 96dp 最小宽度（`DIALOG_BTN_MIN_W`）。
+ *  - 用户要求：① `.icon-select-wrap` 的 1px 边框去掉；② `app-field` 加「输入区下划线」——
+ *    原实现那条 1px 线画在 `bgCard` **之外**、落在 `bgPage` 灰底上（`#EBEDF0` vs `#F7F8FA`）
+ *    ⇒ 实际看不见，现已挪进白卡内部、画在输入行正下方。
  *  - 图标选择弹窗：`height:70%`、`.icon-grid{repeat(4,1fr); gap:16}`、图标 48×48、选中描边 `--van-blue #1989fa`（Vant 调色板，非主题色）、
  *    选中打勾在右上角（`background:theme-primary` 圆形 + 10px 白勾）。
  */
@@ -146,8 +160,8 @@ fun CategoryManageScreen(nav: NavHostController, initialType: String = "expense"
         scope.launch {
             when (val r = graph.category.list(t)) {
                 is ApiResult.Ok -> cache[t] = r.data.orEmpty()
-                is ApiResult.Fail -> toast.show("加载失败")
-                else -> toast.show("加载失败")
+                // web `BankCategoryManage.loadCategories` → 「银行分类加载失败」；普通分类页 → 「加载失败」
+                else -> toast.show(if (t == "bank") "银行分类加载失败" else "加载失败")
             }
             loading = false
         }
@@ -180,7 +194,7 @@ fun CategoryManageScreen(nav: NavHostController, initialType: String = "expense"
                 return@launch
             }
             if (picked.bytes.size / 1024 / 1024 >= 2) {
-                toast.show("图片大小不能超过 2MB")
+                toast.show("图片大小不能超过 2MB", VanToastType.Fail)
                 uploading = false
                 return@launch
             }
@@ -188,14 +202,14 @@ fun CategoryManageScreen(nav: NavHostController, initialType: String = "expense"
                 is ApiResult.Ok -> {
                     val path = r.data.orEmpty()
                     if (path.isBlank()) {
-                        toast.show("上传失败")
+                        toast.show("上传失败", VanToastType.Fail)
                     } else {
                         iconUrl = path // web：新上传的图标自动选中
-                        toast.show("上传成功")
+                        toast.show("上传成功", VanToastType.Success)
                         loadIcons() // web 是把新行 unshift 进列表；原生重拉等价（且字段更全）
                     }
                 }
-                else -> toast.show("上传失败")
+                else -> toast.showFail(r, "上传失败")
             }
             uploading = false
         }
@@ -228,12 +242,12 @@ fun CategoryManageScreen(nav: NavHostController, initialType: String = "expense"
                             name = n, type = type, iconUrl = ic, remark = rm,
                         )
                         cache[type] = cache[type].orEmpty() + row
-                        toast.show("创建成功")
+                        toast.show("创建成功", VanToastType.Success)
                         closeForm()
                     }
                     is ApiResult.NeedPin -> toast.show("需先验证 PIN")
-                    is ApiResult.Fail -> toast.show("创建失败")
-                    else -> toast.show("创建失败")
+                    is ApiResult.Fail -> toast.show("创建失败", VanToastType.Fail)
+                    else -> toast.showFail(r, "创建失败")
                 }
             } else {
                 when (val r = graph.category.update(cur.id, n, rm, ic)) {
@@ -242,12 +256,12 @@ fun CategoryManageScreen(nav: NavHostController, initialType: String = "expense"
                         cache[type] = cache[type].orEmpty().map {
                             if (it.id == cur.id) it.copy(name = n, remark = rm, iconUrl = ic) else it
                         }
-                        toast.show("更新成功")
+                        toast.show("更新成功", VanToastType.Success)
                         closeForm()
                     }
                     is ApiResult.NeedPin -> toast.show("需先验证 PIN")
-                    is ApiResult.Fail -> toast.show("更新失败")
-                    else -> toast.show("更新失败")
+                    is ApiResult.Fail -> toast.show("更新失败", VanToastType.Fail)
+                    else -> toast.showFail(r, "更新失败")
                 }
             }
         }
@@ -331,16 +345,15 @@ fun CategoryManageScreen(nav: NavHostController, initialType: String = "expense"
                     maxlength = 20,
                     showWordLimit = true,
                 )
-                // .icon-select-wrap{padding:12 16; bg-secondary; border:1px border}
+                // .icon-select-wrap{padding:12 16; bg-secondary}（web 还有 border:1px border —— 按用户要求去掉）
                 Row(
                     Modifier
                         .fillMaxWidth()
                         .background(colors.bgCard)
-                        .border(1.dp, colors.border)
                         .padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    FText("选择图标", 14f, FontWeight.Normal, colors.textSecondary)
+                    FText("选择图标", 16f, FontWeight.Normal, colors.textSecondary)
                     Spacer(Modifier.weight(1f))
                     Box(Modifier.clickable { showPicker = true }) {
                         if (iconUrl.isNotBlank()) {
@@ -372,10 +385,11 @@ fun CategoryManageScreen(nav: NavHostController, initialType: String = "expense"
                     showWordLimit = true,
                 )
             }
-            // .dialog-actions{gap:12; margin-top:24}：app-btn 不吃 .van-button 的 flex:1 → 自然宽度、左对齐
+            // .dialog-actions{gap:12; margin-top:24}。用户要求：两个按钮**靠右下角**排布，
+            // 且原来「自然宽度」太窄 ⇒ 各给一个最小宽度（Large 高 50 + 96dp 宽，够两只手点）。
             Row(
                 Modifier.fillMaxWidth().padding(top = 24.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End),
             ) {
                 AppButton(
                     text = "取消",
@@ -384,6 +398,7 @@ fun CategoryManageScreen(nav: NavHostController, initialType: String = "expense"
                     size = AppButtonSize.Large,
                     plain = true,
                     round = true,
+                    modifier = Modifier.widthIn(min = DIALOG_BTN_MIN_W),
                 )
                 AppButton(
                     text = "保存",
@@ -391,6 +406,7 @@ fun CategoryManageScreen(nav: NavHostController, initialType: String = "expense"
                     type = AppButtonType.Primary,
                     size = AppButtonSize.Large,
                     round = true,
+                    modifier = Modifier.widthIn(min = DIALOG_BTN_MIN_W),
                 )
             }
         }
@@ -408,7 +424,7 @@ fun CategoryManageScreen(nav: NavHostController, initialType: String = "expense"
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                FText(if (isBank) "选择银行图标" else "选择分类图标", 16f, FontWeight.SemiBold, colors.textPrimary)
+                FText(if (isBank) "选择银行图标" else "选择分类图标", 18f, FontWeight.SemiBold, colors.textPrimary)
                 VanIcon(name = "cross", size = 16.sp, color = colors.textPrimary, onClick = { showPicker = false })
             }
             // .upload-section{padding-bottom:16; border:1px border; margin-bottom:16}
@@ -435,7 +451,7 @@ fun CategoryManageScreen(nav: NavHostController, initialType: String = "expense"
                     } else {
                         VanIcon(name = "plus", size = 20.sp, color = colors.textTertiary)
                         Spacer(Modifier.height(4.dp))
-                        FText("上传图标", 11f, FontWeight.Normal, colors.textTertiary)
+                        FText("上传图标", 12f, FontWeight.Normal, colors.textTertiary)
                     }
                 }
             }
@@ -491,8 +507,8 @@ fun CategoryManageScreen(nav: NavHostController, initialType: String = "expense"
                         toast.show("已删除")
                     }
                     is ApiResult.NeedPin -> toast.show("需先验证 PIN")
-                    is ApiResult.Fail -> toast.show(r.message)
-                    else -> toast.show("删除失败")
+                    is ApiResult.Fail -> toast.show(r.message, VanToastType.Fail)
+                    else -> toast.showFail(r, "删除失败")
                 }
             }
         },
@@ -526,7 +542,7 @@ private fun CategoryBody(
         ) {
             FText(
                 if (isBank) "共 ${list.size} 个银行分类" else "共 ${list.size} 个分类",
-                13f, FontWeight.Normal, colors.textTertiary,
+                14f, FontWeight.Normal, colors.textTertiary,
             )
             AppButton(
                 text = "新增",
@@ -599,7 +615,7 @@ private fun CategoryCard(
                 Box(Modifier.size(36.dp), contentAlignment = Alignment.Center) { DefaultCategoryIcon() }
             }
             Column(Modifier.weight(1f)) {
-                FText(item.name, 15f, FontWeight.SemiBold, colors.textPrimary)
+                FText(item.name, 16f, FontWeight.SemiBold, colors.textPrimary)
                 if (item.remark.isNotBlank()) {
                     FText(item.remark, 12f, FontWeight.Normal, colors.textTertiary, Modifier.padding(top = 2.dp))
                 }
@@ -625,8 +641,11 @@ private fun BankIconBox(iconUrl: String, name: String, size: Dp = 36.dp) {
     val colors = LocalAppColors.current
     Box(Modifier.size(size), contentAlignment = Alignment.Center) {
         if (iconUrl.isNotBlank()) {
+            val url = AppConfig.fullFileUrl(iconUrl)
             VanImage(
-                src = AppConfig.fullFileUrl(iconUrl),
+                src = url,
+                // 与启动预热同一把缓存键（见 BankIconCache），否则这里拉的是另一条缓存条目
+                imageRequest = rememberBankIconRequest(url),
                 modifier = Modifier.fillMaxSize(),
                 fit = ContentScale.Fit,
                 showError = false,
@@ -710,7 +729,7 @@ private fun IconCell(thumb: String, active: Boolean, modifier: Modifier, onClick
         modifier
             .height(52.dp)
             .clip(shape)
-            .border(2.dp, if (active) Color(0xFF1989FA) else Color.Transparent, shape)
+            .border(2.dp, if (active) vanBlue() else Color.Transparent, shape)
             .clickable(onClick = onClick),
     ) {
         VanImage(
@@ -739,7 +758,11 @@ private fun IconCell(thumb: String, active: Boolean, modifier: Modifier, onClick
 
 /**
  * `app-field`（web `components/base/AppField.vue`）：`padding:10 16`、bg-secondary、
- * label 13 text-secondary（下距 6）、输入 14/行高 1.5、计数右对齐 12 tertiary（上距 4）、**通栏 1px 底线**。
+ * label 13 text-secondary（下距 6）、输入 14/行高 1.5、计数右对齐 12 tertiary（上距 4）。
+ *
+ * ⚠ 底部那条 1px 线（web `.app-field { border-bottom }`）**必须画在白卡内部、输入行正下方**：
+ * 旧实现挂在 `bgCard` 之外、落在 `bgPage` 灰底上（`#EBEDF0` vs `#F7F8FA`）⇒ 肉眼看不见，
+ * 用户反馈「不知道哪里是输入项」。现改为输入区下划线（下方留白仍是白卡，才读得出是下划线）。
  */
 @Composable
 private fun AppFieldBox(
@@ -757,25 +780,34 @@ private fun AppFieldBox(
             .background(colors.bgCard)
             .padding(horizontal = 16.dp, vertical = 10.dp),
     ) {
-        FText(label, 13f, FontWeight.Normal, colors.textSecondary, Modifier.padding(bottom = 6.dp))
+        FText(label, 14f, FontWeight.Normal, colors.textSecondary, Modifier.padding(bottom = 6.dp))
         Box {
             if (value.isEmpty()) {
-                FText(placeholder, 14f, FontWeight.Normal, colors.textTertiary, Modifier.padding(vertical = 2.dp))
+                FText(placeholder, 16f, FontWeight.Normal, colors.textTertiary, Modifier.padding(vertical = 2.dp))
             }
             BasicTextField(
                 value = value,
                 onValueChange = { onValueChange(it.take(maxlength)) },
                 singleLine = true,
-                textStyle = TextStyle(color = colors.textPrimary, fontSize = 14.sp, lineHeight = 21.sp),
+                textStyle = TextStyle(color = colors.textPrimary, fontSize = scaledSp(16f), lineHeight = scaledSp(21f)),
                 cursorBrush = SolidColor(colors.primary),
                 modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
             )
         }
+        // ⭐ 输入区下划线（用户要求：让「名称 / 备注」一眼看出是可输入项）。
+        // ⚠ 必须画在**白卡内部**：原来那条 1px 线挂在 `bgCard` 之外、落在 `bgPage` 灰底上，
+        //    `#EBEDF0` 与 `#F7F8FA` 几乎同色 ⇒ 实际根本看不见，等于没有下划线。
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .padding(top = 6.dp)
+                .height(1.dp)
+                .background(colors.border),
+        )
         if (showWordLimit) {
             Box(Modifier.fillMaxWidth().padding(top = 4.dp), contentAlignment = Alignment.CenterEnd) {
                 FText("${value.length}/$maxlength", 12f, FontWeight.Normal, colors.textTertiary)
             }
         }
     }
-    Box(Modifier.fillMaxWidth().height(1.dp).background(colors.border))
 }

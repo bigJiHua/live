@@ -35,6 +35,41 @@ data class Moment(
 }
 
 /**
+ * 公开分享页的内容（`GET /share/:token` 与 `POST /share/password` 的 `data`）。
+ *
+ * 与登录态下的 [Moment] 是**两套结构**，别混用：分享接口只给 `content / img_url / mood /
+ * location / create_time / author.name / expire_at`，**不含** `vt / vs / pw / children`。
+ */
+data class MomentShareDetail(
+    val id: String = "",
+    val content: String = "",
+    val images: List<MomentImage> = emptyList(),
+    val mood: String = "",
+    val locationName: String = "",
+    /** 毫秒时间戳字符串（同 [Moment.createTime]）。 */
+    val createTime: String = "",
+    val authorName: String = "ta",
+    /** Token 模式才有（后端 `payload.exp` 的 ISO 串）；密码模式为空 → UI 显示「长期有效」。 */
+    val expireAt: String = "",
+)
+
+/**
+ * 分享页取内容的结果 —— **刻意不用 [com.live.finance.core.net.ApiResult]**：
+ * 后端把 403/404/410/429 都放在**业务体**里（HTTP 仍是 200），走 `Envelope.toResult()` 会把
+ * 429 折成不带文案的 `RateLimited`，「密码错误，还剩 N 次机会」这类后端文案就丢了。
+ */
+data class ShareViewResult(
+    /** 后端业务状态码：200 成功；403 分享已关闭/链接失效；404 内容不存在；410 链接过期；429 爆破锁定。 */
+    val status: Int,
+    val message: String = "",
+    val detail: MomentShareDetail? = null,
+    /** 429 的冷却秒数（后端 `retryAfter`）；0 表示无冷却。 */
+    val retryAfterSec: Int = 0,
+) {
+    val isOk: Boolean get() = status == 200
+}
+
+/**
  * 后端详情/列表的 `content` 可能是 HTML（web 用 `v-html` 渲染）。Compose 没有等价能力，
  * 这里做「去标签 + 常见实体还原 + `<br>`/`</p>` 转换行」的纯文本降级，保证不显示尖括号。
  */

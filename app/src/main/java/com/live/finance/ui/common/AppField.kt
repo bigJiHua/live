@@ -23,6 +23,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.live.finance.theme.LocalAppColors
+import com.live.finance.theme.scaledSp
 import com.live.finance.ui.flow.FText
 
 /**
@@ -45,6 +46,8 @@ fun AppField(
     maxlength: Int? = null,
     showWordLimit: Boolean = false,
     keyboardType: KeyboardType = KeyboardType.Text,
+    /** 只读禁用（web `:disabled`）：文字置灰且不可编辑 */
+    disabled: Boolean = false,
     /** 聚焦时回调（web `@focus`，用于收起数字键盘） */
     onFocus: (() -> Unit)? = null,
     trailing: @Composable (() -> Unit)? = null,
@@ -58,7 +61,7 @@ fun AppField(
     ) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
             if (!label.isNullOrEmpty()) {
-                FText(label, 13f, FontWeight.Normal, colors.textSecondary)
+                FText(label, 14f, FontWeight.Normal, colors.textSecondary)
                 Spacer(Modifier.height(6.dp))
             }
             Row(
@@ -68,13 +71,14 @@ fun AppField(
             ) {
                 Box(Modifier.weight(1f)) {
                     if (value.isEmpty() && !placeholder.isNullOrEmpty()) {
-                        FText(placeholder, 14f, FontWeight.Normal, colors.textTertiary)
+                        FText(placeholder, 16f, FontWeight.Normal, colors.textTertiary)
                     }
                     BasicTextField(
                         value = value,
                         onValueChange = { v -> onValueChange(if (maxlength != null) v.take(maxlength) else v) },
-                        enabled = true,
-                        textStyle = TextStyle(color = colors.textPrimary, fontSize = 14.sp),
+                        enabled = !disabled,
+                        readOnly = disabled,
+                        textStyle = TextStyle(color = if (disabled) colors.textTertiary else colors.textPrimary, fontSize = scaledSp(16f)),
                         cursorBrush = SolidColor(colors.primary),
                         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
                         singleLine = true,

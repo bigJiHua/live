@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -49,6 +50,7 @@ import com.live.finance.data.model.Todo
 import com.live.finance.theme.LocalAppColors
 import com.live.finance.theme.LocalAppTokens
 import com.live.finance.theme.SemanticRole
+import com.live.finance.theme.scaledSp
 import com.live.finance.ui.common.AppButton
 import com.live.finance.ui.common.AppButtonSize
 import com.live.finance.ui.common.AppButtonType
@@ -211,7 +213,7 @@ private fun DateBadge(month: Int, day: Int, onClick: () -> Unit) {
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(14.4.dp)
+                    .heightIn(min = 14.4.dp)
                     .background(
                         Color.White.copy(alpha = 0.25f),
                         RoundedCornerShape(topStart = 6.4.dp, topEnd = 6.4.dp),
@@ -221,7 +223,7 @@ private fun DateBadge(month: Int, day: Int, onClick: () -> Unit) {
                     "${month}月",
                     style = TextStyle(
                         color = Color.White,
-                        fontSize = 8.sp,
+                        fontSize = scaledSp(12f),
                         fontWeight = FontWeight.Bold,
                         platformStyle = PlatformTextStyle(includeFontPadding = false),
                         lineHeightStyle = tight,
@@ -233,7 +235,7 @@ private fun DateBadge(month: Int, day: Int, onClick: () -> Unit) {
                     "$day",
                     style = TextStyle(
                         color = Color.White,
-                        fontSize = 14.4.sp,
+                        fontSize = scaledSp(14.4f),
                         fontWeight = FontWeight.Bold,
                         platformStyle = PlatformTextStyle(includeFontPadding = false),
                         lineHeightStyle = tight,
@@ -247,14 +249,14 @@ private fun DateBadge(month: Int, day: Int, onClick: () -> Unit) {
 @Composable private fun TodayLine(label: String, value: String, color: Color) {
     // web .income-item：space-between + baseline 对齐 + gap 8px；`.ie-label` 9.6、金额 13.12/600
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        FText(label, 9.6f, FontWeight.Normal, Color.White.copy(alpha = 0.75f))
+        FText(label, 12f, FontWeight.Normal, Color.White.copy(alpha = 0.75f))
         FText(value, 13.12f, FontWeight.SemiBold, color)
     }
 }
 
 @Composable private fun DetailCol(label: String, value: String, modifier: Modifier) {
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        FText(label, 9.6f, FontWeight.Normal, Color.White.copy(alpha = 0.8f))   // web .small-label .6rem
+        FText(label, 12f, FontWeight.Normal, Color.White.copy(alpha = 0.8f))   // web .small-label .6rem → 移动端下限 12
         Spacer(Modifier.height(4.8.dp))                                        // web margin-bottom .3rem
         FText(value, 15.2f, FontWeight.SemiBold, Color.White)                  // web .95rem
     }
@@ -281,7 +283,7 @@ private fun MenuGridCard(
     Column(modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onClick).padding(vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         VanIcon(name = icon, size = 26.sp, color = iconColor)
         Spacer(Modifier.height(8.dp))
-        FText(text, 13f, FontWeight.Normal, LocalAppColors.current.textSecondary)
+        FText(text, 14f, FontWeight.Normal, LocalAppColors.current.textSecondary)
     }
 }
 
@@ -382,12 +384,12 @@ private fun RecentRecords(
 ) {
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(19.2.dp)).background(colors.bgCard)) {
         Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            FText("近期消费", 15f, FontWeight.Bold, colors.textPrimary)
+            FText("近期消费", 16f, FontWeight.Bold, colors.textPrimary)
             // web .view-detail { font-size: .8rem; color: var(--theme-primary) }
             FText("查看明细>", 12.8f, FontWeight.Normal, colors.primary, modifier = Modifier.clickable(onClick = onViewAll))
         }
         if (items.isEmpty()) {
-            FText("暂无大额流水", 14f, FontWeight.Normal, colors.textTertiary, Modifier.padding(16.dp))
+            FText("暂无大额流水", 16f, FontWeight.Normal, colors.textTertiary, Modifier.padding(16.dp))
         } else {
             items.forEachIndexed { i, it ->
                 Row(
@@ -395,14 +397,14 @@ private fun RecentRecords(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(Modifier.weight(1f)) {
-                        FText((it.categoryName) + if (it.isIncome) "收入" else "支出", 15f, FontWeight.Normal, colors.textPrimary)
+                        FText((it.categoryName) + if (it.isIncome) "收入" else "支出", 16f, FontWeight.Normal, colors.textPrimary)
                         Spacer(Modifier.height(3.dp))
                         FText(it.transDate, 12f, FontWeight.Normal, colors.textTertiary)
                     }
                     // web：`.text-income` 硬编码 --van-danger-color、`.text-expense` 硬编码 --van-green（不跟随收支颜色设置）
                     FText(
                         (if (it.isIncome) "+" else "-") + Money.format(it.amount) + "元",
-                        15f, FontWeight.SemiBold, if (it.isIncome) colors.danger else colors.success,
+                        16f, FontWeight.SemiBold, if (it.isIncome) colors.danger else colors.success,
                     )
                 }
                 if (i != items.lastIndex) Box(Modifier.fillMaxWidth().height(0.5.dp).padding(start = 16.dp).background(colors.border))

@@ -146,7 +146,7 @@ fun BalanceFlowScreen(nav: NavHostController) {
                                     verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier.clickable { showPicker = true },
                                 ) {
-                                    FText("${year}年${month}月", 16f, FontWeight.SemiBold, colors.textPrimary)
+                                    FText("${year}年${month}月", 18f, FontWeight.SemiBold, colors.textPrimary)
                                     VanIcon("arrow-down", size = 12.sp, color = colors.textPrimary,
                                         modifier = Modifier.padding(start = 4.dp))
                                 }
@@ -191,7 +191,7 @@ fun BalanceFlowScreen(nav: NavHostController) {
 
             if (loading) {
                 Box(Modifier.fillMaxSize().background(colors.bgPage), contentAlignment = Alignment.Center) {
-                    FText("加载中…", 14f, color = colors.textTertiary)
+                    FText("加载中…", 16f, color = colors.textTertiary)
                 }
             }
         }
@@ -227,7 +227,7 @@ private fun OverviewRow(label: String, value: String, valueColor: Color) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         FText(label, 12f, color = colors.textTertiary,
             modifier = Modifier.width(36.dp))
-        FText(value, 14f, FontWeight.SemiBold, valueColor)
+        FText(value, 16f, FontWeight.SemiBold, valueColor)
     }
 }
 
@@ -252,21 +252,21 @@ private fun DayGroupCard(
             Column(horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Row(verticalAlignment = Alignment.Bottom) {
-                    FText(dayLabel(g.date), 15f, FontWeight.SemiBold, colors.textPrimary)
+                    FText(dayLabel(g.date), 16f, FontWeight.SemiBold, colors.textPrimary)
                     FText(weekLabel(g.date), 12f, color = colors.textTertiary,
                         modifier = Modifier.padding(start = 6.dp))
                 }
                 FText(
                     (if (g.balance >= 0) "+" else "-") + Money.format(abs(g.balance)),
-                    13f, FontWeight.SemiBold,
+                    14f, FontWeight.SemiBold,
                     if (g.balance >= 0) MoneyColor.income else MoneyColor.expense,
                 )
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    FText("-" + Money.format(g.expense), 13f, color = MoneyColor.expense)
-                    FText("+" + Money.format(g.income), 13f, color = MoneyColor.income)
+                    FText("-" + Money.format(g.expense), 14f, color = MoneyColor.expense)
+                    FText("+" + Money.format(g.income), 14f, color = MoneyColor.income)
                 }
                 VanIcon(if (collapsed) "arrow-down" else "arrow-up", size = 14.sp,
                     color = colors.textTertiary, modifier = Modifier.padding(start = 8.dp))
@@ -323,18 +323,18 @@ private fun FlowColumn(
             ) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Row {
-                        FText(categoryName(row), 13f, color = colors.textPrimary)
+                        FText(categoryName(row), 14f, color = colors.textPrimary)
                         if (isCredit) {
-                            FText("信用卡", 11f, color = colors.primary,
+                            FText("信用卡", 12f, color = colors.primary,
                                 modifier = Modifier.padding(start = 4.dp))
                         }
                     }
-                    FText(TimeFmt.hm(row.createTime), 11f, color = colors.textTertiary)
+                    FText(TimeFmt.hm(row.createTime), 12f, color = colors.textTertiary)
                 }
                 Spacer(Modifier.height(3.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    FText("$sign${Money.format(row.amount)}", 13f, FontWeight.SemiBold, titleColor)
-                    FText(bankLabel(row), 11f, color = colors.textTertiary)
+                    FText("$sign${Money.format(row.amount)}", 14f, FontWeight.SemiBold, titleColor)
+                    FText(bankLabel(row), 12f, color = colors.textTertiary)
                 }
             }
         }

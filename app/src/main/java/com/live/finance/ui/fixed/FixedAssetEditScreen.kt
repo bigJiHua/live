@@ -3,6 +3,7 @@ package com.live.finance.ui.fixed
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,6 +20,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
@@ -29,6 +31,7 @@ import androidx.navigation.NavHostController
 import com.live.finance.App
 import com.live.finance.core.nav.Routes
 import com.live.finance.core.net.ApiResult
+import com.live.finance.core.net.failMessage
 import com.live.finance.data.model.NewFixedAsset
 import com.live.finance.theme.LocalAppColors
 import com.live.finance.ui.common.AppButton
@@ -42,16 +45,24 @@ import com.live.vant.feedback.VanPopup
 import com.live.vant.form.VanPicker
 import com.live.vant.form.VanPickerOption
 import kotlinx.coroutines.launch
+import com.live.finance.core.net.showFail
+import com.live.vant.feedback.VanToastType
 
 /**
- * 编辑固定资产（整页）—— 一比一复刻 web `views/Finance/fixedAsset/Edit.vue`。
+ * 编辑固定资产（整页）—— 以 web `views/Finance/fixedAsset/Edit.vue` 为基准。
  *
- * 与「登记」弹窗（`AssetForm.vue`）的差异（**照抄，别"统一"掉**）：
- *  1. 是**整页**不是弹窗；图片区 `padding 16 / bg-secondary / margin-bottom 12`；
- *  2. 字段多一行 **当前账面价值**（`now_val`，可手动调整），且**预计使用年限没有「推荐」按钮**；
- *  3. 校验**不校验购买日期**（因为编辑不提交 `buy_date`）；
- *  4. 底部只有**一个「保存」按钮**（large/round/primary，非 block → 自然宽度左对齐）；
- *  5. 保存成功后 `router.replace` 到详情页（原生用 `popUpTo(列表) + navigate(详情)` 等价）。
+ * 结构照抄 web：整页（非弹窗）；图片区 `padding 16 / bg-secondary / margin-bottom 12`；
+ * 表单比登记弹窗多一行 **当前账面价值**（`now_val`，可手动调整）；底部只有**一个「保存」按钮**
+ * （large/round/primary，非 block → 自然宽度左对齐）；保存成功后 `router.replace` 到详情页
+ * （原生用 `popUpTo(列表) + navigate(详情)` 等价）。
+ *
+ * 与「登记」弹窗（`AssetForm.vue`）的差异，本工程按拍板做了**统一**（web 自身两处口径不一致）：
+ *  1. 「预计使用年限」统一带上「推荐」按钮与 `推荐 N 年` 占位，选品类时自动带出推荐年限
+ *     （web 编辑页原来没有，登记弹窗有）；
+ *  2. 购买日期在编辑页**只读展示**：后端 `PUT /fixedAsset/:id` 的可改字段不含 `buy_date`
+ *     （见 `api/src/modules/fixed_asset/model/fixed_asset.js` 的 allowedFields），
+ *     因此编辑页不提交、也不校验它；
+ *  3. 「当前账面价值」只存在于编辑页：后端新建接口不接受 `now_val`（新建时账面价值 = 购买价）。
  */
 @Composable
 fun FixedAssetEditScreen(nav: NavHostController, id: String) {
@@ -75,10 +86,13 @@ fun FixedAssetEditScreen(nav: NavHostController, id: String) {
     var showTagPicker by remember { mutableStateOf(false) }
     var showImagePicker by remember { mutableStateOf(false) }
 
+    // 统一到登记弹窗口径：	agRecommendedYears[tag] || 3（web AssetForm.vue）
+    val recommendedYears = TAG_RECOMMENDED_YEARS[tag] ?: 3
+
     // web `loadData`：`data.xxx || ''`（JS 假值：0 → 空串），residual_rate 兜底 '5'
     LaunchedEffect(id) {
         if (id.isBlank()) {
-            toast.show("参数错误")
+            toast.show("参数错误", VanToastType.Fail)
             nav.popBackStack()
             return@LaunchedEffect
         }
@@ -100,7 +114,7 @@ fun FixedAssetEditScreen(nav: NavHostController, id: String) {
                 secondhandPrice = if (a.secondhandPrice != 0.0) jsNum(a.secondhandPrice) else ""
                 nowVal = if (a.nowVal != 0.0) jsNum(a.nowVal) else ""
             }
-            else -> toast.show("加载失败")
+            else -> toast.showFail(r, "加载失败")
         }
     }
 
@@ -142,7 +156,7 @@ fun FixedAssetEditScreen(nav: NavHostController, id: String) {
                 }
                 else -> {
                     saving = false
-                    toast.show("保存失败")
+                    toast.showFail(r, "保存失败")
                 }
             }
         }
@@ -158,7 +172,7 @@ fun FixedAssetEditScreen(nav: NavHostController, id: String) {
         ) {
             // .upload-section{padding 16; bg secondary; margin-bottom 12}
             Column(Modifier.fillMaxWidth().background(colors.bgCard).padding(16.dp)) {
-                FText("资产图片", 14f, FontWeight.Normal, colors.textSecondary)
+                FText("资产图片", 16f, FontWeight.Normal, colors.textSecondary)
                 Spacer(Modifier.height(8.dp))
                 UploadAreaBox(imgUrl) { showImagePicker = true }
             }
@@ -182,8 +196,16 @@ fun FixedAssetEditScreen(nav: NavHostController, id: String) {
                 FixedReadonlyField("购买日期", buyDate, "请选择") { }
                 AppField(
                     value = useYears, onValueChange = { useYears = it }, label = "预计使用年限",
-                    placeholder = "预计使用年限", keyboardType = KeyboardType.Number,
-                    trailing = { Suffix("年") },
+                    placeholder = "推荐 $recommendedYears 年", keyboardType = KeyboardType.Number,
+                    trailing = {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Suffix("年")
+                            AppButton(
+                                text = "推荐", onClick = { useYears = recommendedYears.toString() },
+                                type = AppButtonType.Primary, size = AppButtonSize.Small, plain = true,
+                            )
+                        }
+                    },
                 )
                 AppField(
                     value = residualRate, onValueChange = { residualRate = it }, label = "残值率",
@@ -216,13 +238,16 @@ fun FixedAssetEditScreen(nav: NavHostController, id: String) {
         }
     }
 
-    // 品类选择（Edit 的 onTagConfirm 只设 tag，**不带出推荐年限**）
+    // 品类选择（统一到登记弹窗口径：选品类且未填年限时自动带出推荐值）
     VanPopup(show = showTagPicker, onDismissRequest = { showTagPicker = false }, round = true) {
         VanPicker(
             columns = listOf(TAG_RECOMMENDED_YEARS.keys.map { VanPickerOption(it, it) }),
             title = "选择品类",
             onConfirm = { _, values ->
-                tag = values.firstOrNull()?.toString().orEmpty()
+                val picked = values.firstOrNull()?.toString().orEmpty()
+                tag = picked
+                // 统一到登记弹窗口径：选了品类且还没填年限 → 自动带出推荐值
+                if (useYears.isEmpty()) useYears = (TAG_RECOMMENDED_YEARS[picked] ?: 3).toString()
                 showTagPicker = false
             },
             onCancel = { showTagPicker = false },

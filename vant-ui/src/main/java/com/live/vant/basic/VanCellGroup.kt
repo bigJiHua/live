@@ -14,6 +14,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.live.vant.theme.LocalVantColors
 import com.live.vant.theme.LocalVantDimens
+import com.live.vant.theme.fontSp
 
 /**
  * 复刻 van-cell-group（web 项目 125 处使用；props：title / inset）。
@@ -39,7 +40,7 @@ fun VanCellGroup(
                 titleSlot != null -> titleSlot()
                 else -> androidx.compose.foundation.text.BasicText(
                     title!!,
-                    style = TextStyle(color = c.textTertiary, fontSize = tokens.fontSizeMd, lineHeight = 16.sp),
+                    style = TextStyle(color = c.textTertiary, fontSize = tokens.fontSizeMd, lineHeight = tokens.fontSp(16f)),
                     modifier = titleModifier,
                 )
             }

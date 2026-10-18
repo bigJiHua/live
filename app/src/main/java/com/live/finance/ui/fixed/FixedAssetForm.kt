@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.sp
 import com.live.finance.App
 import com.live.finance.core.AppConfig
 import com.live.finance.core.net.ApiResult
+import com.live.finance.core.net.failMessage
 import com.live.finance.data.model.FixedAsset
 import com.live.finance.data.model.NewFixedAsset
 import com.live.finance.theme.LocalAppColors
@@ -56,6 +57,7 @@ import com.live.vant.icon.VanIcon
 import com.live.vant.form.VanDatePicker
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import com.live.finance.core.net.showFail
 
 /** web `AssetForm.vue` / `Edit.vue` 共用的 `tagRecommendedYears`：品类 → 推荐使用年限。 */
 internal val TAG_RECOMMENDED_YEARS: Map<String, Int> = linkedMapOf(
@@ -152,7 +154,7 @@ fun FixedAssetFormPopup(
                     onDismiss()
                 }
                 is ApiResult.NeedPin -> toast.show("需先验证 PIN")
-                else -> toast.show("保存失败")
+                else -> toast.showFail(r, "保存失败")
             }
         }
     }
@@ -171,7 +173,7 @@ fun FixedAssetFormPopup(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                FText(if (asset != null) "编辑资产" else "登记固定资产", 17f, FontWeight.SemiBold, colors.textPrimary)
+                FText(if (asset != null) "编辑资产" else "登记固定资产", 18f, FontWeight.SemiBold, colors.textPrimary)
                 Box(Modifier.clickable(onClick = onDismiss).padding(4.dp)) {
                     VanIcon(name = "cross", size = 18.sp, color = colors.textTertiary)
                 }
@@ -180,9 +182,9 @@ fun FixedAssetFormPopup(
             // ===== 资产图片（.upload-section{padding 0 16}）=====
             Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    FText("资产图片", 14f, FontWeight.Normal, colors.textSecondary)
+                    FText("资产图片", 16f, FontWeight.Normal, colors.textSecondary)
                     Spacer(Modifier.width(4.dp))
-                    FText("*", 14f, FontWeight.Normal, colors.danger)
+                    FText("*", 16f, FontWeight.Normal, colors.danger)
                 }
                 Spacer(Modifier.height(8.dp))
                 UploadAreaBox(imgUrl) { showImagePicker = true }
@@ -263,10 +265,12 @@ fun FixedAssetFormPopup(
     // 购买日期（web 是 `<input type="date">` 浏览器原生日期选择；项目内其余 6 处同款字段（JobSetting 等）
     // 统一用 `VanDatePicker(type="date")`，故这里也对齐，不用整月日历 VanCalendar）
     if (showDatePicker) {
+        // ⚠ `VanDatePicker` 是**受控**组件：空的 `onValueChange` 会让滚轮状态写不回（同 `RepayAddScreen` 的 BUG）。
+        var pendingBuyDate by remember { mutableStateOf(runCatching { LocalDate.parse(buyDate) }.getOrNull() ?: LocalDate.now()) }
         VanDatePicker(
             type = "date",
-            value = runCatching { LocalDate.parse(buyDate) }.getOrNull() ?: LocalDate.now(),
-            onValueChange = {},
+            value = pendingBuyDate,
+            onValueChange = { pendingBuyDate = it },
             title = "购买日期",
             onConfirm = { showDatePicker = false; buyDate = it.toString() },
             onCancel = { showDatePicker = false },
@@ -316,5 +320,5 @@ internal fun UploadAreaBox(imgUrl: String, onClick: () -> Unit) {
 /** `.app-field__suffix`：单位小字（tertiary、14px）。 */
 @Composable
 internal fun Suffix(text: String) {
-    FText(text, 14f, FontWeight.Normal, LocalAppColors.current.textTertiary)
+    FText(text, 16f, FontWeight.Normal, LocalAppColors.current.textTertiary)
 }

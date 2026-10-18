@@ -24,6 +24,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -31,9 +33,13 @@ import com.google.gson.JsonObject
 import androidx.compose.ui.platform.LocalContext
 import com.live.finance.App
 import com.live.finance.core.net.ApiResult
+import com.live.finance.core.net.failMessage
 import com.live.finance.data.model.Fund
 import com.live.finance.data.model.FundHistory
 import com.live.finance.theme.LocalAppColors
+import com.live.finance.theme.vanDangerBg
+import com.live.finance.theme.vanGreen
+import com.live.finance.theme.vanGreenBg
 import com.live.finance.ui.common.AppButton
 import com.live.finance.ui.common.AppButtonSize
 import com.live.finance.ui.common.AppButtonType
@@ -44,10 +50,11 @@ import com.live.vant.basic.VanLoading
 import com.live.vant.feedback.VanConfirmDialog
 import com.live.vant.feedback.VanPopup
 import com.live.vant.feedback.rememberVanToastController
-import com.live.vant.nav.VanNavBar
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import com.live.finance.core.net.showFail
+import com.live.vant.feedback.VanToastType
 
 @Composable
 fun FundEarningsScreen(nav: androidx.navigation.NavHostController) {
@@ -76,14 +83,16 @@ fun FundEarningsScreen(nav: androidx.navigation.NavHostController) {
                     val d = res.data
                     monthRecords = d?.records ?: emptyList()
                     if (!monthInit && d != null && d.latestRecordDate.isNotBlank()) {
-                        runCatching { LocalDate.parse(d.latestRecordDate, fmt) }.getOrNull()?.let {
-                            calendarMonth = it.withDayOfMonth(1)
-                        }
+                        // ⚠ **只记录"存在最新收益月"这个事实**（给右上角「收益月」按钮当可跳标记），
+                        //   不再改 calendarMonth：web 的初值就是 `dayjs().startOf('month')`（`FundEarnings.vue:162`），
+                        //   而那个自动跳月的 `focusCalendarMonth()`（`:192-200`）**全 web 没有任何调用点＝死代码**。
+                        //   原生之前在这里强跳 ⇒ 进页面落在"最新有收益的那个月"而不是本月
+                        //   （负责人 2026-09-19：「2026年9月19日点进去的时候 日历月份是 2026年9月」）。
                         monthInit = true
                     }
                 }
-                is ApiResult.Fail -> toast.show(res.message)
-                else -> toast.show("加载失败")
+                is ApiResult.Fail -> toast.show(res.message, VanToastType.Fail)
+                else -> toast.showFail(res, "加载失败")
             }
             monthLoading = false
         }
@@ -99,8 +108,8 @@ fun FundEarningsScreen(nav: androidx.navigation.NavHostController) {
                     if (currentFundId.isBlank() && d != null && d.isNotEmpty()) currentFundId = d.first().id
                     loadMonthly()
                 }
-                is ApiResult.Fail -> toast.show(res.message)
-                else -> toast.show("加载失败")
+                is ApiResult.Fail -> toast.show(res.message, VanToastType.Fail)
+                else -> toast.showFail(res, "加载失败")
             }
             loading = false
         }
@@ -124,7 +133,6 @@ fun FundEarningsScreen(nav: androidx.navigation.NavHostController) {
 
     ScreenScaffold { outerMod ->
         Column(outerMod) {
-            VanNavBar(title = "收益明细", leftArrow = true, onClickLeft = { nav.popBackStack() })
             Column(
                 Modifier.verticalScroll(rememberScrollState()).padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -145,7 +153,7 @@ fun FundEarningsScreen(nav: androidx.navigation.NavHostController) {
                 }
 
                 // 基金选择
-                FText("选择基金", 14f, FontWeight.SemiBold, colors.textPrimary)
+                FText("选择基金", 16f, FontWeight.SemiBold, colors.textPrimary)
                 Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     fundList.forEach { item ->
                         val selected = item.id == currentFundId
@@ -157,7 +165,7 @@ fun FundEarningsScreen(nav: androidx.navigation.NavHostController) {
                                     monthInit = false
                                 }.padding(horizontal = 14.dp, vertical = 8.dp),
                         ) {
-                            FText(item.fundName.ifEmpty { "未命名" }, 13f, FontWeight.Medium, if (selected) colors.buttonPrimaryText else colors.textPrimary)
+                            FText(item.fundName.ifEmpty { "未命名" }, 14f, FontWeight.Medium, if (selected) colors.buttonPrimaryText else colors.textPrimary)
                         }
                     }
                 }
@@ -169,10 +177,22 @@ fun FundEarningsScreen(nav: androidx.navigation.NavHostController) {
                     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(colors.bgCard).padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                             Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                                FText(f.fundName.ifEmpty { "未命名" }, 15f, FontWeight.SemiBold, colors.textPrimary)
-                                FText(f.fundCompany.ifEmpty { "基金公司未填" }, 12f, FontWeight.Normal, colors.textSecondary)
+                                FText(f.fundName.ifEmpty { "未命名" }, 16f, FontWeight.SemiBold, colors.textPrimary)
+                                // web `.ec-company{font-size:11px(§7.9→12f); color:var(--theme-text-tertiary)}`（旧实现误用 textSecondary）
+                                FText(f.fundCompany.ifEmpty { "基金公司未填" }, 12f, FontWeight.Normal, colors.textTertiary)
                             }
-                            FText(fundRate(rate), 16f, FontWeight.Bold, profitColor)
+                            // web `.ec-rate{min-width:58px; padding:3px 8px; border-radius:999px; font-size:13px(§7.9→14f); font-weight:700; text-align:center}`
+                            //   + `.success{color:var(--van-danger-color); background:var(--van-danger-bg,#fff1f0)}`
+                            //   + `.danger{color:var(--van-green,#07c160); background:var(--van-green-bg,#eefaf3)}`
+                            //   —— 旧实现是**裸文本**，没有胶囊底、没有 padding/圆角/居中。
+                            Box(
+                                Modifier.clip(RoundedCornerShape(999.dp))
+                                    .background(if (f.isProfit) vanDangerBg(Color(0xFFFFF1F0)) else vanGreenBg(Color(0xFFEEFAF3)))
+                                    .padding(horizontal = 8.dp, vertical = 3.dp).widthIn(min = 58.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                FText(fundRate(rate), 14f, FontWeight.Bold, if (f.isProfit) colors.danger else vanGreen())
+                            }
                         }
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                             Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
@@ -192,7 +212,7 @@ fun FundEarningsScreen(nav: androidx.navigation.NavHostController) {
                                 if (f.sellOrg.isNotBlank()) add(f.sellOrg)
                                 if (f.fundAccount.isNotBlank()) add("账户 ${f.fundAccount}")
                             }
-                            meta.forEach { FText(it, 11f, FontWeight.Normal, colors.textTertiary) }
+                            meta.forEach { FText(it, 12f, FontWeight.Normal, colors.textTertiary) }
                         }
                         // 收益率进度条
                         Box(Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)).background(colors.bgThird)) {
@@ -202,9 +222,14 @@ fun FundEarningsScreen(nav: androidx.navigation.NavHostController) {
                     }
 
                     // 每日收益日历
-                    FText("每日收益日历", 14f, FontWeight.SemiBold, colors.textPrimary)
+                    FText("每日收益日历", 16f, FontWeight.SemiBold, colors.textPrimary)
                     FundCalHeader("${calendarMonth.year}年${calendarMonth.monthValue}月", { calendarMonth = calendarMonth.minusMonths(1) }, { calendarMonth = calendarMonth.plusMonths(1) })
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    // web `.cal-shortcuts{ display:flex; justify-content:center; gap:8px }` ⇒ 两个快捷按钮**整行居中**
+                    //   （负责人 2026-09-20 指认原生是左对齐）。
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                    ) {
                         Box(Modifier.clip(RoundedCornerShape(16.dp)).background(colors.bgThird).clickable { if (monthInit) { monthInit = false; loadMonthly() } }.padding(horizontal = 12.dp, vertical = 6.dp)) {
                             FText("收益月", 12f, FontWeight.Medium, colors.primary)
                         }
@@ -251,9 +276,9 @@ fun FundEarningsScreen(nav: androidx.navigation.NavHostController) {
             scope.launch {
                 saving = true
                 when (val res = graph.fund.updateHistory(rec.id, body)) {
-                    is ApiResult.Ok -> { toast.show("修改成功"); showDayPopup = false; loadMonthly() }
-                    is ApiResult.Fail -> toast.show(res.message)
-                    else -> toast.show("操作失败")
+                    is ApiResult.Ok -> { toast.show("修改成功", VanToastType.Success); showDayPopup = false; loadMonthly() }
+                    is ApiResult.Fail -> toast.show(res.message.ifBlank { "修改失败" }, VanToastType.Fail)
+                    else -> toast.showFail(res, "修改失败")
                 }
                 saving = false
             }
@@ -262,16 +287,16 @@ fun FundEarningsScreen(nav: androidx.navigation.NavHostController) {
         fun deleteDay() {
             scope.launch {
                 when (val res = graph.fund.deleteHistory(rec.id)) {
-                    is ApiResult.Ok -> { toast.show("已删除"); showDayPopup = false; loadMonthly() }
-                    is ApiResult.Fail -> toast.show(res.message)
-                    else -> toast.show("操作失败")
+                    is ApiResult.Ok -> { toast.show("删除成功", VanToastType.Success); showDayPopup = false; loadMonthly() }
+                    is ApiResult.Fail -> toast.show(res.message.ifBlank { "删除失败" }, VanToastType.Fail)
+                    else -> toast.showFail(res, "删除失败")
                 }
             }
         }
 
         VanPopup(show = true, onDismissRequest = { showDayPopup = false }) {
             Column(Modifier.fillMaxWidth().background(colors.bgCard).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                FText("${rec.recordDate} 记录", 16f, FontWeight.SemiBold, colors.textPrimary)
+                FText("${rec.recordDate} 记录", 18f, FontWeight.SemiBold, colors.textPrimary)
                 AppField(editNet, { editNet = it }, label = "今日收益", placeholder = "如 0.19 / -0.30", keyboardType = KeyboardType.Number)
                 AppField(editMkt, { editMkt = it }, label = "增持本金", placeholder = "如 5000，不增持填 0", keyboardType = KeyboardType.Number)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {

@@ -37,7 +37,10 @@ import com.live.finance.core.net.ApiResult
 import com.live.finance.data.model.Job
 import com.live.finance.data.model.SalaryMonth
 import com.live.finance.theme.LocalAppColors
+import com.live.finance.theme.SemanticRole
 import com.live.finance.theme.LocalAppTokens
+import com.live.finance.theme.vanGreen
+
 import com.live.finance.ui.common.MoneyColor
 import com.live.finance.ui.common.ScreenScaffold
 import com.live.finance.ui.flow.FText
@@ -74,9 +77,9 @@ fun SalaryCalendarScreen(nav: NavHostController) {
     val context = LocalContext.current
     val work = App.of(context).graph.work
     val colors = LocalAppColors.current
-    val tokens = LocalAppTokens.current
-    // web 页头箭头色 `var(--van-green,#07c160)`：浅色 #07c160，深色被 style.css 重定向到 `--theme-success`
-    val salaryGreen = if (tokens.isDark) colors.success else SALARY_GREEN
+    // web `SalaryCalendar.vue:306/448/488` 页头箭头色 `var(--van-green, #07c160)`：
+    // `--van-green` **只在深色模式**被重定向到 `--theme-success`，浅色走行内 fallback #07c160。
+    val salaryGreen = vanGreen()
     val today = LocalDate.now()
 
     var year by remember { mutableStateOf(today.year) }
@@ -91,16 +94,22 @@ fun SalaryCalendarScreen(nav: NavHostController) {
     var pickerMonth by remember { mutableStateOf(today.monthValue) }
     val scope = rememberCoroutineScope()
 
-    fun load() {
+    // web `loadJobInfo()`：只在 onMounted / onActivated 调，**切月不重拉**
+    // （原生原来把它塞进 load()，导致每翻一个月都多一次 jobList 请求）
+    suspend fun loadJobInfo() {
+        val jobsRes = work.jobList()
+        if (jobsRes is ApiResult.Ok) {
+            val jobs = jobsRes.data.orEmpty()
+            formalJob = jobs.firstOrNull { it.jobType == "formal" && it.status == "在职" }
+            parttimeJobs = jobs.filter { it.jobType == "parttime" && it.status == "在职" }
+        }
+    }
+
+    /** web `loadMonthData()`：切月 / 选月只拉这个。 */
+    fun loadMonth() {
         scope.launch {
             loading = true
-            val jobsRes = work.jobList()
             val monthRes = work.salaryMonth(year, month)
-            if (jobsRes is ApiResult.Ok) {
-                val jobs = jobsRes.data.orEmpty()
-                formalJob = jobs.firstOrNull { it.jobType == "formal" && it.status == "在职" }
-                parttimeJobs = jobs.filter { it.jobType == "parttime" && it.status == "在职" }
-            }
             if (monthRes is ApiResult.Ok) monthData = monthRes.data
             loading = false
         }
@@ -108,15 +117,18 @@ fun SalaryCalendarScreen(nav: NavHostController) {
 
     fun prevMonth() {
         if (month == 1) { month = 12; year -= 1 } else month -= 1
-        load()
+        loadMonth()
     }
 
     fun nextMonth() {
         if (month == 12) { month = 1; year += 1 } else month += 1
-        load()
+        loadMonth()
     }
 
-    LaunchedEffect(Unit) { load() }
+    LaunchedEffect(Unit) {
+        loadJobInfo()
+        loadMonth()
+    }
 
     // web `calendarDataset`：整月逐日 → dataset
     val dataset = remember(year, month, monthData, formalJob, parttimeJobs) {
@@ -151,7 +163,13 @@ fun SalaryCalendarScreen(nav: NavHostController) {
                     VanIcon("arrow-left", size = 18.sp, color = salaryGreen)
                 }
                 Row(
-                    modifier = Modifier.clickable { showMonthPicker = true },
+                    modifier = Modifier.clickable {
+                        // 打开选择器时把滚轮同步到「当前查看月」（web `openMonthPicker`）。
+                        // 否则 `pickerYear/pickerMonth` 只在上次 confirm 时更新 ⇒ 翻到 3 月再打开却停在 9 月。
+                        pickerYear = year
+                        pickerMonth = month
+                        showMonthPicker = true
+                    },
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
@@ -184,7 +202,7 @@ fun SalaryCalendarScreen(nav: NavHostController) {
                 StatItem("月总收入", "¥${monthData?.totalIncome ?: "0.00"}", MoneyColor.income, Modifier.weight(1f))
                 Box(Modifier.width(1.dp).height(30.dp).background(colors.border))
                 StatItem("正式", "¥${monthData?.formalTotal ?: "0.00"}", colors.primary)
-                StatItem("兼职", "¥${monthData?.parttimeTotal ?: "0.00"}", SALARY_ORANGE)
+                StatItem("兼职", "¥${monthData?.parttimeTotal ?: "0.00"}", LocalAppTokens.current.semanticIcon(SemanticRole.Orange))
             }
             Spacer(Modifier.height(8.dp))
 
@@ -240,7 +258,7 @@ fun SalaryCalendarScreen(nav: NavHostController) {
                 pickerYear = year
                 pickerMonth = month
                 showMonthPicker = false
-                load()
+                loadMonth()
             },
             onCancel = { showMonthPicker = false },
             title = "选择月份",
@@ -248,11 +266,11 @@ fun SalaryCalendarScreen(nav: NavHostController) {
     }
 }
 
-/** `--van-green`（web 页头箭头用的 Vant 调色板色，非主题色）。 */
-private val SALARY_GREEN = Color(0xFF07C160)
-
-/** `--van-orange`（兼职工资金额）。 */
-private val SALARY_ORANGE = Color(0xFFFF976A)
+/** `--van-orange`（兼职工资金额）—— style.css:158 写死 `#ff976a`，非主题色。 */
+// web `SalaryCalendar.vue`：`.stat-value.orange{ color: var(--van-orange, #ff976a) }`，
+// 且该元素带 `orange` 类 ⇒ 走 `html[data-theme-mono="1"]` 规则，非「绿/蓝/靛」主题时统一成 --theme-primary。
+// 故不能写死 #ff976a，要走 AppTokens.semanticIcon(SemanticRole.Orange)。
+private val SALARY_ORANGE = Color(0xFFFF976A) // 仅作非 mono 主题的兜底值，实际取色见 StatItem 调用处
 
 /** `.stat-item{column; gap 4}` + `.stat-label{12px tertiary}` + `.stat-value{18px/600}`。 */
 @Composable

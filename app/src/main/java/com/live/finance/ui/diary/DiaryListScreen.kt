@@ -19,11 +19,13 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
+import androidx.compose.foundation.lazy.staggeredgrid.items
+import androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -50,10 +52,16 @@ import com.live.finance.App
 import com.live.finance.core.AppConfig
 import com.live.finance.core.nav.Routes
 import com.live.finance.core.net.ApiResult
+import com.live.finance.core.net.failMessage
 import com.live.finance.data.model.Moment
 import com.live.finance.data.model.User
 import com.live.finance.theme.LocalAppColors
+
+import com.live.finance.theme.VanGreenBgFixed
+import com.live.finance.theme.vanGreen
 import com.live.finance.theme.LocalAppTokens
+import com.live.finance.theme.VanPurpleFixed
+import com.live.finance.theme.scaledSp
 import com.live.finance.ui.common.WebShadow
 import com.live.finance.ui.common.cssShadow
 import com.live.finance.ui.common.cssShadowCircle
@@ -71,12 +79,11 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import kotlin.math.abs
+import com.live.finance.core.net.showFail
 
 /** Vant `--van-purple`（`.mood-tag` 用它，**不是**主题色）。 */
-private val VAN_PURPLE = Color(0xFF7232DD)
 
 /** Vant `--van-green`（`.sub-record-tag` / `.date`）。 */
-private val VAN_GREEN = Color(0xFF07C160)
 
 /** `--van-green-bg` 未定义 → 走 fallback `#f0f9eb`。 */
 private val VAN_GREEN_BG = Color(0xFFF0F9EB)
@@ -95,6 +102,7 @@ private val HHMM = SimpleDateFormat("HH:mm", Locale.US)
  * `.card-content{padding:10}`；正文 13/500 行高 1.45 两行截断；心情标签 10px 紫、追文标签 10px 绿；
  * 作者名 11px、时间 10px、日期芯片 9px 绿底；底部 `height:100px` 占位。
  */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun DiaryListScreen(nav: NavHostController) {
     val ctx = LocalContext.current
@@ -110,8 +118,13 @@ fun DiaryListScreen(nav: NavHostController) {
     var loadingMore by remember { mutableStateOf(false) }
     var requesting by remember { mutableStateOf(false) }    // 独立防重（web `requesting`）
     var user by remember { mutableStateOf<User?>(null) }
+    /** 已成功加载的页码，用于触底去重（避免「向上滚再往下滑」就重复打接口 —— 2026-09-19 真机反馈「频繁获取数据」）。 */
+    val loadedPages = remember { mutableSetOf<Int>() }
 
-    val scroll = rememberScrollState()
+    // ⚠ 列表容器必须是**懒**的：这里原本是 `Column + verticalScroll`（非懒），每加载一页就把已渲染的
+    // 全部卡片重新测量/摆放 ⇒ 触底加载那一瞬 fling 动量被打断（负责人 2026-09-20 报「动态页的刷新
+    // 打断我的上滑，无法快速上滑」）。改成 `LazyVerticalStaggeredGrid` 两列，只组合可视项。
+    val gridState = rememberLazyStaggeredGridState()
     val refreshState = rememberVanPullRefreshState()
 
     // 回顶按钮可见性 + 发布浮钮收起（web：y>400 显示回顶；下滑 delta>6 收起浮钮、上滑弹起）
@@ -123,18 +136,30 @@ fun DiaryListScreen(nav: NavHostController) {
         if (requesting) return
         requesting = true
         if (append) loadingMore = true else { loading = true; page = 1 }
-        when (val r = graph.moment.list(page, PAGE_SIZE)) {
-            is ApiResult.Ok -> {
-                val d = r.data
-                val list = d?.list.orEmpty()
-                total = d?.total ?: 0
-                rows = if (append) rows + list else list
+        // ⚠ **必须用 try/finally 复位**：旧实现把复位写在末尾，一旦 `graph.moment.list` 抛异常或协程被取消（
+        //   LaunchedEffect 因 key 变化重启），`requesting` / `loadingMore` 永远为 true ⇒ 后续 load 全部早退，
+        //   表现为「**向下滑动卡在「加载中...」不动**（2026-09-19 真机反馈）。
+        try {
+            when (val r = graph.moment.list(page, PAGE_SIZE)) {
+                is ApiResult.Ok -> {
+                    val d = r.data
+                    val list = d?.list.orEmpty()
+                    total = d?.total ?: 0
+                    rows = if (append) rows + list else list
+                    if (append) {
+                        loadedPages.add(page)
+                    } else {
+                        loadedPages.clear()
+                        loadedPages.add(1)
+                    }
+                }
+                else -> toast.showFail(r, "加载失败")
             }
-            else -> toast.show("加载失败")
+        } finally {
+            requesting = false
+            loading = false
+            loadingMore = false
         }
-        requesting = false
-        loading = false
-        loadingMore = false
     }
 
     LaunchedEffect(Unit) {
@@ -144,8 +169,15 @@ fun DiaryListScreen(nav: NavHostController) {
     }
 
     // 滚动：回顶显隐 + 浮钮收起弹起 + 触底加载
-    LaunchedEffect(Unit) {
-        snapshotFlow { scroll.value }.collect { y ->
+    //
+    // 懒网格拿不到 web 的 `window.scrollY` 总偏移 ⇒ 用「首个可见项序号 × 1_000_000 + 该项内滚动 px」当代理：
+    // 同一个 item 内随 px 单调，跨 item 的步进（1e6）远大于 web 的 6px 阈值 ⇒ web 那两条判据
+    // （`y > 400` 显示回顶、`delta > 6` 收起/弹起浮钮）**原样保留**，不用重写语义。
+    val scrollPos by remember {
+        derivedStateOf { gridState.firstVisibleItemIndex * 1_000_000 + gridState.firstVisibleItemScrollOffset }
+    }
+    LaunchedEffect(gridState) {
+        snapshotFlow { scrollPos }.collect { y ->
             showBackTop = y > 400
             val delta = y - lastY
             if (abs(delta) > 6) {
@@ -154,12 +186,19 @@ fun DiaryListScreen(nav: NavHostController) {
             }
         }
     }
+    // web `van-list` 是「距底 300px 就检查」⇒ 这里按「最后一个可见项距列表末尾 ≤ 4 项」等价收口
     val nearBottom by remember {
-        derivedStateOf { scroll.maxValue > 0 && scroll.value >= scroll.maxValue - 400 }
+        derivedStateOf {
+            val info = gridState.layoutInfo
+            val last = info.visibleItemsInfo.lastOrNull()
+            last != null && last.index >= info.totalItemsCount - 4
+        }
     }
     LaunchedEffect(nearBottom, rows.size, total) {
-        if (nearBottom && total > 0 && rows.size < total && !requesting && !loadingMore) {
-            page += 1
+        val next = page + 1
+        // ⚠ 去重：向上滚再往下滑会重新触发 nearBottom，若不加 `next !in loadedPages` 会**反复打同一页接口**。
+        if (nearBottom && total > 0 && rows.size < total && !requesting && !loadingMore && next !in loadedPages) {
+            page = next
             load(append = true)
         }
     }
@@ -168,7 +207,9 @@ fun DiaryListScreen(nav: NavHostController) {
         VanPullRefresh(
             state = refreshState,
             // 只有列表滚到顶部时下拉才触发刷新（Vant 语义；VanPullRefresh 默认 `{ true }` 会导致任意位置下拉都刷新）
-            isChildAtTop = { scroll.value == 0 },
+            isChildAtTop = {
+                gridState.firstVisibleItemIndex == 0 && gridState.firstVisibleItemScrollOffset == 0
+            },
             onRefresh = {
                 scope.launch {
                     load(false)
@@ -176,96 +217,82 @@ fun DiaryListScreen(nav: NavHostController) {
                 }
             },
         ) {
-            Column(
-                Modifier
-                    .fillMaxSize()
-                    .verticalScroll(scroll)
-                    .padding(8.dp), // .page-diary{padding:8px}
-            ) {
-                when {
-                    loading -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
-                        VanLoading()
+            when {
+                loading -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
+                    VanLoading()
+                }
+
+                rows.isEmpty() -> VanEmpty(description = "还没有动态，快来发布第一条吧", image = "search")
+
+                else -> LazyVerticalStaggeredGrid(
+                    // web `.waterfall-container{display:flex;gap:8px}` + 两列各自流式（`leftList` 偶、`rightList` 奇）。
+                    // 交错网格按「较矮的一列」放下一项 ⇒ 观感与 web 一致；卡片落哪一列可能与 web 不同
+                    // （web 是奇偶硬分列），这是懒实现换来的唯一差异，已在构造书 5.6 记档。
+                    columns = StaggeredGridCells.Fixed(2),
+                    state = gridState,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalItemSpacing = 8.dp, // 列内卡片自带 margin-bottom 4 ⇒ 合计 12，同 web
+                    modifier = Modifier.fillMaxSize().padding(8.dp), // .page-diary{padding:8px}
+                ) {
+                    items(rows, key = { it.id }) { m ->
+                        DiaryCard(
+                            item = m,
+                            userName = user?.username.orEmpty(),
+                            userAvatar = user?.avatar.orEmpty(),
+                            onClick = { nav.navigate("${Routes.DIARY_DETAIL}?id=${m.id}") },
+                        )
                     }
-
-                    rows.isEmpty() -> VanEmpty(description = "还没有动态，快来发布第一条吧", image = "search")
-
-                    else -> {
-                        val left = rows.filterIndexed { i, _ -> i % 2 == 0 }
-                        val right = rows.filterIndexed { i, _ -> i % 2 == 1 }
-                        Row(Modifier.fillMaxWidth()) { // .waterfall-container{gap:8}
-                            Column(
-                                Modifier.weight(1f),
-                                verticalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                left.forEach { m ->
-                                    DiaryCard(
-                                        item = m,
-                                        userName = user?.username.orEmpty(),
-                                        userAvatar = user?.avatar.orEmpty(),
-                                        onClick = { nav.navigate("${Routes.DIARY_DETAIL}?id=${m.id}") },
-                                    )
-                                }
-                            }
-                            Spacer(Modifier.size(8.dp))
-                            Column(
-                                Modifier.weight(1f),
-                                verticalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                right.forEach { m ->
-                                    DiaryCard(
-                                        item = m,
-                                        userName = user?.username.orEmpty(),
-                                        userAvatar = user?.avatar.orEmpty(),
-                                        onClick = { nav.navigate("${Routes.DIARY_DETAIL}?id=${m.id}") },
-                                    )
-                                }
-                            }
-                        }
-                        // van-list 的加载中 / 没有更多了
-                        if (loadingMore) {
-                            Row(
+                    // van-list 的加载中 / 没有更多了 —— 改成列表内的 item（原非懒实现里是 Column 尾巴）
+                    item(key = "footer") {
+                        when {
+                            loadingMore -> Row(
                                 Modifier.fillMaxWidth().padding(vertical = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.Center,
                             ) {
                                 VanLoading(size = 16.sp)
                                 Spacer(Modifier.size(6.dp))
-                                FText("加载中...", 13f, FontWeight.Normal, colors.textTertiary)
+                                FText("加载中...", 14f, FontWeight.Normal, colors.textTertiary)
                             }
-                        } else if (total > 0 && rows.size >= total) {
-                            Box(Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
-                                FText("没有更多了", 13f, FontWeight.Normal, colors.textTertiary)
-                            }
+
+                            total > 0 && rows.size >= total ->
+                                Box(Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
+                                    FText("没有更多了", 14f, FontWeight.Normal, colors.textTertiary)
+                                }
                         }
-                        Box(Modifier.height(100.dp)) // 页面底部占位
                     }
+                    item(key = "bottom-spacer") { Box(Modifier.height(100.dp)) } // web 底部 `height:100px` 占位
                 }
             }
         }
 
-        // 回顶按钮：fixed right 16 / bottom 80 / 40×40 圆形（内容区已上抬 90dp，故 +10dp 回到与 web 同一视口位置）
+        // 回顶按钮：web `.back-top{fixed; right:16px; bottom:80px}` —— **80dp 必须自己从屏幕底算**。
+        // 旧注释「内容区已上抬 90dp，故 +10dp 回到同一视口位置」在第二十一轮之后就不成立了：
+        // 那轮把内容区的 `padding(bottom=90dp)` 去掉（岛收起时露大黑条），内容改成整屏高，
+        // 这个 +10dp 补偿于是变成「往下 10dp」⇒ 两个浮钮一起沉到屏幕底边、压住底部岛（负责人 2026-09-20 报）。
         if (showBackTop) {
             Box(
                 Modifier
                     .align(Alignment.BottomEnd)
-                    .offset(y = 10.dp)
-                    .padding(end = 16.dp)
+                    .padding(end = 16.dp, bottom = 80.dp)
                     .size(40.dp)
                     .cssShadowCircle(WebShadow(0f, 2f, 12f, Color.Black.copy(alpha = 0.15f)))
                     .clip(CircleShape)
                     .background(colors.bgCard)
-                    .clickable { scope.launch { scroll.animateScrollTo(0) } },
+                    .clickable { scope.launch { gridState.animateScrollToItem(0, 0) } },
                 contentAlignment = Alignment.Center,
             ) { VanIcon(name = "back-top", size = 20.sp, color = colors.primary) }
         }
 
-        // 发布浮钮：fixed 居中 / bottom 80 / 50×50 圆形主色
+        // 发布浮钮：web `.add-diary-btn{fixed; left:50%; bottom:80px}` —— 80dp 同样自己从屏幕底算
+        // （岛 `bottom:20dp` + 高 ≈58dp ⇒ 顶边就在 78dp 附近，所以 80dp 正好「浮在底部 Bar 上面一点点」）。
         val fabAlpha by animateFloatAsState(if (fabHidden) 0f else 1f, tween(300), label = "fabAlpha")
         val fabOffset by animateFloatAsState(if (fabHidden) 100f else 0f, tween(300), label = "fabOffset")
         Box(
             Modifier
                 .align(Alignment.BottomCenter)
-                .offset(y = (10 + fabOffset).dp)
+                .padding(bottom = 80.dp)
+                .offset(y = fabOffset.dp)
                 .alpha(fabAlpha)
                 .size(50.dp)
                 .cssShadowCircle(WebShadow(0f, 4f, 12f, Color.Black.copy(alpha = 0.15f)))
@@ -326,7 +353,7 @@ private fun DiaryCard(
                     ) {
                         VanIcon(name = "photo-o", size = 10.sp, color = Color.White)
                         Spacer(Modifier.size(2.dp))
-                        FText("${item.imageCount}", 10f, FontWeight.Normal, Color.White)
+                        FText("${item.imageCount}", 12f, FontWeight.Normal, Color.White)
                     }
                 }
             }
@@ -340,8 +367,8 @@ private fun DiaryCard(
                 overflow = TextOverflow.Ellipsis,
                 style = TextStyle(
                     color = colors.textPrimary,
-                    fontSize = 13.sp,
-                    lineHeight = 18.85.sp, // line-height: 1.45
+                    fontSize = scaledSp(14f),
+                    lineHeight = scaledSp(18.85f), // line-height: 1.45
                     fontWeight = FontWeight.Medium,
                 ),
             )
@@ -353,20 +380,21 @@ private fun DiaryCard(
                     if (item.mood.isNotBlank()) {
                         Box(
                             Modifier
-                                .background(VAN_PURPLE.copy(alpha = 0.1f), RoundedCornerShape(4.dp))
+                                .background(VanPurpleFixed.copy(alpha = 0.1f), RoundedCornerShape(4.dp))
                                 .padding(horizontal = 6.dp, vertical = 2.dp),
-                        ) { FText(item.mood, 10f, FontWeight.Normal, VAN_PURPLE) }
+                        ) { FText(item.mood, 12f, FontWeight.Normal, VanPurpleFixed) }
                     }
                     if (item.childrenCount > 0) {
                         Row(
                             Modifier
-                                .background(VAN_GREEN.copy(alpha = 0.1f), RoundedCornerShape(4.dp))
+                                // web `DiaryCard.vue:250`：`background: var(--van-green-bg, #f0f9eb)` —— 深浅两模式**都**是 #f0f9eb
+                                .background(VanGreenBgFixed, RoundedCornerShape(4.dp))
                                 .padding(horizontal = 6.dp, vertical = 2.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            VanIcon(name = "chat-o", size = 10.sp, color = VAN_GREEN)
+                            VanIcon(name = "chat-o", size = 10.sp, color = vanGreen())
                             Spacer(Modifier.size(3.dp))
-                            FText("${item.childrenCount} 笔追文", 10f, FontWeight.Normal, VAN_GREEN)
+                            FText("${item.childrenCount} 笔追文", 12f, FontWeight.Normal, vanGreen())
                         }
                     }
                 }
@@ -387,7 +415,7 @@ private fun DiaryCard(
                         text = userName.ifBlank { "用户" },
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        style = TextStyle(color = colors.textSecondary, fontSize = 11.sp),
+                        style = TextStyle(color = colors.textSecondary, fontSize = scaledSp(12f)),
                     )
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) { // .time-wrap{gap:8}
@@ -397,10 +425,10 @@ private fun DiaryCard(
                             Modifier
                                 .background(VAN_GREEN_BG, RoundedCornerShape(3.dp))
                                 .padding(horizontal = 4.dp, vertical = 1.dp),
-                        ) { FText(d, 9f, FontWeight.Normal, VAN_GREEN) }
+                        ) { FText(d, 12f, FontWeight.Normal, vanGreen()) }
                     }
                     Spacer(Modifier.size(8.dp))
-                    FText(momentTime(item.createTime), 10f, FontWeight.Normal, colors.textTertiary)
+                    FText(momentTime(item.createTime), 12f, FontWeight.Normal, colors.textTertiary)
                 }
             }
             Box(Modifier.fillMaxWidth().padding(top = 8.dp).height(1.dp).background(colors.border))
@@ -411,7 +439,7 @@ private fun DiaryCard(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     VanIcon(name = "location-o", size = 10.sp, color = colors.textTertiary)
                     Spacer(Modifier.size(3.dp))
-                    FText(item.locationName, 10f, FontWeight.Normal, colors.textTertiary)
+                    FText(item.locationName, 12f, FontWeight.Normal, colors.textTertiary)
                 }
             }
         }

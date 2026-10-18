@@ -52,9 +52,11 @@ import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import com.live.finance.App
 import com.live.finance.core.net.ApiResult
+import com.live.finance.core.net.failMessage
 import com.live.finance.data.model.DbSqlImportResult
 import com.live.finance.data.model.DbValidateResult
 import com.live.finance.theme.LocalAppColors
+import com.live.finance.theme.scaledSp
 import com.live.finance.ui.common.AppButton
 import com.live.finance.ui.common.AppButtonSize
 import com.live.finance.ui.common.AppButtonType
@@ -77,6 +79,8 @@ import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import com.live.finance.core.net.showFail
+import com.live.vant.feedback.VanToastType
 
 /**
  * 数据导入 —— 一比一复刻 web `views/Finance/data/DbImport.vue`。
@@ -149,7 +153,8 @@ fun DbImportScreen(nav: NavHostController) {
     LaunchedEffect(Unit) {
         when (val r = graph.data.tables()) {
             is ApiResult.Ok -> allTables = r.data.orEmpty()
-            else -> toast.show("加载表列表失败")
+            // web `loadTableList` 的 catch → showToast({ message: "加载表列表失败", type: "fail" })
+            else -> toast.showFail(r, "加载表列表失败")
         }
     }
 
@@ -159,30 +164,36 @@ fun DbImportScreen(nav: NavHostController) {
         scope.launch {
             val name = uriDisplayName(ctx, uri)
             if (!name.lowercase().endsWith(".json")) {
-                toast.show("请上传 JSON 文件")
+                toast.warning("请上传 JSON 文件")
                 return@launch
             }
             val text = withContext(Dispatchers.IO) {
                 runCatching { ctx.contentResolver.openInputStream(uri)?.use { it.readBytes() } }.getOrNull()
             }
             if (text == null) {
-                toast.show("JSON解析失败")
+                toast.fail("JSON解析失败")
                 return@launch
             }
             if (text.size > 10 * 1024 * 1024) {
-                toast.show("文件超过10MB，请拆分后导入")
+                toast.warning("文件超过10MB，请拆分后导入")
                 jsonRows = emptyList(); jsonFields = emptyList(); jsonFileName = ""
                 return@launch
             }
             val parsed = runCatching { JsonParser.parseString(String(text, Charsets.UTF_8)) }.getOrNull()
-            if (parsed == null || !parsed.isJsonArray) {
-                toast.show("JSON文件格式错误，应为数组")
+            if (parsed == null) {
+                // web：JSON.parse 抛错 → showToast({ message: "JSON解析失败", type: "fail" })
+                toast.fail("JSON解析失败")
+                jsonRows = emptyList(); jsonFields = emptyList(); jsonFileName = ""
+                return@launch
+            }
+            if (!parsed.isJsonArray) {
+                toast.warning("JSON文件格式错误，应为数组")
                 jsonRows = emptyList(); jsonFields = emptyList(); jsonFileName = ""
                 return@launch
             }
             val arr = parsed.asJsonArray
             if (arr.size() > 50_000) {
-                toast.show("单次导入不能超过5万条数据")
+                toast.warning("单次导入不能超过5万条数据")
                 jsonRows = emptyList(); jsonFields = emptyList(); jsonFileName = ""
                 return@launch
             }
@@ -203,18 +214,18 @@ fun DbImportScreen(nav: NavHostController) {
             val name = uriDisplayName(ctx, uri)
             val lower = name.lowercase()
             if (!lower.endsWith(".sql") && !lower.endsWith(".zip")) {
-                toast.show("请上传 .sql 或 .zip 文件")
+                toast.warning("请上传 .sql 或 .zip 文件")
                 return@launch
             }
             val bytes = withContext(Dispatchers.IO) {
                 runCatching { ctx.contentResolver.openInputStream(uri)?.use { it.readBytes() } }.getOrNull()
             }
             if (bytes == null) {
-                toast.show("读取文件失败")
+                toast.show("读取文件失败", VanToastType.Fail)
                 return@launch
             }
             if (bytes.size > 100 * 1024 * 1024) {
-                toast.show("文件超过 100MB 限制")
+                toast.warning("文件超过 100MB 限制")
                 return@launch
             }
             sqlFileName = name
@@ -244,14 +255,14 @@ fun DbImportScreen(nav: NavHostController) {
                     importTime = nowText()
                     statusType = "danger"; statusText = "导入失败"
                     importCompleted = true
-                    toast.show(r.message.ifBlank { "导入失败" })
+                    toast.fail(r.message.ifBlank { "导入失败" })
                 }
                 is ApiResult.NeedPin -> toast.show("需先验证 PIN")
                 else -> {
                     importTime = nowText()
                     statusType = "danger"; statusText = "导入失败"
                     importCompleted = true
-                    toast.show("导入失败")
+                    toast.showFail(r, "导入失败")
                 }
             }
             loading = false
@@ -259,6 +270,8 @@ fun DbImportScreen(nav: NavHostController) {
     }
 
     fun runSqlImport() {
+        // web `handleSqlImport`：未选文件 → 「请先选择 SQL 文件」（按钮已 disabled，此处同源兜底）
+        if (sqlFileName.isBlank() || sqlBytes == null) return toast.warning("请先选择 SQL 文件")
         val bytes = sqlBytes ?: return
         loading = true
         importCompleted = false
@@ -272,7 +285,7 @@ fun DbImportScreen(nav: NavHostController) {
                     sqlResult = d
                     if (d.errorCount > 0) {
                         statusType = "warning"; statusText = "部分失败"
-                        toast.show("SQL 导入完成，${d.errorCount} 条语句失败")
+                        toast.warning("SQL 导入完成，${d.errorCount} 条语句失败")
                     } else {
                         statusType = "success"; statusText = "导入成功"
                         toast.success("SQL 导入成功")
@@ -283,14 +296,14 @@ fun DbImportScreen(nav: NavHostController) {
                     importTime = nowText()
                     statusType = "danger"; statusText = "导入失败"
                     importCompleted = true
-                    toast.show(r.message.ifBlank { "导入失败" })
+                    toast.fail(r.message.ifBlank { "导入失败" })
                 }
                 is ApiResult.NeedPin -> toast.show("需先验证 PIN")
                 else -> {
                     importTime = nowText()
                     statusType = "danger"; statusText = "导入失败"
                     importCompleted = true
-                    toast.show("导入失败")
+                    toast.showFail(r, "导入失败")
                 }
             }
             loading = false
@@ -313,7 +326,7 @@ fun DbImportScreen(nav: NavHostController) {
                 VanIcon(name = "arrow-up", size = 48.sp, color = DB_ORANGE)
                 Spacer(Modifier.height(12.dp))
                 FText("数据导入", 20f, FontWeight.Bold, colors.textPrimary, Modifier.padding(bottom = 8.dp))
-                FText("从文件导入数据到数据库", 14f, FontWeight.Normal, colors.textTertiary)
+                FText("从文件导入数据到数据库", 16f, FontWeight.Normal, colors.textTertiary)
             }
             Spacer(Modifier.height(20.dp))
 
@@ -369,7 +382,7 @@ fun DbImportScreen(nav: NavHostController) {
                         AppCell(
                             title = "当前选择表",
                             border = false,
-                            rightIcon = { FText(selectedTable, 14f, FontWeight.Medium, colors.primary) },
+                            rightIcon = { FText(selectedTable, 16f, FontWeight.Medium, colors.primary) },
                         )
                     }
                 }
@@ -410,7 +423,7 @@ fun DbImportScreen(nav: NavHostController) {
                                             BasicText(
                                                 jsonValueText(e.value),
                                                 modifier = Modifier.weight(1f),
-                                                style = TextStyle(color = colors.textPrimary, fontSize = 12.sp, lineHeight = 21.6.sp),
+                                                style = TextStyle(color = colors.textPrimary, fontSize = scaledSp(12f), lineHeight = scaledSp(21.6f)),
                                             )
                                         }
                                     }
@@ -423,6 +436,11 @@ fun DbImportScreen(nav: NavHostController) {
                     AppButton(
                         text = "校验数据",
                         onClick = {
+                            // web `handleValidate`：未选表或文件 → showToast({ message: "请先选择表和文件", type: "warning" })
+                            if (selectedTable.isBlank() || jsonRows.isEmpty()) {
+                                toast.warning("请先选择表和文件")
+                                return@AppButton
+                            }
                             validating = true
                             scope.launch {
                                 when (val r = graph.data.validateImport(selectedTable, jsonRows)) {
@@ -430,9 +448,10 @@ fun DbImportScreen(nav: NavHostController) {
                                         validation = r.data
                                         val v = r.data
                                         if (v?.canImport == true) toast.success("数据校验通过")
-                                        else toast.show("有 ${v?.invalidRows ?: 0} 行数据存在问题")
+                                        else toast.warning("有 ${v?.invalidRows ?: 0} 行数据存在问题")
                                     }
-                                    else -> toast.show("校验失败")
+                                    // web：showToast({ message: e?.message || "校验失败", type: "fail" })
+                                    else -> toast.showFail(r, "校验失败")
                                 }
                                 validating = false
                             }
@@ -442,7 +461,7 @@ fun DbImportScreen(nav: NavHostController) {
                         block = true,
                         round = true,
                         loading = validating,
-                        modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 16.dp),
+                        modifier = Modifier.padding(bottom = 16.dp),
                     )
                 }
 
@@ -534,7 +553,7 @@ fun DbImportScreen(nav: NavHostController) {
                 round = true,
                 loading = loading,
                 disabled = !canImport,
-                modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 20.dp),
+                modifier = Modifier.padding(bottom = 20.dp),
             )
 
             if (importCompleted) {
@@ -567,8 +586,8 @@ fun DbImportScreen(nav: NavHostController) {
                                     Column(Modifier.width(200.dp)) {
                                         failed.forEach { e ->
                                             Column(Modifier.fillMaxWidth().border(1.dp, colors.border).padding(vertical = 4.dp)) {
-                                                FText("第 ${e.index} 条: ${e.message}", 11f, FontWeight.Normal, colors.danger)
-                                                FText(e.sql, 10f, FontWeight.Normal, colors.textTertiary, Modifier.padding(top = 2.dp))
+                                                FText("第 ${e.index} 条: ${e.message}", 12f, FontWeight.Normal, colors.danger)
+                                                FText(e.sql, 12f, FontWeight.Normal, colors.textTertiary, Modifier.padding(top = 2.dp))
                                             }
                                         }
                                     }
@@ -586,7 +605,7 @@ fun DbImportScreen(nav: NavHostController) {
                                 modifier = Modifier.width(160.dp),
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis,
-                                style = TextStyle(color = colors.primary, fontSize = 12.sp, fontFamily = FontFamily.Monospace),
+                                style = TextStyle(color = colors.primary, fontSize = scaledSp(12f), fontFamily = FontFamily.Monospace),
                             )
                         },
                     )

@@ -330,6 +330,7 @@ class RemoteDataRepository(private val client: ApiClient) : DataRepository {
             id = str(o, "id").ifEmpty { str(o, "taskId") },
             type = str(o, "type"),
             status = str(o, "status"),
+            reuseExisting = runCatching { o.get("reuseExisting")?.asBoolean ?: false }.getOrDefault(false),
             tableName = str(o, "tableName"),
             tableSize = lng(o, "tableSize"),
             progress = lng(o, "progress").toInt(),

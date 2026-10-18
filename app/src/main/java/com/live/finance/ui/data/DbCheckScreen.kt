@@ -41,6 +41,7 @@ import com.live.finance.App
 import com.live.finance.core.net.ApiResult
 import com.live.finance.data.model.DbTableStatus
 import com.live.finance.theme.LocalAppColors
+import com.live.finance.theme.scaledSp
 import com.live.finance.ui.common.AppButton
 import com.live.finance.ui.common.AppButtonSize
 import com.live.finance.ui.common.AppButtonType
@@ -152,7 +153,7 @@ fun DbCheckScreen(nav: NavHostController) {
                     VanIcon(name = "passed", size = 48.sp, color = colors.primary)
                     Spacer(Modifier.height(12.dp))
                     FText("数据库检查", 20f, FontWeight.Bold, colors.textPrimary, Modifier.padding(bottom = 8.dp))
-                    FText("检查数据库连接状态和数据完整性", 14f, FontWeight.Normal, colors.textTertiary)
+                    FText("检查数据库连接状态和数据完整性", 16f, FontWeight.Normal, colors.textTertiary)
                 }
             }
 
@@ -198,7 +199,7 @@ fun DbCheckScreen(nav: NavHostController) {
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         VanIcon(name = "records-o", size = 16.sp, color = colors.textPrimary, modifier = Modifier.padding(end = 10.dp))
-                        FText("数据库表状态", 14f, FontWeight.Normal, colors.textPrimary, Modifier.weight(1f))
+                        FText("数据库表状态", 16f, FontWeight.Normal, colors.textPrimary, Modifier.weight(1f))
                         VanIcon(
                             name = "arrow", size = 16.sp, color = colors.textTertiary,
                             modifier = Modifier.rotate(if (expanded) 90f else 0f),
@@ -227,19 +228,25 @@ fun DbCheckScreen(nav: NavHostController) {
 private fun DbSectionTitle(text: String, topSpacingZero: Boolean = false) {
     val colors = LocalAppColors.current
     FText(
-        text, 13f, FontWeight.Medium, colors.textTertiary,
-        Modifier.padding(start = 16.dp, end = 16.dp, top = if (topSpacingZero) 0.dp else 8.dp, bottom = 8.dp),
+        text, 14f, FontWeight.Medium, colors.textTertiary,
+        // ⚠ 手机适配（同 `DbExportScreen.DbGroupTitle`）：去掉叠加在根 padding 上的左右 16，
+        //   与卡片 / 头部卡统一左对齐到 16。
+        Modifier.padding(top = if (topSpacingZero) 0.dp else 8.dp, bottom = 8.dp),
     )
 }
 
-/** `van-cell-group inset .app-card`：圆角 **12**（本页 `.app-card` 覆写）、左右内缩 16、overflow hidden。 */
+/**
+ * `van-cell-group inset .app-card`：圆角 **12**（本页 `.app-card` 覆写）、overflow hidden。
+ *
+ * ⚠ 手机适配（同 `DbExportScreen.DbCardGroup`）：去掉 `inset` 那层左右 16 ⇒ 卡片与头部卡 / 标题
+ *   统一左对齐到 16，行内容多出 32dp。
+ */
 @Composable
 private fun CardGroup(content: @Composable () -> Unit) {
     val colors = LocalAppColors.current
     Column(
         Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(colors.bgCard),
     ) { content() }
@@ -311,7 +318,7 @@ private fun TableCell(
                     dim -> colors.textTertiary
                     else -> colors.textSecondary
                 },
-                fontSize = if (mono) 11.sp else 12.sp,
+                fontSize = if (mono) scaledSp(11f) else scaledSp(12f),
                 fontWeight = if (header) FontWeight.SemiBold else FontWeight.Normal,
                 fontFamily = if (mono) FontFamily.Monospace else FontFamily.Default,
                 textAlign = align,

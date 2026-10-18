@@ -44,10 +44,13 @@ import androidx.navigation.NavHostController
 import com.live.finance.App
 import com.live.finance.core.AppConfig
 import com.live.finance.core.net.ApiResult
+import com.live.finance.core.net.failMessage
 import com.live.finance.data.model.Moment
 import com.live.finance.data.model.User
 import com.live.finance.theme.LocalAppColors
+import com.live.finance.theme.vanGreen
 import com.live.finance.theme.LocalAppTokens
+import com.live.finance.theme.scaledSp
 import com.live.finance.ui.common.AppButton
 import com.live.finance.ui.common.AppButtonSize
 import com.live.finance.ui.common.AppButtonType
@@ -60,6 +63,7 @@ import com.live.vant.basic.VanImage
 import com.live.vant.basic.VanLoading
 import com.live.vant.feedback.LocalVanToastController
 import com.live.vant.feedback.VanActionSheet
+import com.live.vant.feedback.VanAlertDialog
 import com.live.vant.feedback.VanConfirmDialog
 import com.live.vant.feedback.VanImagePreview
 import com.live.vant.feedback.VanPopup
@@ -69,16 +73,22 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.Calendar
 import java.util.Date
+import com.live.finance.core.net.showFail
+import com.live.vant.feedback.VanToastType
 
-/** 分享链接的站点域名（对齐 web `ENV.SITE_URL` 默认值 `http://localhost`）。 */
-private const val SITE_URL = "http://localhost"
+/** 分享链接的站点域名。
+ *
+ * 取值来自 [AppConfig.siteUrl]，对齐 web `src/utils/env.js` 的 `SITE_URL`。
+ * 🚫 2026-10-17：不再有 `http://localhost` 兜底 —— 值只来自「设置 → 分享 URL」的本机保存项，
+ *   未填写时为空串；分享入口在点击时已用 `SiteStore.shareUrl() == null` 阻断。
+ *   公网分发应引导用户填 **https** 地址。安全整改 P2-21。 */
+private val SITE_URL: String get() = AppConfig.siteUrl
 
-/** `--van-danger-color`（.delete-btn 文字）与其 fallback 底色 `--van-danger-bg #fff0f0`。 */
-private val VAN_DANGER = Color(0xFFEE0A24)
+/** web `Diary/Detail.vue:759/896` `.delete-btn`：
+ *  `color: var(--van-danger-color)` —— **`--van-danger-color` 在 `:root`** → 两模式 = --theme-danger，用 `colors.danger`。
+ *  `background: var(--van-danger-bg, #fff0f0)` —— 深色 #fff0f0、浅色 fallback 也正好是 #fff0f0 → 两模式同值。 */
 private val VAN_DANGER_BG = Color(0xFFFFF0F0)
 
-/** Vant `--van-green`（分享状态开关 active-color / 密码色）。 */
-private val VAN_GREEN = Color(0xFF07C160)
 
 private val DURATION_OPTIONS = listOf(1 to "1 小时", 6 to "6 小时", 12 to "12 小时", 24 to "24 小时", 48 to "48 小时", 72 to "72 小时")
 
@@ -121,12 +131,16 @@ fun DiaryDetailScreen(nav: NavHostController, id: String) {
     // 分享
     var showShare by remember { mutableStateOf(false) }
     var showShareResult by remember { mutableStateOf(false) }
+    var showShareMissing by remember { mutableStateOf(false) }
     var shareOn by remember { mutableStateOf(false) }
     var shareLoading by remember { mutableStateOf(false) }
     var shareDuration by remember { mutableStateOf(1) }
     var showDuration by remember { mutableStateOf(false) }
     var shareToken by remember { mutableStateOf("") }
     var sharePassword by remember { mutableStateOf("") }
+
+    // 分享 URL（Web 端地址）本地存储：未填写时分享功能阻断（弹提示引导去设置）
+    val siteStore = remember { com.live.finance.core.store.SiteStore(ctx) }
 
     val isShared = (detail?.vt ?: 0) == 1
 
@@ -147,7 +161,7 @@ fun DiaryDetailScreen(nav: NavHostController, id: String) {
                 val ids = r.data?.childrenIds.orEmpty()
                 if (ids.isNotEmpty()) loadChildren(ids) else children = emptyList()
             }
-            else -> toast.show("加载失败")
+            else -> toast.showFail(r, "加载失败")
         }
         loading = false
     }
@@ -155,7 +169,7 @@ fun DiaryDetailScreen(nav: NavHostController, id: String) {
     LaunchedEffect(id) {
         (graph.auth.getUserinfo() as? ApiResult.Ok)?.data?.let { user = it }
         if (id.isBlank()) {
-            toast.show("参数错误")
+            toast.show("参数错误", VanToastType.Fail)
             nav.popBackStack()
         } else {
             loadDetail()
@@ -193,15 +207,15 @@ fun DiaryDetailScreen(nav: NavHostController, id: String) {
             val targetId = if (deleteMain) detail?.id.orEmpty() else deleteChildId.orEmpty()
             when (val r = graph.moment.delete(targetId)) {
                 is ApiResult.Ok -> {
-                    toast.show("删除成功")
+                    toast.show("删除成功", VanToastType.Success)
                     if (deleteMain) {
                         nav.popBackStack()
                     } else {
                         detail?.let { d -> if (d.childrenIds.isNotEmpty()) loadChildren(d.childrenIds) }
                     }
                 }
-                is ApiResult.Fail -> toast.show(r.message)
-                else -> toast.show("删除失败")
+                is ApiResult.Fail -> toast.show(r.message, VanToastType.Fail)
+                else -> toast.showFail(r, "删除失败")
             }
         }
     }
@@ -219,11 +233,11 @@ fun DiaryDetailScreen(nav: NavHostController, id: String) {
                         showShare = false
                         showShareResult = true
                     } else {
-                        toast.show("开启分享失败")
+                        toast.show("开启分享失败", VanToastType.Fail)
                     }
                 }
-                is ApiResult.Fail -> toast.show("开启分享失败")
-                else -> toast.show("开启分享失败")
+                is ApiResult.Fail -> toast.show("开启分享失败", VanToastType.Fail)
+                else -> toast.showFail(r, "开启分享失败")
             }
             shareLoading = false
         }
@@ -238,8 +252,8 @@ fun DiaryDetailScreen(nav: NavHostController, id: String) {
                     showShare = false
                     toast.show("分享已关闭")
                 }
-                is ApiResult.Fail -> toast.show("关闭分享失败")
-                else -> toast.show("关闭分享失败")
+                is ApiResult.Fail -> toast.show("关闭分享失败", VanToastType.Fail)
+                else -> toast.showFail(r, "关闭分享失败")
             }
             shareLoading = false
         }
@@ -256,10 +270,10 @@ fun DiaryDetailScreen(nav: NavHostController, id: String) {
                         if (t.isNotEmpty()) {
                             copyToClipboard("$SITE_URL/share/diary/detail?token=$t", "公共链接已复制")
                         } else {
-                            toast.show("生成失败")
+                            toast.show("生成失败", VanToastType.Fail)
                         }
                     }
-                    else -> toast.show("生成链接失败")
+                    else -> toast.showFail(r, "生成链接失败")
                 }
             }
         } else {
@@ -320,7 +334,7 @@ fun DiaryDetailScreen(nav: NavHostController, id: String) {
                                 Column(Modifier.weight(1f)) {
                                     FText(
                                         user?.username.orEmpty().ifBlank { "用户" },
-                                        16f, FontWeight.SemiBold, colors.textPrimary,
+                                        18f, FontWeight.SemiBold, colors.textPrimary,
                                     )
                                     FText(relativeTime(d.createTime), 12f, FontWeight.Normal, colors.textTertiary)
                                 }
@@ -388,7 +402,7 @@ fun DiaryDetailScreen(nav: NavHostController, id: String) {
                                         BasicText(
                                             d.locationName,
                                             maxLines = 1,
-                                            style = TextStyle(color = colors.textTertiary, fontSize = 12.sp),
+                                            style = TextStyle(color = colors.textTertiary, fontSize = scaledSp(12f)),
                                         )
                                     }
                                 }
@@ -399,16 +413,22 @@ fun DiaryDetailScreen(nav: NavHostController, id: String) {
                                             .clip(RoundedCornerShape(4.dp))
                                             .background(colors.bgThird)
                                             .clickable {
-                                                shareOn = isShared
-                                                shareDuration = 1
-                                                showShare = true
+                                                // 分享 URL（Web 端）未填写 ⇒ 阻断并引导去设置
+                                                // （分享链接是网页链接，落地页只有 web 端有，2026-10-14）
+                                                if (siteStore.shareUrl() == null) {
+                                                    showShareMissing = true
+                                                } else {
+                                                    shareOn = isShared
+                                                    shareDuration = 1
+                                                    showShare = true
+                                                }
                                             }
                                             .padding(horizontal = 12.dp, vertical = 6.dp),
                                         verticalAlignment = Alignment.CenterVertically,
                                     ) {
                                         VanIcon(name = "share-o", size = 13.sp, color = colors.textSecondary)
                                         Spacer(Modifier.width(4.dp))
-                                        FText(if (isShared) "关闭分享" else "分享", 13f, FontWeight.Normal, colors.textSecondary)
+                                        FText(if (isShared) "关闭分享" else "分享", 14f, FontWeight.Normal, colors.textSecondary)
                                     }
                                     // .delete-btn
                                     Row(
@@ -419,9 +439,9 @@ fun DiaryDetailScreen(nav: NavHostController, id: String) {
                                             .padding(horizontal = 12.dp, vertical = 6.dp),
                                         verticalAlignment = Alignment.CenterVertically,
                                     ) {
-                                        VanIcon(name = "delete-o", size = 13.sp, color = VAN_DANGER)
+                                        VanIcon(name = "delete-o", size = 13.sp, color = colors.danger)
                                         Spacer(Modifier.width(4.dp))
-                                        FText("删除", 13f, FontWeight.Normal, VAN_DANGER)
+                                        FText("删除", 14f, FontWeight.Normal, colors.danger)
                                     }
                                 }
                             }
@@ -434,7 +454,7 @@ fun DiaryDetailScreen(nav: NavHostController, id: String) {
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween,
                             ) {
-                                FText("追文", 17f, FontWeight.SemiBold, colors.textPrimary)
+                                FText("追文", 18f, FontWeight.SemiBold, colors.textPrimary)
                                 FText("${children.size} 条今日追文", 12f, FontWeight.Normal, colors.textTertiary)
                             }
                             when {
@@ -448,7 +468,7 @@ fun DiaryDetailScreen(nav: NavHostController, id: String) {
                                 ) {
                                     VanIcon(name = "edit", size = 36.sp, color = Color(0xFFE0E0E0))
                                     Spacer(Modifier.height(8.dp))
-                                    FText("暂无补充内容", 14f, FontWeight.Normal, colors.textSecondary)
+                                    FText("暂无补充内容", 16f, FontWeight.Normal, colors.textSecondary)
                                 }
 
                                 else -> children.forEachIndexed { idx, child ->
@@ -531,10 +551,10 @@ fun DiaryDetailScreen(nav: NavHostController, id: String) {
                                                 horizontalArrangement = Arrangement.SpaceBetween,
                                             ) {
                                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                                    FText(relativeTime(child.createTime), 11f, FontWeight.Normal, colors.textTertiary)
+                                                    FText(relativeTime(child.createTime), 12f, FontWeight.Normal, colors.textTertiary)
                                                     if (child.locationName.isNotBlank()) {
                                                         Spacer(Modifier.width(4.dp))
-                                                        FText("· ${child.locationName}", 11f, FontWeight.Normal, colors.textTertiary)
+                                                        FText("· ${child.locationName}", 12f, FontWeight.Normal, colors.textTertiary)
                                                     }
                                                 }
                                                 Row(
@@ -543,7 +563,7 @@ fun DiaryDetailScreen(nav: NavHostController, id: String) {
                                                         .background(VAN_DANGER_BG)
                                                         .clickable { openDeleteDialog(false, child.id, "确定要删除这条追文吗？") }
                                                         .padding(horizontal = 6.dp, vertical = 2.dp),
-                                                ) { VanIcon(name = "delete-o", size = 12.sp, color = VAN_DANGER) }
+                                                ) { VanIcon(name = "delete-o", size = 12.sp, color = colors.danger) }
                                             }
                                         }
                                     }
@@ -591,25 +611,42 @@ fun DiaryDetailScreen(nav: NavHostController, id: String) {
         onClose = { showDelete = false },
     )
 
+    // 分享 URL 未填写提示（分享链接是网页链接，需已部署的 Web 端才能打开）
+    VanAlertDialog(
+        show = showShareMissing,
+        title = "无法分享",
+        message = "请先在「我的 → 应用设置 → 基础API设定」中填写已部署的 Web 端分享 URL，才能使用分享功能。",
+        confirmButtonText = "知道了",
+        onConfirm = { showShareMissing = false },
+        onClose = { showShareMissing = false },
+    )
+
     // 分享弹窗（app-popup position=bottom round，padding 20 16）
     VanPopup(show = showShare, onDismissRequest = { showShare = false }) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 20.dp)) {
             Box(Modifier.fillMaxWidth().padding(bottom = 20.dp), contentAlignment = Alignment.Center) {
-                FText(if (isShared) "管理分享" else "开启分享", 17f, FontWeight.SemiBold, colors.textPrimary)
+                FText(if (isShared) "管理分享" else "开启分享", 18f, FontWeight.SemiBold, colors.textPrimary)
             }
             Row(
                 Modifier.fillMaxWidth().padding(bottom = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                FText("分享状态", 15f, FontWeight.Normal, colors.textPrimary)
+                FText("分享状态", 16f, FontWeight.Normal, colors.textPrimary)
                 VanSwitch(
                     checked = shareOn,
                     onCheckedChange = { shareOn = it },
                     size = 22, // size="22px"
-                    activeColor = VAN_GREEN,
+                    activeColor = vanGreen(),
                 )
             }
+            // 分享依赖 Web 端提示（2026-10-14）：分享落地页只有 web 端有，外链是网页链接——
+            // 接收方必须能访问「已部署的 Web 端」才能打开；没部署 web 则外链打不开。
+            FText(
+                "分享链接为网页链接：接收方需访问已部署的 Web 端才能打开；未部署 Web 端则外链无法打开。",
+                12f, FontWeight.Normal, Color(0xFFFF976A),
+                Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp),
+            )
             if (shareOn && !isShared) {
                 Row(
                     Modifier
@@ -620,11 +657,11 @@ fun DiaryDetailScreen(nav: NavHostController, id: String) {
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    FText("有效时间", 15f, FontWeight.Normal, colors.textPrimary)
+                    FText("有效时间", 16f, FontWeight.Normal, colors.textPrimary)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         FText(
                             DURATION_OPTIONS.firstOrNull { it.first == shareDuration }?.second ?: "1 小时",
-                            14f, FontWeight.Normal, colors.primary,
+                            16f, FontWeight.Normal, colors.primary,
                         )
                         Spacer(Modifier.width(4.dp))
                         VanIcon(name = "arrow", size = 12.sp, color = colors.primary)
@@ -645,8 +682,8 @@ fun DiaryDetailScreen(nav: NavHostController, id: String) {
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    FText("当前密码", 15f, FontWeight.Normal, colors.textPrimary)
-                    FText(detail?.pw.orEmpty().ifBlank { "***" }, 18f, FontWeight.SemiBold, VAN_GREEN)
+                    FText("当前密码", 16f, FontWeight.Normal, colors.textPrimary)
+                    FText(detail?.pw.orEmpty().ifBlank { "***" }, 18f, FontWeight.SemiBold, vanGreen())
                 }
                 Spacer(Modifier.height(12.dp))
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -703,16 +740,22 @@ fun DiaryDetailScreen(nav: NavHostController, id: String) {
     VanPopup(show = showShareResult, onDismissRequest = { showShareResult = false }) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 24.dp)) {
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                VanIcon(name = "success", size = 40.sp, color = VAN_GREEN)
+                VanIcon(name = "success", size = 40.sp, color = vanGreen())
             }
             Spacer(Modifier.height(8.dp))
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                FText("分享已开启", 17f, FontWeight.SemiBold, colors.textPrimary)
+                FText("分享已开启", 18f, FontWeight.SemiBold, colors.textPrimary)
             }
             Spacer(Modifier.height(12.dp))
             Box(Modifier.fillMaxWidth().padding(bottom = 20.dp), contentAlignment = Alignment.Center) {
-                FText("密码：$sharePassword", 15f, FontWeight.Normal, colors.textSecondary)
+                FText("密码：$sharePassword", 16f, FontWeight.Normal, colors.textSecondary)
             }
+            // 同分享弹窗：外链依赖 Web 端部署（未部署则接收方打不开）
+            FText(
+                "外链需接收方访问已部署的 Web 端打开；未部署 Web 端则外链无法打开。",
+                12f, FontWeight.Normal, Color(0xFFFF976A),
+                Modifier.fillMaxWidth().padding(bottom = 12.dp),
+            )
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 AppButton(
                     text = "密码访问（复制链接）",
@@ -723,6 +766,21 @@ fun DiaryDetailScreen(nav: NavHostController, id: String) {
                     text = "公共访问（复制链接）",
                     onClick = { copyToClipboard("$SITE_URL/share/diary/detail?token=$shareToken", "公共链接已复制") },
                     type = AppButtonType.Primary, round = true, block = true,
+                )
+                AppButton(
+                    // 原生增强：web 复制链接后要去浏览器看，这里直接在 App 内打开分享页
+                    // （`Routes.diaryShare` 二选一：有 token 走公共模式，否则走密码模式）
+                    text = "预览分享页",
+                    onClick = {
+                        val route = if (shareToken.isNotBlank()) {
+                            com.live.finance.core.nav.Routes.diaryShare(token = shareToken)
+                        } else {
+                            com.live.finance.core.nav.Routes.diaryShare(id = detail?.id.orEmpty())
+                        }
+                        runCatching { nav.navigate(route) }
+                        showShareResult = false
+                    },
+                    type = AppButtonType.Default, round = true, block = true, plain = true,
                 )
                 AppButton(
                     text = "关闭",

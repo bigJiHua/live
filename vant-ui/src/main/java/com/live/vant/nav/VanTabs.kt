@@ -30,6 +30,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.live.vant.theme.LocalVantColors
+import com.live.vant.theme.vantDimens
 
 data class VanTabItem(
     val name: String,
@@ -59,6 +60,15 @@ fun VanTabs(
     titleInactiveColor: Color? = null,
     animated: Boolean = false,
     shrink: Boolean = false, // 页签宽度收缩（不拉伸满屏）
+    /**
+     * 导航条背景；`null` 时取 `--van-tabs-nav-background`（[VantColors.navBarBg]）。
+     *
+     * ⚠ 需要显式传的场景：**tabs 被放进一块有自己背景的容器**（如 `.filter-bar` 的
+     *   `--theme-bg-secondary`）时，两者在深色模式下不是同一个值（`navBarBg` 取 bg.primary
+     *   `#0F0F12`，而 `.filter-bar` 是 bg.secondary `#1A1A1E`）⇒ 会出现一条明显的色块接缝。
+     *   传 `LocalAppColors.current.bgCard` 即可对齐（2026-09-19 银行卡收支页反馈）。
+     */
+    navBackground: Color? = null,
     content: @Composable (name: String) -> Unit,
 ) {
     val c = LocalVantColors.current
@@ -71,7 +81,7 @@ fun VanTabs(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(44.dp)
-                .background(c.navBarBg),  // --van-tabs-nav-background（web navBg）
+                .background(navBackground ?: c.navBarBg),  // --van-tabs-nav-background（web navBg）
             verticalAlignment = Alignment.CenterVertically,
         ) {
             tabs.forEachIndexed { index, tab ->
@@ -94,7 +104,7 @@ fun VanTabs(
                             ) {
                                 androidx.compose.foundation.text.BasicText(
                                     tab.title,
-                                    style = TextStyle(color = if (isActive) Color.White else activeColor, fontSize = 14.sp, lineHeight = 20.sp),
+                                    style = TextStyle(color = if (isActive) Color.White else activeColor, fontSize = vantDimens.fontSizeMd, lineHeight = vantDimens.lineHeightMd),
                                 )
                             }
                         } else {
@@ -102,8 +112,8 @@ fun VanTabs(
                                 tab.title,
                                 style = TextStyle(
                                     color = if (tab.disabled) c.textTertiary else if (isActive) fgActive else fgInactive,
-                                    fontSize = 14.sp,
-                                    lineHeight = 20.sp,
+                                    fontSize = vantDimens.fontSizeMd,
+                                    lineHeight = vantDimens.lineHeightMd,
                                 ),
                             )
                         }

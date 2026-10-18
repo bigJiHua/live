@@ -12,6 +12,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -34,6 +35,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -50,6 +52,7 @@ import com.live.finance.App
 import com.live.finance.core.AppConfig
 import com.live.finance.core.nav.Routes
 import com.live.finance.core.net.ApiResult
+import com.live.finance.core.net.failMessage
 import com.live.finance.theme.LocalAppColors
 import com.live.finance.ui.common.AppDialogShell
 import com.live.finance.ui.common.ScreenScaffold
@@ -62,15 +65,18 @@ import com.live.vant.form.VanSimpleKeyboard
 import com.live.vant.icon.VanIcon
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import com.live.finance.core.net.showFail
+import com.live.vant.feedback.VanToastType
 
 // ===== web `User/ProfileEdit.vue` 的度量常量（逐条对照其 scoped CSS）=====
 private val AVATAR_SIZE_D = 100.dp      // van-image width/height="100"
-private val CARD_SHAPE = RoundedCornerShape(12.dp)  // app-popup(center,round) border-radius:12px
 private val FIELD_SHAPE = RoundedCornerShape(10.dp) // .field-wrap / .app-field border-radius:10px
 private val GROUP_SHAPE = RoundedCornerShape(8.dp)  // van-cell-group inset 默认 8px（本页无 .app-card 覆写）
 
 /** 安全键盘总高（4×58 + 3×7 + 工具栏），用于弹窗上移量：web `lift = kbH/2 + 8`。 */
-private val KB_LIFT_D = 152.dp
+// 键盘弹出时整卡上移量 ≈ 键区高度的一半。VanSimpleKeyboard 的度量对齐登录键盘后
+// 整体矮了约 40dp（键高 58→52、键区 253→226、面板 padding 10→5），故上移量同步下调。
+private val KB_LIFT_D = 132.dp
 
 /**
  * 编辑资料页 —— 1:1 复刻 web `src/views/User/ProfileEdit.vue`。
@@ -169,7 +175,7 @@ fun ProfileEditScreen(nav: NavHostController) {
                 val picked = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                     com.live.finance.ui.common.compressUriToJpeg(ctx, uri, maxSide = 512)
                 }
-                if (picked == null) { toast.show("读取图片失败"); uploading = false; return@launch }
+                if (picked == null) { toast.show("读取图片失败", VanToastType.Fail); uploading = false; return@launch }
                 val r = graph.client.uploadRaw(
                     "/upload/single", "file", picked.fileName, picked.mime, picked.bytes,
                     mapOf("busType" to "other"),
@@ -183,13 +189,13 @@ fun ProfileEditScreen(nav: NavHostController) {
                         // 必须转成绝对 URL：后端 avatar 走 Joi `string().uri()`，相对路径会被判「格式不正确」
                         val abs = AppConfig.fullFileUrl(path)
                         when (val up = graph.auth.updateProfile(avatar = abs)) {
-                            is ApiResult.Ok -> { up.data?.let { avatar = it.avatar }; toast.show("头像已更新") }
-                            is ApiResult.Fail -> toast.show(up.message)
-                            else -> toast.show("头像更新失败")
+                            is ApiResult.Ok -> { up.data?.let { avatar = it.avatar }; toast.success("头像已更新") }
+                            is ApiResult.Fail -> toast.show(up.message, VanToastType.Fail)
+                            else -> toast.showFail(up, "头像更新失败")
                         }
                     }
-                    is ApiResult.Fail -> toast.show(r.message)
-                    else -> toast.show("上传失败")
+                    is ApiResult.Fail -> toast.show(r.message, VanToastType.Fail)
+                    else -> toast.showFail(r, "上传失败")
                 }
             }
         }
@@ -203,11 +209,11 @@ fun ProfileEditScreen(nav: NavHostController) {
             when (val r = graph.auth.updateProfile(avatar = url)) {
                 is ApiResult.Ok -> {
                     r.data?.let { avatar = it.avatar }
-                    toast.show("头像已更新")
+                    toast.success("头像已更新")
                     avatarUrl = ""
                 }
-                is ApiResult.Fail -> toast.show(r.message)
-                else -> toast.show("头像更新失败")
+                is ApiResult.Fail -> toast.show(r.message, VanToastType.Fail)
+                else -> toast.showFail(r, "头像更新失败")
             }
         }
     }
@@ -225,10 +231,10 @@ fun ProfileEditScreen(nav: NavHostController) {
             when (val r = graph.auth.updateProfile(username = nameNew)) {
                 is ApiResult.Ok -> {
                     r.data?.let { username = it.username }
-                    toast.show("用户名修改成功")
+                    toast.success("用户名修改成功")
                 }
-                is ApiResult.Fail -> toast.show(r.message)
-                else -> toast.show("用户名修改失败")
+                is ApiResult.Fail -> toast.show(r.message, VanToastType.Fail)
+                else -> toast.showFail(r, "用户名修改失败")
             }
             onDone()
         }
@@ -240,8 +246,8 @@ fun ProfileEditScreen(nav: NavHostController) {
         scope.launch {
             when (val r = graph.auth.sendEmailCode(emailNew, "email")) {
                 is ApiResult.Ok -> { toast.show("验证码已发送"); emailCountdown = 60 }
-                is ApiResult.Fail -> toast.show(r.message)
-                else -> toast.show("发送失败")
+                is ApiResult.Fail -> toast.show(r.message, VanToastType.Fail)
+                else -> toast.showFail(r, "发送失败")
             }
         }
     }
@@ -254,25 +260,25 @@ fun ProfileEditScreen(nav: NavHostController) {
             when (val r = graph.auth.changeEmail(emailNew, emailCode)) {
                 is ApiResult.Ok -> {
                     r.data?.let { email = it.email }
-                    toast.show("邮箱修改成功")
+                    toast.success("邮箱修改成功")
                     submitting = false
                     onSuccess()
                 }
-                is ApiResult.Fail -> { toast.show(r.message); submitting = false }
-                else -> { toast.show("邮箱修改失败"); submitting = false }
+                is ApiResult.Fail -> { toast.show(r.message, VanToastType.Fail); submitting = false }
+                else -> { toast.showFail(r, "邮箱修改失败"); submitting = false }
             }
         }
     }
 
     fun sendPwdCode() {
         if (pwdOld.isBlank() || pwdNew.isBlank() || pwdConfirm.isBlank()) { toast.show("请先填写完整信息"); return }
-        if (pwdNew != pwdConfirm) { toast.show("两次输入的新密码不一致"); return }
+        if (pwdNew != pwdConfirm) { toast.show("两次输入的新密码不一致", VanToastType.Fail); return }
         scope.launch {
             // type=pwd：后端从库里取绑定邮箱，忽略传入 email
             when (val r = graph.auth.sendEmailCode(email, "pwd")) {
                 is ApiResult.Ok -> { toast.show("验证码已发送"); pwdCountdown = 60 }
-                is ApiResult.Fail -> toast.show(r.message)
-                else -> toast.show("发送失败")
+                is ApiResult.Fail -> toast.show(r.message, VanToastType.Fail)
+                else -> toast.showFail(r, "发送失败")
             }
         }
     }
@@ -280,21 +286,21 @@ fun ProfileEditScreen(nav: NavHostController) {
     fun submitPassword(onSuccess: () -> Unit) {
         if (submitting) return
         if (pwdOld.isEmpty() || pwdNew.isEmpty() || pwdCode.isEmpty()) { toast.show("请填写完整信息"); return }
-        if (pwdNew != pwdConfirm) { toast.show("新输入的两次密码不一致"); return }
+        if (pwdNew != pwdConfirm) { toast.show("新输入的两次密码不一致", VanToastType.Fail); return }
         submitting = true
         scope.launch {
             when (val r = graph.auth.changePassword(pwdOld, pwdNew, pwdCode)) {
                 is ApiResult.Ok -> {
                     submitting = false
-                    toast.show("修改成功，请重新登录")
+                    toast.success("修改成功，请重新登录")
                     pwdCountdown = 0
                     onSuccess()
                     delay(1200) // web: setTimeout 1200 → 回首页
                     graph.auth.logout()
                     nav.navigate(Routes.LOGIN) { popUpTo(Routes.MAIN) { inclusive = true } }
                 }
-                is ApiResult.Fail -> { toast.show(r.message); submitting = false }
-                else -> { toast.show("密码修改失败"); submitting = false }
+                is ApiResult.Fail -> { toast.show(r.message, VanToastType.Fail); submitting = false }
+                else -> { toast.showFail(r, "密码修改失败"); submitting = false }
             }
         }
     }
@@ -306,12 +312,6 @@ fun ProfileEditScreen(nav: NavHostController) {
                 .verticalScroll(rememberScrollState())
                 .padding(bottom = 30.dp), // .page-profile-edit padding-bottom: 30px
         ) {
-            // 页面标题（web 在全局 nav-bar 上；原生目前无全局栏，沿用本项目各页自绘标题的约定）
-            FText(
-                "编辑资料", 18f, FontWeight.Bold, colors.textPrimary,
-                Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 16.dp),
-            )
-
             // 1) 头像区
             AvatarSection(
                 avatarUrl = if (avatar.isBlank()) "" else AppConfig.fullFileUrl(avatar),
@@ -614,9 +614,9 @@ private fun ReadonlyLinkField(label: String, value: String, onClick: () -> Unit)
             .clickable { onClick() }
             .padding(horizontal = 16.dp, vertical = 10.dp),
     ) {
-        FText(label, 13f, FontWeight.Normal, colors.textSecondary, Modifier.padding(bottom = 6.dp))
+        FText(label, 14f, FontWeight.Normal, colors.textSecondary, Modifier.padding(bottom = 6.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            FText(value, 14f, FontWeight.Normal, colors.textPrimary, Modifier.weight(1f))
+            FText(value, 16f, FontWeight.Normal, colors.textPrimary, Modifier.weight(1f))
             Spacer(Modifier.width(6.dp))
             VanIcon(name = "arrow", size = 16.sp, color = colors.textTertiary)
         }
@@ -636,7 +636,7 @@ private fun LinkCell(title: String, onClick: () -> Unit) {
             .clickable { onClick() }
             .padding(horizontal = 16.dp, vertical = 12.dp),
     ) {
-        FText(title, 14f, FontWeight.Normal, colors.textPrimary, Modifier.weight(1f))
+        FText(title, 16f, FontWeight.Normal, colors.textPrimary, Modifier.weight(1f))
         Spacer(Modifier.width(6.dp))
         VanIcon(name = "arrow", size = 16.sp, color = colors.textTertiary)
     }
@@ -689,7 +689,11 @@ private fun EditDialog(
 /**
  * 弹窗内字段 —— 对应 `.field-wrap :deep(.app-field)`：
  * 透明底 + 1px border + 圆角 10；激活时描边主色 + 2px 主色内环、label 变主色；
- * label 13px（mb 6），值 14px/行高 1.5（→21sp），激活时值后跟闪烁光标。
+ * label 13px（mb 6），值 14px/行高 1.5（→21sp），激活时显示闪烁光标。
+ *
+ * 光标位置与 [com.live.finance.ui.auth.LoginScreen] 的 `LoginField` **完全同口径**：
+ * 空值激活时光标落在**占位符之前**（= web 空串时假光标 `left:0` 落在首位），
+ * 有值时才跟在文本末尾并随输入右移（`hScroll` 始终贴到 `maxValue`）。
  */
 @Composable
 @Suppress("UNUSED_PARAMETER")
@@ -716,24 +720,35 @@ private fun DialogField(
     ) {
         if (label.isNotEmpty()) {
             FText(
-                label, 13f, FontWeight.Normal,
+                label, 14f, FontWeight.Normal,
                 if (active) colors.primary else colors.textSecondary,
                 Modifier.padding(bottom = 6.dp),
             )
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
+            // ⚠ 光标必须在**占位符之前**（空值激活时）。原先写成「占位符/值 + 光标」⇒ 假光标
+            // 停在「请输入新用户名」的**后面**，用户一眼看出不对（对齐 Login 的 LoginField）。
+            // 超宽时整体左移露出末尾（= web canvas 的 `offset = clientWidth - 文本宽`）。
+            val hScroll = rememberScrollState()
+            LaunchedEffect(hScroll) { snapshotFlow { hScroll.maxValue }.collect { hScroll.scrollTo(it) } }
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).horizontalScroll(hScroll),
             ) {
+                val hasText = value.isNotEmpty()
+                if (active && !hasText) {
+                    BlinkingCursor(colors.primary)
+                    Spacer(Modifier.width(2.dp))
+                }
                 FText(
-                    if (value.isEmpty()) placeholder else value,
-                    14f, FontWeight.Normal,
-                    if (value.isEmpty()) colors.textPlaceholder else colors.textPrimary,
+                    if (hasText) value else placeholder,
+                    16f, FontWeight.Normal,
+                    if (hasText) colors.textPrimary else colors.textPlaceholder,
                     Modifier.padding(vertical = 2.dp),
+                    maxLines = 1,
                 )
-                if (active) {
-                    Spacer(Modifier.width(1.dp))
+                if (active && hasText) {
+                    Spacer(Modifier.width(2.dp))
                     BlinkingCursor(colors.primary)
                 }
             }
@@ -778,7 +793,7 @@ private fun RuleBox(title: String, items: List<Pair<String, Boolean>>) {
         FText(title, 12f, FontWeight.SemiBold, colors.textPrimary, Modifier.padding(bottom = 8.dp))
         items.forEach { (text, ok) ->
             FText(
-                text, 13f,
+                text, 14f,
                 if (ok) FontWeight.Medium else FontWeight.Normal,
                 if (ok) colors.success else colors.textTertiary,
                 Modifier.padding(vertical = 6.dp),
@@ -801,6 +816,6 @@ private fun SmallPrimaryButton(text: String, enabled: Boolean, onClick: () -> Un
             .clickable(enabled = enabled) { onClick() }
             .padding(horizontal = 12.dp),
     ) {
-        FText(text, 13f, FontWeight.Medium, colors.buttonPrimaryText)
+        FText(text, 14f, FontWeight.Medium, colors.buttonPrimaryText)
     }
 }

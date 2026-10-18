@@ -3,6 +3,7 @@
 > 用途：为 `APP/`（Jetpack Compose 原生重写）提供「web 原有功能 + 样式」的完整逐页面参考，便于后续按页重构 UI。
 > 审计对象：`d:/Code/live/web/`（Vue3 + Vant 4.9.22，全量引入），路由表 `web/src/router/map.js`。
 > 审计日期：2026-09-15。共覆盖约 95 个页面 + 18 个通用基础组件。
+> **2026-10-18 复核**：web 侧现状为 `web/src/views` **89 个 `.vue`**、`web/src/components` 19 个文件（18 个 `.vue`）、`web/src/utils/api` 15 个接口模块、`web/src/router/*.js` **96 条 `path:` 声明**（含 redirect）。10 月 web 侧改动主要在接口精简与 toast 换自研实现，**页面清单本身无增删**；本文页码/路由对照如有与上述数字不符处，以本行复核数字为准。
 > 约定：web 已自研一套主题化基础组件（`app-*`）几乎替代 Vant 视觉组件，仅少量借用 `van-icon/password-input/notice-bar/swipe`。所有颜色走 `--theme-*` / `--van-*` CSS 变量，天然支持深色。
 
 ---
@@ -120,7 +121,7 @@ web 自研组件位于 `web/src/components/`，Compose 侧 `vant-ui` 已基本�
 
 ### 3.2 /login — 登录（独立全屏）
 - 头部：logo + 「Gold 财管」+ 副标题。
-- 表单：`app-form` > `van-cell-group inset`；账号 `app-field`（readonly，点击弹 `FullKeyboard`）；密码 `app-field`（readonly，canvas 绘制 `●` 掩码防 F12 泄露，眼睛切换本地显明文）。
+- 表单：`app-form` > `van-cell-group inset`；账号 `app-field`（readonly，点击弹 `FullKeyboard`）；密码 `app-field`（readonly，**input 文字 `opacity:0`，其值 `‘●’.repeat(n)` 只是长度占位、不可见**；防 F12 的可见内容由 canvas 以 **14px 绘制 `*`.repeat(n)**，光标 2×18px 主色，超宽 `offset = clientWidth - 文本宽` 露末尾；眼睛切换本地显明文）。（2026-09-18 修正：原文把 DOM 的 `●` 误记成可见掩码，原生照抄后出现「点过大 + 换行」，见构造书 8.2 P1-18）
 - 提交：`app-button`(round,block,primary,loading) 长度校验 6–30 才允许。
 - 安全键盘弹层：`FullKeyboard`（RSA 公钥就绪后弹起；密码 secure 模式明文不进 DOM）。
 - API：`authApi.login({nameOrEmail,password})`（密码可为 RSA 密文数组或明文兜底）；`getRsaPublicKey` 握手。Token 存 `localStorage.finance_token`。

@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<link rel="stylesheet" href="wangEditor.css">
+<script src="wangEditor.js"></script>
+<style>
+  /*
+   * 主题口径（2026-09-20 第二十七轮负责人拍板）：**编辑区背景跟随主题**。
+   * 依据：web 全仓从未覆盖 wangEditor 的 `--w-e-*` 变量 ⇒ web 的编辑区恒为白底 #333，
+   * 深色主题下与工具条（`.w-e-bar{background:var(--theme-bg-secondary)}`）明显打架。
+   * 他给的二选一是「输入处背景跟随主题，否则整个都别适配、就是白色」⇒ 这里选前者，
+   * 并把 wangEditor 的全部取色点统一挂到原生注入的 `--t-*` 上，避免半主题半白色。
+   */
+  :root {
+    --t-bg-page: #ffffff;
+    --t-bg-card: #f7f8fa;
+    --t-bg-third: #f0f2f5;
+    --t-border: #ebedf0;
+    --t-text-primary: #323233;
+    --t-text-secondary: #646566;
+    --t-text-tertiary: #969799;
+
+    --w-e-textarea-bg-color: var(--t-bg-card);
+    --w-e-textarea-color: var(--t-text-primary);
+    --w-e-textarea-border-color: var(--t-border);
+    --w-e-textarea-slight-bg-color: var(--t-bg-third);
+    --w-e-textarea-slight-color: var(--t-text-tertiary);
+    --w-e-textarea-slight-border-color: var(--t-border);
+    --w-e-toolbar-bg-color: var(--t-bg-card);
+    --w-e-toolbar-color: var(--t-text-secondary);
+    --w-e-toolbar-active-color: var(--t-text-primary);
+    --w-e-toolbar-active-bg-color: var(--t-bg-page);
+    --w-e-toolbar-disabled-color: var(--t-text-tertiary);
+    --w-e-toolbar-border-color: var(--t-border);
+    --w-e-modal-button-bg-color: var(--t-bg-page);
+    --w-e-modal-button-border-color: var(--t-border);
+  }
+  /*
+   * ⚠⚠ 2026-10-18 定案：**不再撑满视口**，改为「工具条 + 固定 10 行书写区」。
+   * 页面总高 = 工具条实际高度 + #editor 固定高度，由页面 JS 量出来通过桥回报，
+   * 原生按这个像素值设置 WebView 高度（见 DiaryRichEditorWebView 的 onEditorHeight）。
+   * 之前用 height:100% / fixed 撑满视口的写法在 Android WebView 首次 0 高布局下会被
+   * 解析成 0（2026-10-17 的「只剩 4 行」），现在彻底不依赖视口高度。
+   */
+  html, body { margin: 0; padding: 0; background: var(--t-bg-card); }
+  body {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* web `.wangeditor-toolbar{border:1px solid var(--theme-border); flex-shrink:0}` */
+  #toolbar { flex: 0 0 auto; border: 1px solid var(--t-border); position: relative; }
+  /*
+   * 书写区固定 10 行：16px × line-height 1.6 × 10 = 256px 内容
+   * + 上下 padding 16px × 2 = 288px。
+   * ⚠ 数值必须与下方 JS 的 EDITOR_H 保持一致。
+   */
+  #editor { flex: 0 0 auto; height: 288px; position: relative; overflow: hidden; }
+  #editor .w-e-text-container { height: 100% !important; border: none !important; }
+  /* 内容超过 10 行后由书写区自己滚动（不然会被 #editor 的 overflow:hidden 裁掉） */
+  #editor .w-e-text-container .w-e-scroll { overflow-y: auto !important; }
+
+  /* web：占位文字与滚动容器「行高、字号严格同步」 */
+  #editor .w-e-text-placeholder { top: 16px !important; left: 16px !important; font-size: 16px !important; line-height: 1.6 !important; color: var(--t-text-tertiary) !important; }
+  #editor .w-e-text-container .w-e-scroll { padding: 16px; font-size: 16px; line-height: 1.6; -webkit-overflow-scrolling: touch; }
+  /* web：段落边距清零，防止首行 p 自带 margin 把光标推离占位文字 */
+  #editor .w-e-text-container [contenteditable="true"] p,
+  #editor .w-e-text-container [contenteditable="true"] .w-e-textarea-2,
+  #editor .w-e-text-container [data-slate-editor] { margin: 0 !important; padding: 0 !important; line-height: 1.6 !important; }
+  #toolbar .w-e-bar, #editor .w-e-bar { background: var(--t-bg-card); }
+  #editor .w-e-bar-item button { padding: 0 6px; }
+</style>
+</head>
+<body>
+<div id="toolbar"></div>
+<div id="editor"></div>
+<script>
+(function () {
+  var bridge = window.AndroidBridge || null;
+  var editor = null;
+
+  // 诊断：编辑器是离线黑盒，整页空白时真机上看不出原因 ⇒ 把错误送回原生（toast + Logcat）。
+  window.onerror = function (msg, src, line, col) {
+    if (bridge && bridge.onError) bridge.onError((msg || 'js error') + ' @' + line + ':' + col);
+    return false;
+  };
+
+  // ===== 与 web `views/Diary/Add.vue` 逐字对齐的两份配置 =====
+  var toolbarConfig = {
+    toolbarKeys: [
+      'bold', 'italic', 'underline', 'through', 'fontSize', 'lineHeight', '|',
+      'bulletedList', 'numberedList', 'clearStyle', 'emotion', '|',
+      {
+        key: 'group-more-style',
+        title: '更多',
+        menuKeys: [
+          'header1', 'header2', 'header3',
+          'blockquote', 'codeBlock', 'divider', 'todo',
+          'undo', 'redo'
+        ]
+      }
+    ]
+  };
+  var editorConfig = {
+    placeholder: '这一刻的想法...',
+    readOnly: false,
+    autoFocus: false,
+    scroll: true,
+    onCreated: function (ed) {
+      editor = ed;
+      // web 的 `editorRef` 就绪时机：Vue 的 onCreated。原生用 ready 决定「编辑器未就绪」提示与指令补发。
+      if (bridge) bridge.onReady();
+      sync();
+    },
+    onChange: function (ed) { syncDebounced(); }
+  };
+
+  // ===== 同步（原生 ← 编辑器）=====
+  // ⚠ 性能（2026-09-20 优化）：`onChange` 是**每个按键**都触发的，原来直接在里面 `sync()`
+  //   ⇒ 每敲一个字都要 `editor.getHtml()`（整篇 DOM 序列化）+ 跨 JNI 回调 + 触发 Compose 重组，
+  //   长文输入明显掉帧。
+  //   现在分两条路径：
+  //   - `sync()`（立即）：onCreated / insertHtml / setHtml 等**指令**后调用，必须马上生效；
+  //   - `syncDebounced()`（250ms 尾部防抖）：输入路径，停止输入后才同步一次；
+  //   - `flush()`：原生在「提交 / 页面暂停 / 失焦」前主动调用，保证拿到的永远是最新内容。
+  var syncTimer = null;
+  var lastHtml = null;
+  var lastText = null;
+
+  function syncNow() {
+    if (!editor || !bridge) return;
+    var html = '';
+    var text = '';
+    try { html = editor.getHtml() || ''; } catch (e) {}
+    try { text = editor.getText() || ''; } catch (e) {}
+    // 内容没变就不要打扰原生（省掉一次 JNI + 一次重组）
+    if (html === lastHtml && text === lastText) return;
+    lastHtml = html;
+    lastText = text;
+    bridge.onHtml(html, text);
+  }
+
+  function sync() { syncNow(); }
+
+  function syncDebounced() {
+    if (syncTimer) clearTimeout(syncTimer);
+    syncTimer = setTimeout(function () {
+      syncTimer = null;
+      syncNow();
+    }, 250);
+  }
+
+  function flush() {
+    if (syncTimer) { clearTimeout(syncTimer); syncTimer = null; }
+    syncNow();
+  }
+
+  /**
+   * 原生 → WebView 只下发**指令**（不发网络请求）：
+   * 数据流单向是 WebView → 原生（onHtml），提交仍由原生走 moment.create。
+   * 必须在 `createEditor` **之前**挂好：`onCreated` 是在 createEditor 内部同步回调的，
+   * 原生收到 onReady 后立刻补发指令队列，晚一帧都够让 `liveEditor` 还是 undefined。
+   */
+  window.liveEditor = {
+    insertHtml: function (html) {
+      if (!editor) return false;
+      editor.focus();
+      editor.dangerouslyInsertHtml(html);   // web 同款：v5 无 insertImg API
+      sync();
+      return true;
+    },
+    setHtml: function (html) {
+      if (!editor) return false;
+      editor.setHtml(html || '');
+      sync();
+      return true;
+    },
+    focus: function () { if (editor) editor.focus(); },
+    sync: sync,
+    /** 原生提交 / 页面暂停前调用：把防抖窗口里未同步的内容立刻推给原生。 */
+    flush: flush,
+    setTheme: function (map) {
+      for (var k in map) {
+        if (Object.prototype.hasOwnProperty.call(map, k)) {
+          document.documentElement.style.setProperty(k, map[k]);
+        }
+      }
+    }
+  };
+
+  /*
+   * ⚠ 2026-10-17：纯 CSS 的 flex/百分比高度在 Android WebView 上仍可能不可信
+   * （首次 0 高布局解析差异 / fixed 包含块版本差异）。这里在工具条创建后按**实测像素**兜底：
+   *   #editor 高度 = 视口高度 − 工具条实际高度。
+   * 只在量到有效视口（vh>0）时写值；量不到就退回 CSS，不会把页面写成 0 高。
+   * 监听 resize / visualViewport：键盘策略切了 adjustNothing 时视口不变，无副作用；
+   * 若某些机型仍 resize，也能重新贴合。
+   */
+  var TEXT_LINES = 10;
+  // 与 CSS 严格同步：.w-e-scroll 是 font-size:16px / line-height:1.6 / padding:16px
+  var LINE_H = 16 * 1.6;
+  var PAD_Y = 16 * 2;
+  var EDITOR_H = Math.round(LINE_H * TEXT_LINES + PAD_Y); // 288
+
+  /*
+   * 固定 10 行书写区，并把「工具条 + 书写区」的总高回报给原生，
+   * 由原生设置 WebView 高度（页面不再依赖任何视口高度）。
+   * 工具条高度随宽度换行而变，所以每次 resize 都重新量。
+   */
+  function fitEditor() {
+    var bar = document.getElementById('toolbar');
+    var box = document.getElementById('editor');
+    if (!bar || !box) return;
+    box.style.height = EDITOR_H + 'px';
+    var th = Math.round(bar.getBoundingClientRect().height || 0);
+    // ⚠ 工具条还没完成布局（高度 0）时**不能回报**：会把 WebView 总高设成只有书写区，
+    //   输入区底部被裁掉，看起来就不足 10 行。等 50/300ms 的重试。
+    if (th <= 0) return;
+    var total = th + EDITOR_H;
+    // 真机取证：Logcat 过滤 RichEditor
+    console.log('[fit] bar=' + th + ' editor=' + EDITOR_H + ' total=' + total);
+    if (bridge && bridge.onEditorHeight) bridge.onEditorHeight(total);
+  }
+  window.addEventListener('resize', fitEditor);
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', fitEditor);
+
+  try {
+    if (typeof wangEditor === 'undefined') {
+      throw new Error('wangEditor.js 未加载（脚本没执行或被拦截）');
+    }
+    editor = wangEditor.createEditor({ selector: '#editor', config: editorConfig, html: '', mode: 'default' });
+    wangEditor.createToolbar({ editor: editor, selector: '#toolbar', config: toolbarConfig, mode: 'default' });
+    // 工具条刚创建、可能还没完成换行排版 ⇒ 立即量一次，再补两次
+    fitEditor();
+    setTimeout(fitEditor, 50);
+    setTimeout(fitEditor, 300);
+  } catch (err) {
+    // 起不来就不回调 onReady：原生侧 ready=false，发布时命中 web 同款「编辑器未就绪」
+    console.error('wangEditor create failed', err);
+    if (bridge && bridge.onError) {
+      bridge.onError('create failed: ' + ((err && err.message) || err));
+    }
+  }
+
+  // 触屏进编辑：WebView 嵌在 Compose 里时窗口焦点不一定给到它，
+  // 手指按文本区时向原生要一次焦点（真机 2026-09-20 反馈「无法输入」的对症之一）。
+  document.getElementById('editor').addEventListener('pointerdown', function () {
+    if (bridge && bridge.onNeedFocus) bridge.onNeedFocus();
+  }, true);
+
+  // 页面被隐藏 / 卸载 / 编辑区失焦 ⇒ 立刻把最新内容推给原生，避免防抖窗口里的内容丢失。
+  document.addEventListener('visibilitychange', function () { if (document.hidden) flush(); });
+  window.addEventListener('pagehide', flush);
+  document.getElementById('editor').addEventListener('blur', flush, true);
+})();
+</script>
+</body>
+</html>

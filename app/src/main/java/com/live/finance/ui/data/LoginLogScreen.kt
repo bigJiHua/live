@@ -40,8 +40,12 @@ import androidx.navigation.NavHostController
 import com.live.finance.App
 import com.live.finance.core.TimeFmt
 import com.live.finance.core.net.ApiResult
+import com.live.finance.core.net.failMessage
 import com.live.finance.data.model.LoginLog
 import com.live.finance.theme.LocalAppColors
+import com.live.finance.theme.scaledSp
+import com.live.finance.theme.vanGreen
+import com.live.finance.theme.VanGrayFixed
 import com.live.finance.ui.common.ScreenScaffold
 import com.live.finance.ui.flow.FText
 import com.live.vant.basic.VanEmpty
@@ -49,7 +53,9 @@ import com.live.vant.basic.VanLoading
 import com.live.vant.basic.VanTag
 import com.live.vant.basic.VanTagSize
 import com.live.vant.basic.VanTagType
+import com.live.vant.feedback.LocalVanToastController
 import com.live.vant.icon.VanIcon
+import com.live.finance.core.net.showFail
 
 /**
  * 登录日志 —— 一比一复刻 web `views/Finance/data/LoginLog.vue`。
@@ -70,12 +76,19 @@ import com.live.vant.icon.VanIcon
 @Composable
 fun LoginLogScreen(nav: NavHostController) {
     val colors = LocalAppColors.current
+    val toast = LocalVanToastController.current
     val repo = App.of(LocalContext.current).graph.loginLog
     var rows by remember { mutableStateOf<List<LoginLog>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
 
     LaunchedEffect(Unit) {
-        rows = when (val r = repo.list()) { is ApiResult.Ok -> r.data.orEmpty(); else -> emptyList() }
+        when (val r = repo.list()) {
+            is ApiResult.Ok -> rows = r.data.orEmpty()
+            // web：`res.message || "获取日志失败"` → fail toast
+            is ApiResult.Fail -> { rows = emptyList(); toast.fail(r.message.ifBlank { "获取日志失败" }) }
+            // web `loadLogs` 的 catch → showToast({ message: "获取登录日志失败", type: "fail" })
+            else -> { rows = emptyList(); toast.showFail(r, "获取登录日志失败") }
+        }
         loading = false
     }
     val suspicious = remember(rows) { markSuspicious(rows) }
@@ -94,7 +107,7 @@ fun LoginLogScreen(nav: NavHostController) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                FText("近期登录记录", 15f, FontWeight.SemiBold, colors.textPrimary)
+                FText("近期登录记录", 16f, FontWeight.SemiBold, colors.textPrimary)
                 VanTag(text = "${rows.size} 条", plain = true, size = VanTagSize.Small)
             }
 
@@ -114,13 +127,11 @@ fun LoginLogScreen(nav: NavHostController) {
 }
 
 // 类型徽章底色（web：`.log-type.type-*`，其中 logout 是 `var(--van-gray,#969799)` 的 fallback）
-private val TYPE_LOGIN_BG = Color(0xFF07C160)
-private val TYPE_LOGOUT_BG = Color(0xFF969799)
 
 @Composable
 private fun LogCard(log: LoginLog, suspicion: Suspicion?) {
     val colors = LocalAppColors.current
-    val accent = if (log.failed) colors.danger else TYPE_LOGIN_BG
+    val accent = if (log.failed) colors.danger else vanGreen()
     Box(
         Modifier
             .fillMaxWidth()
@@ -147,7 +158,7 @@ private fun LogCard(log: LoginLog, suspicion: Suspicion?) {
                         )
                     }
                 }
-                FText(TimeFmt.dateTime(log.timeValue), 11f, FontWeight.Normal, colors.textTertiary)
+                FText(TimeFmt.dateTime(log.timeValue), 12f, FontWeight.Normal, colors.textTertiary)
             }
 
             // .log-body{font-size 12; line-height 1.6}
@@ -166,7 +177,7 @@ private fun LogCard(log: LoginLog, suspicion: Suspicion?) {
                         }
                     },
                     modifier = Modifier.weight(1f),
-                    style = TextStyle(color = colors.textPrimary, fontSize = 12.sp, lineHeight = 19.2.sp),
+                    style = TextStyle(color = colors.textPrimary, fontSize = scaledSp(12f), lineHeight = scaledSp(19.2f)),
                 )
             }
 
@@ -187,7 +198,7 @@ private fun LogCard(log: LoginLog, suspicion: Suspicion?) {
                             }
                         },
                         modifier = Modifier.weight(1f),
-                        style = TextStyle(color = colors.textPrimary, fontSize = 12.sp, lineHeight = 19.2.sp),
+                        style = TextStyle(color = colors.textPrimary, fontSize = scaledSp(12f), lineHeight = scaledSp(19.2f)),
                     )
                 }
             }
@@ -199,7 +210,7 @@ private fun LogCard(log: LoginLog, suspicion: Suspicion?) {
                     modifier = Modifier.fillMaxWidth().padding(top = 3.dp),
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
-                    style = TextStyle(color = colors.textTertiary, fontSize = 10.sp, lineHeight = 14.sp),
+                    style = TextStyle(color = colors.textTertiary, fontSize = scaledSp(12f), lineHeight = scaledSp(14f)),
                 )
             }
 
@@ -211,7 +222,7 @@ private fun LogCard(log: LoginLog, suspicion: Suspicion?) {
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     VanIcon(name = "warning-o", size = 12.sp, color = colors.danger)
-                    FText(log.errorMessage, 11f, FontWeight.Normal, colors.danger)
+                    FText(log.errorMessage, 12f, FontWeight.Normal, colors.danger)
                 }
             }
         }
@@ -223,10 +234,10 @@ private fun LogCard(log: LoginLog, suspicion: Suspicion?) {
 private fun TypeBadge(log: LoginLog) {
     val colors = LocalAppColors.current
     val bg = when (log.type) {
-        "logout" -> TYPE_LOGOUT_BG
+        "logout" -> VanGrayFixed
         "refresh" -> colors.primary
         "failed" -> colors.danger
-        else -> TYPE_LOGIN_BG
+        else -> vanGreen()
     }
     Box(
         Modifier
@@ -235,7 +246,7 @@ private fun TypeBadge(log: LoginLog) {
             .padding(horizontal = 8.dp, vertical = 1.dp),
         contentAlignment = Alignment.Center,
     ) {
-        FText(log.typeLabel, 11f, FontWeight.SemiBold, Color.White)
+        FText(log.typeLabel, 12f, FontWeight.SemiBold, Color.White)
     }
 }
 

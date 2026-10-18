@@ -1,8 +1,6 @@
 package com.live.finance.ui.asset
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -30,19 +29,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.drawText
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
@@ -50,6 +40,10 @@ import com.live.finance.App
 import com.live.finance.core.net.ApiResult
 import com.live.finance.data.model.AssetRegister
 import com.live.finance.theme.LocalAppColors
+import com.live.finance.theme.vanGreen
+import com.live.finance.theme.VanGrayFixed
+import com.live.finance.ui.common.chart.LineChart
+import com.live.finance.ui.common.chart.SeriesData
 import com.live.finance.ui.common.ScreenScaffold
 import com.live.finance.ui.flow.FText
 import com.live.vant.basic.VanEmpty
@@ -64,17 +58,12 @@ private val PALETTE = listOf(
     Color(0xFFF97316), Color(0xFF6366F1), Color(0xFF14B8A6), Color(0xFFEAB308),
     Color(0xFFD946EF), Color(0xFF22C55E), Color(0xFF0EA5E9),
 )
-private val UP_RED = Color(0xFFEE0A24)
-private val DOWN_GREEN = Color(0xFF07C160)
-private val AXIS_GRAY = Color(0xFF969799)
-private val SPLIT_LINE = Color(0xFFECEEF1)
-private val AXIS_LINE_C = Color(0xFFDCDee0)
 
 private enum class TrendTab(val key: String, val label: String, val empty: String) {
     TOTAL("total", "总资产", ""),
     BALANCE("balance", "境内资产", "暂无境内资产登记"),
     OFFSHORE("offshore", "境外资产", "暂无境外资产登记"),
-    DEBT("debt", "信用卡/负债", "暂无负债登记"),
+    DEBT("debt", "负债", "暂无负债登记"),
 }
 
 private data class TrendSeries(val name: String, val data: List<Double?>)
@@ -151,7 +140,7 @@ fun AssetTrendScreen(nav: NavHostController) {
 
             if (loading) {
                 Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
-                    FText("加载中…", 14f, color = colors.textTertiary)
+                    FText("加载中…", 16f, color = colors.textTertiary)
                 }
             } else if (n == 0 || (tab != TrendTab.TOTAL && series.isEmpty())) {
                 Box(Modifier.fillMaxWidth().padding(top = 40.dp), contentAlignment = Alignment.Center) {
@@ -159,18 +148,43 @@ fun AssetTrendScreen(nav: NavHostController) {
                 }
             } else {
                 // —— 折线图（40vh，min240/max420）——
+                //   web `.chart-section{ background:var(--theme-bg-secondary); margin:0; padding:0; radius:0 }`
+                //   ⇒ 图表是落在**一条白底带**里的；原生此前直接把 Canvas 铺在页面灰底上（少了这层底）。
+                //   负责人 2026-09-19「图表记得加 padding（四周留白）」⇒ 在白底带上加内边距，
+                //   让 y 轴标签与日期不贴卡片边缘（echarts 侧靠 `grid.containLabel` 消化，自绘 Canvas 要自己留）。
                 val chartH = with(androidx.compose.ui.platform.LocalDensity.current) {
                     val vh = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp * 0.4f
                     vh.coerceIn(240.dp, 420.dp)
                 }
-                TrendChart(
-                    series = series,
-                    dates = rows.map { it.registerDate },
-                    start = start, end = end,
-                    activeIndex = activeIndex,
-                    onPick = { idx -> if (idx in 0 until n) activeIndex = idx },
-                    modifier = Modifier.fillMaxWidth().height(chartH),
-                )
+                Box(
+                    Modifier.fillMaxWidth().background(colors.bgCard)
+                        // 负责人 2026-09-20 复测仍报「图表贴边」⇒ 留白从 10/8 提到 **16/12**
+                        //   （y 轴标签是画在 Canvas 的 x=0 处的，外层不留白就直接贴到卡片边）。
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                ) {
+                    val windowSeries = series.map { s ->
+                        SeriesData(
+                            name = s.name,
+                            // 缺数据保留 null 占位（LineChart 契约：null 保留原始索引位）；
+                            // 此前 mapNotNull 剔 null ⇒ 某系列最新期缺值时整体左移、与日期错位
+                            data = (start..end).map { s.data.getOrNull(it) },
+                        )
+                    }
+                    val windowDates = (start..end).map { rows[it].registerDate }
+                    LineChart(
+                        series = windowSeries,
+                        dates = windowDates,
+                        colors = PALETTE,
+                        showArea = true,
+                        smooth = true,
+                        onPointClick = { sIdx, dIdx ->
+                            val dataIdx = start + dIdx
+                            if (dataIdx in 0 until n) activeIndex = dataIdx
+                        },
+                        activeIndices = series.indices.map { activeIndex - start }.filter { it in 0 until (end - start + 1) },
+                        modifier = Modifier.fillMaxWidth().height(chartH),
+                    )
+                }
                 // 图例（>1 条时；echarts scroll legend 的 wrap 近似）
                 if (series.size > 1) {
                     FlowRow(
@@ -182,8 +196,9 @@ fun AssetTrendScreen(nav: NavHostController) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Box(Modifier.size(7.dp).clip(CircleShape)
                                     .background(PALETTE[i % PALETTE.size]))
-                                FText(s.name, 10f, color = AXIS_GRAY,
-                                    modifier = Modifier.padding(start = 3.dp))
+                                // web legend: textStyle{fontSize:10,color:'#969799'} / itemGap:8
+                                FText(s.name, 10f, color = VanGrayFixed,
+                                    modifier = Modifier.padding(start = 5.dp))
                             }
                         }
                     }
@@ -283,137 +298,6 @@ private fun detailRows(series: List<TrendSeries>, idx: Int, prevIdx: Int): List<
         DiffRow(s.name, cur, diff, PALETTE[i % PALETTE.size])
     }
 
-// ================= 图表 =================
-
-@Composable
-private fun TrendChart(
-    series: List<TrendSeries>,
-    dates: List<String>,
-    start: Int,
-    end: Int,
-    activeIndex: Int,
-    onPick: (Int) -> Unit,
-    modifier: Modifier,
-) {
-    val textMeasurer = rememberTextMeasurer()
-    val labelStyle = TextStyle(color = AXIS_GRAY, fontSize = 10.sp)
-    val count = (end - start + 1).coerceAtLeast(1)
-    val window = start..end
-    // 窗口内全部 series 的非空值
-    val visibleVals = series.flatMap { s ->
-        window.mapNotNull { s.data.getOrNull(it) }
-    }
-    var maxV = visibleVals.maxOrNull() ?: 1.0
-    var minV = visibleVals.minOrNull() ?: 0.0
-    if (maxV == minV) { maxV += 1.0; minV -= 1.0 }
-    val pad = (maxV - minV) * 0.1f
-    maxV += pad; minV -= pad
-
-    Canvas(
-        modifier.pointerInput(start, end) {
-            detectTapGestures { off ->
-                val padL = 42f; val padR = 8f
-                val w = size.width - padL - padR
-                if (count <= 1) { onPick(start); return@detectTapGestures }
-                val ratio = ((off.x - padL) / w).coerceIn(0f, 1f)
-                onPick(start + (ratio * (count - 1)).roundToLong().toInt())
-            }
-        },
-    ) {
-        val padL = 42f; val padR = 8f; val padT = 8f; val padB = 40f
-        val w = size.width - padL - padR
-        val h = size.height - padT - padB
-        fun px(i: Int) = padL + if (count == 1) w / 2 else w * i / (count - 1)
-        fun py(v: Double) = padT + h * (1f - ((v - minV) / (maxV - minV)).toFloat())
-
-        // 横网格 4 段 5 线
-        repeat(5) { i ->
-            val gy = padT + h * i / 4f
-            drawLine(SPLIT_LINE, Offset(padL, gy), Offset(size.width - padR, gy), strokeWidth = 1f)
-            val v = maxV - (maxV - minV) * i / 4
-            val r = textMeasurer.measure(axisLabel(v), labelStyle)
-            drawText(r, topLeft = Offset(0f, gy - r.size.height / 2f))
-        }
-
-        series.forEachIndexed { si, s ->
-            val color = PALETTE[si % PALETTE.size]
-            val pts = (0 until count).map { k ->
-                val gi = start + k
-                s.data.getOrNull(gi)?.let { Offset(px(k), py(it)) }
-            }
-            // 分段连线（connectNulls 语义：跳过 null 不断线 → web connectNulls:true）
-            val line = Path()
-            val area = Path()
-            var started = false
-            var prevP: Offset? = null
-            pts.forEach { p ->
-                if (p != null) {
-                    if (!started) { line.moveTo(p.x, p.y); started = true }
-                    else { val pv = prevP!!; val mx = (pv.x + p.x) / 2f; line.cubicTo(mx, pv.y, mx, p.y, p.x, p.y) }
-                    prevP = p
-                }
-            }
-            // 面积（8%）
-            val firstP = pts.firstOrNull { it != null }
-            val lastP = pts.lastOrNull { it != null }
-            if (firstP != null && lastP != null) {
-                area.moveTo(firstP.x, padT + h)
-                area.lineTo(firstP.x, firstP.y)
-                var ap: Offset? = firstP
-                pts.forEach { p ->
-                    if (p != null && ap != null) {
-                        if (p != ap) { val pv = ap!!; val mx = (pv.x + p.x) / 2f; area.cubicTo(mx, pv.y, mx, p.y, p.x, p.y) }
-                        ap = p
-                    }
-                }
-                area.lineTo(lastP.x, padT + h); area.close()
-                drawPath(area, color.copy(alpha = 0.08f))
-            }
-            drawPath(line, color, style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round))
-            pts.forEach { p ->
-                if (p != null) drawCircle(color, radius = 5f / 2f, center = p)
-            }
-        }
-
-        // x 轴日期（窗口≤6 全显，10sp → 用 9sp 防挤）
-        (0 until count).forEach { k ->
-            val date = formatDate(dates[start + k])
-            val r = textMeasurer.measure(date, labelStyle.copy(fontSize = 9.sp))
-            drawText(r, topLeft = Offset(px(k) - r.size.width / 2f, size.height - padB + 6f))
-        }
-        // 轴线
-        drawLine(AXIS_LINE_C, Offset(padL, padT + h), Offset(size.width - padR, padT + h), strokeWidth = 1f)
-
-        // 选中竖线（蓝色虚线）+ 高亮圈
-        if (activeIndex in window) {
-            val k = activeIndex - start
-            val x = px(k)
-            val dash = PathEffect.dashPathEffect(floatArrayOf(12f, 12f), 0f)
-            drawLine(Color(0xFF3B82F6), Offset(x, padT), Offset(x, padT + h),
-                strokeWidth = 1.5f, pathEffect = dash)
-            // 竖线与各 series 交点高亮
-            series.forEachIndexed { si, s ->
-                val v = s.data.getOrNull(activeIndex)
-                if (v != null) {
-                    val p = Offset(x, py(v))
-                    drawCircle(Color.White, radius = 5f, center = p)
-                    drawCircle(PALETTE[si % PALETTE.size], radius = 5f, center = p,
-                        style = Stroke(width = 2.dp.toPx()))
-                }
-            }
-        }
-    }
-}
-
-private fun axisLabel(v: Double): String {
-    val a = abs(v)
-    return when {
-        a >= 1e8 -> String.format(java.util.Locale.US, "%.1f亿", v / 1e8)
-        a >= 1e4 -> String.format(java.util.Locale.US, "%.1f万", v / 1e4)
-        else -> Math.round(v).toString()
-    }
-}
-
 // ================= 指标条 + 明细表 =================
 
 @Composable
@@ -431,8 +315,11 @@ private fun QuoteBar(
         .padding(start = 10.dp, end = 10.dp, top = 6.dp, bottom = 8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             NavCircleBtn("arrow-left", enabled = index > 0, onClick = onPrev)
-            FText(date, 16f, FontWeight.SemiBold, colors.textPrimary,
-                modifier = Modifier.weight(1f))
+            // 日期**居中**：原来直接 `FText(..., Modifier.weight(1f))` ⇒ BasicText 默认左对齐，
+            //   文字紧贴左边的 `<`，负责人两次反馈「上方的左右中间是日期，这个日期要居中显示」。
+            Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                FText(date, 18f, FontWeight.SemiBold, colors.textPrimary)
+            }
             NavCircleBtn("arrow", enabled = index < total - 1, onClick = onNext)
         }
         Spacer(Modifier.height(6.dp))
@@ -443,10 +330,10 @@ private fun QuoteBar(
                         .background(colors.bgThird).padding(vertical = 4.dp, horizontal = 8.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    FText(label, 10f, color = colors.textTertiary)
+                    FText(label, 12f, color = colors.textTertiary)
                     FText(
                         v?.let { (if (offshoreUnit) "" else "¥") + detailFmt(it) } ?: "--",
-                        13f, FontWeight.SemiBold,
+                        14f, FontWeight.SemiBold,
                         if ((v ?: 0.0) < 0) colors.danger else colors.primary,
                     )
                 }
@@ -458,14 +345,19 @@ private fun QuoteBar(
 @Composable
 private fun NavCircleBtn(icon: String, enabled: Boolean, onClick: () -> Unit) {
     val colors = LocalAppColors.current
+    // 负责人 2026-09-20：「`< >` 日期切换按钮过小」⇒ 视觉圆 30→**40dp**、字形 14→**18sp**，
+    //   外面再包一层 52dp 的透明点击热区。只改这一处（其它页的同名件不动），属安卓侧有意偏离。
     Box(
-        Modifier.size(30.dp).clip(CircleShape)
-            .background(colors.bgThird)
-            .clickable(enabled = enabled) { onClick() },
+        Modifier.size(52.dp).clip(CircleShape).clickable(enabled = enabled) { onClick() },
         contentAlignment = Alignment.Center,
     ) {
-        VanIcon(icon, size = 14.sp,
-            color = if (enabled) colors.primary else colors.textTertiary.copy(alpha = 0.35f))
+        Box(
+            Modifier.size(40.dp).clip(CircleShape).background(colors.bgThird),
+            contentAlignment = Alignment.Center,
+        ) {
+            VanIcon(icon, size = 18.sp,
+                color = if (enabled) colors.primary else colors.textTertiary.copy(alpha = 0.35f))
+        }
     }
 }
 
@@ -473,13 +365,14 @@ private fun NavCircleBtn(icon: String, enabled: Boolean, onClick: () -> Unit) {
 private fun DetailTable(rows: List<DiffRow>, offshoreUnit: Boolean) {
     val colors = LocalAppColors.current
     Column(Modifier.fillMaxWidth().background(colors.bgCard)) {
-        // 表头
+        // 表头 —— 顺序与行内一致：`项目 …… 金额 / 较上期`（web `Trend.vue:70-77` 已于 2026-09-19 同步改过：
+        //   原表头写「较上期 / 金额」与下方 dl-row 的 `金额 → diff` 顺序相反，负责人实测发现后要求两端一起改）
         Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically) {
-            FText("项目", 11f, color = colors.textTertiary, modifier = Modifier.weight(1f))
-            FText("较上期", 10f, color = colors.textTertiary)
-            Spacer(Modifier.width(8.dp))
-            FText("金额（${if (offshoreUnit) "CNY" else "¥"}）", 11f, color = colors.textTertiary)
+            FText("项目", 12f, color = colors.textTertiary, modifier = Modifier.weight(1f))
+            FText("金额（${if (offshoreUnit) "CNY" else "¥"}）", 12f, color = colors.textTertiary)
+            Spacer(Modifier.width(8.dp))                                  // web `.dl-head-r{gap:8px}`
+            FText("较上期", 12f, color = colors.textTertiary)
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(colors.border))
         if (rows.isEmpty()) {
@@ -489,29 +382,51 @@ private fun DetailTable(rows: List<DiffRow>, offshoreUnit: Boolean) {
         } else {
             rows.forEach { row ->
                 Row(
+                    // web `.dl-row{display:flex; align-items:center; gap:6px; padding:7px 10px}`
+                    //   —— 元素之间是 **6px 间隙**；原来原生没有 arrangement，diff 与金额、箭头与数字全贴在一起。
                     Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 7.dp),
                     verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     Box(Modifier.size(8.dp).clip(CircleShape).background(row.color))
-                    FText(row.name, 12f, color = colors.textSecondary,
-                        modifier = Modifier.weight(1f).padding(start = 6.dp))
-                    // 较上期（固定宽度，红涨绿跌）
+                    FText(row.name, 12f, color = colors.textSecondary, modifier = Modifier.weight(1f))
+                    // ⚠ 行内顺序照 web 模板：`dl-dot → dl-name → **dl-value（金额）** → **dl-diff（较上期）**`
+                    //   即涨跌标记在**金额之后**。（表头写的是「较上期 / 金额」两列 —— web 自己就和行内顺序不一致，
+                    //   原生此前跟着表头把 diff 放到了金额前面，这是那处偏差的来源；表头保持与 web 一致不动。）
+                    FText(
+                        (row.value?.let { (if (offshoreUnit) "" else "¥") + detailFmt(it) }) ?: "--",
+                        14f, FontWeight.SemiBold,
+                        color = if ((row.value ?: 0.0) < 0) colors.danger else colors.textPrimary,
+                    )
+                    // web `.dl-diff{display:flex; gap:2px; min-width:52px; justify-content:flex-end; flex-shrink:0}`
+                    //   web 用 `v-if="row.diff !== null"`：无差值时整列不占位。负责人 2026-09-21 拍板偏离：
+                    //   无值也要 **"--" 占位**，缺项不得让行内布局塌陷（web 未改）。
                     val diff = row.diff
-                    Box(Modifier.width(64.dp), contentAlignment = Alignment.CenterEnd) {
-                        if (diff != null && diff != 0.0) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                FText(if (diff > 0) "↑" else "↓", 14f, FontWeight.Bold,
-                                    color = if (diff > 0) UP_RED else DOWN_GREEN)
-                                FText(detailFmt(abs(diff)), 12f, FontWeight.SemiBold,
-                                    color = if (diff > 0) UP_RED else DOWN_GREEN)
+                    // 较上期 —— web `assets/Trend.vue:908-915`：
+                    //   `.up`   = `var(--theme-danger-color)`（两模式跟主题）
+                    //   `.down` = `var(--van-green, #07c160)`（**只在深色** = --theme-success，浅色 #07c160）
+                    // ⚠ 这是**红涨绿跌**（A 股口径），与流水页的「红收绿支」不是一回事
+                    when {
+                        diff == null -> Box(
+                            Modifier.widthIn(min = 52.dp),
+                            contentAlignment = Alignment.CenterEnd,
+                        ) { FText("--", 12f, color = colors.textTertiary) }
+                        diff == 0.0 -> Box(
+                            Modifier.widthIn(min = 52.dp),
+                            contentAlignment = Alignment.CenterEnd,
+                        ) { FText("0.00", 12f, FontWeight.SemiBold, colors.textTertiary) }
+                        else -> {
+                            val diffColor = if (diff > 0) colors.danger else vanGreen()
+                            Row(
+                                Modifier.widthIn(min = 52.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                            ) {
+                                FText(if (diff > 0) "↑" else "↓", 16f, FontWeight.Bold, diffColor)
+                                FText(detailFmt(abs(diff)), 12f, FontWeight.SemiBold, diffColor)
                             }
                         }
                     }
-                    FText(
-                        (row.value?.let { (if (offshoreUnit) "" else "¥") + detailFmt(it) }) ?: "--",
-                        13f, FontWeight.SemiBold,
-                        color = if ((row.value ?: 0.0) < 0) colors.danger else colors.textPrimary,
-                    )
                 }
                 Box(Modifier.fillMaxWidth().height(1.dp).background(colors.border.copy(alpha = 0.5f)))
             }

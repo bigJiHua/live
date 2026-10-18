@@ -36,6 +36,7 @@ import androidx.navigation.NavHostController
 import com.live.finance.App
 import com.live.finance.core.nav.Routes
 import com.live.finance.core.net.ApiResult
+import com.live.finance.core.net.failMessage
 import com.live.finance.data.model.Budget
 import com.live.finance.data.model.EatDetails
 import com.live.finance.data.model.ShoppingDetails
@@ -56,6 +57,8 @@ import com.live.vant.feedback.LocalVanToastController
 import com.live.vant.feedback.VanConfirmDialog
 import com.live.vant.icon.VanIcon
 import kotlinx.coroutines.launch
+import com.live.finance.core.net.showFail
+import com.live.vant.feedback.VanToastType
 
 /**
  * 预算详情（web `views/Finance/budget/Detail.vue`）：
@@ -91,7 +94,7 @@ fun BudgetDetailScreen(nav: NavHostController, budgetId: String) {
         Box(inner.fillMaxSize()) {
             if (loading) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    FText("加载中…", 14f, color = colors.textTertiary)
+                    FText("加载中…", 16f, color = colors.textTertiary)
                 }
             } else if (b == null) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -117,13 +120,13 @@ fun BudgetDetailScreen(nav: NavHostController, budgetId: String) {
                             Spacer(Modifier.height(4.dp))
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 VanIcon("location-o", size = 13.sp, color = Color.White.copy(alpha = 0.9f))
-                                FText(" ${b.route}", 14f, color = Color.White.copy(alpha = 0.9f))
+                                FText(" ${b.route}", 16f, color = Color.White.copy(alpha = 0.9f))
                             }
                         }
                         Spacer(Modifier.height(4.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             VanIcon("calendar-o", size = 13.sp, color = Color.White.copy(alpha = 0.85f))
-                            FText(" ${b.planDate} · ${b.cycle}", 13f, color = Color.White.copy(alpha = 0.85f))
+                            FText(" ${b.planDate} · ${b.cycle}", 14f, color = Color.White.copy(alpha = 0.85f))
                         }
                         Spacer(Modifier.height(16.dp))
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -139,7 +142,7 @@ fun BudgetDetailScreen(nav: NavHostController, budgetId: String) {
                             .background(Color.White.copy(alpha = 0.25f))) {
                             Box(Modifier.fillMaxWidth(progress / 100f).height(6.dp)
                                 .clip(RoundedCornerShape(3.dp))
-                                .background(if (isOver) colors.danger else Color(0xFF07C160)))
+                                .background(if (isOver) colors.danger else colors.success))
                         }
                         Spacer(Modifier.height(8.dp))
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -165,21 +168,23 @@ fun BudgetDetailScreen(nav: NavHostController, budgetId: String) {
                         }
                         SectionCard("每日消费明细", "orders-o") {
                             if (d.days.isEmpty()) {
-                                Box(Modifier.fillMaxWidth().padding(vertical = 16.dp), contentAlignment = Alignment.Center) {
-                                    FText("暂无每日明细", 13f, color = colors.textTertiary)
-                                }
+                                // web `budget/Detail.vue`：`<van-empty description="暂无每日明细" />`
+                                VanEmpty(description = "暂无每日明细")
                             }
                             d.days.forEach { day ->
                                 Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
                                     .background(colors.bgThird).padding(12.dp)) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         VanIcon("calendar-o", size = 13.sp, color = colors.primary)
-                                        FText(" ${day.date}", 14f, FontWeight.SemiBold, colors.primary)
+                                        FText(" ${day.date}", 16f, FontWeight.SemiBold, colors.primary)
                                     }
                                     Spacer(Modifier.height(8.dp))
                                     if (day.items.isEmpty()) {
-                                        FText("暂无消费记录", 13f, color = colors.textTertiary,
-                                            modifier = Modifier.padding(vertical = 8.dp))
+                                        // web `.empty-day{ text-align:center; color:text-tertiary;
+                                        //   font-size:13px→14; padding: 8px 0 }` —— 旧实现没居中
+                                        Box(Modifier.fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
+                                            FText("暂无消费记录", 14f, color = colors.textTertiary)
+                                        }
                                     }
                                     day.items.forEach { item ->
                                         Row(Modifier.fillMaxWidth().padding(vertical = 6.dp),
@@ -189,16 +194,16 @@ fun BudgetDetailScreen(nav: NavHostController, budgetId: String) {
                                                 modifier = Modifier.weight(1f)) {
                                                 VanTag(item.type, plain = true, size = VanTagSize.Small,
                                                     type = VanTagType.Default,
-                                                    color = expenseTypeColor(item.type),
-                                                    textColor = expenseTypeColor(item.type))
-                                                FText(" ${item.description.ifEmpty { "无描述" }}", 13f,
+                                                    color = expenseTypeColor(item.type, colors),
+                                                    textColor = expenseTypeColor(item.type, colors))
+                                                FText(" ${item.description.ifEmpty { "无描述" }}", 14f,
                                                     color = colors.textPrimary)
                                             }
                                             Column(horizontalAlignment = Alignment.End) {
-                                                FText("${trimAmt(item.amount)} ${item.currency}", 14f,
+                                                FText("${trimAmt(item.amount)} ${item.currency}", 16f,
                                                     FontWeight.SemiBold, colors.danger)
                                                 if (item.currency != "CNY") {
-                                                    FText("≈ ¥${Money.format(item.cnyAmount)}", 11f,
+                                                    FText("≈ ¥${Money.format(item.cnyAmount)}", 12f,
                                                         color = colors.textTertiary)
                                                 }
                                             }
@@ -206,8 +211,8 @@ fun BudgetDetailScreen(nav: NavHostController, budgetId: String) {
                                     }
                                     Spacer(Modifier.height(8.dp))
                                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                        FText("当天合计", 13f, color = colors.textSecondary)
-                                        FText("¥${Money.format(d.dayTotal(day))}", 13f, FontWeight.SemiBold, colors.primary)
+                                        FText("当天合计", 14f, color = colors.textSecondary)
+                                        FText("¥${Money.format(d.dayTotal(day))}", 14f, FontWeight.SemiBold, colors.primary)
                                     }
                                 }
                                 Spacer(Modifier.height(10.dp))
@@ -227,9 +232,8 @@ fun BudgetDetailScreen(nav: NavHostController, budgetId: String) {
                             }
                             Spacer(Modifier.height(12.dp))
                             if (d.items.isEmpty()) {
-                                Box(Modifier.fillMaxWidth().padding(vertical = 16.dp), contentAlignment = Alignment.Center) {
-                                    FText("暂无购物清单", 13f, color = colors.textTertiary)
-                                }
+                                // web `budget/Detail.vue`：`<van-empty description="暂无购物清单" />`
+                                VanEmpty(description = "暂无购物清单")
                             }
                             d.items.forEachIndexed { i, item ->
                                 Row(verticalAlignment = Alignment.Top) {
@@ -240,7 +244,7 @@ fun BudgetDetailScreen(nav: NavHostController, budgetId: String) {
                                                 type = priorityColor(item.priority), size = VanTagSize.Small)
                                         }
                                         Spacer(Modifier.height(6.dp))
-                                        FText(item.name.ifEmpty { "未命名商品" }, 14f, FontWeight.SemiBold, colors.textPrimary)
+                                        FText(item.name.ifEmpty { "未命名商品" }, 16f, FontWeight.SemiBold, colors.textPrimary)
                                         Spacer(Modifier.height(4.dp))
                                         Row {
                                             if (item.category.isNotEmpty()) FText(item.category, 12f, color = colors.textTertiary)
@@ -248,9 +252,9 @@ fun BudgetDetailScreen(nav: NavHostController, budgetId: String) {
                                         }
                                         Spacer(Modifier.height(4.dp))
                                         Row {
-                                            FText("预计 ¥${Money.format(item.price)} × ${item.quantity}", 13f, color = colors.textSecondary)
+                                            FText("预计 ¥${Money.format(item.price)} × ${item.quantity}", 14f, color = colors.textSecondary)
                                             if (item.actualPrice > 0) {
-                                                FText("  实付 ¥${Money.format(item.actualPrice)}", 13f, FontWeight.SemiBold, colors.danger)
+                                                FText("  实付 ¥${Money.format(item.actualPrice)}", 14f, FontWeight.SemiBold, colors.danger)
                                             }
                                         }
                                         if (item.purchaseDate.isNotEmpty()) {
@@ -278,29 +282,28 @@ fun BudgetDetailScreen(nav: NavHostController, budgetId: String) {
                                 .background(Color(0x1AEE0A24)).padding(12.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically) {
-                                FText("实际消费", 14f, color = colors.textSecondary)
+                                FText("实际消费", 16f, color = colors.textSecondary)
                                 FText("¥${Money.format(d.actualTotal)}", 18f, FontWeight.Bold, colors.danger)
                             }
                             Spacer(Modifier.height(12.dp))
                             if (d.dishes.isEmpty()) {
-                                Box(Modifier.fillMaxWidth().padding(vertical = 16.dp), contentAlignment = Alignment.Center) {
-                                    FText("暂无菜单明细", 13f, color = colors.textTertiary)
-                                }
+                                // web `budget/Detail.vue`：`<van-empty description="暂无菜单明细" />`
+                                VanEmpty(description = "暂无菜单明细")
                             }
                             d.dishes.forEachIndexed { i, dish ->
                                 Row(Modifier.fillMaxWidth().padding(vertical = 8.dp),
                                     verticalAlignment = Alignment.Top) {
                                     IndexBadge(i + 1, colors.danger)
                                     Column(Modifier.weight(1f).padding(start = 8.dp)) {
-                                        FText(dish.name.ifEmpty { "未命名菜品" }, 14f, color = colors.textPrimary)
+                                        FText(dish.name.ifEmpty { "未命名菜品" }, 16f, color = colors.textPrimary)
                                         if (dish.notes.isNotEmpty()) {
                                             FText(dish.notes, 12f, color = colors.textTertiary,
                                                 modifier = Modifier.padding(top = 2.dp))
                                         }
                                     }
                                     Column(horizontalAlignment = Alignment.End) {
-                                        FText("¥${Money.format(dish.price)} × ${dish.quantity}", 13f, color = colors.textSecondary)
-                                        FText("= ¥${Money.format(d.dishSubtotal(dish))}", 13f, FontWeight.SemiBold, colors.danger)
+                                        FText("¥${Money.format(dish.price)} × ${dish.quantity}", 14f, color = colors.textSecondary)
+                                        FText("= ¥${Money.format(d.dishSubtotal(dish))}", 14f, FontWeight.SemiBold, colors.danger)
                                     }
                                 }
                             }
@@ -316,7 +319,7 @@ fun BudgetDetailScreen(nav: NavHostController, budgetId: String) {
                     }
                     if (notes.isNotEmpty()) {
                         SectionCard("备注", "comment-o") {
-                            FText(notes, 14f, color = colors.textSecondary)
+                            FText(notes, 16f, color = colors.textSecondary)
                         }
                     }
 
@@ -349,13 +352,13 @@ fun BudgetDetailScreen(nav: NavHostController, budgetId: String) {
             scope.launch {
                 when (val r = repo.delete(budgetId)) {
                     is ApiResult.Ok -> {
-                        toast.show("删除成功")
+                        toast.show("删除成功", VanToastType.Success)
                         nav.popBackStack(Routes.BUDGET, false)
                     }
                     is ApiResult.Unauthorized -> nav.navigate(Routes.LOGIN) { popUpTo(Routes.MAIN) { inclusive = true } }
                     is ApiResult.RateLimited -> nav.navigate(Routes.ERROR_429)
-                    is ApiResult.Fail -> toast.show(r.message.ifEmpty { "删除失败" })
-                    else -> toast.show("删除失败")
+                    is ApiResult.Fail -> toast.show(r.message.ifEmpty { "删除失败" }, VanToastType.Fail)
+                    else -> toast.showFail(r, "删除失败")
                 }
             }
         },
@@ -381,7 +384,7 @@ private fun SectionCard(title: String, icon: String, content: @Composable () -> 
         Row(verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(bottom = 12.dp)) {
             VanIcon(icon, size = 16.sp, color = colors.primary)
-            FText(" $title", 15f, FontWeight.SemiBold, colors.textPrimary)
+            FText(" $title", 16f, FontWeight.SemiBold, colors.textPrimary)
         }
         content()
     }
@@ -391,8 +394,8 @@ private fun SectionCard(title: String, icon: String, content: @Composable () -> 
 private fun ShopStat(label: String, value: String, modifier: Modifier, valueColor: Color = LocalAppColors.current.textPrimary) {
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        FText(label, 11f, color = LocalAppColors.current.textTertiary)
-        FText(value, 14f, FontWeight.SemiBold, valueColor)
+        FText(label, 12f, color = LocalAppColors.current.textTertiary)
+        FText(value, 16f, FontWeight.SemiBold, valueColor)
     }
 }
 
@@ -401,5 +404,5 @@ private fun IndexBadge(n: Int, color: Color) {
     Box(
         Modifier.size(20.dp).clip(CircleShape).background(color),
         contentAlignment = Alignment.Center,
-    ) { FText("$n", 11f, FontWeight.SemiBold, Color.White) }
+    ) { FText("$n", 12f, FontWeight.SemiBold, Color.White) }
 }

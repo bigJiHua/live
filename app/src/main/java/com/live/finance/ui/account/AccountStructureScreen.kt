@@ -25,6 +25,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -37,11 +38,14 @@ import androidx.navigation.NavHostController
 import com.live.finance.App
 import com.live.finance.core.nav.Routes
 import com.live.finance.core.net.ApiResult
+import com.live.finance.core.net.failMessage
 import com.live.finance.data.model.Balance
 import com.live.finance.data.model.Card
 import com.live.finance.data.model.Category
 import com.live.finance.theme.LocalAppColors
 import com.live.finance.ui.common.BankIconView
+import com.live.finance.ui.common.WebShadow
+import com.live.finance.ui.common.cssShadowCircle
 import com.live.finance.ui.common.Money
 import com.live.finance.ui.common.ScreenScaffold
 import com.live.finance.ui.flow.FText
@@ -50,6 +54,7 @@ import com.live.vant.feedback.LocalVanToastController
 import com.live.vant.form.VanSearch
 import com.live.vant.icon.VanIcon
 import kotlinx.coroutines.launch
+import com.live.finance.core.net.showFail
 
 /** 虚拟账户图标底色（web virtualConfig 硬编码 #07c160）。 */
 private val VIRTUAL_GREEN = Color(0xFF07C160)
@@ -89,7 +94,7 @@ fun AccountStructureScreen(nav: NavHostController) {
         cards = ((graph.card.list("debit") as? ApiResult.Ok)?.data) ?: emptyList()
         accounts = when (val r = graph.balance.list()) {
             is ApiResult.Ok -> r.data ?: emptyList()
-            else -> { toast.show("加载失败"); emptyList() }
+            else -> { toast.showFail(r, "加载失败"); emptyList() }
         }
         loading = false
     }
@@ -107,7 +112,11 @@ fun AccountStructureScreen(nav: NavHostController) {
     val virtualAccounts = accounts.filter { it.isVirtual }
         // 后端排序 xxxx、yyyy；保险再排一次
         .sortedBy { if (it.cardId == "xxxx") 0 else 1 }
-    val bankAccounts = accounts.filter { !it.isVirtual }
+    // ⚠ 这一行原来没包 remember：`accounts.filter{}` **每次重组都产出新的 List 实例**，
+    //   传给下面 remember 的 key 就**每帧都不同** ⇒ `filteredBank` 缓存永不命中、每帧重算
+    //   （内含 O(n) 的 cardBankInfo() + 3 次 lowercase() 分配），滑动时就是纯卡顿。
+    //   这与构造书里 `remember(breakdown, checked)` 那个 bug 是同一族的反向版本。
+    val bankAccounts = remember(accounts) { accounts.filter { !it.isVirtual } }
     val filteredBank = remember(bankAccounts, searchKey, cards, banks) {
         val key = searchKey.trim().lowercase()
         if (key.isEmpty()) bankAccounts
@@ -129,7 +138,7 @@ fun AccountStructureScreen(nav: NavHostController) {
                     r.data?.forEach { (k, v) -> flowStats[k] = v }
                     showFlowStats = true
                 }
-                else -> toast.show("获取失败")
+                else -> toast.showFail(r, "获取失败")
             }
         }
     }
@@ -151,7 +160,7 @@ fun AccountStructureScreen(nav: NavHostController) {
                             .background(colors.bgCard).padding(24.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                        FText("系统内计总资产", 14f, color = colors.textTertiary)
+                        FText("系统内计总资产", 16f, color = colors.textTertiary)
                         Spacer(Modifier.height(8.dp))
                         Row(verticalAlignment = Alignment.Bottom,
                             modifier = Modifier.clickable { showAmount = !showAmount }) {
@@ -175,7 +184,7 @@ fun AccountStructureScreen(nav: NavHostController) {
                                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                             ) {
                                 VanIcon("info-o", size = 14.sp, color = ORANGE)
-                                FText("余额为零，去记账获取收支计划", 13f, color = ORANGE)
+                                FText("余额为零，去记账获取收支计划", 14f, color = ORANGE)
                                 VanIcon("arrow", size = 12.sp, color = ORANGE)
                             }
                         }
@@ -229,7 +238,7 @@ fun AccountStructureScreen(nav: NavHostController) {
                             ) {
                                 VanIcon(if (showFlowStats) "exchange" else "eye-o",
                                     size = 14.sp, color = Color.White)
-                                FText(if (showFlowStats) "余额" else "动账", 13f, color = Color.White)
+                                FText(if (showFlowStats) "余额" else "动账", 14f, color = Color.White)
                             }
                         }
                     }
@@ -245,7 +254,7 @@ fun AccountStructureScreen(nav: NavHostController) {
                                     amountText = amountText(acc.balance),
                                     divider = i < filteredBank.lastIndex,
                                     onClick = {
-                                        nav.navigate("${Routes.REPORT_CARD_FLOW}?cardId=${acc.cardId}")
+                                        nav.navigate(Routes.cardFlow(acc.cardId))
                                     },
                                 )
                             }
@@ -278,21 +287,30 @@ fun AccountStructureScreen(nav: NavHostController) {
                 }
             }
 
-            // 回顶
+            // 回顶 —— 视觉圆 **52dp / 字形 24sp**：web `.back-top` 是 40×40 + `font-size:20px`，
+            //   但负责人 2026-09-19/20 **两次**反馈「这个位置的 Back top 点击 icon 过小，需要单独调整」
+            //   ⇒ 上一轮只放大了不可见的点击热区（40→56dp）他没觉得有变化，这次把**视觉尺寸**一起放大。
+            //   投影 / bottom:60dp / 平滑滚动仍按 web。属安卓侧有意偏离（只这一处，其它页的 back-top 不动）。
             if (showBackTop) {
                 Box(
-                    Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 24.dp)
-                        .size(40.dp).clip(RoundedCornerShape(50))
-                        .background(colors.bgCard).clickable {
-                            scope.launch { listState.scrollToItem(0) }
+                    Modifier.align(Alignment.BottomEnd).padding(end = 4.dp, bottom = 48.dp)
+                        .size(64.dp).clip(CircleShape).clickable {
+                            scope.launch { listState.animateScrollToItem(0) }   // web `behavior:'smooth'`
                         },
                     contentAlignment = Alignment.Center,
-                ) { VanIcon("back-top", size = 20.sp, color = colors.primary) }
+                ) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.size(52.dp)
+                            .cssShadowCircle(WebShadow(0f, 2f, 12f, Color(0x26000000)))
+                            .clip(CircleShape).background(colors.bgCard),
+                    ) { VanIcon("back-top", size = 24.sp, color = colors.primary) }
+                }
             }
 
             if (loading) {
                 Box(Modifier.fillMaxSize().background(colors.bgPage), contentAlignment = Alignment.Center) {
-                    FText("加载中…", 14f, color = colors.textTertiary)
+                    FText("加载中…", 16f, color = colors.textTertiary)
                 }
             }
         }
@@ -301,7 +319,7 @@ fun AccountStructureScreen(nav: NavHostController) {
 
 @Composable
 private fun SectionTitle(text: String) {
-    FText(text, 13f, color = LocalAppColors.current.textTertiary,
+    FText(text, 14f, color = LocalAppColors.current.textTertiary,
         modifier = Modifier.padding(start = 4.dp, top = 8.dp, bottom = 0.dp))
 }
 
@@ -328,11 +346,11 @@ private fun VirtualRow(
             ) { VanIcon(icon, size = 20.sp, color = Color.White) }
             Column(Modifier.weight(1f).padding(start = 12.dp)) {
                 FText(acc.cardAlias.ifBlank { acc.alias.ifBlank { if (acc.cardId == "xxxx") "现金账户" else "余额账户(微信+支付宝)" } },
-                    15f, FontWeight.Medium, colors.textPrimary)
+                    16f, FontWeight.Medium, colors.textPrimary)
                 Spacer(Modifier.height(4.dp))
                 FText(typeLabel, 12f, color = colors.textTertiary)
             }
-            FText(amountText, 16f, FontWeight.SemiBold,
+            FText(amountText, 18f, FontWeight.SemiBold,
                 color = when {
                     acc.balance < 0 -> colors.danger
                     acc.balance == 0.0 -> colors.textTertiary
@@ -367,9 +385,17 @@ private fun BankRow(
             Modifier.fillMaxWidth().padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            BankIconView(src = info.iconUrl, name = name, size = 28.dp, rounded = 10.dp)
+            // web `.account-icon`：44×44 / radius 12 的**无底色**容器，里面放 28 的 BankIcon
+            //   （`.bank-icon{background:linear-gradient(...)}` 是死样式 —— scoped CSS 打不进子组件内层，且
+            //    BankIcon.vue 根本没有 `.bank-icon` 这个类）。缺这层容器时行高 60dp，web 实测 ≈76dp。
+            Box(
+                Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)),
+                contentAlignment = Alignment.Center,
+            ) {
+                BankIconView(src = info.iconUrl, name = name, size = 28.dp, rounded = 10.dp)
+            }
             Column(Modifier.weight(1f).padding(start = 12.dp)) {
-                FText(name, 15f, FontWeight.Medium, colors.textPrimary)
+                FText(name, 16f, FontWeight.Medium, colors.textPrimary)
                 Spacer(Modifier.height(4.dp))
                 FText(
                     if (last4.isNotBlank()) "****$last4" else "借记卡",
@@ -379,14 +405,14 @@ private fun BankRow(
             if (showFlowStats) {
                 Column(horizontalAlignment = Alignment.End) {
                     if (idle) {
-                        FText("近6个月无动账", 13f, FontWeight.Medium, colors.danger)
+                        FText("近6个月无动账", 14f, FontWeight.Medium, colors.danger)
                     } else {
-                        FText("消费 $expense 笔", 13f, color = colors.textSecondary)
-                        FText("收入 $income 笔", 13f, color = colors.textSecondary)
+                        FText("消费 $expense 笔", 14f, color = colors.textSecondary)
+                        FText("收入 $income 笔", 14f, color = colors.textSecondary)
                     }
                 }
             } else {
-                FText(amountText, 16f, FontWeight.SemiBold,
+                FText(amountText, 18f, FontWeight.SemiBold,
                     color = when {
                         acc.balance < 0 -> colors.danger
                         acc.balance == 0.0 -> colors.textTertiary

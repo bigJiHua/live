@@ -1,6 +1,5 @@
 package com.live.finance.ui.report
 
-import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -40,6 +39,8 @@ import com.live.finance.theme.LocalAppColors
 import com.live.finance.ui.common.ScreenScaffold
 import com.live.finance.ui.flow.FText
 import com.live.vant.icon.VanIcon
+import com.live.vant.feedback.LocalVanToastController
+import com.live.vant.feedback.VanToastType
 
 /** 报表中心菜单条目（web `Report.vue`；`route == null` = 原生尚未复刻的子页）。 */
 private data class ReportEntry(val title: String, val desc: String, val icon: String, val route: String?)
@@ -47,11 +48,17 @@ private data class ReportEntry(val title: String, val desc: String, val icon: St
 /**
  * 财务报表中心 —— 一比一复刻 web `views/Finance/report/Report.vue`（`/finance/report`，账本页「报表」的真正落点）。
  * 四分区：流水管理 / 数据统计 / 负债统计 / 理财投资；图标块是**无底色**的 40×40 主色图标（web `.menu-icon`）。
+ *
+ * **字号例外（2026-09-19 真机实测定稿，不走 §7.9 提档表）**：
+ * ① 分组标题 15 / ② 菜单标题 14 / ③ 菜单描述 11 —— **即 web 原值，不提档**；④ 图标 22（web 20）。
+ * 原因：web 上 ①(15px) 与 ②(14px) 提档后都落进 16 档，**层级只剩字重差**，真机上分不出分组；
+ * 回落 web 原值后层级恢复。**别按 §7.9 把这三个数改回 16/16/12。**
  */
 @Composable
 fun ReportCenterScreen(nav: NavHostController) {
     val colors = LocalAppColors.current
     val context = LocalContext.current
+    val vanToast = LocalVanToastController.current
     var pendingTip by remember { mutableStateOf<String?>(null) }
 
     val sections = remember {
@@ -77,11 +84,15 @@ fun ReportCenterScreen(nav: NavHostController) {
 
     ScreenScaffold { inner ->
         Column(Modifier.fillMaxSize().then(inner).background(colors.bgPage)) {
-            com.live.vant.nav.VanNavBar(title = "财务报表", leftArrow = true, onClickLeft = { nav.popBackStack() })
             Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 30.dp)) {
                 sections.forEach { (sectionTitle, entries) ->
                     Column(Modifier.fillMaxWidth().padding(bottom = 20.dp)) {
-                        FText(sectionTitle, 15f, FontWeight.SemiBold, colors.textPrimary, modifier = Modifier.padding(start = 2.dp, bottom = 10.dp))
+                        // ① 分组标题 **18sp**（web 15px / 600）。
+                        //    ⚠ 曾写 15f 并注释「不提档」——因为直接套 7.9 会让本页的 15(分组) 与
+                        //    14(菜单) **双双变成 16**、层级消失。正确做法是**按档位重映射**而非跳过提档：
+                        //    分组标题 → 18（小标题档）、菜单标题 → 16（正文）、菜单描述 → 12（辅助），
+                        //    既保住 18 > 16 > 12 的层级，又与其它页面统一（2026-09-19 改）。
+                        FText(sectionTitle, 18f, FontWeight.SemiBold, colors.textPrimary, modifier = Modifier.padding(start = 2.dp, bottom = 10.dp))
                         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(colors.bgCard)) {
                             entries.forEachIndexed { idx, entry ->
                                 val isLast = idx == entries.lastIndex
@@ -105,13 +116,16 @@ fun ReportCenterScreen(nav: NavHostController) {
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
-                                        VanIcon(entry.icon, size = 20.sp, color = colors.primary)
+                                        // ④ 图标 22sp（web 20px；实测放大 2）
+                                        VanIcon(entry.icon, size = 22.sp, color = colors.primary)
                                     }
                                     Spacer(Modifier.width(12.dp))
                                     Column(Modifier.weight(1f)) {
-                                        FText(entry.title, 14f, FontWeight.Medium, colors.textPrimary)
+                                        // ② 菜单标题 **16sp**（web 14px / 500）→ 正文档
+                                        FText(entry.title, 16f, FontWeight.Medium, colors.textPrimary)
                                         Spacer(Modifier.height(2.dp))
-                                        FText(entry.desc, 11f, color = colors.textTertiary)
+                                        // ③ 菜单描述 **12sp**（web 11px）→ 辅助档（7.9 下限 12）
+                                        FText(entry.desc, 12f, color = colors.textTertiary)
                                     }
                                     VanIcon("arrow", size = 16.sp, color = colors.textTertiary)
                                 }
@@ -125,7 +139,7 @@ fun ReportCenterScreen(nav: NavHostController) {
 
     LaunchedEffect(pendingTip) {
         pendingTip?.let {
-            Toast.makeText(context, "「$it」报表页尚未复刻，敬请期待", Toast.LENGTH_SHORT).show()
+            vanToast.show("「$it」报表页尚未复刻，敬请期待")
             pendingTip = null
         }
     }

@@ -6,11 +6,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -24,21 +22,29 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.platform.LocalContext
 import com.live.finance.App
-import com.live.finance.core.net.ApiResult
 import com.live.finance.core.nav.Routes
+import com.live.finance.core.net.ApiResult
+import com.live.finance.core.net.failMessage
 import com.live.finance.data.model.Fund
 import com.live.finance.theme.LocalAppColors
+import com.live.finance.theme.vanGreen
 import com.live.finance.ui.common.ScreenScaffold
 import com.live.finance.ui.flow.FText
 import com.live.vant.icon.VanIcon
-import com.live.vant.nav.VanNavBar
 import kotlinx.coroutines.launch
+import kotlin.math.abs
+import com.live.finance.core.net.showFail
+import com.live.vant.feedback.VanToastType
 
+/**
+ * 理财总览（对齐 web Finance/report/fund/Fund.vue）。
+ * 四宫格汇总卡 + 「操作」菜单列表 + 「持仓概览」持仓卡列表。
+ */
 @Composable
 fun FundScreen(nav: androidx.navigation.NavHostController) {
     val colors = LocalAppColors.current
@@ -53,8 +59,8 @@ fun FundScreen(nav: androidx.navigation.NavHostController) {
             loading = true
             when (val res = graph.fund.list()) {
                 is ApiResult.Ok -> fundList = res.data ?: emptyList()
-                is ApiResult.Fail -> toast.show(res.message)
-                else -> toast.show("加载失败")
+                is ApiResult.Fail -> toast.show(res.message, VanToastType.Fail)
+                else -> toast.showFail(res, "加载失败")
             }
             loading = false
         }
@@ -63,76 +69,59 @@ fun FundScreen(nav: androidx.navigation.NavHostController) {
 
     val totalInvest = fundList.sumOf { it.invest }
     val totalMarket = fundList.sumOf { it.marketVal }
-    val totalProfit = fundList.sumOf { it.netValue }
-    val allProfit = totalProfit >= 0
+    val totalEarnings = fundList.sumOf { it.netValue }
+    val allProfit = totalEarnings >= 0
 
     ScreenScaffold { outerMod ->
         Column(outerMod) {
-            VanNavBar(title = "理财总览", leftArrow = true, onClickLeft = { nav.popBackStack() })
-            Column(
-                Modifier.verticalScroll(rememberScrollState()).padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-            ) {
-            // 概览统计卡（总本金 / 总市值 / 总收益）
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                SummaryCard("总持有", "${fundList.size} 只", null, Modifier.weight(1f))
-                SummaryCard(
-                    "总收益",
-                    fundAmount(totalProfit),
-                    if (allProfit) colors.danger else colors.success,
-                    Modifier.weight(1f),
-                )
-            }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                SummaryCard("总本金", fundAmount(totalInvest), null, Modifier.weight(1f))
-                SummaryCard("总市值", fundAmount(totalMarket), null, Modifier.weight(1f))
-            }
-
-            // 功能菜单
-            Column(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(colors.bgCard).padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                val menus = listOf(
-                    Triple("gold-coin-o", "净值登记") { nav.navigate(Routes.FUND_REGISTER) },
-                    Triple("replay", "每日收益") { nav.navigate(Routes.FUND_DAILY) },
-                    Triple("chart-trending-o", "收益走势") { nav.navigate(Routes.FUND_TREND) },
-                    Triple("balance-o", "累计收益") { nav.navigate(Routes.FUND_EARNINGS) },
-                )
-                menus.chunked(2).forEach { row ->
+            if (!loading) {
+                Column(
+                    Modifier.verticalScroll(rememberScrollState()).padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    // 汇总卡：持有基金 / 当前本金 / 当前市值 / 累计收益
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        row.forEach { (icon, label, action) ->
-                            Column(
-                                Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).background(colors.bgThird)
-                                    .clickable { action() }.padding(vertical = 16.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                VanIcon(icon, size = 24.sp, color = colors.primary)
-                                FText(label, 13f, FontWeight.Medium, colors.textPrimary)
+                        SummaryCard("持有基金", "${fundList.size}支", null, Modifier.weight(1f))
+                        SummaryCard("当前本金", "¥${fundAmount(totalInvest)}", null, Modifier.weight(1f))
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        SummaryCard("当前市值", "¥${fundAmount(totalMarket)}", colors.primary, Modifier.weight(1f))
+                        SummaryCard(
+                            "累计收益",
+                            "${if (allProfit) "+" else ""}¥${fundAmount(abs(totalEarnings))}",
+                            if (allProfit) colors.danger else colors.success,
+                            Modifier.weight(1f),
+                        )
+                    }
+
+                    // 操作
+                    FText("操作", 16f, FontWeight.SemiBold, colors.textPrimary)
+                    Column(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(colors.bgCard),
+                    ) {
+                        // ⚠ 四个入口的图标色统一吃 web `.menu-icon{ color: var(--theme-primary) }`（旧实现曾写成 textPrimary）。
+                        //   「每日收益登记」原本 web 多了一句内联 `style="color: var(--van-green,#07c160)"` 把它钉死成绿，
+                        //   原生当时照抄成 `vanGreen()` —— 2026-09-19 负责人判定那是 web 的 bug 且要求**两端一起改**：
+                        //   web 已删该内联（`Fund.vue:36-40`），原生这里改回 `colors.primary`。
+                    FundMenuItem("edit", "理财登记", "新增 / 编辑 / 删除持有的基金", colors.primary) { nav.navigate(Routes.FUND_REGISTER) }
+                        FundMenuItem("edit", "每日收益登记", "记录今日收益和增持本金", colors.primary) { nav.navigate(Routes.FUND_DAILY) }
+                        FundMenuItem("chart-trending-o", "变化走势图", "查看累计收益和当前市值变化", colors.primary) { nav.navigate(Routes.FUND_TREND) }
+                        FundMenuItem("gold-coin-o", "收益明细", "每支基金的收益详情与回报率", colors.primary) { nav.navigate(Routes.FUND_EARNINGS) }
+                    }
+
+                    // 持仓概览
+                    FText("持仓概览", 16f, FontWeight.SemiBold, colors.textPrimary)
+                    if (fundList.isEmpty()) {
+                        com.live.vant.basic.VanEmpty(description = "暂无基金数据，点上方「理财登记」添加")
+                    } else {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            fundList.forEach { fund ->
+                                FundCard(fund) { nav.navigate(Routes.FUND_TREND) }
                             }
                         }
-                        if (row.size == 1) Box(Modifier.weight(1f))
                     }
                 }
             }
-
-            // 持仓列表
-            FText("我的持仓", 15f, FontWeight.SemiBold, colors.textPrimary)
-            if (loading) {
-                Box(Modifier.fillMaxWidth().height(80.dp), contentAlignment = Alignment.Center) {
-                    com.live.vant.basic.VanLoading()
-                }
-            } else if (fundList.isEmpty()) {
-                com.live.vant.basic.VanEmpty(description = "暂无持仓基金")
-            } else {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    fundList.forEach { fund ->
-                        FundCard(fund)
-                    }
-                }
-            }
-        }
         }
     }
 }
@@ -150,26 +139,48 @@ private fun SummaryCard(label: String, value: String, valueColor: androidx.compo
 }
 
 @Composable
-private fun FundCard(fund: Fund) {
+private fun FundMenuItem(icon: String, title: String, desc: String, iconColor: androidx.compose.ui.graphics.Color, onClick: () -> Unit) {
     val colors = LocalAppColors.current
-    val profitColor = if (fund.isProfit) colors.danger else colors.success
+    Row(
+        Modifier.fillMaxWidth().clickable { onClick() }.padding(horizontal = 14.dp, vertical = 13.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        VanIcon(icon, size = 20.sp, color = iconColor)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            FText(title, 16f, FontWeight.Medium, colors.textPrimary)
+            FText(desc, 12f, FontWeight.Normal, colors.textSecondary)
+        }
+        VanIcon("arrow", size = 16.sp, color = colors.textTertiary)
+    }
+}
+
+@Composable
+private fun FundCard(fund: Fund, onClick: () -> Unit) {
+    val colors = LocalAppColors.current
+    val profit = fund.netValue
+    val profitColor = if (profit >= 0) colors.danger else colors.success
+    val rate = if (fund.invest > 0) profit / fund.invest * 100 else 0.0
     Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(colors.bgCard).padding(14.dp),
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(colors.bgCard)
+            .clickable { onClick() }.padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                FText(fund.fundName.ifEmpty { "未命名" }, 15f, FontWeight.SemiBold, colors.textPrimary)
-                FText(fund.fundCompany.ifEmpty { "—" }, 12f, FontWeight.Normal, colors.textSecondary)
-            }
-            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                FText(fundAmount(fund.marketVal), 16f, FontWeight.Bold, colors.textPrimary)
-                FText(fund.rate.ifEmpty { "0.00%" }, 12f, FontWeight.Medium, profitColor)
-            }
+            FText(fund.fundName.ifEmpty { "未命名" }, 16f, FontWeight.SemiBold, colors.textPrimary)
+            FText("¥${fundAmount(fund.marketVal)}", 18f, FontWeight.Bold, colors.primary)
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            FText("持有 ${String.format("%.2f", fund.share)} 份", 12f, FontWeight.Normal, colors.textSecondary)
-            FText((if (fund.isProfit) "+" else "") + fundAmount(fund.netValue), 13f, FontWeight.Medium, profitColor)
+            FText(fund.fundCompany.ifEmpty { "-" }, 12f, FontWeight.Normal, colors.textSecondary)
+            FText("${if (rate >= 0) "+" else ""}${fundRate(rate)}", 12f, FontWeight.Medium, profitColor)
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            FText("份额 ${trimDecimal(fund.share)}", 12f, FontWeight.Normal, colors.textSecondary)
+            FText(
+                "收益 ${if (profit >= 0) "+" else ""}¥${fundAmount(abs(profit))}",
+                12f, FontWeight.Medium, profitColor, Modifier.weight(1f),
+            )
+            FText("购入 ${fund.buyDate.ifBlank { "-" }}", 12f, FontWeight.Normal, colors.textSecondary)
         }
     }
 }

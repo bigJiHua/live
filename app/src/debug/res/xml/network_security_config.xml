@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  网络安全配置 —— **debug 构建专用覆盖**（资源合并：debug 变体覆盖 main 同名资源）
+
+  用途：局域网联调（2026-10-10）
+    main 的 NSC 全局禁明文（上线加固 P0-4），会把 http://192.168.0.103:666 硬拦掉。
+    本文件只为 **debug 包**（appFakeDebug / appProdDebug）放开两件事：
+      1. 对联调主机（192.168.0.103 / 10.0.2.2）允许明文 http；
+      2. <debug-overrides> 信任用户安装的证书 —— 需要抓包时把 Charles/mitmproxy
+         证书装到手机「用户凭据」即可，不用改 main。
+
+  ⚠ 安全边界（为什么敢这么放）：
+    - debug-overrides 与本文件**只在 debuggable=true 的构建里生效**，
+      release 包用的是 main 的 NSC（仍全局禁明文 + 只信 system CA）——
+      即使本文件被误提交，线上包也不受任何影响。
+    - 明文豁免精确到**两个联调 IP**，不是全局放开。
+
+  ⚠ release 永远不要加这两个豁免：见 main/res/xml/network_security_config.xml。
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+
+    <!-- 仅这两个联调地址允许明文（真机局域网 / 模拟器到宿主机） -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">192.168.0.103</domain>
+        <domain includeSubdomains="false">10.0.2.2</domain>
+    </domain-config>
+
+    <!-- debug 包信任用户安装的证书（抓包用）；release 包自动忽略此段 -->
+    <debug-overrides>
+        <trust-anchors>
+            <certificates src="user" />
+        </trust-anchors>
+    </debug-overrides>
+</network-security-config>

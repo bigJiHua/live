@@ -25,6 +25,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -38,6 +40,10 @@ import com.live.finance.core.nav.Routes
 import com.live.finance.core.net.ApiResult
 import com.live.finance.data.model.Budget
 import com.live.finance.theme.LocalAppColors
+import com.live.finance.theme.VanGrayFixed
+import com.live.finance.theme.VanPurpleFixed
+import com.live.finance.theme.vanGreen
+import com.live.vant.theme.VantColors
 import com.live.finance.theme.LocalAppTokens
 import com.live.finance.ui.common.AppButton
 import com.live.finance.ui.common.AppButtonSize
@@ -118,7 +124,7 @@ fun BudgetListScreen(nav: NavHostController) {
                             )
                         }
                         Spacer(Modifier.height(4.dp))
-                        FText("整体进度 $totalProgress%", 11f, color = Color.White.copy(alpha = 0.85f))
+                        FText("整体进度 $totalProgress%", 12f, color = Color.White.copy(alpha = 0.85f))
                     }
                 }
 
@@ -153,16 +159,17 @@ fun BudgetListScreen(nav: NavHostController) {
 
             if (loading) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    FText("加载中…", 14f, color = colors.textTertiary)
+                    FText("加载中…", 16f, color = colors.textTertiary)
                 }
             }
 
-            // 底部固定「登记预算」（web bottom-actions fixed）
+            // 底部固定「登记预算」（web bottom-actions fixed）；
+            // 第四十五轮按他要求删掉实心 bg → plain（透明底 + 主色描边字）
             AppButton(
                 text = "登记预算",
                 onClick = { nav.navigate(Routes.BUDGET_TYPE_SELECT) },
                 type = AppButtonType.Primary, size = AppButtonSize.Large,
-                block = true, round = true, icon = "plus",
+                plain = true, block = true, round = true, icon = "plus",
                 modifier = Modifier.align(Alignment.BottomCenter).padding(horizontal = 16.dp, vertical = 20.dp),
             )
         }
@@ -185,21 +192,27 @@ private fun BudgetCard(b: Budget, onClick: () -> Unit) {
     val progress = BudgetShared.progressOf(b)
     val over = BudgetShared.isOver(b)
     val remaining = b.budgetAmount - used
+    // ⚠ vanGreen() 是 @Composable，只能在组合上下文取色；drawBehind 是非组合 lambda，
+    //   直接在里面调会编译失败（第四十轮顺手修正第四十六轮留下的编译错误）。
+    val green = vanGreen()
 
     Box(
         Modifier.padding(horizontal = 12.dp, vertical = 5.dp).fillMaxWidth()
             .clip(RoundedCornerShape(12.dp)).background(colors.bgCard)
+            // 周期色条（web top:0/bottom:0 的等价画法）：必须画在背景层——
+            // fillMaxHeight 在 LazyColumn 的无限高约束下会塌成 0（第四十六轮修正案）
+            .drawBehind {
+                drawRect(
+                    BudgetShared.cycleColor(b.cycle, colors, green),
+                    size = Size(4.dp.toPx(), size.height),
+                )
+            }
             .clickable { onClick() }.padding(14.dp),
     ) {
-        // 左侧周期色条（card-cycle-bar）
-        Box(
-            Modifier.align(Alignment.CenterStart).width(4.dp).height(200.dp)
-                .background(BudgetShared.cycleColor(b.cycle)),
-        )
         Column(Modifier.padding(start = 8.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Column(Modifier.weight(1f)) {
-                    FText(b.title, 15f, FontWeight.SemiBold, colors.textPrimary)
+                    FText(b.title, 16f, FontWeight.SemiBold, colors.textPrimary)
                     if (b.route.isNotEmpty()) {
                         Spacer(Modifier.height(4.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -210,7 +223,7 @@ private fun BudgetCard(b: Budget, onClick: () -> Unit) {
                     Spacer(Modifier.height(6.dp))
                     Row(verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        FText(b.planDate, 11f, color = colors.textTertiary)
+                        FText(b.planDate, 12f, color = colors.textTertiary)
                         VanTag(BudgetShared.typeName(b.budgetType),
                             type = BudgetShared.typeTagColor(b.budgetType).toVanType(),
                             size = VanTagSize.Small)
@@ -219,17 +232,20 @@ private fun BudgetCard(b: Budget, onClick: () -> Unit) {
                     }
                 }
                 Column(horizontalAlignment = Alignment.End) {
-                    FText("¥${Money.format(b.budgetAmount)}", 16f, FontWeight.Bold, colors.textPrimary)
+                    FText("¥${Money.format(b.budgetAmount)}", 18f, FontWeight.Bold, colors.textPrimary)
                     Spacer(Modifier.height(2.dp))
+                    // web `budget/List.vue:524-531` `.card-remaining.positive { color: var(--van-green) }`
+                    // （`.negative` = `var(--van-danger-color)`，:root 有定义 → colors.danger）
                     FText(
                         if (remaining >= 0) "剩余 ¥${Money.format(remaining)}" else "超支 ¥${Money.format(-remaining)}",
                         12f,
-                        color = if (remaining >= 0) Color(0xFF07C160) else colors.danger,
+                        color = if (remaining >= 0) vanGreen() else colors.danger,
                     )
                 }
             }
             Spacer(Modifier.height(12.dp))
-            // 进度条（超支红渐变 / 正常主色→绿渐变）
+            // web `budget/List.vue:546` `.progress-fill`：`linear-gradient(90deg, var(--theme-primary), var(--van-green))`
+            // （超支分支见 List.vue:552：`var(--van-danger-color) → #ff6034`）
             Box(
                 Modifier.fillMaxWidth().height(4.dp)
                     .clip(RoundedCornerShape(2.dp)).background(colors.bgThird),
@@ -238,15 +254,15 @@ private fun BudgetCard(b: Budget, onClick: () -> Unit) {
                     Modifier.fillMaxWidth(progress / 100f).height(4.dp)
                         .clip(RoundedCornerShape(2.dp))
                         .background(
-                            if (over) Brush.horizontalGradient(listOf(Color(0xFFEE0A24), Color(0xFFFF6034)))
-                            else Brush.horizontalGradient(listOf(colors.primary, Color(0xFF07C160))),
+                            if (over) Brush.horizontalGradient(listOf(colors.danger, Color(0xFFFF6034)))
+                            else Brush.horizontalGradient(listOf(colors.primary, vanGreen())),
                         ),
                 )
             }
             Spacer(Modifier.height(4.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                FText("已 ¥${Money.format(used)}", 11f, color = colors.textTertiary)
-                FText("$progress%", 11f, FontWeight.SemiBold, colors.primary)
+                FText("已 ¥${Money.format(used)}", 12f, color = colors.textTertiary)
+                FText("$progress%", 12f, FontWeight.SemiBold, colors.primary)
             }
             if (over) {
                 Spacer(Modifier.height(8.dp))
@@ -265,15 +281,25 @@ internal fun VanTagColor.toVanType(): VanTagType = when (this) {
     VanTagColor.Default -> VanTagType.Default
 }
 
-/** Detail/表单用的支出类型色（web getExpenseTypeColor：行=primary 吃=danger 喝=success 买=warning 住=purple 玩=orange）。 */
-internal fun expenseTypeColor(type: String): Color = when (type) {
-    "行" -> Color(0xFF1989FA)
-    "吃" -> Color(0xFFEE0A24)
-    "喝" -> Color(0xFF07C160)
-    "买" -> Color(0xFFFF976A)
-    "住" -> Color(0xFF7232DD)
+/**
+ * Detail/表单用的支出类型色（web `getExpenseTypeColor`：`Detail.vue:301-310`）。
+ *
+ * ⚠ web 返回的是 **Vant tag 类型名**而不是 hex，而 `style.css` 把 `--van-primary-color` /
+ * `--van-success-color` / `--van-warning-color` / `--van-danger-color` 全部重定向到 `--theme-*`
+ * → 这四档**随主题**。只有 `purple` / `orange` 是 web 在 `Detail.vue:363-371` 自定义的，
+ * 且取的是 `--van-purple`（写死 #7232dd）/ `--van-orange`（写死 #ff976a）→ **固定**。
+ *
+ * 注意「买」(warning) 与「玩」(orange) 浅色下都是 #ff976a，**深色下会分叉**
+ * （warning → #c9a05a，orange 仍是 #ff976a），所以不能合并。
+ */
+internal fun expenseTypeColor(type: String, colors: VantColors): Color = when (type) {
+    "行" -> colors.primary
+    "吃" -> colors.danger
+    "喝" -> colors.success
+    "买" -> colors.warning
+    "住" -> VanPurpleFixed
     "玩" -> Color(0xFFFF976A)
-    else -> Color(0xFF969799)
+    else -> VanGrayFixed
 }
 
 /** 购物优先级色（web getPriorityColor：必买=danger 想要=warning）。 */

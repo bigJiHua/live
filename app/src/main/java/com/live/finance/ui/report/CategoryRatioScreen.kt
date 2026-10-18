@@ -14,7 +14,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -23,6 +25,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -34,6 +37,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
@@ -41,15 +45,19 @@ import com.live.finance.App
 import com.live.finance.core.net.ApiResult
 import com.live.finance.data.model.FlowRow
 import com.live.finance.theme.LocalAppColors
+import com.live.finance.theme.scaledSp
 import com.live.finance.ui.common.Money
 import com.live.finance.ui.common.MoneyColor
 import com.live.finance.ui.common.ScreenScaffold
 import com.live.finance.ui.flow.FText
+import com.live.finance.ui.common.YearMonthSaver
 import com.live.vant.basic.VanEmpty
 import com.live.vant.feedback.VanPopup
 import com.live.vant.feedback.VanPopupPosition
-import com.live.vant.form.VanDatePicker
 import com.live.vant.icon.VanIcon
+import com.live.vant.other.VanCalendar
+import com.live.vant.other.VanSwipe
+import com.live.vant.other.VanCalendarType
 import java.time.LocalDate
 import java.time.YearMonth
 import kotlin.math.roundToInt
@@ -72,7 +80,8 @@ fun CategoryRatioScreen(nav: NavHostController) {
     val colors = LocalAppColors.current
     val graph = App.of(LocalContext.current).graph
 
-    var month by remember { mutableStateOf(YearMonth.now()) }
+    // keep-alive：本页会跳「流水详情」，返回时普通 remember 会丢 ⇒ 月份跳回当月
+    var month by rememberSaveable(stateSaver = YearMonthSaver) { mutableStateOf(YearMonth.now()) }
     var showMonthPick by remember { mutableStateOf(false) }
     var activeType by remember { mutableStateOf("all") }
     var allList by remember { mutableStateOf<List<FlowRow>>(emptyList()) }
@@ -112,7 +121,11 @@ fun CategoryRatioScreen(nav: NavHostController) {
     LaunchedEffect(breakdown) { checked.clear(); checked.addAll(breakdown.map { it.name }); showAll = false }
 
     val allChecked = checked.size == breakdown.size && breakdown.isNotEmpty()
-    val filtered = remember(breakdown, checked) {
+    // ⚠ key 不能用 `checked` 本身：它是**同一个** `SnapshotStateList` 实例，`remember` 按 `equals`
+    //   比 key ⇒ 永远"没变"，缓存里停在首帧（`LaunchedEffect(breakdown)` 还没填充、checked 为空）算出的
+    //   `emptyList()`，`tiers` 随之为空 ⇒ 圆环图整块不进组合，只有切 tab 让 breakdown 换实例才重算一次。
+    //   web 侧是 `watch(..., {immediate:true})` + `computed`（同一 tick 生效），首帧就有环。
+    val filtered = remember(breakdown, checked.toSet()) {
         val raw = breakdown.filter { it.name in checked }
         val total = raw.sumOf { it.amount }
         if (total <= 0) emptyList()
@@ -145,7 +158,6 @@ fun CategoryRatioScreen(nav: NavHostController) {
 
     ScreenScaffold { inner ->
         Column(inner.fillMaxSize()) {
-            com.live.vant.nav.VanNavBar(title = "类目消费占比", leftArrow = true, onClickLeft = { nav.popBackStack() })
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             // 月份切换
             Row(
@@ -155,7 +167,8 @@ fun CategoryRatioScreen(nav: NavHostController) {
             ) {
                 VanIcon("arrow-left", size = 18.sp, color = colors.primary,
                     modifier = Modifier.clickable { month = month.minusMonths(1) })
-                FText("${month.year}年${month.monthValue.toString().padStart(2, '0')}月", 16f, FontWeight.SemiBold,
+                // web `.month-text{font-size:16px; font-weight:600}` → 按 §7.9 阶梯 16px ⇒ **18f**
+                FText("${month.year}年${month.monthValue.toString().padStart(2, '0')}月", 18f, FontWeight.SemiBold,
                     colors.textPrimary, modifier = Modifier
                         .clickable { showMonthPick = true }
                         .padding(horizontal = 16.dp))
@@ -179,7 +192,7 @@ fun CategoryRatioScreen(nav: NavHostController) {
 
             if (loading) {
                 Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
-                    FText("加载中…", 14f, color = colors.textTertiary)
+                    FText("加载中…", 16f, color = colors.textTertiary)
                 }
             } else if (breakdown.isEmpty()) {
                 Box(Modifier.fillMaxWidth().padding(top = 40.dp), contentAlignment = Alignment.Center) {
@@ -189,8 +202,11 @@ fun CategoryRatioScreen(nav: NavHostController) {
                 Column(Modifier.padding(16.dp).fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp)).background(colors.bgCard).padding(16.dp)) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        FText("分类占比", 14f, FontWeight.SemiBold, colors.textPrimary)
-                        FText(if (allChecked) "取消全选" else "全选", 12f, color = colors.primary,
+                        // web `.section-title{font-size:14px; font-weight:600}` → 按 §7.9 阶梯 14px ⇒ **16f**
+                        FText("分类占比", 16f, FontWeight.SemiBold, colors.textPrimary)
+                        // ⚠ `.section-toggle` 在 web **没有任何 CSS 规则** ⇒ 继承 `.section-title`（14px/600/text-primary ⇒ §7.9 16f），
+                        //   不是「12px 主色」（旧实现凭感觉写成了主色小字）
+                        FText(if (allChecked) "取消全选" else "全选", 16f, FontWeight.SemiBold, colors.textPrimary,
                             modifier = Modifier.clickable {
                                 checked.clear()
                                 if (!allChecked) checked.addAll(breakdown.map { it.name })
@@ -215,13 +231,18 @@ fun CategoryRatioScreen(nav: NavHostController) {
                                             if (bar.name in checked) checked.remove(bar.name) else checked.add(bar.name)
                                         },
                                 )
-                                FText(bar.name, 13f, color = colors.textPrimary,
+                                // web `.cat-bar-name{font-size:13px}`→§7.9 14f / `.cat-bar-pct{font-size:11px; min-width:26px; text-align:right}`→§7.9 12f /
+                                //   `.cat-bar-value{font-size:12px; font-weight:600; min-width:52px; text-align:right}`（12px 不动）
+                                FText(bar.name, 14f, color = colors.textPrimary,
                                     modifier = Modifier.weight(1f).padding(start = 8.dp))
-                                FText("${bar.percent}%", 11f, color = colors.textTertiary)
+                                BarText("${bar.percent}%", 12f, colors.textTertiary,
+                                    Modifier.widthIn(min = 26.dp), textAlign = TextAlign.End)
                                 Spacer(Modifier.width(8.dp))
-                                FText(
+                                BarText(
                                     if (bar.amount >= 1000) "¥${Money.format(bar.amount / 10000)}万" else "¥${Money.format(bar.amount)}",
-                                    12f, FontWeight.SemiBold, colors.textPrimary,
+                                    12f, colors.textPrimary,
+                                    Modifier.widthIn(min = 52.dp), weight = FontWeight.SemiBold,
+                                    textAlign = TextAlign.End,
                                 )
                                 VanIcon("arrow", size = 12.sp, color = colors.textTertiary,
                                     modifier = Modifier.padding(start = 4.dp).clickable { drawerCat = bar.name; drawerType = "all" })
@@ -235,43 +256,63 @@ fun CategoryRatioScreen(nav: NavHostController) {
                     }
                     if (breakdown.size > 5) {
                         Row(
-                            Modifier.fillMaxWidth().clickable { showAll = !showAll }.padding(vertical = 10.dp),
+                            // web `.cat-bar-expand{padding:10px 0 4px; gap:4px}`
+                            Modifier.fillMaxWidth().clickable { showAll = !showAll }
+                                .padding(top = 10.dp, bottom = 4.dp),
                             horizontalArrangement = Arrangement.Center,
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             FText(if (showAll) "收起" else "展开全部 (${breakdown.size}项)", 12f, color = colors.primary)
+                            Spacer(Modifier.width(4.dp))
                             VanIcon(if (showAll) "arrow-up" else "arrow-down", size = 10.sp, color = colors.primary)
                         }
                     }
                 }
 
-                // 三档环形图
-                tiers.forEach { (label, cats, total) ->
-                    val (bg, _) = when {
-                        label.startsWith("大额") -> Color(0x0AEE0A24) to Color(0x1FEE0A24)
-                        label.startsWith("中等") -> Color(0x0AFFB300) to Color(0x24FFB300)
-                        else -> Color(0x0A1989FA) to Color(0x1F1989FA)
-                    }
-                    Column(
-                        Modifier.padding(horizontal = 16.dp, vertical = 6.dp).fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp)).background(bg)
-                            .padding(14.dp),
-                    ) {
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            FText(label, 14f, FontWeight.Bold, colors.textPrimary)
-                            FText(Money.format(total), 14f, FontWeight.Bold, colors.textPrimary)
+                // ===== 三档环形图：web 是**左右翻页** =====
+                // `<van-swipe :loop="false" :show-indicators="tiers.length > 1" indicator-color="#1989fa">`
+                //   + 一档一个 `van-swipe-item`（`CategoryRatio.vue:56-66`）⇒ 一屏只看到一档，横向滑动切换。
+                //   原生此前是 `tiers.forEach` 上下堆叠 —— 负责人 2026-09-20 明确「我要的就是左右滑」。
+                //   底座 `VanSwipe`（横向走 HorizontalPager、带指示点）之前 0 处业务调用，这里是第一处。
+                if (tiers.isNotEmpty()) {
+                    VanSwipe(
+                        count = tiers.size,
+                        loop = false,                                     // web :loop="false"（不首尾相接）
+                        showIndicators = tiers.size > 1,                   // web 只在多档时显示圆点
+                        indicatorColor = Color(0xFF1989FA),               // web indicator-color="#1989fa"
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { idx ->
+                        val (label, cats, total) = tiers[idx]
+                        // web `.tier-big/.tier-mid/.tier-small`：底 4% + **1px 同色系描边** + radius 10
+                        val (bg, bd) = when {
+                            label.startsWith("大额") -> Color(0x0AEE0A24) to Color(0x1FEE0A24)
+                            label.startsWith("中等") -> Color(0x0AFFB300) to Color(0x24FFB300)
+                            else -> Color(0x0A1989FA) to Color(0x1F1989FA)
                         }
-                        DonutChart(
-                            data = cats.map { (c, _) -> Triple(c.name, c.amount.toFloat(), c.color) },
-                            modifier = Modifier.fillMaxWidth().height(220.dp).padding(top = 8.dp),
-                        )
-                        // 图例
-                        Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
-                            cats.forEach { (c, pct) ->
-                                Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Box(Modifier.size(7.dp).clip(CircleShape).background(c.color))
-                                    FText(" ${c.name}", 11f, color = colors.textSecondary, modifier = Modifier.weight(1f))
-                                    FText("${pct}% · ¥${Money.format(c.amount)}", 11f, FontWeight.Medium, colors.textPrimary)
+                        val shape = RoundedCornerShape(10.dp)
+                        Column(
+                            Modifier.padding(horizontal = 16.dp, vertical = 6.dp).fillMaxWidth()
+                                .clip(shape).background(bg)
+                                .border(1.dp, bd, shape)
+                                .padding(14.dp),
+                        ) {
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                FText(label, 16f, FontWeight.Bold, colors.textPrimary)
+                                FText(Money.format(total), 16f, FontWeight.Bold, colors.textPrimary)
+                            }
+                            DonutChart(
+                                data = cats.map { (c, _) -> Triple(c.name, c.amount.toFloat(), c.color) },
+                                // web `.tier-chart{ width:100%; height:240px }`（原来是 220dp）
+                                modifier = Modifier.fillMaxWidth().height(240.dp).padding(top = 8.dp),
+                            )
+                            // 图例（原生补充的读数区，web 靠 echarts tooltip；翻页后每档自带，保留）
+                            Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                                cats.forEach { (c, pct) ->
+                                    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        Box(Modifier.size(7.dp).clip(CircleShape).background(c.color))
+                                        FText(" ${c.name}", 12f, color = colors.textSecondary, modifier = Modifier.weight(1f))
+                                        FText("${pct}% · ¥${Money.format(c.amount)}", 12f, FontWeight.Medium, colors.textPrimary)
+                                    }
                                 }
                             }
                         }
@@ -282,23 +323,25 @@ fun CategoryRatioScreen(nav: NavHostController) {
         }
     }
 
-    // 月份选择
-    if (showMonthPick) {
-        VanPopup(show = true, onDismissRequest = { showMonthPick = false }, position = VanPopupPosition.Bottom, round = true) {
-            VanDatePicker(
-                type = "year-month", value = month.atDay(1), onValueChange = { },
-                title = "选择月份",
-                onConfirm = { month = YearMonth.from(it); showMonthPick = false },
-                onCancel = { showMonthPick = false },
-            )
-        }
-    }
+    // 月份选择（web `van-calendar`：single / min 2020-01-01 / max 今天，确认后取当月 1 日）
+    VanCalendar(
+        show = showMonthPick,
+        onClose = { showMonthPick = false },
+        type = VanCalendarType.Single,
+        minDate = LocalDate.of(2020, 1, 1),
+        maxDate = LocalDate.now(),
+        defaultDate = listOf(month.atDay(1)),
+        onConfirm = { dates ->
+            dates.firstOrNull()?.let { month = YearMonth.from(it) }
+            showMonthPick = false
+        },
+    )
     // 分类明细抽屉
     if (drawerCat != null) {
         VanPopup(show = true, onDismissRequest = { drawerCat = null }, position = VanPopupPosition.Bottom, round = true) {
             Column(Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
                 Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                    FText(drawerCat.orEmpty(), 16f, FontWeight.SemiBold, colors.textPrimary)
+                    FText(drawerCat.orEmpty(), 18f, FontWeight.SemiBold, colors.textPrimary)
                     VanIcon("cross", size = 18.sp, color = colors.textTertiary,
                         modifier = Modifier.clickable { drawerCat = null })
                 }
@@ -315,7 +358,7 @@ fun CategoryRatioScreen(nav: NavHostController) {
                 Column(Modifier.fillMaxWidth().height(400.dp).verticalScroll(rememberScrollState())) {
                     if (drawerItems.isEmpty()) {
                         Box(Modifier.fillMaxWidth().padding(vertical = 30.dp), contentAlignment = Alignment.Center) {
-                            FText("暂无记录", 13f, color = colors.textTertiary)
+                            FText("暂无记录", 14f, color = colors.textTertiary)
                         }
                     }
                     drawerItems.forEach { item ->
@@ -335,16 +378,16 @@ fun CategoryRatioScreen(nav: NavHostController) {
                             }
                             Column(Modifier.weight(1f).padding(start = 10.dp)) {
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    FText(item.categoryName, 13f, FontWeight.Medium, colors.textPrimary)
+                                    FText(item.categoryName, 14f, FontWeight.Medium, colors.textPrimary)
                                     FText(
-                                        (if (item.direction == 1) "+" else "-") + Money.format(item.amount), 14f, FontWeight.Bold,
+                                        (if (item.direction == 1) "+" else "-") + Money.format(item.amount), 16f, FontWeight.Bold,
                                         if (item.direction == 1) MoneyColor.income else MoneyColor.expense,
                                     )
                                 }
                                 Spacer(Modifier.height(3.dp))
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    FText(item.transDate.take(10), 11f, color = colors.textTertiary)
-                                    FText(item.remark.ifEmpty { "无备注" }, 11f, color = colors.textTertiary)
+                                    FText(item.transDate.take(10), 12f, color = colors.textTertiary)
+                                    FText(item.remark.ifEmpty { "无备注" }, 12f, color = colors.textTertiary)
                                 }
                             }
                         }
@@ -383,3 +426,21 @@ private fun DonutChart(data: List<Triple<String, Float, Color>>, modifier: Modif
         }
     }
 }
+
+/**
+ * 带 `textAlign` 的纯文本（web 里靠 `text-align` 排版的单元格用）。
+ *
+ * ⚠ **不要叫 `FTextA`**：`DebtOverviewScreen.kt` 里已有同包同签名的 `private fun FTextA`，
+ *   顶层 private 虽是文件级可见，但解析时会同时列出两个候选而报「None of the following functions
+ *   can be called with the arguments supplied」（2026-09-19 实测）。换个名字最省事。
+ */
+@Composable
+private fun BarText(
+    text: String, sizeSp: Float, color: Color,
+    modifier: Modifier = Modifier,
+    weight: FontWeight = FontWeight.Normal,
+    textAlign: TextAlign = TextAlign.Start,
+) = androidx.compose.foundation.text.BasicText(
+    text, modifier,
+    androidx.compose.ui.text.TextStyle(color = color, fontSize = scaledSp(sizeSp), fontWeight = weight, textAlign = textAlign),
+)

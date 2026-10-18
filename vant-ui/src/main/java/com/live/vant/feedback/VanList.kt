@@ -17,6 +17,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.live.vant.basic.VanLoading
+import com.live.vant.theme.vantDimens
 import com.live.vant.theme.LocalVantColors
 
 /**
@@ -78,13 +79,13 @@ fun VanListFooter(
                 VanLoading(size = 16.sp, color = c.textTertiary)
                 androidx.compose.foundation.text.BasicText(
                     loadingText,
-                    style = TextStyle(color = c.textTertiary, fontSize = 14.sp),
+                    style = TextStyle(color = c.textTertiary, fontSize = vantDimens.fontSizeMd),
                     modifier = Modifier.padding(start = 8.dp),
                 )
             }
             finished && !finishedText.isNullOrEmpty() -> androidx.compose.foundation.text.BasicText(
                 finishedText,
-                style = TextStyle(color = c.textTertiary, fontSize = 14.sp, lineHeight = 50.sp),
+                style = TextStyle(color = c.textTertiary, fontSize = vantDimens.fontSizeMd, lineHeight = 50.sp),
             )
         }
     }

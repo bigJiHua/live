@@ -2,4 +2,6 @@
 <resources>
     <!-- 启动窗口底色（Compose 首帧前）：浅色 = web theme bg-primary (#f7f8fa) -->
     <color name="window_bg">#F7F8FA</color>
+    <!-- 启动图标自适应背景：对齐 web manifest theme-color (#3a66e0) -->
+    <color name="ic_launcher_background">#3A66E0</color>
 </resources>

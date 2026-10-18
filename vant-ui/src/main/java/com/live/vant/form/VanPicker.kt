@@ -268,6 +268,7 @@ fun VanPickerToolbar(
     modifier: Modifier = Modifier,
 ) {
     val c = LocalVantColors.current
+    val d = LocalVantDimens.current
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
@@ -284,7 +285,7 @@ fun VanPickerToolbar(
         ) {
             BasicText(
                 cancelButtonText,
-                style = TextStyle(color = c.textSecondary, fontSize = 14.sp),
+                style = TextStyle(color = c.textSecondary, fontSize = d.fontSizeMd),
                 modifier = Modifier.padding(horizontal = 16.dp),
             )
         }
@@ -292,7 +293,7 @@ fun VanPickerToolbar(
             if (!title.isNullOrEmpty()) {
                 BasicText(
                     title,
-                    style = TextStyle(color = c.textPrimary, fontSize = 16.sp, lineHeight = 20.sp),
+                    style = TextStyle(color = c.textPrimary, fontSize = d.fontSizeLg, lineHeight = d.lineHeightMd),
                 )
             }
         }
@@ -305,7 +306,7 @@ fun VanPickerToolbar(
         ) {
             BasicText(
                 confirmButtonText,
-                style = TextStyle(color = c.primary, fontSize = 14.sp),
+                style = TextStyle(color = c.primary, fontSize = d.fontSizeMd),
                 modifier = Modifier.padding(horizontal = 16.dp),
             )
         }

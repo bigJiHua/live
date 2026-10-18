@@ -2,6 +2,7 @@ package com.live.finance.ui.user
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,6 +36,7 @@ import com.live.finance.App
 import com.live.finance.core.nav.Routes
 import com.live.finance.core.net.ApiResult
 import com.live.finance.theme.LocalAppColors
+import com.live.finance.theme.vanGreen
 import com.live.finance.ui.common.PinCells
 import com.live.finance.ui.common.ScreenScaffold
 import com.live.finance.ui.flow.FText
@@ -42,9 +44,13 @@ import com.live.vant.basic.VanNoticeBar
 import com.live.vant.feedback.LocalVanToastController
 import com.live.vant.form.VanSafeKeyboard
 import kotlinx.coroutines.delay
+import com.live.vant.feedback.VanToastType
 
-// web `PinSetup.vue` 里写死的色（var 无定义时的 fallback）
-private val PIN_STEP_GREEN = Color(0xFF07C160)   // var(--van-green, #07c160)
+/**
+ * ⚠ 原本按「var 无定义时的 fallback」处理 —— 前提错了。
+ * web `style.css:154` 有 `--van-green: var(--theme-success)`（那一块注释原文就是「跟随主题切换」），
+ * 所以 fallback `#07c160` **不会生效**，实际取主题 success。故这里改用 `vanGreen()`，常量已删。
+ */
 private val PIN_STEP_GLOW = Color(0x4D07C160)    // 0 4px 12px rgba(7,193,96,.3)
 
 /**
@@ -150,7 +156,7 @@ fun PinSetupScreen(nav: NavHostController, mode: String = "new") {
                     when (val r = sec.setPin(firstPin)) {
                         is ApiResult.Ok -> {
                             isSubmitting = false
-                            toast.show("PIN 码设置成功")
+                            toast.show("PIN 码设置成功", VanToastType.Success)
                             delay(1500)
                             nav.popBackStack()
                         }
@@ -199,7 +205,7 @@ fun PinSetupScreen(nav: NavHostController, mode: String = "new") {
                     when (val r = sec.changePin(oldPin, pin)) {
                         is ApiResult.Ok -> {
                             isSubmitting = false
-                            toast.show("PIN 码修改成功")
+                            toast.show("PIN 码修改成功", VanToastType.Success)
                             delay(1500)
                             nav.popBackStack()
                         }
@@ -213,50 +219,12 @@ fun PinSetupScreen(nav: NavHostController, mode: String = "new") {
 
     ScreenScaffold { inner ->
         Box(inner) {
-            // .page-pin-setup{ height:60vh }
-            Column(Modifier.fillMaxWidth().fillMaxHeight(0.6f)) {
-                // .setup-content{ flex:1; column; center; justify-center; padding:0 20px }
-                Column(
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp),
-                ) {
-                    PinStepIndicator(currentStep = currentStep, isModify = isModify)
-
-                    if (isModify && currentStep == 1) {
-                        FText("验证身份", 18f, FontWeight.Bold, colors.textPrimary, Modifier.padding(bottom = 12.dp))
-                        FText(
-                            "请输入当前的 PIN 码以确认身份", 14f, FontWeight.Normal, colors.textPrimary,
-                            Modifier.padding(vertical = 20.dp),
-                        )
-                    }
-                    // .pin-display{ margin: 40px 0 }；:gutter="15"
-                    PinCells(
-                        value = currentPin,
-                        gutter = 15.dp,
-                        modifier = Modifier.padding(vertical = 40.dp),
-                    )
-
-                    // .tip-text{ width:100%; margin:20px 0 }：有错走 warning 通知条，否则走普通提示
-                    Box(Modifier.fillMaxWidth().padding(vertical = 20.dp)) {
-                        if (errorMessage.isNotEmpty()) {
-                            VanNoticeBar(text = errorMessage, leftIcon = "warning-o")
-                        } else {
-                            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                                FText(
-                                    tipText(currentStep, isModify), 14f, FontWeight.Normal, colors.textTertiary,
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            // ===== 底部安全键盘（复刻 web PinSetup.vue 的 .keyboard-overlay）=====
-            // 全屏透明遮罩：点键盘外任意区域 → 收起键盘（对应 web
-            // .keyboard-overlay @click="showKeyboard=false"）。web 原版遮罩只盖键盘高度、
-            // 键盘 @click.stop 导致点外不收起；这里做成全屏透明遮罩，上方有可点区域，满足
-            // 「点外自主收起」诉求。键盘面板自身吞掉点击（对应 web @click.stop），避免点键误关。
+            // ===== 底部安全键盘（先画，页面内容在其上层）=====
+            // 之前键盘遮罩画在内容之后（盖在最上面）：它是 fillMaxSize 的全屏透明层，
+            // 于是连 PIN 格子都被它吃掉 → 只可能 showKeyboard=false，且没有任何路径置回 true，
+            // 表现就是「键盘收起后再也唤不出来」。改成先画键盘、后画内容即可：
+            // 内容区没有 clickable 的地方点击会穿透到遮罩（保留「点外收起」），
+            // PinCells 自身可点则负责重新唤出。
             if (showKeyboard) {
                 Box(
                     modifier = Modifier
@@ -286,6 +254,52 @@ fun PinSetupScreen(nav: NavHostController, mode: String = "new") {
                     }
                 }
             }
+
+            // .page-pin-setup{ height:60vh }
+            Column(Modifier.fillMaxWidth().fillMaxHeight(0.6f)) {
+                // .setup-content{ flex:1; column; center; justify-center; padding:0 20px }
+                Column(
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp),
+                ) {
+                    PinStepIndicator(currentStep = currentStep, isModify = isModify)
+
+                    if (isModify && currentStep == 1) {
+                        FText("验证身份", 18f, FontWeight.Bold, colors.textPrimary, Modifier.padding(bottom = 12.dp))
+                        FText(
+                            "请输入当前的 PIN 码以确认身份", 16f, FontWeight.Normal, colors.textPrimary,
+                            Modifier.padding(vertical = 20.dp),
+                        )
+                    }
+                    // .pin-display{ margin: 40px 0 }；:gutter="15"
+                    // 点击 PIN 格子重新唤出键盘（收起后唯一的再唤出入口）
+                    PinCells(
+                        value = currentPin,
+                        gutter = 15.dp,
+                        modifier = Modifier
+                            .padding(vertical = 40.dp)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                            ) { showKeyboard = true },
+                    )
+
+                    // .tip-text{ width:100%; margin:20px 0 }：有错走 warning 通知条，否则走普通提示
+                    Box(Modifier.fillMaxWidth().padding(vertical = 20.dp)) {
+                        if (errorMessage.isNotEmpty()) {
+                            VanNoticeBar(text = errorMessage, leftIcon = "warning-o")
+                        } else {
+                            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                                FText(
+                                    tipText(currentStep, isModify), 16f, FontWeight.Normal, colors.textTertiary,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
         }
     }
 }
@@ -329,13 +343,13 @@ private fun PinStepIndicator(currentStep: Int, isModify: Boolean) {
                         .background(
                             when {
                                 active -> colors.primary
-                                completed -> PIN_STEP_GREEN
+                                completed -> vanGreen()
                                 else -> colors.bgThird
                             },
                         ),
                 ) {
                     FText(
-                        "$s", 16f, FontWeight.Bold,
+                        "$s", 18f, FontWeight.Bold,
                         if (active || completed) Color.White else colors.textTertiary,
                     )
                 }

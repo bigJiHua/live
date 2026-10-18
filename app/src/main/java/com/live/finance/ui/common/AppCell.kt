@@ -44,6 +44,11 @@ fun AppCell(
     /** 值是占位文案时置灰（对应 web `:class="{ placeholder: !selected }"`） */
     valuePlaceholder: Boolean = false,
     valueColor: Color? = null,
+    /**
+     * 值字重。web 的 `app-cell` 有些行会给 `#value` 加 `value-class="amount-highlight" / "amount-warning"`
+     *   （`font-weight:600`）⇒ 需要能单独加粗数值（账单详情页的「本期账单 / 待还金额」）。
+     */
+    valueWeight: androidx.compose.ui.text.font.FontWeight = androidx.compose.ui.text.font.FontWeight.Normal,
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
     rightIcon: @Composable (() -> Unit)? = null,
@@ -72,7 +77,7 @@ fun AppCell(
                 }
                 // 正文（flex:1; min-width:0）
                 Column(Modifier.weight(1f)) {
-                    if (title != null) FText(title, 14f, FontWeight.Normal, colors.textPrimary)
+                    if (title != null) FText(title, 16f, FontWeight.Normal, colors.textPrimary)
                     if (!label.isNullOrEmpty()) {
                         Spacer(Modifier.height(4.dp))
                         FText(label, 12f, FontWeight.Normal, colors.textTertiary)
@@ -81,8 +86,8 @@ fun AppCell(
                 if (!value.isNullOrEmpty()) {
                     FText(
                         value,
-                        14f,
-                        FontWeight.Normal,
+                        16f,
+                        valueWeight,
                         valueColor ?: if (valuePlaceholder) colors.textTertiary else colors.textSecondary,
                         Modifier
                             .padding(start = 8.dp)

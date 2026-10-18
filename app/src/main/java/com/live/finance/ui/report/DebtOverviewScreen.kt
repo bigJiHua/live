@@ -1,5 +1,6 @@
 package com.live.finance.ui.report
 
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -8,11 +9,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -22,7 +26,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -44,10 +50,18 @@ import com.live.finance.data.model.Card
 import com.live.finance.data.model.Category
 import com.live.finance.data.model.FlowRow
 import com.live.finance.theme.LocalAppColors
+import com.live.finance.theme.scaledSp
+import com.live.finance.theme.vanDangerBg
+import com.live.finance.theme.vanGreen
+import com.live.finance.theme.vanGreenBg
+import com.live.finance.theme.vanOrange
+import com.live.finance.theme.vanOrangeBg
 import com.live.finance.ui.common.Money
 import com.live.finance.ui.common.MoneyColor
 import com.live.finance.ui.common.ScreenScaffold
 import com.live.finance.ui.flow.FText
+import com.live.finance.ui.common.YearMonthSaver
+import com.live.vant.basic.VanNoticeBar
 import com.live.vant.basic.VanTag
 import com.live.vant.basic.VanTagSize
 import com.live.vant.feedback.VanPopup
@@ -75,7 +89,8 @@ fun DebtOverviewScreen(nav: NavHostController) {
     val colors = LocalAppColors.current
     val graph = App.of(LocalContext.current).graph
 
-    var month by remember { mutableStateOf(YearMonth.now()) }
+    // keep-alive：本页会跳「流水详情」，返回时普通 remember 会丢 ⇒ 月份跳回当月
+    var month by rememberSaveable(stateSaver = YearMonthSaver) { mutableStateOf(YearMonth.now()) }
     var loading by remember { mutableStateOf(true) }
     var cards by remember { mutableStateOf<List<Card>>(emptyList()) }
     var banks by remember { mutableStateOf<List<Category>>(emptyList()) }
@@ -165,10 +180,9 @@ fun DebtOverviewScreen(nav: NavHostController) {
 
     ScreenScaffold { inner ->
         Column(inner.fillMaxSize()) {
-            com.live.vant.nav.VanNavBar(title = "负债统计", leftArrow = true, onClickLeft = { nav.popBackStack() })
             if (loading) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    FText("加载中…", 14f, color = colors.textTertiary)
+                    FText("加载中…", 16f, color = colors.textTertiary)
                 }
             } else {
                 Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 30.dp)) {
@@ -177,43 +191,56 @@ fun DebtOverviewScreen(nav: NavHostController) {
                         horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
                         VanIcon("arrow-left", size = 18.sp, color = colors.primary,
                             modifier = Modifier.clickable { month = month.minusMonths(1) })
-                        FText("${month.year}年${month.monthValue.toString().padStart(2, '0')}月账单", 16f,
+                        // web `.month-text{font-size:16px; font-weight:600}` → 按 §7.9 阶梯 16px ⇒ **18f**（不是 16f）
+                        FText("${month.year}年${month.monthValue.toString().padStart(2, '0')}月账单", 18f,
                             FontWeight.SemiBold, colors.textPrimary, modifier = Modifier.padding(horizontal = 16.dp))
                         VanIcon("arrow", size = 18.sp, color = colors.primary,
                             modifier = Modifier.clickable { month = month.plusMonths(1) })
                     }
 
-                    // 摘要
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
+                    // 摘要 —— 负责人 2026-09-20：「本期消费/未还金额 这块因文字大小超高，与右侧的持卡/代还
+                    //   item 高度不一致」。web 是 `.sw-left`（两行）与 `.sw-card`（label+value 两行）并排，
+                    //   靠 `.sw-row` 的 stretch 等高 ⇒ 原生这里给 Row 取 `IntrinsicSize.Max`、右侧两张卡
+                    //   `fillMaxHeight()`，两侧就永远一样高（不再受字号影响）。
+                    Row(
+                        Modifier.fillMaxWidth().height(IntrinsicSize.Max)
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                    ) {
+                        // web `.sw-left{padding:12px 14px; gap:10px}`（旧实现四边都是 14）
                         Column(Modifier.weight(1f).clip(RoundedCornerShape(12.dp))
-                            .background(colors.bgCard).padding(14.dp),
+                            .background(colors.bgCard).padding(horizontal = 14.dp, vertical = 12.dp),
                             verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                 FText("本期消费", 12f, color = colors.textTertiary)
-                                FText("¥${Money.format(lastMonthSpent)}", 16f, FontWeight.Bold, MoneyColor.expense)
+                                FText("¥${Money.format(lastMonthSpent)}", 18f, FontWeight.Bold, MoneyColor.expense)
                             }
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                 FText("未还金额", 12f, color = colors.textTertiary)
-                                FText("¥${Money.format(unpaid)}", 16f, FontWeight.Bold,
+                                FText("¥${Money.format(unpaid)}", 18f, FontWeight.Bold,
                                     if (unpaid > 0) MoneyColor.expense else colors.textPrimary)
                             }
                         }
                         Spacer(Modifier.width(8.dp))
-                        Box(Modifier.clip(RoundedCornerShape(12.dp)).background(colors.bgCard)
-                            .clickable { nav.navigate(Routes.CARD_CREDIT) }.padding(horizontal = 12.dp, vertical = 12.dp),
+                        // web `.sw-card{padding:12px 10px; min-width:54px}`（旧实现 padding 12/12、缺 min-width 已补；
+                        //   `.sw-card .sw-label{font-size:10px}` 按 §7.9 ⇒ 12f）
+                        Box(Modifier.fillMaxHeight().clip(RoundedCornerShape(12.dp)).background(colors.bgCard)
+                            .clickable { nav.navigate(Routes.CARD_CREDIT) }
+                            .padding(horizontal = 10.dp, vertical = 12.dp).widthIn(min = 54.dp),
                             contentAlignment = Alignment.Center) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                FText("持卡", 10f, color = colors.textTertiary)
-                                FText("${bills.size}", 16f, FontWeight.Bold, colors.textPrimary)
+                                FText("持卡", 12f, color = colors.textTertiary)
+                                FText("${bills.size}", 18f, FontWeight.Bold, colors.textPrimary)
                             }
                         }
                         Spacer(Modifier.width(6.dp))
-                        Box(Modifier.clip(RoundedCornerShape(12.dp)).background(colors.bgCard)
-                            .clickable { nav.navigate(Routes.BILL_LIST) }.padding(horizontal = 12.dp, vertical = 12.dp),
+                        Box(Modifier.fillMaxHeight().clip(RoundedCornerShape(12.dp)).background(colors.bgCard)
+                            .clickable { nav.navigate(Routes.BILL_LIST) }
+                            .padding(horizontal = 10.dp, vertical = 12.dp).widthIn(min = 54.dp),
                             contentAlignment = Alignment.Center) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                FText("待还", 10f, color = colors.textTertiary)
-                                FText("$unpaidCardCount", 16f, FontWeight.Bold, Color(0xFFFA8C16))
+                                FText("待还", 12f, color = colors.textTertiary)
+                                // web `.sw-value.warning{color:var(--van-orange, #fa8c16)}` —— 本页 fallback 是 **#fa8c16**（不是 #ff976a）
+                                FText("$unpaidCardCount", 18f, FontWeight.Bold, vanOrange(Color(0xFFFA8C16)))
                             }
                         }
                     }
@@ -223,9 +250,9 @@ fun DebtOverviewScreen(nav: NavHostController) {
                         .clip(RoundedCornerShape(12.dp)).background(colors.bgCard)
                         .clickable { expiryExpanded = !expiryExpanded }.padding(16.dp)) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            FText("📅 全部信用卡有效期", 14f, FontWeight.SemiBold, colors.textPrimary)
+                            FText("📅 全部信用卡有效期", 16f, FontWeight.SemiBold, colors.textPrimary)
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                FText("${expiryRows.size}张 ", 11f, color = colors.textTertiary)
+                                FText("${expiryRows.size}张 ", 12f, color = colors.textTertiary)
                                 VanIcon(if (expiryExpanded) "arrow-up" else "arrow-down", size = 11.sp, color = colors.textTertiary)
                             }
                         }
@@ -238,9 +265,13 @@ fun DebtOverviewScreen(nav: NavHostController) {
                                 FTextA("状态", 12f, colors.textTertiary, Modifier.width(84.dp), textAlign = TextAlign.End)
                             }
                             expiryRows.forEach { row ->
+                                // web `DebtOverview.vue:593-594` `.expiry-row.danger/.warn`
+                                // → `var(--van-danger-bg)` / `var(--van-orange-bg)`，**没写 fallback**：
+                                //   浅色模式下变量不存在 → 声明失效 → 背景取初始值 **transparent**；
+                                //   深色才是 #fff0f0 / rgba(255,151,106,.12)。
                                 val rowBg = when {
-                                    row.expired -> Color(0x1AEE0A24)
-                                    row.expiring -> Color(0x1AFA8C16)
+                                    row.expired -> vanDangerBg(Color.Transparent)
+                                    row.expiring -> vanOrangeBg(Color.Transparent)
                                     else -> Color.Transparent
                                 }
                                 Row(Modifier.fillMaxWidth().background(rowBg).padding(vertical = 8.dp),
@@ -252,26 +283,72 @@ fun DebtOverviewScreen(nav: NavHostController) {
                                     )
                                     Box(Modifier.width(84.dp), contentAlignment = Alignment.CenterEnd) {
                                         when {
-                                            row.expired -> ExpiryBadge("已过期", Color(0xFFFFEBE8), Color(0xFFEE0A24))
-                                            row.expiring -> ExpiryBadge("${row.monthsLeft}个月后到期", Color(0xFFFFF7E6), Color(0xFFFA8C16))
-                                            else -> ExpiryBadge("正常", Color(0xFFE8F8EE), Color(0xFF07C160))
+                                            // web `DebtOverview.vue:578-580` `.badge-{red,orange,green}`：
+                                            //   red    bg `var(--van-danger-bg, #ffebe8)`  fg `var(--van-danger-color)`（:root → 跟主题）
+                                            //   orange bg `var(--van-orange-bg, #fff7e6)`  fg `var(--van-orange, #fa8c16)`
+                                            //   green  bg `var(--van-green-bg, #f0fff4)`   fg `var(--van-green, #07c160)`
+                                            // ⚠ `--van-*-bg` 只在深色有定义 → 浅色用行内 fallback（#ffebe8/#fff7e6/#f0fff4），
+                                            //   深色才是 #fff0f0 / rgba(255,151,106,.12) / #f0f9eb；前景色同理（#fa8c16 vs #ff976a）。
+                                            row.expired -> ExpiryBadge("已过期", vanDangerBg(Color(0xFFFFEBE8)), colors.danger)
+                                            // web `.badge-orange{background:var(--van-orange-bg,#fff7e6); color:var(--van-orange,#fa8c16)}` —— 本页 fallback #fa8c16
+                                            row.expiring -> ExpiryBadge("${row.monthsLeft}个月后到期", vanOrangeBg(Color(0xFFFFF7E6)), vanOrange(Color(0xFFFA8C16)))
+                                            else -> ExpiryBadge("正常", vanGreenBg(Color(0xFFF0FFF4)), vanGreen())
                                         }
                                     }
                                 }
                             }
                         } else if (expiryRows.isNotEmpty()) {
-                            // 折叠态：最近一张
-                            val first = expiryRows.first()
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                FText(cardText(first.card), 13f, color = colors.textPrimary)
-                                val expire = first.expire?.let { "·%04d/%02d".format(it.year, it.monthValue) } ?: ""
-                                FText(" $expire ", 13f, color = colors.textTertiary)
-                                when {
-                                    first.expired -> FText("已过期", 13f, FontWeight.SemiBold, Color(0xFFEE0A24))
-                                    first.expiring -> FText("${first.monthsLeft}个月到期", 13f, FontWeight.SemiBold, Color(0xFFFA8C16))
-                                    else -> FText("正常", 13f, FontWeight.SemiBold, Color(0xFF07C160))
+                            // 折叠态 = web `<van-notice-bar left-icon="volume-o" :scrollable="false">` 内套
+                            //   `<van-swipe vertical :autoplay="4000" :touchable="false" :show-indicators="false">`
+                            //   （`DebtOverview.vue:44-51`）⇒ 一条 40dp 橙底横幅，每 4 秒**竖向**换一张卡。
+                            //   负责人说的「缺少下方的滚动栏」就是这条轮播：原生此前是静态渲染 `first()` 一条，
+                            //   既没有 notice-bar 的外壳（橙底 + volume-o 图标），也不轮播。
+                            var swipeIdx by remember { mutableIntStateOf(0) }
+                            LaunchedEffect(expiryRows.size) {
+                                swipeIdx = 0
+                                while (expiryRows.size > 1) {
+                                    kotlinx.coroutines.delay(4000)
+                                    swipeIdx = (swipeIdx + 1) % expiryRows.size
                                 }
                             }
+                            // 外壳仍是 `van-notice-bar`（左 `volume-o` + 40dp 橙底），轮播内容放它的 content 槽里
+                            VanNoticeBar(leftIcon = "volume-o", scrollable = false) {
+                            // van-swipe 的切换是**竖向位移动画**（`transform: translate3d(0,-h,0)`，默认 300ms ease），
+                            //   不是文本直接替换。负责人 2026-09-20：「滚动并非滚动，而是刷新数据」——
+                            //   上一版只换了 idx（瞬间换字）⇒ 观感像数据刷新，这里补上上下滑入滑出。
+                            androidx.compose.animation.AnimatedContent(
+                                targetState = swipeIdx,
+                                transitionSpec = {
+                                    androidx.compose.animation.slideInVertically(
+                                        androidx.compose.animation.core.tween(300),
+                                    ) { it } + androidx.compose.animation.fadeIn(
+                                        androidx.compose.animation.core.tween(300),
+                                    ) togetherWith androidx.compose.animation.slideOutVertically(
+                                        androidx.compose.animation.core.tween(300),
+                                    ) { -it } + androidx.compose.animation.fadeOut(
+                                        androidx.compose.animation.core.tween(300),
+                                    )
+                                },
+                                label = "notice-swipe",
+                                contentAlignment = Alignment.CenterStart,
+                                modifier = Modifier.height(40.dp),   // web `.notice-swipe{height:40px;line-height:40px}`
+                            ) { idx ->
+                                val row = expiryRows.getOrElse(idx) { expiryRows.first() }
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    FText(cardText(row.card), 14f, color = colors.textPrimary)
+                                    val expire = row.expire?.let { "·%04d/%02d".format(it.year, it.monthValue) } ?: ""
+                                    FText(" $expire ", 14f, color = colors.textTertiary)
+                                    // ⚠ 折叠态走的是 notice-bar 里的**行内裸 hex**
+                                    //   （`DebtOverview.vue:48-50`：`style="color:#ee0a24/#fa8c16/#07c160"`），
+                                    //   与上面展开态的 `.badge-*` CSS 变量是**两套配色**，别统一。
+                                    when {
+                                        row.expired -> FText("已过期", 14f, FontWeight.SemiBold, Color(0xFFEE0A24))
+                                        row.expiring -> FText("${row.monthsLeft}个月到期", 14f, FontWeight.SemiBold, Color(0xFFFA8C16))
+                                        else -> FText("正常", 14f, FontWeight.SemiBold, Color(0xFF07C160))
+                                    }
+                                }
+                            }
+                            }   // VanNoticeBar 的 content 槽
                         }
                     }
 
@@ -279,8 +356,8 @@ fun DebtOverviewScreen(nav: NavHostController) {
                     Column(Modifier.padding(horizontal = 16.dp, vertical = 5.dp).fillMaxWidth()
                         .clip(RoundedCornerShape(12.dp)).background(colors.bgCard).padding(16.dp)) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            FText("📆 每日信用卡支出", 14f, FontWeight.SemiBold, colors.textPrimary)
-                            FText("${month.year}年${month.monthValue.toString().padStart(2, '0')}月", 11f, color = colors.textTertiary)
+                            FText("📆 每日信用卡支出", 16f, FontWeight.SemiBold, colors.textPrimary)
+                            FText("${month.year}年${month.monthValue.toString().padStart(2, '0')}月", 12f, color = colors.textTertiary)
                         }
                         Spacer(Modifier.height(10.dp))
                         Row(Modifier.fillMaxWidth()) {
@@ -312,10 +389,10 @@ fun DebtOverviewScreen(nav: NavHostController) {
                                             verticalArrangement = Arrangement.Center,
                                         ) {
                                             if (date.isNotEmpty()) {
-                                                FText(date.takeLast(2), 14f, FontWeight.Medium,
+                                                FText(date.takeLast(2), 16f, FontWeight.Medium,
                                                     if (selected) Color.White else if (isToday) colors.primary else colors.textPrimary)
                                                 if (total > 0) {
-                                                    FText("¥${abbrevTransfer(total)}", 9f,
+                                                    FText("¥${abbrevTransfer(total)}", 12f,
                                                         color = if (selected) Color.White else colors.danger,
                                                         modifier = Modifier.padding(top = 2.dp))
                                                 }
@@ -331,10 +408,10 @@ fun DebtOverviewScreen(nav: NavHostController) {
                     Column(Modifier.padding(horizontal = 16.dp, vertical = 5.dp).fillMaxWidth()
                         .clip(RoundedCornerShape(12.dp)).background(colors.bgCard).padding(16.dp)) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            FText(if (selectedDate.isEmpty()) "📊 本月支出类别" else "📊 $selectedDate 支出类别",
-                                14f, FontWeight.SemiBold, colors.textPrimary)
+                            FText(if (selectedDate.isEmpty()) "📊 本月总支出类别" else "📊 $selectedDate 支出类别",
+                                16f, FontWeight.SemiBold, colors.textPrimary)
                             if (selectedDate.isNotEmpty()) {
-                                FText("重置", 11f, color = colors.primary,
+                                FText("重置", 12f, color = colors.primary,
                                     modifier = Modifier.clickable { selectedDate = "" })
                             }
                         }
@@ -372,7 +449,7 @@ fun DebtOverviewScreen(nav: NavHostController) {
             Column(Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
                 Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                     Row {
-                        FText(popupTitle, 15f, FontWeight.SemiBold, colors.textPrimary)
+                        FText(popupTitle, 16f, FontWeight.SemiBold, colors.textPrimary)
                         FText("  ${popupItems.size}笔", 12f, color = colors.textTertiary)
                     }
                     VanIcon("cross", size = 18.sp, color = colors.textTertiary,
@@ -391,11 +468,11 @@ fun DebtOverviewScreen(nav: NavHostController) {
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Column(Modifier.weight(1f)) {
-                                FText(item.remark.ifEmpty { item.categoryName }, 14f, color = colors.textPrimary)
-                                FText("${cardText(cards.firstOrNull { it.id == item.cardId })} · ${item.time}", 11f,
+                                FText(item.remark.ifEmpty { item.categoryName }, 16f, color = colors.textPrimary)
+                                FText("${cardText(cards.firstOrNull { it.id == item.cardId })} · ${item.time}", 12f,
                                     color = colors.textTertiary, modifier = Modifier.padding(top = 2.dp))
                             }
-                            FText("-¥${Money.format(item.amount)}", 14f, FontWeight.SemiBold, MoneyColor.expense)
+                            FText("-¥${Money.format(item.amount)}", 16f, FontWeight.SemiBold, MoneyColor.expense)
                         }
                     }
                 }
@@ -407,7 +484,7 @@ fun DebtOverviewScreen(nav: NavHostController) {
 @Composable
 private fun ExpiryBadge(text: String, bg: Color, fg: Color) {
     Box(Modifier.clip(RoundedCornerShape(8.dp)).background(bg).padding(horizontal = 8.dp, vertical = 2.dp)) {
-        FText(text, 10f, color = fg)
+        FText(text, 12f, color = fg)
     }
 }
 
@@ -420,5 +497,5 @@ private fun FTextA(
     textAlign: TextAlign = TextAlign.Start,
 ) = androidx.compose.foundation.text.BasicText(
     text, modifier,
-    androidx.compose.ui.text.TextStyle(color = color, fontSize = sizeSp.sp, fontWeight = weight, textAlign = textAlign),
+    androidx.compose.ui.text.TextStyle(color = color, fontSize = scaledSp(sizeSp), fontWeight = weight, textAlign = textAlign),
 )

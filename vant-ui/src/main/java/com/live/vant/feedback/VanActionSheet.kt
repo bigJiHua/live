@@ -24,6 +24,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.live.vant.icon.VanIcon
+import com.live.vant.theme.vantDimens
 import com.live.vant.theme.LocalVantColors
 
 /** 动作面板选项（对应 Vant ActionSheetAction） */
@@ -72,7 +73,7 @@ fun VanActionSheet(
                 ) {
                     androidx.compose.foundation.text.BasicText(
                         title,
-                        style = TextStyle(color = c.textTertiary, fontSize = 14.sp),
+                        style = TextStyle(color = c.textTertiary, fontSize = vantDimens.fontSizeMd),
                     )
                 }
             }
@@ -114,8 +115,8 @@ fun VanActionSheet(
                                 action.name,
                                 style = TextStyle(
                                     color = if (action.disabled) c.textTertiary else fg,
-                                    fontSize = 16.sp,
-                                    lineHeight = 22.sp,
+                                    fontSize = vantDimens.fontSizeLg,
+                                    lineHeight = vantDimens.lineHeightLg,
                                 ),
                                 modifier = Modifier.padding(start = if (action.icon != null || action.loading) 8.dp else 0.dp),
                             )
@@ -123,7 +124,7 @@ fun VanActionSheet(
                         if (!action.subname.isNullOrEmpty()) {
                             androidx.compose.foundation.text.BasicText(
                                 action.subname,
-                                style = TextStyle(color = c.textTertiary, fontSize = 12.sp, lineHeight = 18.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center),
+                                style = TextStyle(color = c.textTertiary, fontSize = vantDimens.fontSizeSm, lineHeight = vantDimens.lineHeightSm, textAlign = androidx.compose.ui.text.style.TextAlign.Center),
                                 modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
                             )
                         }
@@ -142,7 +143,7 @@ fun VanActionSheet(
             if (!description.isNullOrEmpty()) {
                 androidx.compose.foundation.text.BasicText(
                     description,
-                    style = TextStyle(color = c.textTertiary, fontSize = 14.sp, lineHeight = 20.sp, textAlign = TextAlign.Center),
+                    style = TextStyle(color = c.textTertiary, fontSize = vantDimens.fontSizeMd, lineHeight = vantDimens.lineHeightMd, textAlign = TextAlign.Center),
                     modifier = Modifier.fillMaxWidth().background(c.bgCard).padding(16.dp),
                 )
             }
@@ -161,7 +162,7 @@ fun VanActionSheet(
                 ) {
                     androidx.compose.foundation.text.BasicText(
                         cancelText,
-                        style = TextStyle(color = c.textSecondary, fontSize = 16.sp, lineHeight = 22.sp),
+                        style = TextStyle(color = c.textSecondary, fontSize = vantDimens.fontSizeLg, lineHeight = vantDimens.lineHeightLg),
                     )
                 }
             }

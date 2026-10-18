@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -133,7 +134,9 @@ fun AppButton(
         modifier = modifier
             .let { if (block) it.fillMaxWidth() else it }
             .alpha(if (isDisabled) 0.55f else 1f)
-            .height(btnHeight)
+            // `heightIn(min=)` 而不是 `height=`：「文字大小」档位把标签放大时要能长高，否则 28/34dp 的
+            // Mini/Small 按钮会把字截掉；三档（偏移 0）下标签本来就低于 min，渲染结果与写死高度逐像素相同。
+            .heightIn(min = btnHeight)
             .graphicsLayer(scaleX = if (pressed && !isDisabled) 0.97f else 1f, scaleY = if (pressed && !isDisabled) 0.97f else 1f)
             // 主色实心：0 4px 12px rgba(var(--theme-primary-rgb), .25)
             .let {

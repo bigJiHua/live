@@ -31,10 +31,15 @@ data class VantDimens(
     val paddingXl: Dp = 24.dp,
 
     // 字号 / 行高
-    val fontSizeXs: TextUnit = 10.sp,
+    // ⚠ 2026-09-18 起按「移动端最佳字号」口径调整（负责人拍板）：Vant 出厂的 10/14/16 在手机上偏小。
+    // 定档依据（审计 M3 / iOS HIG / 国内主流 App 后）：**全偶数阶梯 12 / 14 / 16 / 18 / 20 / 24** ——
+    // 12 = M3 bodySmall & iOS caption1（最小可读下限）；14 = M3 bodyMedium（次要）；
+    // 16 = M3 bodyLarge & 微信/支付宝正文；18 = 小标题；每档差 ≥2sp，避免出现 16/17 这种分不出层级的两档。
+    // 图标一律**不走**这套 token（图标继续用各自的 `size`，不要跟着放大，否则组件几何会被撑变形）。
+    val fontSizeXs: TextUnit = 12.sp,
     val fontSizeSm: TextUnit = 12.sp,
-    val fontSizeMd: TextUnit = 14.sp,
-    val fontSizeLg: TextUnit = 16.sp,
+    val fontSizeMd: TextUnit = 16.sp,
+    val fontSizeLg: TextUnit = 18.sp,
     val lineHeightXs: TextUnit = 14.sp,
     val lineHeightSm: TextUnit = 18.sp,
     val lineHeightMd: TextUnit = 20.sp,
@@ -89,5 +94,28 @@ data class VantDimens(
     // 动效时长（ms），对应 --van-duration-base/.fast
     val durationBase: Int = 300,
     val durationFast: Int = 200,
+    // 长过渡（卡片弹层 / 大幅位移入场），web `transition:.38s` 对齐
+    val durationSlow: Int = 380,
     val disabledOpacity: Float = 0.5f,
+
+    /**
+     * 应用侧「文字大小」档位带来的 sp 偏移（默认 0 = 出厂值不变，由 `:app` 的 `AppRoot` 注入）。
+     *
+     * 用途只有一类：底座里**没有对应 token** 的字面字号（如 14sp 的刷新提示、19sp 的行高），
+     * 写成 `fontSp(14f)` 即可跟档。⚠ 已经在读 [fontSizeXs]/[fontSizeSm]/[fontSizeMd]/[fontSizeLg]
+     * 的地方**不要再叠一次** `fontOffsetSp` —— 那几个 token 本身已经含偏移，叠了就是双份放大。
+     * 图标（`VanIcon` 的 `size`）与 §7.9 排除表（四个键盘 / `VanPasswordInput` / badge / pivot）一律不接。
+     */
+    val fontOffsetSp: Float = 0f,
 )
+
+/** 见 [VantDimens.fontOffsetSp]：给「没有 token 的字面字号」加上档位偏移。 */
+fun VantDimens.fontSp(baseSp: Float): TextUnit = (baseSp + fontOffsetSp).sp
+
+/**
+ * 把「已含偏移」的字号 token 还原成基准值。
+ *
+ * 只给一类场合用：**图标尺寸跟着字号 token 走**的地方（`VanIcon(size = tokens.fontSizeLg)` 等）。
+ * 构造书 §7.9 第 1 条硬规矩是「图标不动」—— 文字放大时字形必须停在原尺寸，否则卡片/网格几何会被撑变形。
+ */
+fun VantDimens.baseOf(scaled: TextUnit): TextUnit = (scaled.value - fontOffsetSp).sp

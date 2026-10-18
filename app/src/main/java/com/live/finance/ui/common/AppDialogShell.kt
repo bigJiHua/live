@@ -71,6 +71,13 @@ fun AppDialogShell(
     modifier: Modifier = Modifier,
     confirmText: String = "确认",
     cancelText: String = "取消",
+    /** 确认键文字色（web `showConfirmDialog({ confirmButtonColor })`，默认主题 primary）。 */
+    confirmColor: Color? = null,
+    /**
+     * 确认键是否可用（默认 true）。false 时文字降到 40% 透明度且点击无效 ——
+     * 用于「正在连接站点…」这类异步校验中，防重复提交（2026-10-17）。
+     */
+    confirmEnabled: Boolean = true,
     /** 键盘弹出时整卡上移量（0 = 不上移）。 */
     lift: Dp = 0.dp,
     /** 内容区最大高度（null = 不限制；超出可滚动）。 */
@@ -117,7 +124,7 @@ fun AppDialogShell(
                     ) { },
             ) {
                 FText(
-                    title, 16f, FontWeight.SemiBold, colors.textPrimary,
+                    title, 18f, FontWeight.SemiBold, colors.textPrimary,
                     Modifier.padding(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 10.dp),
                 )
                 Column(
@@ -133,7 +140,13 @@ fun AppDialogShell(
                 Row(Modifier.fillMaxWidth().height(48.dp)) {
                     ShellButton(cancelText, colors.textSecondary, FontWeight.Normal, Modifier.weight(1f), onCancel)
                     Box(Modifier.fillMaxHeight().width(1.dp).background(colors.border))
-                    ShellButton(confirmText, colors.primary, FontWeight.Medium, Modifier.weight(1f), onConfirm)
+                    ShellButton(
+                        confirmText,
+                        (confirmColor ?: colors.primary).let { if (confirmEnabled) it else it.copy(alpha = 0.4f) },
+                        FontWeight.Medium,
+                        Modifier.weight(1f),
+                        if (confirmEnabled) onConfirm else ({}),
+                    )
                 }
             }
 
@@ -161,7 +174,7 @@ private fun ShellButton(
                 onClick = onClick,
             ),
     ) {
-        FText(text, 15f, weight, color)
+        FText(text, 16f, weight, color)
     }
 }
 

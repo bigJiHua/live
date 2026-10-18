@@ -34,6 +34,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.live.vant.theme.LocalVantColors
+import com.live.vant.theme.rememberKeyHaptic
 
 /** 字母页（QWERTY）；第 2 行在渲染时整体右缩进（对应 web `.kb-indent-1 { padding-left: 5.5% }`）。 */
 private val SIMPLE_ABC_ROWS = listOf(
@@ -57,8 +58,12 @@ private val SIMPLE_NUM_ROWS = listOf(
  * 与 FullKeyboard 的差别（逐项对齐 web）：
  *  - 工具栏**只有状态提示**（圆点 + 「普通键盘」），不可点、无安全/普通模式切换；
  *  - 字符**直接文本渲染**，无 canvas 防 OCR、无 RSA 加密载荷、无随机偏移；
- *  - 键高 58、圆角 10、字符 20sp；`del`/`switch` 占 2 格、`space` 占 4 格（不可点）、`login` 占 3 格；
- *  - 字母页第 2 行右缩进 5.5%（CSS grid 10 列语义）。
+ *  - `del`/`switch` 占 2 格、`space` 占 4 格（不可点）、`login` 占 3 格；
+ *  - 字母页第 2 行右缩进（CSS grid 10 列语义）。
+ *
+ * ⚠ 键面度量**必须与登录用 [VanSecureKeyboard] 完全一致**，否则编辑资料的全键盘比登录键盘
+ * 明显高出一截（用户反馈）。统一口径：键高 52 / 行距 6 / 键距 4 / 圆角 8 /
+ * 字符 24·Bold / 功能键 17·Medium / 删除箭头 24 / 「确认」17·SemiBold / 「空格」13。
  *
  * 用法：由调用方决定挂载位置（本组件不自带 Dialog/遮罩），通常贴在弹层底部。
  */
@@ -88,12 +93,12 @@ fun VanSimpleKeyboard(
             )
             .clip(shape)
             .background(c.bgCard) // .kb-sheet{ background: var(--theme-bg-secondary) }
-            .padding(10.dp), // .kb-sheet{ padding: 10px }
+            .padding(5.dp), // .kb-sheet{ padding: 5px }（与 Login.vue 的 .kb-sheet 一致）
     ) {
         // 工具栏（仅状态提示，不可点）
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(start = 4.dp, end = 4.dp, top = 6.dp, bottom = 10.dp),
+            modifier = Modifier.padding(start = 4.dp, end = 4.dp, top = 6.dp, bottom = 8.dp),
         ) {
             Box(
                 Modifier
@@ -109,12 +114,12 @@ fun VanSimpleKeyboard(
 
         val rows = if (page == "abc") SIMPLE_ABC_ROWS else SIMPLE_NUM_ROWS
         Column(
-            verticalArrangement = Arrangement.spacedBy(7.dp), // .kb-rows{ gap:7px }
-            modifier = Modifier.height(253.dp), // .kb-rows{ min-height:253px } = 4×58 + 3×7
+            verticalArrangement = Arrangement.spacedBy(6.dp), // .kb-rows{ gap:6px }
+            modifier = Modifier.height(226.dp), // 4×52 + 3×6（与 VanSecureKeyboard 的键区同高）
         ) {
             rows.forEachIndexed { ri, row ->
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp), // .kb-row{ gap:6px }
+                    horizontalArrangement = Arrangement.spacedBy(4.dp), // .kb-row{ gap:4px }
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     // 字母页第 2 行整体右缩进 .kb-indent-1{ padding-left:5.5% }
@@ -157,10 +162,11 @@ private fun RowScope.SimpleKey(
     onKey: (String) -> Unit,
 ) {
     val c = LocalVantColors.current
+    val haptic = rememberKeyHaptic()
     val isFn = k == "del" || k == "switch" || k == "shift"
     val isSpace = k == "space"
     val isLogin = k == "login"
-    val shape = RoundedCornerShape(10.dp)
+    val shape = RoundedCornerShape(8.dp) // 与 VanSecureKeyboard 一致（原为 10.dp）
 
     val bg = when {
         isLogin -> c.primary
@@ -169,7 +175,7 @@ private fun RowScope.SimpleKey(
     }
     val fg = when {
         isLogin -> c.buttonPrimaryText
-        isFn -> c.textSecondary
+        isFn -> c.textPrimary // 与 VanSecureKeyboard 一致（功能键也用主文本色）
         else -> c.textPrimary
     }
     val span = when (k) {
@@ -186,8 +192,8 @@ private fun RowScope.SimpleKey(
         contentAlignment = Alignment.Center,
         modifier = Modifier
             .weight(span)
-            .height(58.dp) // .kb-key{ height:58px }
-            .offset(y = if (pressed && !isSpace) 2.dp else 0.dp) // :active{ transform: translateY(2px) }
+            .height(52.dp) // .kb-key{ height:52px }（与 VanSecureKeyboard 一致，原为 58.dp）
+            .offset(y = if (pressed && !isSpace) 1.dp else 0.dp) // :active{ translateY(1px) }
             .shadow(
                 elevation = if (pressed) 1.dp else 3.dp,
                 shape = shape,
@@ -199,21 +205,20 @@ private fun RowScope.SimpleKey(
             .background(bg)
             .let {
                 if (isSpace) it
-                else it.clickable(interactionSource = interaction, indication = null) { onKey(k) }
+                else it.clickable(interactionSource = interaction, indication = null) { haptic(); onKey(k) }
             },
     ) {
         when {
             k == "del" -> androidx.compose.foundation.text.BasicText(
                 "←",
-                style = TextStyle(color = fg, fontSize = 26.sp, fontWeight = FontWeight.Bold),
+                style = TextStyle(color = fg, fontSize = 24.sp),
             )
 
             k == "space" -> androidx.compose.foundation.text.BasicText(
                 "空格",
                 style = TextStyle(
                     color = c.textTertiary,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 13.sp,
                     letterSpacing = 2.sp,
                 ),
             )
@@ -223,34 +228,34 @@ private fun RowScope.SimpleKey(
                 androidx.compose.foundation.text.BasicText(
                     "A",
                     style = TextStyle(
-                        color = if (shifted) c.primary else fg,
+                        color = if (shifted) c.primary else c.textTertiary,
                         fontSize = 17.sp,
-                        fontWeight = FontWeight.SemiBold,
+                        fontWeight = FontWeight.Bold,
                     ),
                 )
                 androidx.compose.foundation.text.BasicText(
                     "a",
                     style = TextStyle(
-                        color = if (shifted) fg else c.primary,
+                        color = if (!shifted) c.primary else c.textTertiary,
                         fontSize = 17.sp,
-                        fontWeight = FontWeight.SemiBold,
+                        fontWeight = FontWeight.Bold,
                     ),
                 )
             }
 
             k == "switch" -> androidx.compose.foundation.text.BasicText(
                 if (page == "abc") "123" else "ABC",
-                style = TextStyle(color = fg, fontSize = 19.sp, fontWeight = FontWeight.Medium),
+                style = TextStyle(color = fg, fontSize = 17.sp, fontWeight = FontWeight.Medium),
             )
 
             k == "login" -> androidx.compose.foundation.text.BasicText(
                 "确认",
-                style = TextStyle(color = fg, fontSize = 19.sp, fontWeight = FontWeight.Bold),
+                style = TextStyle(color = fg, fontSize = 17.sp, fontWeight = FontWeight.SemiBold),
             )
 
             else -> androidx.compose.foundation.text.BasicText(
                 displayKey(k, page, shifted),
-                style = TextStyle(color = fg, fontSize = 20.sp, fontWeight = FontWeight.Medium),
+                style = TextStyle(color = fg, fontSize = 24.sp, fontWeight = FontWeight.Bold),
             )
         }
     }
