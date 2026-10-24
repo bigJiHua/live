@@ -6,7 +6,6 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "build:webview": "vite build --config vite.config.webview.js",
     "preview": "vite preview"
   },
   "dependencies": {
