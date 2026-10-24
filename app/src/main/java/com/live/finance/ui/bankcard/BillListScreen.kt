@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import com.live.finance.App
+import com.live.finance.core.net.ApiGetCache
 import com.live.finance.core.net.ApiResult
 import com.live.finance.core.net.failMessage
 import com.live.finance.core.net.failToastType
@@ -279,6 +280,7 @@ fun BillListScreen(nav: NavHostController) {
         state = refreshState,
         isChildAtTop = { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0 },
         onRefresh = {
+            ApiGetCache.clear() // 下拉刷新必须绕过 GET 缓存
             scope.launch {
                 // ⚠ 下拉刷新不该弹全屏 loading 遮罩（web 只有 `van-pull-refresh` 自己的指示器）；
                 //   `loadBillList()` 不带 silent 会把 `loading` 置 true ⇒ 列表上盖一层黑遮罩，很难看。

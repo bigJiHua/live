@@ -1,9 +1,21 @@
 package com.live.finance.ui.main
 
+import android.graphics.BlurMaskFilter
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
+import android.graphics.Paint as AndroidPaint
+import android.graphics.Picture as AndroidPicture
+import android.graphics.RectF as AndroidRectF
+import android.graphics.RenderEffect
+import android.graphics.RenderNode
+import android.graphics.Shader
+import android.os.Build
 import androidx.activity.compose.BackHandler
+import androidx.annotation.RequiresApi
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -23,7 +35,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableIntState
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -32,19 +46,42 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Canvas as ComposeCanvas
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathOperation
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
+import com.live.finance.core.glass.BarGlassSpec
 import com.live.finance.theme.LocalAppColors
+import com.live.finance.theme.LocalAppTokens
 import com.live.finance.theme.scaledSp
 import com.live.finance.ui.diary.DiaryListScreen
 import com.live.finance.ui.finance.FinanceScreen
@@ -67,6 +104,44 @@ internal val ISLAND_TABS = listOf(
 /** web `box-shadow: 0 8px 24px rgba(0,0,0,.08)`。 */
 private val ISLAND_SHADOW = Color(0x14000000)
 private val ISLAND_SHAPE_D = 30.dp // border-radius: 30px
+
+/**
+ * 玻璃参数已全部搬到 [BarGlassSpec]（2026-10-19）：
+ *  - 浅/深 tint α、模糊半径、饱和度、上缘受光、镜面描边、胶囊 α、环折射五参数
+ *    **都不再是这里的常量**，而是由「液态玻璃实验室」调参 → `AppGraph.barGlass` 实时提供；
+ *  - 这里只保留与参数无关的几何/投影常量（描边宽度、内底暗边、投影）。
+ *
+ * 沿革（为什么不再写死）：2026-10-18「太透明」→「灰黑块」→「不要黑色和颗粒」→
+ * 「要 Apple 液态玻璃」→ 2026-10-19 实验室逐项选定（浅α .20 / 深α .08 / 模糊 2dp /
+ * 饱和 1.09 / 受光 0 / 镜面 0 / 胶囊 .65·.02 / 环 8dp×1.14）⇒ 改为运行时可调 + 可保存。
+ */
+
+/** 镜面高光描边宽度（只亮上缘，不再整面泛白）。 */
+private val GLASS_SPECULAR_W = 1.2.dp
+
+/** 内底暗边宽度 —— 给出玻璃的"厚度感"。 */
+private val GLASS_INNER_SHADOW_W = 1.dp
+
+/**
+ * 胶囊相对每个格子的内缩（纵向 6dp、横向 **2dp**）—— 比整格小一圈才读得出"小圆角"。
+ * 横向沿革：6dp →（10-19）4dp →（10-19 二次）**2dp**：负责人两次要求「再宽一点点」。
+ */
+private val CAPSULE_INSET_Y = 6.dp
+private val CAPSULE_INSET_X = 2.dp
+
+/** 选中项（图标+文字）放大倍数 —— 负责人 2026-10-19：「做放大镜就好 放大 ICON 和文字」。 */
+private const val TAB_SELECTED_SCALE = 1.18f
+
+/**
+ * 外投影（对应 web `box-shadow: 0 8px 24px rgba(0,0,0,.08)`）。
+ *
+ * ⚠ **不能**用 `Modifier.shadow` 挂在岛上：岛在 blur 模式下背景是透明的，而 `shadow` 是
+ * `graphicsLayer.shadowElevation` —— 平台把阴影画在**内容之下**、且不挖空内部，透明背景就等于
+ * 把整块阴影露出来，玻璃内部被压成灰。所以投影改在玻璃层里、玻璃**之前**画。
+ */
+private val GLASS_SHADOW_BLUR = 12.dp
+private val GLASS_SHADOW_DY = 6.dp
+private const val GLASS_SHADOW_ALPHA = 34 // ≈13%，比 web 的 8% 略重（真机小屏上 8% 几乎看不见）
 
 /**
  * 主外壳：内容区 + 悬浮玻璃岛 TabBar（一比一复刻 web 的 `.floating-island-nav`）。
@@ -111,9 +186,14 @@ fun MainScreen(nav: NavHostController, tabState: MutableIntState) {
     //      - `ui/flow/FlowListScreen.kt`：「上滑看后续内容 → consumed.y 为负」，故 `scrolledPx - consumed.y`
     //      - `vant-ui/.../VanPullRefresh.kt`：下拉（= 手指下滑）时 `available.y > 0`
     val tabbarVisible = remember { mutableStateOf(true) }
+    // 悬浮岛玻璃参数（2026-10-19）：实验室调参实时写入 graph.barGlass ⇒ 这里读 State，
+    // 从实验室返回主页立即是新值；「保存设定」后才落盘（重启仍生效）。
+    val graph = com.live.finance.App.of(LocalContext.current).graph
     val scrollConnection = remember {
         object : NestedScrollConnection {
             override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                // 实验室开关「是否因滚动而收起」关掉后：底栏始终固定，不参与滚动收起
+                if (!graph.barGlass.value.collapseOnScroll) return Offset.Zero
                 val dy = consumed.y
                 if (dy < -6f) tabbarVisible.value = false // 向下浏览 → 收起
                 else if (dy > 6f) tabbarVisible.value = true // 向上回退 → 弹起
@@ -121,6 +201,53 @@ fun MainScreen(nav: NavHostController, tabState: MutableIntState) {
             }
         }
     }
+    // 开关由「开」改「关」时，若底栏正处于收起状态，立刻弹起（否则要等下一次上滑）
+    LaunchedEffect(graph.barGlass.value.collapseOnScroll) {
+        if (!graph.barGlass.value.collapseOnScroll) tabbarVisible.value = true
+    }
+
+    // ── 液态玻璃 backdrop ──────────────────────────────────────────────────
+    // 离线自实现（不引 haze，P1-11 维持）：内容区逐帧录进 [AndroidPicture] →
+    // 岛区域的扩边条带经 [RenderNode] + [RenderEffect] 做**真高斯模糊 + 提饱和** →
+    // 圆角裁剪垫到岛下，再叠 tint / 镜面高光 / 内底暗边（2026-10-19 已删边缘折射环）。
+    //
+    // ⚠ 2026-10-18 修正：旧实现拿 `BlurMaskFilter` 当"模糊"，可那个 filter 只糊 **alpha 掩膜的边缘**，
+    //   对不透明位图的内部像素毫无作用 ⇒ 内容原样清晰地透出来，只是条带边缘被抹软了一点。
+    //   这正是此前反复被反馈「太过于透明」「不像毛玻璃」的根因。换成 RenderEffect 才是真 blur。
+    //   API31+ 才启用（RenderEffect 要求）；低版本回退纯 tint 玻璃底，无 blur。
+    val glassBlur = remember { Build.VERSION.SDK_INT >= 31 }
+    val backdropPicture = remember { AndroidPicture() }
+    val glassSpec = graph.barGlass.value
+    val glassNodeBody = remember { if (Build.VERSION.SDK_INT >= 31) RenderNode("glassBody") else null }
+
+    val glassSaturation = remember { ColorMatrix() }
+    val density = LocalDensity.current
+    val glassShadowPaint = remember(density) {
+        AndroidPaint(AndroidPaint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.argb(GLASS_SHADOW_ALPHA, 0, 0, 0)
+            maskFilter = BlurMaskFilter(
+                with(density) { GLASS_SHADOW_BLUR.toPx() },
+                BlurMaskFilter.Blur.NORMAL,
+            )
+        }
+    }
+    var contentOrigin by remember { mutableStateOf(Offset.Zero) }
+    var islandRect by remember { mutableStateOf<Rect?>(null) }
+    val tokens = LocalAppTokens.current
+
+    // transition: transform .3s ease, opacity .3s ease（岛的出现/收起动画在此外提，
+    // backdrop 玻璃要与岛同步淡入淡出，必须共享同一份动画值）
+    val islandOffsetY by animateDpAsState(if (tabbarVisible.value) 0.dp else 120.dp, tween(300), label = "islandOffsetY")
+    val islandAlpha by animateFloatAsState(if (tabbarVisible.value) 1f else 0f, tween(300), label = "islandAlpha")
+
+    // 选中胶囊位置：**提到 MainScreen**（原来在 FloatingIslandBar 内部）。
+    // 胶囊透镜必须在父层、与玻璃同一次绘制里画（取样当帧 Picture），
+    // 所以位置状态要放在两者共同的上方，bar 只负责画胶囊本体。
+    val capsulePos = animateFloatAsState(
+        targetValue = tab.toFloat(),
+        animationSpec = spring(dampingRatio = 0.72f, stiffness = 380f),
+        label = "islandCapsule",
+    )
 
     Box(
         Modifier
@@ -143,10 +270,64 @@ fun MainScreen(nav: NavHostController, tabState: MutableIntState) {
         //   （web `.floating-island-nav{ position: fixed; bottom: 20px; z-index: 999 }`）。
         //   页面末尾该留多少让位给岛，由**各页面自己的底部内边距**决定（web 亦然：
         //   `.page-user{ padding-bottom: 30px }`、各页自己的收尾间距），**不要在这里统一压高度**。
+        //
+        //   ⚠ 液态玻璃录制必须挂在这个**内层内容 Box**（不含岛自身）——挂外层会把岛也录进
+        //     backdrop 形成自反馈。玻璃状态（islandRect/islandAlpha）在 draw 阶段读取，
+        //     岛移动/淡入淡出会自动触发本节点重绘，玻璃与岛逐帧同步。
         Box(
             Modifier
                 .fillMaxSize()
-                .nestedScroll(scrollConnection),
+                .nestedScroll(scrollConnection)
+                .onGloballyPositioned { contentOrigin = it.boundsInRoot().topLeft }
+                .drawWithCache {
+                    val w = size.width.toInt().coerceAtLeast(1)
+                    val h = size.height.toInt().coerceAtLeast(1)
+                    onDrawWithContent {
+                        // 岛不可见（还没量到位置 / 已收起）时**完全不录 Picture** ——
+                        // 录一次等于把整屏内容重放一遍，岛收起时这笔开销纯属白花；
+                        // 而「向下浏览」正是岛收起、帧数最多的场景。低版本同理直接画。
+                        val rect = islandRect
+                        if (!glassBlur || rect == null || islandAlpha <= 0.01f) {
+                            drawContent()
+                            return@onDrawWithContent
+                        }
+                        // 1) 逐帧把内容录进 Picture（canvas 置换，drawContent 只执行一次）
+                        val pc = backdropPicture.beginRecording(w, h)
+                        val prev = drawContext.canvas
+                        try {
+                            drawContext.canvas = ComposeCanvas(pc)
+                            drawContent()
+                        } finally {
+                            drawContext.canvas = prev
+                            backdropPicture.endRecording()
+                        }
+                        // 2) 正常显示内容 —— ⚠ **不能用 drawPicture 回放**：
+                        //    快照不会随子页面状态变化重新录制；Picture 只留给玻璃当 backdrop 取样。
+                        //    （首页空白由「首页摘要不走 GET 缓存」单独兜住；这里恢复 10-19 的稳定玻璃顺序。）
+                        drawContent()
+                        // 3) 岛下垫液态玻璃
+                        val islandArea = Rect(
+                            rect.left - contentOrigin.x, rect.top - contentOrigin.y,
+                            rect.right - contentOrigin.x, rect.bottom - contentOrigin.y,
+                        )
+                        renderLiquidGlass(
+                            picture = backdropPicture,
+                            area = islandArea,
+                            canvasW = w,
+                            canvasH = h,
+                            bodyNode = glassNodeBody,
+                            saturation = glassSaturation,
+                            shadowPaint = glassShadowPaint,
+                            spec = glassSpec,
+                            tint = Color.White.copy(
+                                alpha = (if (tokens.isDark) glassSpec.alphaDark else glassSpec.alphaLight) * islandAlpha,
+                            ),
+                            appear = islandAlpha,
+                        )
+                        // 4) 胶囊透镜已删除（2026-10-19 负责人「不做透视了，效果极差」）——
+                        //    改为在 FloatingIslandBar 里放**选中项的图标+文字**（真放大镜）。
+                    }
+                },
         ) {
             when (tab) {
                 0 -> HomeScreen(nav)
@@ -159,7 +340,11 @@ fun MainScreen(nav: NavHostController, tabState: MutableIntState) {
         FloatingIslandBar(
             active = tab,
             onSelect = { tab = it },
-            visible = tabbarVisible.value,
+            offsetY = islandOffsetY,
+            alpha = islandAlpha,
+            spec = glassSpec,
+            capsulePos = capsulePos,
+            onPositioned = { islandRect = it },
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(start = 16.dp, end = 16.dp, bottom = 20.dp),
@@ -170,44 +355,306 @@ fun MainScreen(nav: NavHostController, tabState: MutableIntState) {
 }
 
 /**
- * 悬浮玻璃岛（web `.floating-island-nav`）。
+ * 在 [area]（内容区局部坐标）上画一块 Apple 式液态玻璃。
  *
- * 玻璃效果说明：web 用 `background-color: var(--tabbar-glass-bg)` +
- * `backdrop-filter: blur(15px) saturate(160%)`。
- * **已拍板（2026-09-15）：不做真模糊、不引第三方库**（Compose 无 backdrop-blur 等价物；
- * `Modifier.blur` 只模糊自身内容，haze 需引依赖且 API<31 不生效）。
+ * 参数全部来自 [BarGlassSpec]（2026-10-19 起由实验室实时下发，不再是写死常量）：
+ *  ① **主体磨砂**：backdrop 条带经 `RenderEffect` 真高斯模糊（[BarGlassSpec.blurDp]）
+ *     + 提饱和（[BarGlassSpec.saturation]）；
+ *  ② **磨砂体 tint**：白 α（[BarGlassSpec.alphaLight] / [BarGlassSpec.alphaDark]，调用方按模式算好传入）；
+ *  ③ **折射环（可选）**：[BarGlassSpec.rimWidthDp] > 0 且 [BarGlassSpec.rimStrength] > 0 时，
+ *     把同一份 backdrop 绕中心放大 [BarGlassSpec.rimScale]，经 `saveLayerAlpha(rimStrength)`
+ *     叠在环带上，再压 [BarGlassSpec.rimTintRatio] 倍 tint；环用独立 [rimNode] 录制 ⇒
+ *     [BarGlassSpec.rimBlurScale] 可单独调模糊。
  *
- * 2026-10-18 负责人反馈「当前 APP 有点太过于透明了，需要毛玻璃效果」：
- * web 同源的 0.62 / 0.55 透明度在原生里没有 backdrop blur 兜底，背后内容会直接透出来，
- * 看着像一层薄纱而不是磨砂玻璃。这里在不改全局 token（保持与 web 参数同源）的前提下，
- * 在组件内做三件事增强「磨砂感」：
- *  1. 底色不透明度抬到 0.88（太透会失去玻璃的实感）；
- *  2. 叠一层自上而下的白色高光渐变（顶部亮、底部透明），模拟磨砂表面的反光；
- *  3. 1px 玻璃描边 + 柔和投影保持（原有效果）。
- * 真 backdrop-blur 仍不做 —— 理由同上，且项目离线编译不能引 haze。
+ * [appear] 与岛的出现/收起动画共用同一份 alpha，玻璃不会比岛先到或后走。
+ * API<31 / 非硬件加速时降级为纯 tint（无 blur、无环），布局与可读性不受影响。
+ */
+private fun DrawScope.renderLiquidGlass(
+    picture: AndroidPicture,
+    area: Rect,
+    canvasW: Int,
+    canvasH: Int,
+    bodyNode: RenderNode?,
+    saturation: ColorMatrix,
+    shadowPaint: AndroidPaint,
+    spec: BarGlassSpec,
+    tint: Color,
+    appear: Float,
+) {
+    val radiusPx = ISLAND_SHAPE_D.toPx()
+    val outline = Path().apply { addRoundRect(RoundRect(area, CornerRadius(radiusPx))) }
+
+    // ⓪ 外投影：画在玻璃之前、且在裁剪之外（见 GLASS_SHADOW_BLUR 注释）
+    shadowPaint.alpha = (GLASS_SHADOW_ALPHA * appear).toInt()
+    drawIntoCanvas { nc ->
+        val native = nc.nativeCanvas
+        native.save()
+        native.translate(0f, GLASS_SHADOW_DY.toPx())
+        native.drawRoundRect(area.left, area.top, area.right, area.bottom, radiusPx, radiusPx, shadowPaint)
+        native.restore()
+    }
+
+    // 采样条带：比岛大出 2× 模糊半径，避免模糊后边缘出现"吸边"的透明渐隐
+    val blurPx = spec.blurDp.dp.toPx()
+    val expand = maxOf(blurPx * 2f, 8.dp.toPx())
+    val src = AndroidRectF(
+        (area.left - expand).coerceAtLeast(0f),
+        (area.top - expand).coerceAtLeast(0f),
+        (area.right + expand).coerceAtMost(canvasW.toFloat()),
+        (area.bottom + expand).coerceAtMost(canvasH.toFloat()),
+    )
+
+    val hardware = drawContext.canvas.nativeCanvas.isHardwareAccelerated
+    // ⚠ 用局部 val：`canBlur` 是布尔量，不会把可空 node 智能转换成非空
+    val blurNode = bodyNode
+    val canBlur = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+        hardware && blurNode != null && blurPx > 0.01f
+
+    clipPath(outline) {
+        if (canBlur && blurNode != null) {
+            // ① 主体：真模糊 + 提饱和
+            blurNode.recordBackdrop(picture, src, canvasW, canvasH, blurPx, spec.saturation, saturation)
+            drawIntoCanvas { it.nativeCanvas.drawRenderNode(blurNode) }
+        }
+        // ② tint 整块盖满圆角轮廓
+        drawRect(tint, topLeft = area.topLeft, size = area.size)
+
+        // ③ **不做透视/折射**（2026-10-19 负责人「算了 不做透视了，效果极差」）：
+        //    放大镜改为放大**选中项的图标与文字**，在 FloatingIslandBar 里用 scale 实现。
+    }
+}
+
+/**
+ * 玻璃的「表面处理」，拆成**两层**，分别挂在岛的两条修饰符上：
+ *
+ *  - [drawGlassLight]（受光面）→ `Modifier.drawBehind`：**必须压在图标/文字之下**。
+ *    ⚠ 2026-10-18 踩过：一开始三层全塞进 `drawWithContent { drawContent(); … }`，
+ *    而 `drawContent()` 已经把孩子（图标/文字）画完了 ⇒ 那层白色渐隐直接盖在图标上，把文字洗淡。
+ *    ⚠ 2026-10-19 负责人「受光 改为四周而不是上」⇒ 改为**沿外缘整圈**的受光描边。
+ *  - [drawGlassEdge]（镜面高光 + 内底暗边）→ `Modifier.drawWithContent`：这两笔只落在
+ *    外缘 1dp 的环带上，不碰内容，而且**必须盖在描边之上**才有用。
+ *
+ * 为什么不放回父级 [renderLiquidGlass] 一起画：玻璃材质由父级内容 Box 垫在岛**下面**，
+ * 而岛的 1dp 描边（`colors.tabbarGlassBorder`）是子节点、后画 ⇒ 画在父级的高光会被描边盖住。
+ *
+ * 透明度不在这里乘 —— 岛整体已经挂了 `Modifier.alpha`，出现/收起时自动跟着淡。
+ */
+private fun DrawScope.drawGlassLight(highlight: Float) {
+    if (highlight <= 0.001f) return
+    // 受光 = **四周**：沿外缘整圈描一圈白（不再只有上缘）
+    drawRoundRect(
+        color = Color.White.copy(alpha = highlight.coerceIn(0f, 0.5f)),
+        cornerRadius = CornerRadius(ISLAND_SHAPE_D.toPx()),
+        style = Stroke(width = 1.5.dp.toPx()),
+    )
+}
+
+
+/**
+ * 选中胶囊：画在**图标之下**（和 [drawGlassLight] 同一个 `drawBehind`），
+ * 水平位置由 [pos]（0..count-1 的浮点）驱动 —— 调用方传动画值进来，切 Tab 时就滑过去。
+ *
+ * 位置口径与 [FloatingIslandBar] 的 `padding(horizontal = 10.dp)` + `weight(1f)` 严格对齐：
+ * 格子宽 = (行宽 − 2×10dp) / count，胶囊在格子里再左右各缩 [CAPSULE_INSET_X]。
+ * ⚠ 改 `padding` 或条目数必须同步这里，否则胶囊会跟格子错位。
+ */
+private fun DrawScope.drawSelectionCapsule(
+    pos: Float,
+    count: Int,
+    isDark: Boolean,
+    border: Color,
+    capsuleLight: Float,
+    capsuleDark: Float,
+    /** 受光白 α（BG 的「上缘受光」滑块；胶囊的受光描边与它联动）。 */
+    highlight: Float = 0f,
+) {
+    if (count <= 0) return
+    val padPx = 10.dp.toPx()
+    val slot = (size.width - padPx * 2f) / count
+    val insetX = CAPSULE_INSET_X.toPx()
+    val insetY = CAPSULE_INSET_Y.toPx()
+    val w = slot - insetX * 2f
+    val h = size.height - insetY * 2f
+    if (w <= 0f || h <= 0f) return
+
+    val left = padPx + pos * slot + insetX
+    val top = insetY
+    val radius = h / 2f
+    val corner = CornerRadius(radius)
+    val topLeft = Offset(left, top)
+
+    // 胶囊本体：比磨砂体更白 ⇒ 凸起感（透镜已下线，不再让位）
+    drawRoundRect(
+        color = Color.White.copy(alpha = if (isDark) capsuleDark else capsuleLight),
+        topLeft = topLeft,
+        size = Size(w, h),
+        cornerRadius = corner,
+    )
+    // 受光描边：**四周**（2026-10-19 负责人「受光只作用在BG 胶囊没有作用到」⇒ 与 BG 的
+    // 「上缘受光」滑块联动；保底 0.30 保证深色模式下胶囊始终读得出形状）
+    drawRoundRect(
+        color = Color.White.copy(alpha = (highlight * 2.5f).coerceIn(0.30f, 0.85f)),
+        topLeft = topLeft,
+        size = Size(w, h),
+        cornerRadius = corner,
+        style = Stroke(width = 1.dp.toPx()),
+    )
+    // ⚠ 定形描边：白胶囊压在白磨砂体上**几乎看不出边界**（2026-10-19 实测确认），
+    //   靠这一圈 1dp 的 `tabbarGlassBorder` 才读得出"一个圆角形状"，别删。
+    drawRoundRect(
+        color = border,
+        topLeft = topLeft,
+        size = Size(w, h),
+        cornerRadius = corner,
+        style = Stroke(width = 1.dp.toPx()),
+    )
+    // 内底暗边：一道极淡的暗，给出厚度
+    val inset = 1.dp.toPx()
+    drawRoundRect(
+        brush = Brush.verticalGradient(
+            0.55f to Color.Transparent,
+            1f to Color.Black.copy(alpha = if (isDark) 0.10f else 0.06f),
+            startY = top,
+            endY = top + h,
+        ),
+        topLeft = Offset(left + inset, top + inset),
+        size = Size(w - inset * 2f, h - inset * 2f),
+        cornerRadius = CornerRadius((radius - inset).coerceAtLeast(0f)),
+        style = Stroke(width = inset),
+    )
+}
+
+private fun DrawScope.drawGlassEdge(specular: Float) {
+    val radiusPx = ISLAND_SHAPE_D.toPx()
+    val w = size.width
+    val h = size.height
+
+    // ⑤ 镜面高光：沿外缘 1.2dp 描边，垂直渐变 ⇒ 只有上缘亮（内缩半个描边宽，避免被裁掉一半）
+    //    specular 来自 BarGlassSpec（实验室「镜面描边」滑块，0 = 关闭）
+    val specInset = GLASS_SPECULAR_W.toPx() / 2f
+    drawRoundRect(
+        brush = Brush.verticalGradient(
+            0f to Color.White.copy(alpha = specular.coerceIn(0f, 1f)),
+            0.32f to Color.Transparent,
+            startY = 0f,
+            endY = h,
+        ),
+        topLeft = Offset(specInset, specInset),
+        size = Size(w - specInset * 2, h - specInset * 2),
+        cornerRadius = CornerRadius((radiusPx - specInset).coerceAtLeast(0f)),
+        style = Stroke(width = GLASS_SPECULAR_W.toPx()),
+    )
+
+    // ⑥ 内底暗边：给出玻璃的"厚度"，否则像一张贴纸
+    val inset = GLASS_INNER_SHADOW_W.toPx()
+    drawRoundRect(
+        brush = Brush.verticalGradient(
+            0.55f to Color.Transparent,
+            1f to Color.Black.copy(alpha = 0.08f),
+            startY = 0f,
+            endY = h,
+        ),
+        topLeft = Offset(inset, inset),
+        size = Size(w - inset * 2, h - inset * 2),
+        cornerRadius = CornerRadius((radiusPx - inset).coerceAtLeast(0f)),
+        style = Stroke(width = inset),
+    )
+}
+
+/**
+ * 把 [picture] 里 [src] 这块区域录进本 [RenderNode]，并挂上「高斯模糊 → 提饱和」的渲染效果。
+ *
+ * ⚠ 位置与录制的偏移必须配套：`setPosition` 用**绝对**画布坐标（src 左上角），
+ *   录制时再 `translate(-src.left, -src.top)` 把 src 对齐到节点原点 —— 少任一步都会错位。
+ */
+@RequiresApi(Build.VERSION_CODES.S)
+private fun RenderNode.recordBackdrop(
+    picture: AndroidPicture,
+    src: AndroidRectF,
+    canvasW: Int,
+    canvasH: Int,
+    radiusPx: Float,
+    saturate: Float,
+    saturation: ColorMatrix,
+) {
+    val left = src.left.toInt()
+    val top = src.top.toInt()
+    val w = (src.right - src.left).toInt().coerceAtLeast(1)
+    val h = (src.bottom - src.top).toInt().coerceAtLeast(1)
+    setPosition(left, top, left + w, top + h)
+    saturation.setSaturation(saturate)
+    setRenderEffect(
+        RenderEffect.createChainEffect(
+            RenderEffect.createBlurEffect(radiusPx, radiusPx, Shader.TileMode.CLAMP),
+            RenderEffect.createColorFilterEffect(ColorMatrixColorFilter(saturation)),
+        ),
+    )
+    val rc = beginRecording(w, h)
+    rc.translate(-src.left, -src.top)
+    rc.drawPicture(picture, AndroidRectF(0f, 0f, canvasW.toFloat(), canvasH.toFloat()))
+    endRecording()
+}
+
+
+/**
+ * 悬浮玻璃岛（web `.floating-island-nav`，`web/src/layout/MainLayout.vue:229-262`）。
+ *
+ * 玻璃拟态口径（2026-10-18 第五十七轮定稿 + 同日「不要黑色和颗粒」「要 Apple 液态玻璃」修订，
+ * 负责人拍板原文：「我要的和web一模一样 不允许跟随主题变化 任何UI都是毛玻璃」「苹果的那种」
+ * 「主题UI和bar无关联 不允许匹配 永远保持毛玻璃」「透明度你给我把握好啊」
+ * 「我要的是 毛玻璃bar不要黑色和颗粒」「我要Apple那样的效果能做到么？ 液态玻璃？」）：
+ *  1. **玻璃三色只跟深浅模式、不跟主题预设**（web `useUiTheme.js` 的 `TABBAR` 同款思路）：
+ *     浅 = 白 α0.20；深 = **白 α0.08**（深色玻璃 tint 弃用 web 的近黑 `rgba(18,18,22,.55)`，
+ *     负责人明确「不要黑色」）。描边与文字色仍走主题 token（浅黑 6% / 深白 12%、
+ *     `#7d7e80` / `#b0b0b0`，只跟模式）。
+ *     ⇒ 同模式内切预设 bar 完全不变（「主题 UI 和 bar 无关联」的结构性保证）。
+ *  2. **真 backdrop 液态玻璃**（API31+）：内容区逐帧录 Picture → 岛区域扩边条带经
+ *     `RenderEffect` 真高斯模糊 + 提饱和 → 圆角裁剪垫到岛下，再叠镜面高光 / 内底暗边
+ *     （全部在 [renderLiquidGlass] 里，离线自实现、不引 haze，P1-11 维持）。
+ *     ⚠ 折射环的去留与参数**全部由实验室 [BarGlassSpec] 下发**（renderLiquidGlass ③）：
+ *     2026-10-19 曾按「我不想要这个环」删除，同日实验室定版 B 预设又带回
+ *     8dp×1.14 环（rimWidthDp/rimScale/rimStrength 非 0 时即画，见 BarGlassSpec 默认值）。
+ *     曾用噪点颗粒近似磨砂，「不要颗粒」⇒ 已删除；也曾用 `BlurMaskFilter` 当模糊，
+ *     但它只糊 alpha 边缘、糊不了内容，2026-10-18 已换成 RenderEffect。
+ *     **API<31 回退**：无 blur，Row 自绘半透玻璃底 + 上缘高光（本函数 else 分支）。
+ *  3. blur 模式下 Row 背景透明，只保留描边/内容 —— 玻璃与投影都由内容区垫出，
+ *     出现/收起动画（offsetY/alpha）由 MainScreen 外提传入并与玻璃同步。
+ *  4. 选中色仍走 `colors.primary`（web `.router-link-active` 同口径；毛玻璃本身与主题预设无关）。
+ *  5. **选中胶囊**：选中项背后垫一颗小圆角玻璃（[drawSelectionCapsule]），切 Tab 时走 spring
+ *     从旧位置滑到新位置、带轻微回弹。浅色比磨砂体更白（0.65 > 0.20）⇒ 凸起感；
+ *     深色只加 0.02 白。**不跟主题预设**，与玻璃本体同口径。
+ *
+ * 沿革留痕：2026-09-15 拍板不做真模糊 → 2026-10-18 「太过于透明」→「灰黑色 bg 不是毛玻璃」
+ * （第五十七轮）→「不要黑色和颗粒」（白玻璃 + 高光）→ α0.18 被反馈「这个色？」提档 0.30 →
+ * 「要 Apple 液态玻璃」⇒ 真 backdrop blur（API31+）+ 白 tint/高光，无颗粒无黑 →
+ * 2026-10-19「我不想要这个环」⇒ 删除 6dp 折射环，三层变两层（玻璃 + 选中胶囊）→
+ * 同日「降低磨砂雾蒙蒙，改成环的透明度」⇒ 白 α 浅 0.58→0.49 / 深 0.30→0.25 →
+ * 2026-10-19 实验室实测选定：浅 0.20 / 深 0.08、模糊 2dp、饱和 1.09、受光 0、镜面 0、
+ * 胶囊 浅0.65/深0.02、环 8dp×1.14·tint0.85·强度1（B 预设带回环，全部参数由实验室下发）。
  */
 @Composable
 private fun FloatingIslandBar(
     active: Int,
     onSelect: (Int) -> Unit,
-    visible: Boolean,
+    offsetY: Dp,
+    alpha: Float,
+    spec: BarGlassSpec,
+    /** 选中胶囊位置（0..3 浮点，spring 动画；由 MainScreen 持有，透镜与胶囊共用同一个值）。 */
+    capsulePos: State<Float>,
+    onPositioned: (Rect) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalAppColors.current
+    val tokens = LocalAppTokens.current
     val shape = RoundedCornerShape(ISLAND_SHAPE_D)
+    val glassBlur = remember { Build.VERSION.SDK_INT >= 31 }
 
-    // 磨砂底：沿用主题玻璃色，只把 alpha 提上来（颜色本身仍跟浅色/深色走）
-    val glassBase = colors.tabbarGlassBg.copy(alpha = 0.88f)
-    // 顶部高光：磨砂玻璃最容易被感知的就是这一道自上而下的柔光
-    val glassHighlight = Brush.verticalGradient(
-        0f to Color.White.copy(alpha = 0.16f),
-        0.55f to Color.White.copy(alpha = 0.04f),
-        1f to Color.Transparent,
-    )
-
-    // transition: transform .3s ease, opacity .3s ease
-    val offsetY by animateDpAsState(if (visible) 0.dp else 120.dp, tween(300), label = "islandOffsetY")
-    val alpha by animateFloatAsState(if (visible) 1f else 0f, tween(300), label = "islandAlpha")
+    // 回退玻璃底（API<31 无真 blur）：**只跟深浅模式**，深浅两套都是白色玻璃
+    val fallbackGlass = if (!glassBlur) {
+        Color.White.copy(alpha = if (tokens.isDark) spec.alphaDark else spec.alphaLight)
+    } else {
+        Color.Transparent
+    }
 
     Row(
         modifier = modifier
@@ -215,11 +662,46 @@ private fun FloatingIslandBar(
             .height(60.dp)
             .offset(y = offsetY)
             .alpha(alpha)
-            .shadow(8.dp, shape, clip = false, ambientColor = ISLAND_SHADOW, spotColor = ISLAND_SHADOW)
+            .onGloballyPositioned { onPositioned(it.boundsInRoot()) }
+            // ⚠ blur 模式下投影必须由玻璃层自己画（见 GLASS_SHADOW_BLUR 注释）：
+            //   岛背景透明，再挂 Modifier.shadow 会让阴影从内部透出来，把玻璃压灰。
+            .then(
+                if (glassBlur) {
+                    Modifier
+                } else {
+                    Modifier.shadow(8.dp, shape, clip = false, ambientColor = ISLAND_SHADOW, spotColor = ISLAND_SHADOW)
+                },
+            )
             .clip(shape)
-            .background(glassBase)
-            .background(glassHighlight)
+            .then(
+                if (glassBlur) {
+                    // 玻璃底由内容区 backdrop 真模糊垫出（见 MainScreen drawWithCache）
+                    Modifier
+                } else {
+                    Modifier.background(fallbackGlass) // 受光面/高光统一由下面的 drawGlassLight 画
+                },
+            )
+            // 上缘受光面 + 选中胶囊：都压在图标/文字之下（见 drawGlassLight 注释）
+            .drawBehind {
+                drawGlassLight(spec.highlight)
+                // 选中胶囊本体 + 高光/描边（放大镜效果由每个 tab 自己的 scale 实现）
+                // 只读 State 的 value ⇒ 只让绘制失效，不触发重组
+                drawSelectionCapsule(
+                    capsulePos.value,
+                    ISLAND_TABS.size,
+                    tokens.isDark,
+                    colors.tabbarGlassBorder,
+                    spec.capsuleLight,
+                    spec.capsuleDark,
+                    spec.highlight,
+                )
+            }
             .border(1.dp, colors.tabbarGlassBorder, shape)
+            // 镜面高光 + 内底暗边：只落在边缘环带上，且必须盖在描边之上
+            .drawWithContent {
+                drawContent()
+                drawGlassEdge(spec.specular)
+            }
             .padding(horizontal = 10.dp), // padding: 0 10px
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -231,6 +713,13 @@ private fun FloatingIslandBar(
                 tween(200),
                 label = "islandTabColor$index",
             )
+            // 放大镜 = **选中项的图标+文字整体放大**（2026-10-19 负责人：「不做透视了，
+            // 做放大镜就好，放大 ICON 和文字」；放大不碰背景，所以没有透视那种错位感）。
+            val itemScale by animateFloatAsState(
+                targetValue = if (isActive) TAB_SELECTED_SCALE else 1f,
+                animationSpec = spring(dampingRatio = 0.55f, stiffness = 520f),
+                label = "islandTabScale$index",
+            )
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
@@ -238,10 +727,12 @@ private fun FloatingIslandBar(
                     .weight(1f) // flex: 1
                     .fillMaxHeight()
                     .clickable(
-                        enabled = visible, // web `.nav-hidden{ pointer-events:none }`：收起时不可点
+                        enabled = alpha > 0.9f, // web `.nav-hidden{ pointer-events:none }`：收起时不可点
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
-                    ) { onSelect(index) },
+                    ) { onSelect(index) }
+                    // 缩放放在 clickable 之后：点按热区仍是整格，只有图标/文字被放大
+                    .scale(itemScale),
             ) {
                 VanIcon(
                     name = icon,
@@ -261,3 +752,4 @@ private fun FloatingIslandBar(
         }
     }
 }
+

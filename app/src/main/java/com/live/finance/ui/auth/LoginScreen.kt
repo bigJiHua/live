@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -24,6 +25,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
@@ -40,10 +43,16 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -91,6 +100,9 @@ import com.live.vant.feedback.VanToastType
  *  3. **未接入站点不能登录**：按钮下方常驻提示 + 点击登录时弹【未接入站点】。
  *  4. **不再无限转圈**：登录请求包在 `try/finally` 里，任何异常都会把 loading 归位；
  *     网络类失败弹「无法连接站点」弹窗（附「检查站点」入口），而不是只飘一个 toast。
+ *  5. **站点输入改版（2026-10-18）**：站点设置弹窗弃用「只读展示 + 安全键盘」（模拟 web
+ *     canvas 绘制的那套），改为普通输入框——系统键盘实时点击编辑；前置 `http://` /
+ *     `https://` 下拉前缀选择，用户只需填域名（整段粘贴带前缀的地址也兼容）。
  *
  * 字符上限与后端统一（nameOrEmail ≤50，password 6–30）。
  */
@@ -111,8 +123,23 @@ fun LoginScreen(nav: NavHostController, mainTab: MutableIntState) {
     val siteCtx = LocalContext.current
     val siteStore = remember(siteCtx) { SiteStore(siteCtx) }
     val savedSite = remember(siteCtx) { siteStore.current() }
-    var site by remember { mutableStateOf(savedSite ?: "") }
+    // 站点草稿（2026-10-18 改版）：`sitePrefix` = 下拉选中的前缀（http:// / https://），
+    // `site` = 输入框里的域名部分（不含前缀）。保存时二者拼回完整 URL 再归一化。
+    val initSite = splitSite(savedSite)
+    var sitePrefix by remember { mutableStateOf(initSite.first) }
+    var site by remember { mutableStateOf(initSite.second) }
     var siteError by remember { mutableStateOf<String?>(null) }
+    // 站点输入框是否持有焦点（弹窗 lift 上移避让系统键盘，同 AppSettingsScreen 口径）
+    var siteFieldFocused by remember { mutableStateOf(false) }
+
+    /** 打开弹窗 / 还原草稿：把已存 URL 拆回「前缀 + 域名」两部分（没存过 ⇒ https:// + 空）。 */
+    fun loadSiteDraft() {
+        val (p, h) = splitSite(siteStore.current())
+        sitePrefix = p
+        site = h
+        siteError = null
+    }
+
     // 站点是否已接入：本地存过 URL，或本次在弹窗里探测并保存成功。
     // 同时决定页脚入口文案 —— false = 还没接入过 ⇒ 「接入站点」。
     var siteConfirmed by remember { mutableStateOf(savedSite != null) }
@@ -135,8 +162,7 @@ fun LoginScreen(nav: NavHostController, mainTab: MutableIntState) {
     // 首启（本地没有站点记录）：直接弹设置窗，别让用户先填账密再被拦。
     LaunchedEffect(Unit) {
         if (!siteConfirmed) {
-            site = ""
-            siteError = null
+            loadSiteDraft()
             showSiteDialog = true
         }
     }
@@ -148,15 +174,18 @@ fun LoginScreen(nav: NavHostController, mainTab: MutableIntState) {
     // 仅密码长度 6–30 才允许提交（web 行为；账号空由后端判）
     val pwdValid = pwd.length in 6..30
 
-    /** 只校验不落盘（键盘「确认」/弹窗「保存」的公共前置）。返回归一化地址，非法返回 null。 */
+    /** 只校验不落盘（弹窗「保存」的公共前置）。返回归一化地址，非法返回 null。 */
     fun validateSite(raw: String): String? {
-        if (raw.trim().isEmpty()) {
+        val host = raw.trim()
+        if (host.isEmpty()) {
             siteError = "请输入站点地址"
             return null
         }
-        val normalized = SiteStore.normalize(raw)
+        // 前缀由下拉提供；用户整段粘贴带前缀的地址时直接识别，不重复拼接
+        val full = if (host.startsWith("http://") || host.startsWith("https://")) host else sitePrefix + host
+        val normalized = SiteStore.normalize(full)
         if (normalized == null) {
-            siteError = "站点须以 http:// 或 https:// 开头，如 https://money.example.com"
+            siteError = "站点地址不完整，请检查域名（如 money.example.com）"
             return null
         }
         siteError = null
@@ -174,7 +203,9 @@ fun LoginScreen(nav: NavHostController, mainTab: MutableIntState) {
         siteStore.save(normalized)
         AppConfig.baseUrl = normalized
         siteConfirmed = true
-        site = normalized
+        val (p, h) = splitSite(normalized)
+        sitePrefix = p
+        site = h
         siteError = null
         if (changed) scope.launch { graph.session.clear() }
     }
@@ -356,46 +387,33 @@ fun LoginScreen(nav: NavHostController, mainTab: MutableIntState) {
                 siteActionText = if (siteConfirmed) "切换站点" else "接入站点",
                 onSiteAction = {
                     // 打开弹窗前回填已存站点（丢弃上次没保存的编辑）；首次接入时留空
-                    site = siteStore.current() ?: ""
-                    siteError = null
+                    loadSiteDraft()
                     showSiteDialog = true
                 },
             )
         }
     }
 
-    // 安全键盘：激活字段时弹出；login 键关闭键盘（真正提交由上方按钮）。
-    // 站点字段：确认键 = 只校验（探测/落盘只认弹窗的「保存」，见下方 onConfirm）；
-    // 不再用系统输入法（adjustResize 会把页脚顶到键盘上方，2026-10-14 用户反馈）。
+    // 安全键盘：激活字段（账号/密码）时弹出；login 键关闭键盘（真正提交由上方按钮）。
+    // 站点字段（2026-10-18）已改为普通输入框（系统键盘），不再走安全键盘。
     VanSecureKeyboard(
         show = activeField != null,
         onChar = { ch ->
             when (activeField) {
                 "username" -> username = (username + ch).take(50)
                 "password" -> pwd = (pwd + ch).take(30)
-                // 改站点即清掉上一次的红字，别让旧错误一直挂着（表单常态）
-                "site" -> { site = (site + ch).take(200); siteError = null }
             }
         },
         onDelete = {
             when (activeField) {
                 "username" -> username = username.dropLast(1)
                 "password" -> pwd = pwd.dropLast(1)
-                "site" -> { site = site.dropLast(1); siteError = null }
             }
         },
         encryptChar = encryptChar,
         onCipherAppend = { if (activeField == "password") pwdCipher = (pwdCipher ?: emptyList()) + it },
         onCipherDelete = { if (activeField == "password") pwdCipher = pwdCipher?.dropLast(1) },
-        onLogin = {
-            // 站点字段（只在弹窗里能激活）：确认键 / 点面板外收起 → **只校验**（合法清错、
-            // 非法给红字），**不落盘** —— 落盘只认弹窗的「保存」按钮。否则「收个键盘」
-            // 就会把半截地址存掉，弹窗等于没有「取消」这条路。
-            // ⚠ 无论成功失败都 `activeField = null`：键盘「点面板外收起」走的也是 onLogin
-            //   （键盘组件内部口径），若因校验失败就不关键盘，用户会被锁在键盘里出不来。
-            if (activeField == "site") validateSite(site)
-            activeField = null
-        },
+        onLogin = { activeField = null },
     )
 
     // 站点设置弹窗（页脚「切换站点 / 接入站点」的唯一落地）—— 完整地址只在这里出现。
@@ -407,10 +425,15 @@ fun LoginScreen(nav: NavHostController, mainTab: MutableIntState) {
             if (!siteChecking) {
                 showSiteDialog = false
                 activeField = null
-                site = siteStore.current() ?: ""
-                siteError = null
+                siteFieldFocused = false
+                loadSiteDraft()
             }
         }
+        // 草稿拼回完整 URL（用户整段粘贴带前缀时不再重复拼接），驱动绿✓与落盘校验
+        val siteDraft = site.trim()
+        val siteFull =
+            if (siteDraft.startsWith("http://") || siteDraft.startsWith("https://")) siteDraft
+            else sitePrefix + siteDraft
         AppDialogShell(
             show = true,
             title = "站点设置",
@@ -418,11 +441,13 @@ fun LoginScreen(nav: NavHostController, mainTab: MutableIntState) {
             confirmEnabled = !siteChecking,
             onOverlay = closeSiteDialog,
             onCancel = closeSiteDialog,
+            // 系统键盘弹出时整卡上移，避免输入框被遮（同 AppSettingsScreen 的 160dp 口径）
+            lift = if (siteFieldFocused) 160.dp else 0.dp,
             onConfirm = {
                 if (siteChecking) return@AppDialogShell
                 // 先做格式校验（不发请求），再做连通性探测
                 val normalized = validateSite(site) ?: return@AppDialogShell
-                activeField = null
+                siteFieldFocused = false
                 siteChecking = true
                 scope.launch {
                     try {
@@ -445,15 +470,18 @@ fun LoginScreen(nav: NavHostController, mainTab: MutableIntState) {
             },
         ) {
             SiteField(
+                prefix = sitePrefix,
                 value = site,
-                active = activeField == "site",
-                valid = SiteStore.normalize(site.trim()) != null,
+                valid = SiteStore.normalize(siteFull) != null,
                 error = siteError,
-                onClick = { if (!siteChecking) activeField = "site" },
+                checking = siteChecking,
+                onPrefixChange = { sitePrefix = it; siteError = null },
+                onValueChange = { site = it; siteError = null },
+                onFocusChange = { siteFieldFocused = it },
             )
             Spacer(Modifier.height(8.dp))
             BasicText(
-                "请填写已部署的站点后端地址（如 https://money.example.com）。" +
+                "选择 http/https 前缀后输入站点域名（如 money.example.com）。" +
                     "保存前会先测试连接，连不上无法保存。",
                 style = TextStyle(color = colors.textTertiary, fontSize = scaledSp(12f), lineHeight = scaledSp(16f)),
             )
@@ -471,8 +499,7 @@ fun LoginScreen(nav: NavHostController, mainTab: MutableIntState) {
             onCancel = { showSiteHint = false },
             onConfirm = {
                 showSiteHint = false
-                site = siteStore.current() ?: ""
-                siteError = null
+                loadSiteDraft()
                 showSiteDialog = true
             },
         ) {
@@ -495,8 +522,7 @@ fun LoginScreen(nav: NavHostController, mainTab: MutableIntState) {
             onCancel = { netError = null },
             onConfirm = {
                 netError = null
-                site = siteStore.current() ?: ""
-                siteError = null
+                loadSiteDraft()
                 showSiteDialog = true
             },
         ) {
@@ -508,35 +534,50 @@ fun LoginScreen(nav: NavHostController, mainTab: MutableIntState) {
     }
 }
 
+/** 把完整站点 URL 拆成「前缀 + 域名」；没有前缀（未存过/半截）时前缀回落 https://。 */
+private fun splitSite(url: String?): Pair<String, String> {
+    val u = (url ?: "").trim()
+    return when {
+        u.startsWith("https://") -> "https://" to u.removePrefix("https://")
+        u.startsWith("http://") -> "http://" to u.removePrefix("http://")
+        else -> "https://" to u
+    }
+}
+
 /**
- * 站点地址输入框（分发适配：2026-10-14）—— **两处复用同一形态**：首填态（本地无 URL）
- * 直接摆在表单最上；改址态摆进「站点设置」弹窗里。
+ * 站点地址输入框（2026-10-18 改版）—— 普通输入框，系统键盘实时点击编辑，
+ * 摆进「站点设置」弹窗里（首填/改址同一形态）。
  *
- * **只读展示 + 安全键盘输入**（与账号/密码同门）：
- *  - 早先实现用系统输入法（`KeyboardType.Uri`），但 `adjustResize` 会把登录页脚
- *    （备案/footer）顶到键盘上方——用户反馈后改回安全键盘（Dialog 浮层，不压缩页面）。
- *  - URL 符号 `.` `:` `-` 在键盘数字符号页，`/` 为本次在 VanSecureKeyboard 新增的按键
- *    （字母页另有 `.` 快捷键；邮箱用户名不受影响）。
- *  - [valid]（http(s):// 前缀 + 非空）⇒ 行尾绿✓；按键盘「确认」或弹窗「保存」落盘。
- *  - [error] 非空（确认后仍非法）⇒ 红框 + 红字；重新输入即清掉。
- *  - 视觉与 [LoginField] 对齐：1px 主题边框 + radius 10 + 13px label + 14px 值 + 闪烁光标。
+ *  - **前缀下拉**：行首固定展示 `http://` / `https://` 两选一（默认 https://），点击展开
+ *    内联面板切换，用户无需再手动输入协议前缀；输入区只填域名。
+ *  - **系统键盘输入**：[BasicTextField]（KeyboardType.Uri），实时响应每次点击与编辑；
+ *    弹窗经 `lift` 上移避让键盘（见调用处），不再走安全键盘（旧版模拟 web canvas 的只读方案已弃）。
+ *  - [valid]（前缀 + 域名能归一化）⇒ 行尾绿✓；弹窗「保存」时才校验落盘。
+ *  - [error] 非空（保存失败）⇒ 红框 + 红字；重新输入/切换前缀即清掉。
+ *  - [checking] 探测中：输入只读、下拉禁用（配合按钮「正在连接…」防重复提交）。
+ *  - 视觉与 [LoginField] 对齐：1px 主题边框 + radius 10 + 13px label + 14px 值 + 主色光标。
  */
 @Composable
 private fun SiteField(
+    prefix: String,
     value: String,
-    active: Boolean,
     valid: Boolean,
     error: String?,
-    onClick: () -> Unit,
+    checking: Boolean,
+    onPrefixChange: (String) -> Unit,
+    onValueChange: (String) -> Unit,
+    onFocusChange: (Boolean) -> Unit,
 ) {
     val colors = LocalAppColors.current
     val shape = RoundedCornerShape(10.dp)
+    var menuOpen by remember { mutableStateOf(false) }
+    var focused by remember { mutableStateOf(false) }
+    val active = focused || menuOpen
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .border(1.dp, if (error != null) colors.danger else colors.border, shape)
             .then(if (active) Modifier.border(2.dp, if (error != null) colors.danger else colors.primary, shape) else Modifier)
-            .clickable { onClick() }
             .padding(horizontal = 16.dp, vertical = 10.dp),
     ) {
         BasicText(
@@ -547,36 +588,109 @@ private fun SiteField(
             ),
         )
         Spacer(Modifier.height(6.dp))
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            // 值/占位 + 闪烁光标（对齐 LoginField：激活空值落首位，有值落末尾）
-            val hScroll = rememberScrollState()
-            LaunchedEffect(hScroll) { snapshotFlow { hScroll.maxValue }.collect { hScroll.scrollTo(it) } }
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.weight(1f).horizontalScroll(hScroll),
-            ) {
-                val hasText = value.isNotEmpty()
-                if (active && !hasText) {
-                    BlinkingCursor(colors.primary)
+        // 输入行 + 前缀下拉浮层（Box 叠放：面板悬浮在行下方，不撑高容器）
+        Box(Modifier.fillMaxWidth()) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                // 前缀下拉选择器（固定宽度，http/https 切换时不跳动）
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .width(78.dp)
+                        .clickable(enabled = !checking) { menuOpen = !menuOpen }
+                        .padding(vertical = 2.dp),
+                ) {
+                    BasicText(
+                        prefix,
+                        style = TextStyle(color = colors.textPrimary, fontSize = scaledSp(14f)),
+                        maxLines = 1,
+                    )
                     Spacer(Modifier.width(2.dp))
+                    VanIcon(
+                        name = if (menuOpen) "arrow-up" else "arrow-down",
+                        size = 12.sp,
+                        color = colors.textTertiary,
+                    )
                 }
-                BasicText(
-                    if (hasText) value else "https://money.example.com",
-                    style = TextStyle(
-                        color = if (hasText) colors.textPrimary else colors.textTertiary,
-                        fontSize = scaledSp(14f),
+                Box(Modifier.width(1.dp).height(16.dp).background(colors.border))
+                Spacer(Modifier.width(10.dp))
+                // 域名输入区：普通输入框（系统键盘 Uri 布局），激活态由焦点驱动
+                BasicTextField(
+                    value = value,
+                    onValueChange = onValueChange,
+                    singleLine = true,
+                    readOnly = checking,
+                    textStyle = TextStyle(color = colors.textPrimary, fontSize = scaledSp(14f)),
+                    cursorBrush = SolidColor(colors.primary),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Uri,
+                        imeAction = ImeAction.Done,
                     ),
-                    maxLines = 1,
+                    modifier = Modifier
+                        .weight(1f)
+                        .onFocusChanged {
+                            focused = it.isFocused
+                            onFocusChange(it.isFocused)
+                            if (it.isFocused) menuOpen = false
+                        },
+                    decorationBox = { inner ->
+                        Box {
+                            if (value.isEmpty()) {
+                                BasicText(
+                                    "money.example.com",
+                                    style = TextStyle(color = colors.textTertiary, fontSize = scaledSp(14f)),
+                                    maxLines = 1,
+                                )
+                            }
+                            inner()
+                        }
+                    },
                 )
-                if (active && hasText) {
-                    Spacer(Modifier.width(2.dp))
-                    BlinkingCursor(colors.primary)
+                // 校验通过 ⇒ 绿✓（保存时才真正落盘）
+                if (valid) {
+                    Spacer(Modifier.width(8.dp))
+                    VanIcon(name = "success", size = 18.sp, color = vanGreen())
                 }
             }
-            // 校验通过 ⇒ 绿✓（按键盘「确认」后保存收起）
-            if (valid) {
-                Spacer(Modifier.width(8.dp))
-                VanIcon(name = "success", size = 18.sp, color = vanGreen())
+            // 前缀下拉面板：锚定在选择器正下方的紧凑浮层（阴影 + 边框），点选项即选中收起
+            if (menuOpen) {
+                val menuShape = RoundedCornerShape(8.dp)
+                Column(
+                    Modifier
+                        .align(Alignment.BottomStart)
+                        .offset(y = 6.dp)
+                        .width(132.dp)
+                        .shadow(8.dp, menuShape)
+                        .clip(menuShape)
+                        .background(colors.bgCard)
+                        .border(1.dp, colors.border, menuShape),
+                ) {
+                    listOf("http://", "https://").forEachIndexed { i, opt ->
+                        if (i > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(colors.border))
+                        val selected = opt == prefix
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable(enabled = !checking) {
+                                    onPrefixChange(opt)
+                                    menuOpen = false
+                                }
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                        ) {
+                            BasicText(
+                                opt,
+                                style = TextStyle(
+                                    color = if (selected) colors.primary else colors.textPrimary,
+                                    fontSize = scaledSp(14f),
+                                ),
+                            )
+                            if (selected) {
+                                Spacer(Modifier.weight(1f))
+                                VanIcon(name = "success", size = 14.sp, color = vanGreen())
+                            }
+                        }
+                    }
+                }
             }
         }
         if (error != null) {

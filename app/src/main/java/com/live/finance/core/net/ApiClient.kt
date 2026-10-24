@@ -1,7 +1,9 @@
 package com.live.finance.core.net
 
+import android.util.Log
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
+import com.live.finance.BuildConfig
 import com.live.finance.core.AppConfig
 import com.live.finance.core.crypto.AesCbc
 import com.live.finance.core.store.SessionStore
@@ -129,7 +131,12 @@ class ApiClient(
                     env = sendOnce()
                 }
                 when (val r = env.toResult()) {
-                    is ApiResult.Ok -> ApiResult.Ok(r.data as? JsonObject, r.message)
+                    is ApiResult.Ok -> {
+                        // 上传走独立 OkHttp，不经 request() 的写后清缓存；这里补上，
+                        // 否则刚传的图会被 GET /upload/list 的 5 分钟缓存挡住。
+                        ApiGetCache.clear()
+                        ApiResult.Ok(r.data as? JsonObject, r.message)
+                    }
                     is ApiResult.Fail -> ApiResult.Fail(r.message)
                     // 远端 5xx 也要保持「灰」，别被下面的 else 降级成红的「上传失败」
                     is ApiResult.Network -> ApiResult.Network(r.message)
@@ -218,6 +225,8 @@ class ApiClient(
                 }
                 when (val r = env.toResult()) {
                     is ApiResult.Ok -> {
+                        // 同 uploadRaw：上传成功即让 GET 快照失效，资源库/头像等立即可见。
+                        ApiGetCache.clear()
                         val o = (r.data as? JsonObject)
                         val path = o?.get("url")?.takeIf { !it.isJsonNull }?.asString
                             ?: o?.get("file_path")?.takeIf { !it.isJsonNull }?.asString ?: ""
@@ -244,6 +253,31 @@ class ApiClient(
         routeTag: String = "",
     ): Envelope {
         val lower = method.lowercase()
+
+        // ── GET 进程内 TTL 缓存（2026-10-22）──
+        // 命中新鲜缓存直接返回，不发请求；过期/未命中照常走网络。
+        // 只对「已接入站点」的 GET 生效：未接入时后面本来就会返回 noSiteEnvelope。
+        val cacheKey = if (lower == "get" && AppConfig.hasSite && isCacheableGet(path)) {
+            getCacheKey(path, query)
+        } else {
+            null
+        }
+        if (cacheKey != null) {
+            val hit = ApiGetCache.get(cacheKey)
+            if (hit != null) {
+                val age = System.currentTimeMillis() - hit.at
+                if (age >= 0L && age < hit.ttlMs) {
+                    if (BuildConfig.DEBUG) {
+                        Log.d(TAG, "HIT GET $path age=${age}ms/${hit.ttlMs}ms cache=${ApiGetCache.sizeBytes()}B")
+                    }
+                    return hit.envelope
+                }
+                if (BuildConfig.DEBUG) Log.d(TAG, "STALE GET $path age=${age}ms/${hit.ttlMs}ms")
+            } else if (BuildConfig.DEBUG) {
+                Log.d(TAG, "MISS GET $path")
+            }
+        }
+
         val isHandshake = path.contains(AppConfig.HANDSHAKE_PATH)
         val isSkip = AppConfig.SKIP_ENCRYPT_URLS.any { path.contains(it) }
         val needEncrypt = encrypted && !isHandshake && !isSkip
@@ -340,12 +374,93 @@ class ApiClient(
         //   （中间件 respond() 所致），若按 status 判会把「取消验证 / PIN 输错」误判成会话失效而踢回登录页。
         val pinCode = env.code
         when {
-            pinCode == AppConfig.Pin.LOCKED ->
+            pinCode == AppConfig.Pin.LOCKED -> {
+                ApiGetCache.clear()
                 onSessionBlocked?.invoke(env.message.ifEmpty { "PIN 已锁定，请重新登录" })
-            pinCode == null && (env.httpStatus == 401 || env.status == 401) ->
+            }
+            pinCode == null && (env.httpStatus == 401 || env.status == 401) -> {
+                ApiGetCache.clear()
                 onSessionBlocked?.invoke(env.message.ifEmpty { "登录已失效" })
+            }
+        }
+
+        if (cacheKey != null && env.isSuccess) {
+            val ttl = ttlMsFor(path)
+            ApiGetCache.put(cacheKey, env, ttl)
+            if (BuildConfig.DEBUG) {
+                Log.d(TAG, "PUT GET $path ttl=${ttl}ms cache=${ApiGetCache.sizeBytes()}B")
+            }
+        } else if (lower != "get" && env.isSuccess && !isReadOnlyPost(path)) {
+            // 写成功 ⇒ 所有 GET 快照失效。宁可多清一次，也不能让用户看到刚改完的旧数据。
+            ApiGetCache.clear()
+            if (BuildConfig.DEBUG) Log.d(TAG, "CLEAR after ${method.uppercase()} $path")
+        } else if (lower == "get" && env.isSuccess && isSideEffectGet(path)) {
+            // 少数 GET 会写库（如分期清单会自动入账）⇒ 不缓存，且成功后清掉别的 GET 快照。
+            ApiGetCache.clear()
+            if (BuildConfig.DEBUG) Log.d(TAG, "CLEAR after side-effect GET $path")
         }
         return env
+    }
+
+    /**
+     * 缓存 key：站点 + 当前会话 + path + 已排序 query。
+     *
+     * 站点/会话都进 key ⇒ 切站或换账号后旧条目自然不可达；登出/登录时还会显式清一次。
+     */
+    private fun getCacheKey(path: String, query: Map<String, String>?): String {
+        // 用完整 token（内存 key，不写日志）而不是 hashCode：避免理论上 32 位哈希碰撞
+        // 让两个账号命中同一份财务数据。
+        val token = session.token ?: "anon"
+        val q = query?.entries?.sortedBy { it.key }
+            ?.joinToString("&") { "${it.key}=${it.value}" }
+            .orEmpty()
+        return "${AppConfig.baseUrl}|$token|$path|$q"
+    }
+
+    /** TTL 分级：字典/地理信息长；卡片/池/用户/安全状态中；账务列表与详情短。 */
+    private fun ttlMsFor(path: String): Long = when {
+        path.startsWith("/category") || path.startsWith("/geo") -> 30 * 60_000L
+        path == "/card" || path == "/card/pool" || path == "/pool" ||
+            path == "/auth/me" || path == "/security/pin/check" -> 10 * 60_000L
+        // 账单 GET 在「列表为空」时会触发后端重算，且账期变化比流水频繁 ⇒ 只给 60s。
+        path == "/card/bill" -> 60_000L
+        else -> 5 * 60_000L
+    }
+
+    /**
+     * 哪些 GET 可以进缓存。
+     *
+     * - `/data-manager` 前缀：导出是 GET 启动任务、进度也是 GET 轮询，缓存会让「刷新状态」永远停在旧进度；
+     * - `/recurring/installments`：GET 会自动入账（写库），不能读快照，见 [isSideEffectGet]；
+     * - `/share` 前缀：公开分享内容可能被撤回，不适合留快照；
+     * - 首页摘要（`/asset/home`、`/todo/reminders`、`/work/salary/day`）：2026-10-22
+     *   首页空白回归后先不走缓存，保证从二级/三级页返回首页时一定重新拉最新数据。
+     */
+    private fun isCacheableGet(path: String): Boolean =
+        !path.startsWith("/data-manager") &&
+            !path.startsWith("/recurring/installments") &&
+            !path.startsWith("/share") &&
+            path != "/asset/home" &&
+            path != "/todo/reminders" &&
+            path != "/work/salary/day" &&
+            path != "/geo/ip" // IP 定位是实时查询（客户端公网 IP 会变），且失败(空 address)的 200 响应缓存后会阻止重试 ⇒ 秒批"IP定位失败"
+
+    /** 有写副作用的 GET：不缓存，且在成功后清空其他 GET 快照。 */
+    private fun isSideEffectGet(path: String): Boolean =
+        path.startsWith("/recurring/installments")
+
+    /** 用 POST 承载的只读接口：成功也不该清 GET 缓存。 */
+    private fun isReadOnlyPost(path: String): Boolean =
+        path.startsWith("/moment/batch") ||
+            path.startsWith("/share/password") ||
+            path.startsWith("/security/pin/verify") ||
+            path.startsWith("/security/pin/route-verify") ||
+            path.startsWith("/security/risk-report") ||
+            path.startsWith("/user/email/send-code") ||
+            path.startsWith("/data-manager/validate")
+
+    private companion object {
+        const val TAG = "ApiCache"
     }
 
     private suspend fun buildBody(

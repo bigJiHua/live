@@ -1,5 +1,6 @@
 package com.live.finance.ui.main
 
+import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -61,6 +62,7 @@ fun GlobalNavBar(nav: NavHostController, mainTab: MutableIntState) {
     val graph = App.of(LocalContext.current).graph
     val toast = LocalVanToastController.current
     val scope = rememberCoroutineScope()
+    val backDispatcher = LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
     val onTabRoot = dest?.substringBefore('?') == Routes.MAIN
 
     fun goHome() {
@@ -88,7 +90,9 @@ fun GlobalNavBar(nav: NavHostController, mainTab: MutableIntState) {
                         //   是**永不执行的死代码**，web 返回的实际行为就是纯 `router.back()`。
                         //   之前按字面复刻成 Int 计数，反而做出「点满 3 次永久跳主页」这种 web 没有的行为。
                         //   同类判定见构造书 §7.8 的死代码清单（`LoginLog.vue` 的「疑似异地登录」等）。
-                        nav.popBackStack()
+                        // 走系统返回派发而不是直接 pop：页面内若有 BackHandler（如快速登记向导的步进回退、
+                        // 卡包实验室的收起面板），顶栏箭头必须与系统返回同语义；无人拦截时才由 NavHost 退栈。
+                        if (backDispatcher != null) backDispatcher.onBackPressed() else nav.popBackStack()
                     }
                 }
                 NavHot("wap-home-o", colors.textPrimary) { goHome() }

@@ -58,6 +58,7 @@ import com.live.finance.core.AppConfig
 import com.live.finance.core.loc.requestGpsOnce
 import com.live.finance.core.net.ApiResult
 import com.live.finance.core.net.failMessage
+import com.live.finance.data.local.DiaryListCache
 import com.live.finance.data.model.Resource
 import com.live.finance.data.model.htmlToPlain
 import com.live.finance.theme.LocalAppColors
@@ -373,6 +374,8 @@ fun DiaryAddScreen(nav: NavHostController) {
             submitting = false
             when (r) {
                 is ApiResult.Ok -> {
+                    // 列表有本地快照：发布成功必须失效，否则返回到动态页会先显示旧列表。
+                    DiaryListCache.clear(ctx)
                     toast.show("成功", VanToastType.Success)
                     nav.popBackStack()
                 }

@@ -24,6 +24,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.text.BasicText
+import com.live.finance.core.AppConfig
+import com.live.finance.data.model.Category
 import kotlin.math.tan
 
 /**
@@ -186,13 +188,43 @@ private fun OrgText(
     )
 }
 
-/** 中文卡组织名 → org key（对齐 web `orgMap.js`）。 */
-fun cardOrgKey(name: String): String = when (name) {
-    "银联" -> "unionpay"
-    "万事达" -> "mastercard"
-    "Visa", "visa" -> "visa"
-    "运通", "AmericanExpress", "amex" -> "amex"
-    "大莱", "Diners", "diners" -> "diners"
-    "JCB", "jcb" -> "jcb"
-    else -> ""
+/** 中文卡组织名 → org key（对齐 web `orgMap.js` + 线上 `getCardOrgInfo` 的英文忽略大小写语义：
+ *  ORG_NAME_MAP 只列了 Visa/visa 两种写法，后端数据 `VISA` 大写会漏匹配 ⇒ 卡组织整块不显示
+ *  ——2026-10-20 真机「卡组织匹配问题」的根因）。 */
+fun cardOrgKey(name: String): String {
+    val hit = ORG_KEYS.firstOrNull { it.equals(name, ignoreCase = true) } ?: return ""
+    return ORG_MAP[hit] ?: ""
 }
+
+/**
+ * 卡组织 logo 资源 URL —— 对齐 web `debit.vue/credit.vue` 的 `getCardOrgInfo()`：
+ * 在 `category.list("bank")` 里按名称找同名的卡组织分类（中文全等、英文忽略大小写），
+ * 命中且该分类有 `icon_url` 就用它；否则返回空串、由 [CardOrgBadge] 组件兜底。
+ *
+ * ⚠ web 不是「有卡组织名就直接画组件」：先匹配资源图，图缺失或加载失败才回落组件。
+ */
+fun cardOrgIconUrlOf(cardOrg: String, banks: List<Category>): String {
+    val name = cardOrg.trim()
+    if (name.isEmpty()) return ""
+    val isChinese = name.any { it.code in 0x4E00..0x9FA5 }
+    val hit = banks.firstOrNull {
+        if (isChinese) it.name.trim() == name else it.name.trim().equals(name, ignoreCase = true)
+    } ?: return ""
+    return hit.iconUrl.takeIf { it.isNotBlank() }
+        ?.let { AppConfig.fullFileUrl(it) }
+        .orEmpty()
+}
+
+private val ORG_KEYS = arrayOf("银联", "万事达", "Visa", "运通", "AmericanExpress", "amex", "大莱", "Diners", "diners", "JCB")
+private val ORG_MAP = mapOf(
+    "银联" to "unionpay",
+    "万事达" to "mastercard",
+    "Visa" to "visa",
+    "运通" to "amex",
+    "AmericanExpress" to "amex",
+    "amex" to "amex",
+    "大莱" to "diners",
+    "Diners" to "diners",
+    "diners" to "diners",
+    "JCB" to "jcb",
+)

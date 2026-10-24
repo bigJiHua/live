@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import com.live.finance.App
 import com.live.finance.core.nav.Routes
+import com.live.finance.core.net.ApiGetCache
 import com.live.finance.core.net.ApiResult
 import com.live.finance.data.model.Card
 import com.live.finance.data.model.Category
@@ -253,6 +254,7 @@ fun FlowListScreen(nav: NavHostController) {
                     disabled = !isCurrentMonth,      // web：`:disabled="!isCurrentMonth"`
                     isChildAtTop = { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0 },
                     onRefresh = {
+                        ApiGetCache.clear() // 下拉刷新必须绕过 GET 缓存
                         scope.launch {
                             loadSummary()
                             loadTodayOnly()

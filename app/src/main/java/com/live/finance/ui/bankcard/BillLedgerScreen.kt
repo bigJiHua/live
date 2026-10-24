@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import com.live.finance.App
+import com.live.finance.core.net.ApiGetCache
 import com.live.finance.core.net.ApiResult
 import com.live.finance.core.net.failMessage
 import com.live.finance.core.nav.Routes
@@ -170,7 +171,7 @@ fun BillLedgerScreen(nav: NavHostController, billId: String = "") {
             isChildAtTop = { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0 },
             // ⚠ 必须 `join()` 到请求真的结束：原来 `load()` 是"发射型"（内部自己起协程立刻返回），
             //   `finishRefresh()` 同帧把 Loading→Normal ⇒ 刷新头一闪就没（「抽风」）。
-            onRefresh = { scope.launch { load(reset = true).join(); refreshState.finishRefresh() } },
+            onRefresh = { ApiGetCache.clear(); scope.launch { load(reset = true).join(); refreshState.finishRefresh() } },
             modifier = Modifier.then(inner),
         ) {
         LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {

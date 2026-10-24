@@ -42,6 +42,7 @@ import androidx.navigation.NavHostController
 import com.live.finance.App
 import com.live.finance.core.AppConfig
 import com.live.finance.core.nav.Routes
+import com.live.finance.core.net.ApiGetCache
 import com.live.finance.core.net.ApiResult
 import com.live.finance.data.model.FixedAsset
 import com.live.finance.theme.LocalAppColors
@@ -122,6 +123,7 @@ fun FixedAssetListScreen(nav: NavHostController) {
                 state = refreshState,
                 isChildAtTop = { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0 },
                 onRefresh = {
+                    ApiGetCache.clear() // 下拉刷新必须绕过 GET 缓存
                     scope.launch {
                         load()
                         refreshState.finishRefresh()

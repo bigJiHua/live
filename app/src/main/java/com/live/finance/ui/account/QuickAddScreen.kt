@@ -1,6 +1,13 @@
 package com.live.finance.ui.account
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -11,6 +18,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -20,6 +28,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -39,10 +48,13 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -61,6 +73,7 @@ import com.live.finance.ui.common.AppButtonType
 import com.live.finance.ui.common.AppField
 import com.live.finance.ui.common.Money
 import com.live.finance.ui.common.MoneyColor
+import com.live.finance.ui.common.rememberBankIconRequest
 import com.live.finance.ui.common.ScreenScaffold
 import com.live.finance.ui.common.WebShadow
 import com.live.finance.ui.common.cssShadow
@@ -297,9 +310,15 @@ fun QuickAddScreen(nav: NavHostController) {
         inCardId = card.id
         inCardLabel = cardDisplayText(card, banks)
         inCardType = cardTypeText(card.cardType)
-        // 提现：选完到账卡自动进入金额步（web 80ms setTimeout）
+        // 提现：选完到账卡自动进入金额步（web 80ms setTimeout）。
+        // ⚠ 这里必须读执行时的 step / inCardId 状态：canNext 是组合期算出的局部 Boolean，
+        //   点击时 inCardId 还没写入 ⇒ 协程里捕获到的恒为旧值 false，会导致「选卡不跳步」。
+        //   step==3 的判断同时防止 80ms 内用户已退回上一步时被莫名弹到金额步。
         if (isTransfer && ts == TransferMode.Withdraw) {
-            scope.launch { delay(80); if (canNext) step = 4 }
+            scope.launch {
+                delay(80)
+                if (step == 3 && inCardId.isNotEmpty()) step = 4
+            }
         }
     }
 
@@ -364,405 +383,447 @@ fun QuickAddScreen(nav: NavHostController) {
                 onStepClick = { target -> if (target < step) step = target },
             )
 
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .verticalScroll(rememberScrollState())
-                    .padding(start = 16.dp, end = 16.dp, top = 24.dp, bottom = 40.dp),
-            ) {
-                when (step) {
-                    // ───────── Step 1：方向 ─────────
-                    1 -> {
-                        StepTitle("这一笔是？")
-                        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                            BigButton(
-                                icon = "arrow-up", label = "支出", sub = "花钱出去",
-                                iconColor = colors.danger,
-                                borderColor = colors.danger.copy(alpha = 0.3f),
-                                activeBg = colors.danger.copy(alpha = 0.08f),
-                                active = false, minHeight = 120.dp, iconSize = 44.sp, labelSize = 20f,
-                                onClick = { selectDirection(RecordType.Expense) },
-                            )
-                            BigButton(
-                                icon = "arrow-down", label = "收入", sub = "钱到账了",
-                                iconColor = colors.success,
-                                borderColor = colors.success.copy(alpha = 0.3f),
-                                activeBg = colors.success.copy(alpha = 0.08f),
-                                active = false, minHeight = 120.dp, iconSize = 44.sp, labelSize = 20f,
-                                onClick = { selectDirection(RecordType.Income) },
-                            )
-                            BigButton(
-                                icon = "exchange", label = "转账", sub = "A卡 → B卡",
-                                iconColor = tokens.primary,
-                                borderColor = tokens.primary.copy(alpha = 0.3f),
-                                activeBg = tokens.primary.copy(alpha = 0.1f),
-                                active = false, minHeight = 120.dp, iconSize = 44.sp, labelSize = 20f,
-                                onClick = { selectDirection(RecordType.Transfer) },
-                            )
-                        }
-                    }
-
-                    // ───────── Step 2：分类 / 转账子模式 ─────────
-                    2 -> {
-                        StepTitle(if (isTransfer) "哪种转账？" else "哪个分类？")
-                        if (isTransfer) {
+            // 步进转场：与 web `.slide-fade` 同语义（前进时旧步左移淡出、新步从右侧 20dp 滑入淡入；
+            // 回退反向），300ms。每个步骤各自持有 ScrollState（转场结束后旧内容销毁）⇒ 换步/回退
+            // 都从顶部开始，不会带着上一步的滚动位置进入新步骤。
+            val stepOffsetPx = with(LocalDensity.current) { 20.dp.roundToPx() }
+            AnimatedContent(
+                targetState = step,
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                transitionSpec = {
+                    val dir = if (targetState > initialState) 1 else -1
+                    (fadeIn(tween(300)) + slideInHorizontally(tween(300)) { dir * stepOffsetPx })
+                        .togetherWith(fadeOut(tween(300)) + slideOutHorizontally(tween(300)) { -dir * stepOffsetPx })
+                },
+                label = "quickAddStep",
+            ) { currentStep ->
+                Column(
+                    Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(start = 16.dp, end = 16.dp, top = 24.dp, bottom = 40.dp),
+                ) {
+                    when (currentStep) {
+                        // ───────── Step 1：方向 ─────────
+                        1 -> {
+                            StepTitle("这一笔是？")
                             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                                 BigButton(
-                                    icon = "send-gift-o", label = "对外转账", sub = "转给他人 · 单笔支出",
-                                    iconColor = tokens.primary,
-                                    borderColor = tokens.primary.copy(alpha = 0.3f),
-                                    activeBg = tokens.primary.copy(alpha = 0.1f),
-                                    active = ts == TransferMode.External,
-                                    minHeight = 120.dp, iconSize = 44.sp, labelSize = 20f,
-                                    onClick = { selectTransferMode(TransferMode.External) },
+                                    icon = "arrow-up", label = "支出", sub = "花钱出去",
+                                    iconColor = colors.danger,
+                                    borderColor = colors.danger.copy(alpha = 0.3f),
+                                    activeBg = colors.danger.copy(alpha = 0.08f),
+                                    active = false, minHeight = 120.dp, iconSize = 44.sp, labelSize = 20f,
+                                    // web `.grid-1 .big-btn{padding:24px 12px}` + icon 10 / sub 4px / 13px
+                                    verticalPadding = 24.dp, horizontalPadding = 12.dp,
+                                    iconGap = 10.dp, subGap = 4.dp, subSize = 13f,
+                                    onClick = { selectDirection(RecordType.Expense) },
                                 )
                                 BigButton(
-                                    icon = "exchange", label = "自转", sub = "我的卡之间互转",
+                                    icon = "arrow-down", label = "收入", sub = "钱到账了",
                                     iconColor = colors.success,
                                     borderColor = colors.success.copy(alpha = 0.3f),
                                     activeBg = colors.success.copy(alpha = 0.08f),
-                                    active = ts == TransferMode.Self,
-                                    minHeight = 120.dp, iconSize = 44.sp, labelSize = 20f,
-                                    onClick = { selectTransferMode(TransferMode.Self) },
+                                    active = false, minHeight = 120.dp, iconSize = 44.sp, labelSize = 20f,
+                                    // web `.grid-1 .big-btn{padding:24px 12px}` + icon 10 / sub 4px / 13px
+                                    verticalPadding = 24.dp, horizontalPadding = 12.dp,
+                                    iconGap = 10.dp, subGap = 4.dp, subSize = 13f,
+                                    onClick = { selectDirection(RecordType.Income) },
                                 )
                                 BigButton(
-                                    icon = "cash-back-record-o", label = "提现", sub = "余额 → 银行卡",
-                                    iconColor = OrangeFixed,
-                                    borderColor = OrangeFixed.copy(alpha = 0.3f),
-                                    activeBg = OrangeFixed.copy(alpha = 0.12f),
-                                    active = ts == TransferMode.Withdraw,
-                                    minHeight = 120.dp, iconSize = 44.sp, labelSize = 20f,
-                                    onClick = { selectTransferMode(TransferMode.Withdraw) },
+                                    icon = "exchange", label = "转账", sub = "A卡 → B卡",
+                                    iconColor = tokens.primary,
+                                    borderColor = tokens.primary.copy(alpha = 0.3f),
+                                    activeBg = tokens.primary.copy(alpha = 0.1f),
+                                    active = false, minHeight = 120.dp, iconSize = 44.sp, labelSize = 20f,
+                                    // web `.grid-1 .big-btn{padding:24px 12px}` + icon 10 / sub 4px / 13px
+                                    verticalPadding = 24.dp, horizontalPadding = 12.dp,
+                                    iconGap = 10.dp, subGap = 4.dp, subSize = 13f,
+                                    onClick = { selectDirection(RecordType.Transfer) },
                                 )
-                            }
-                        } else {
-                            Column(Modifier.fillMaxWidth()) {
-                                categoryOptions.chunked(3).forEach { rowCats ->
-                                    Row(
-                                        Modifier.fillMaxWidth().padding(bottom = 12.dp),
-                                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                    ) {
-                                        rowCats.forEach { cat ->
-                                            BigButton(
-                                                icon = null, label = cat.name, sub = null,
-                                                iconColor = tokens.primary,
-                                                borderColor = colors.border,
-                                                activeBg = tokens.primary.copy(alpha = 0.1f),
-                                                active = categoryId == cat.id,
-                                                minHeight = 96.dp, iconSize = 26.sp, labelSize = 15f,
-                                                modifier = Modifier.weight(1f),
-                                                onClick = { selectCategory(cat) },
-                                            )
-                                        }
-                                        repeat(3 - rowCats.size) { Spacer(Modifier.weight(1f)) }
-                                    }
-                                }
-                                if (categoryOptions.isEmpty()) EmptyTip("该方向暂无可用分类")
                             }
                         }
-                    }
 
-                    // ───────── Step 3：账户 ─────────
-                    3 -> {
-                        StepTitle(
+                        // ───────── Step 2：分类 / 转账子模式 ─────────
+                        2 -> {
+                            StepTitle(if (isTransfer) "哪种转账？" else "哪个分类？")
+                            if (isTransfer) {
+                                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                                    BigButton(
+                                        icon = "send-gift-o", label = "对外转账", sub = "转给他人 · 单笔支出",
+                                        iconColor = tokens.primary,
+                                        borderColor = tokens.primary.copy(alpha = 0.3f),
+                                        activeBg = tokens.primary.copy(alpha = 0.1f),
+                                        active = ts == TransferMode.External,
+                                        minHeight = 120.dp, iconSize = 44.sp, labelSize = 20f,
+                                        // web `.grid-1 .big-btn{padding:24px 12px}` + icon 10 / sub 4px / 13px
+                                        verticalPadding = 24.dp, horizontalPadding = 12.dp,
+                                        iconGap = 10.dp, subGap = 4.dp, subSize = 13f,
+                                        onClick = { selectTransferMode(TransferMode.External) },
+                                    )
+                                    BigButton(
+                                        icon = "exchange", label = "自转", sub = "我的卡之间互转",
+                                        iconColor = colors.success,
+                                        borderColor = colors.success.copy(alpha = 0.3f),
+                                        activeBg = colors.success.copy(alpha = 0.08f),
+                                        active = ts == TransferMode.Self,
+                                        minHeight = 120.dp, iconSize = 44.sp, labelSize = 20f,
+                                        // web `.grid-1 .big-btn{padding:24px 12px}` + icon 10 / sub 4px / 13px
+                                        verticalPadding = 24.dp, horizontalPadding = 12.dp,
+                                        iconGap = 10.dp, subGap = 4.dp, subSize = 13f,
+                                        onClick = { selectTransferMode(TransferMode.Self) },
+                                    )
+                                    BigButton(
+                                        icon = "cash-back-record-o", label = "提现", sub = "余额 → 银行卡",
+                                        iconColor = OrangeFixed,
+                                        borderColor = OrangeFixed.copy(alpha = 0.3f),
+                                        activeBg = OrangeFixed.copy(alpha = 0.12f),
+                                        active = ts == TransferMode.Withdraw,
+                                        minHeight = 120.dp, iconSize = 44.sp, labelSize = 20f,
+                                        // web `.grid-1 .big-btn{padding:24px 12px}` + icon 10 / sub 4px / 13px
+                                        verticalPadding = 24.dp, horizontalPadding = 12.dp,
+                                        iconGap = 10.dp, subGap = 4.dp, subSize = 13f,
+                                        onClick = { selectTransferMode(TransferMode.Withdraw) },
+                                    )
+                                }
+                            } else {
+                                Column(Modifier.fillMaxWidth()) {
+                                    categoryOptions.chunked(3).forEach { rowCats ->
+                                        Row(
+                                            Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                        ) {
+                                            rowCats.forEach { cat ->
+                                                BigButton(
+                                                    icon = null, label = cat.name, sub = null,
+                                                    iconColor = tokens.primary,
+                                                    borderColor = colors.border,
+                                                    activeBg = tokens.primary.copy(alpha = 0.1f),
+                                                    active = categoryId == cat.id,
+                                                    minHeight = 96.dp, iconSize = 26.sp, labelSize = 15f,
+                                                    modifier = Modifier.weight(1f),
+                                                    onClick = { selectCategory(cat) },
+                                                )
+                                            }
+                                            repeat(3 - rowCats.size) { Spacer(Modifier.weight(1f)) }
+                                        }
+                                    }
+                                    if (categoryOptions.isEmpty()) EmptyTip("该方向暂无可用分类")
+                                }
+                            }
+                        }
+
+                        // ───────── Step 3：账户 ─────────
+                        3 -> {
+                            StepTitle(
+                                when {
+                                    isTransfer && ts == TransferMode.Self -> "从哪张卡转出 / 转入？"
+                                    isTransfer && ts == TransferMode.Withdraw -> "提现到哪张卡？"
+                                    isTransfer && ts == TransferMode.External -> "从哪张卡转出？"
+                                    else -> "从哪出 / 进？"
+                                },
+                            )
                             when {
-                                isTransfer && ts == TransferMode.Self -> "从哪张卡转出 / 转入？"
-                                isTransfer && ts == TransferMode.Withdraw -> "提现到哪张卡？"
-                                isTransfer && ts == TransferMode.External -> "从哪张卡转出？"
-                                else -> "从哪出 / 进？"
-                            },
-                        )
-                        when {
-                            // 自转：左右两列（转出 / 转入），互斥禁用
-                            isTransfer && ts == TransferMode.Self -> {
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                        SideLabel("转出", "arrow-up", MoneyColor.expense, alignEnd = false)
-                                        Column(
-                                            Modifier.fillMaxWidth().heightIn(max = 400.dp).verticalScroll(rememberScrollState()),
-                                            verticalArrangement = Arrangement.spacedBy(6.dp),
-                                        ) {
-                                            selfOutCards.forEach { card ->
-                                                QuickCardTile(
-                                                    card = card, banks = banks,
-                                                    selected = outCardId == card.id,
-                                                    disabled = inCardId == card.id,
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    onClick = { selectSelfOut(card) },
-                                                )
+                                // 自转：左右两列（转出 / 转入），互斥禁用
+                                isTransfer && ts == TransferMode.Self -> {
+                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                            SideLabel("转出", "arrow-up", MoneyColor.expense, alignEnd = false)
+                                            Column(
+                                                Modifier.fillMaxWidth().heightIn(max = 400.dp).verticalScroll(rememberScrollState()),
+                                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                                            ) {
+                                                selfOutCards.forEach { card ->
+                                                    QuickCardTile(
+                                                        card = card, banks = banks,
+                                                        selected = outCardId == card.id,
+                                                        disabled = inCardId == card.id,
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        onClick = { selectSelfOut(card) },
+                                                    )
+                                                }
+                                                if (selfOutCards.isEmpty()) EmptyTip("暂无可选转出卡")
                                             }
-                                            if (selfOutCards.isEmpty()) EmptyTip("暂无可选转出卡")
                                         }
-                                    }
-                                    Box(Modifier.width(20.dp), contentAlignment = Alignment.Center) {
-                                        VanIcon(name = "arrow", size = 18.sp, color = tokens.primary)
-                                    }
-                                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                        SideLabel("转入", "arrow-down", MoneyColor.income, alignEnd = true)
-                                        Column(
-                                            Modifier.fillMaxWidth().heightIn(max = 400.dp).verticalScroll(rememberScrollState()),
-                                            verticalArrangement = Arrangement.spacedBy(6.dp),
-                                        ) {
-                                            selfInCards.forEach { card ->
-                                                QuickCardTile(
-                                                    card = card, banks = banks,
-                                                    selected = inCardId == card.id,
-                                                    disabled = outCardId == card.id,
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    onClick = { selectSelfIn(card) },
-                                                )
+                                        Box(Modifier.width(20.dp), contentAlignment = Alignment.Center) {
+                                            VanIcon(name = "arrow", size = 18.sp, color = tokens.primary)
+                                        }
+                                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                            SideLabel("转入", "arrow-down", MoneyColor.income, alignEnd = true)
+                                            Column(
+                                                Modifier.fillMaxWidth().heightIn(max = 400.dp).verticalScroll(rememberScrollState()),
+                                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                                            ) {
+                                                selfInCards.forEach { card ->
+                                                    QuickCardTile(
+                                                        card = card, banks = banks,
+                                                        selected = inCardId == card.id,
+                                                        disabled = outCardId == card.id,
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        onClick = { selectSelfIn(card) },
+                                                    )
+                                                }
+                                                if (selfInCards.isEmpty()) EmptyTip("暂无可选转入卡")
                                             }
-                                            if (selfInCards.isEmpty()) EmptyTip("暂无可选转入卡")
                                         }
                                     }
                                 }
-                            }
 
-                            // 提现：顶部固定「余额」→ 到账借记卡
-                            isTransfer && ts == TransferMode.Withdraw -> {
-                                Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                                    SideLabel("从", "arrow-up", colors.danger, alignEnd = false)
-                                    Spacer(Modifier.height(8.dp))
-                                    Row(
-                                        Modifier
-                                            .border(1.5.dp, tokens.primary.copy(alpha = 0.3f), RoundedCornerShape(10.dp))
-                                            .background(colors.bgCard, RoundedCornerShape(10.dp))
-                                            .padding(horizontal = 20.dp, vertical = 12.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                    ) {
-                                        VanIcon(name = "balance-o", size = 28.sp, color = BankIconDebit)
-                                        Spacer(Modifier.width(8.dp))
-                                        FText("余额", 18f, FontWeight.SemiBold, tokens.primary)
-                                    }
-                                }
-                                Box(Modifier.fillMaxWidth().padding(vertical = 4.dp), contentAlignment = Alignment.Center) {
-                                    VanIcon(name = "arrow-down", size = 18.sp, color = tokens.primary)
-                                }
-                                SectionDivider("到账借记卡")
-                                VanSearch(
-                                    value = cardSearchKey,
-                                    onValueChange = { cardSearchKey = it },
-                                    placeholder = "搜索银行名/尾号",
-                                    shape = "round",
-                                    background = Color.Transparent,
-                                    clearable = true,
-                                )
-                                Spacer(Modifier.height(10.dp))
-                                CardGrid(
-                                    cards = withdrawInCards,
-                                    banks = banks,
-                                    selectedId = inCardId,
-                                    emptyText = "暂无借记卡",
-                                    checkColor = BankIconDebit,
-                                    onSelect = { selectSelfIn(it) },
-                                )
-                            }
-
-                            // 对外转账 / 普通收支
-                            else -> {
-                                if (!isTransfer) {
-                                    Row(Modifier.fillMaxWidth().padding(bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                        BigButton(
-                                            icon = "cash-back-record-o", label = "现金", sub = null,
-                                            iconColor = OrangeFixed, borderColor = OrangeFixed.copy(alpha = 0.3f),
-                                            activeBg = OrangeFixed.copy(alpha = 0.12f), active = cardId == VIRTUAL_CASH_ID,
-                                            minHeight = 48.dp, iconSize = 20.sp, labelSize = 13f,
-                                            modifier = Modifier.weight(1f),
-                                            onClick = { selectVirtualCard(VIRTUAL_CASH_ID, "现金", METHOD_CASH) },
-                                        )
-                                        BigButton(
-                                            icon = "balance-o", label = "余额", sub = null,
-                                            iconColor = BankIconDebit, borderColor = tokens.primary.copy(alpha = 0.3f),
-                                            activeBg = tokens.primary.copy(alpha = 0.1f), active = cardId == VIRTUAL_BALANCE_ID,
-                                            minHeight = 48.dp, iconSize = 20.sp, labelSize = 13f,
-                                            modifier = Modifier.weight(1f),
-                                            onClick = { selectVirtualCard(VIRTUAL_BALANCE_ID, "余额", METHOD_BALANCE) },
-                                        )
-                                    }
-                                }
-                                if (realCardList.isNotEmpty()) {
-                                    SectionDivider(if (isTransfer && ts == TransferMode.External) "转出卡片" else "我的卡片")
-                                    if (!isIncome && !(isTransfer && ts == TransferMode.External)) {
-                                        Row(Modifier.fillMaxWidth().padding(bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            CardTypeTab("信用卡", cardTab == "credit", Modifier.weight(1f)) { cardTab = "credit" }
-                                            CardTypeTab("借记卡", cardTab == "debit", Modifier.weight(1f)) { cardTab = "debit" }
+                                // 提现：顶部固定「余额」→ 到账借记卡
+                                isTransfer && ts == TransferMode.Withdraw -> {
+                                    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                                        SideLabel("从", "arrow-up", colors.danger, alignEnd = false)
+                                        Spacer(Modifier.height(8.dp))
+                                        Row(
+                                            Modifier
+                                                .border(1.5.dp, tokens.primary.copy(alpha = 0.3f), RoundedCornerShape(10.dp))
+                                                .background(colors.bgCard, RoundedCornerShape(10.dp))
+                                                .padding(horizontal = 20.dp, vertical = 12.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                        ) {
+                                            VanIcon(name = "balance-o", size = 28.sp, color = BankIconDebit)
+                                            Spacer(Modifier.width(8.dp))
+                                            FText("余额", 18f, FontWeight.SemiBold, tokens.primary)
                                         }
                                     }
+                                    Box(Modifier.fillMaxWidth().padding(vertical = 4.dp), contentAlignment = Alignment.Center) {
+                                        VanIcon(name = "arrow-down", size = 18.sp, color = tokens.primary)
+                                    }
+                                    SectionDivider("到账借记卡")
                                     VanSearch(
                                         value = cardSearchKey,
                                         onValueChange = { cardSearchKey = it },
-                                        placeholder = "搜索银行卡名/尾号",
+                                        placeholder = "搜索银行名/尾号",
                                         shape = "round",
                                         background = Color.Transparent,
                                         clearable = true,
                                     )
                                     Spacer(Modifier.height(10.dp))
                                     CardGrid(
-                                        cards = displayedCards,
+                                        cards = withdrawInCards,
                                         banks = banks,
-                                        selectedId = cardId,
-                                        emptyText = "该类型暂无卡片",
+                                        selectedId = inCardId,
+                                        emptyText = "暂无借记卡",
                                         checkColor = BankIconDebit,
-                                        onSelect = { selectRealCard(it) },
+                                        onSelect = { selectSelfIn(it) },
                                     )
-                                } else {
-                                    EmptyTip("暂无真实银行卡")
+                                }
+
+                                // 对外转账 / 普通收支
+                                else -> {
+                                    if (!isTransfer) {
+                                        Row(Modifier.fillMaxWidth().padding(bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                            BigButton(
+                                                icon = "cash-back-record-o", label = "现金", sub = null,
+                                                iconColor = OrangeFixed, borderColor = OrangeFixed.copy(alpha = 0.3f),
+                                                activeBg = OrangeFixed.copy(alpha = 0.12f), active = cardId == VIRTUAL_CASH_ID,
+                                                minHeight = 48.dp, iconSize = 20.sp, labelSize = 13f,
+                                                modifier = Modifier.weight(1f),
+                                                onClick = { selectVirtualCard(VIRTUAL_CASH_ID, "现金", METHOD_CASH) },
+                                            )
+                                            BigButton(
+                                                icon = "balance-o", label = "余额", sub = null,
+                                                iconColor = BankIconDebit, borderColor = tokens.primary.copy(alpha = 0.3f),
+                                                activeBg = tokens.primary.copy(alpha = 0.1f), active = cardId == VIRTUAL_BALANCE_ID,
+                                                minHeight = 48.dp, iconSize = 20.sp, labelSize = 13f,
+                                                modifier = Modifier.weight(1f),
+                                                onClick = { selectVirtualCard(VIRTUAL_BALANCE_ID, "余额", METHOD_BALANCE) },
+                                            )
+                                        }
+                                    }
+                                    if (realCardList.isNotEmpty()) {
+                                        SectionDivider(if (isTransfer && ts == TransferMode.External) "转出卡片" else "我的卡片")
+                                        if (!isIncome && !(isTransfer && ts == TransferMode.External)) {
+                                            Row(Modifier.fillMaxWidth().padding(bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                CardTypeTab("信用卡", cardTab == "credit", Modifier.weight(1f)) { cardTab = "credit" }
+                                                CardTypeTab("借记卡", cardTab == "debit", Modifier.weight(1f)) { cardTab = "debit" }
+                                            }
+                                        }
+                                        VanSearch(
+                                            value = cardSearchKey,
+                                            onValueChange = { cardSearchKey = it },
+                                            placeholder = "搜索银行卡名/尾号",
+                                            shape = "round",
+                                            background = Color.Transparent,
+                                            clearable = true,
+                                        )
+                                        Spacer(Modifier.height(10.dp))
+                                        CardGrid(
+                                            cards = displayedCards,
+                                            banks = banks,
+                                            selectedId = cardId,
+                                            emptyText = "该类型暂无卡片",
+                                            checkColor = BankIconDebit,
+                                            onSelect = { selectRealCard(it) },
+                                        )
+                                    } else {
+                                        EmptyTip("暂无真实银行卡")
+                                    }
                                 }
                             }
+                            if (isTransfer) {
+                                NextBigButton(text = "下一步", enabled = canNext) { if (canNext) step += 1 }
+                            }
                         }
-                        if (isTransfer) {
-                            NextBigButton(text = "下一步", enabled = canNext) { if (canNext) step += 1 }
-                        }
-                    }
 
-                    // ───────── Step 4：金额 ─────────
-                    4 -> {
-                        StepTitle("多少金额？")
-                        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Row(
-                                Modifier
-                                    .border(1.dp, colors.border, RoundedCornerShape(16.dp))
-                                    .background(colors.bgCard, RoundedCornerShape(16.dp))
-                                    .clickable { showCurrencyPicker = true }
-                                    .padding(horizontal = 12.dp, vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                FText(currency.label, 14f, FontWeight.Normal, colors.textPrimary)
-                                Spacer(Modifier.width(4.dp))
-                                VanIcon(name = "arrow-down", size = 13.sp, color = colors.textPrimary)
-                            }
-                            Spacer(Modifier.height(32.dp))   // web .amount-display { margin: 32px 0 12px }
-                            Row(
-                                Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 28.dp)
-                                    .background(colors.bgCard, RoundedCornerShape(12.dp))
-                                    .clickable { showKeyboard = true },
-                                horizontalArrangement = Arrangement.Center,
-                                verticalAlignment = Alignment.Bottom,
-                            ) {
-                                FText(currency.symbol, 28f, FontWeight.Normal, colors.textTertiary)
-                                Spacer(Modifier.width(4.dp))
-                                FText(amount.ifBlank { "0.00" }, 56f, FontWeight.Bold, colors.textPrimary)
-                            }
-                            Spacer(Modifier.height(12.dp))
-                            if (currency.code != "CNY" && amount.isNotBlank()) {
-                                FText(
-                                    "约 ¥ ${Money.formatMoney(exchangedCny(amount, exchangeRate, currency))}",
-                                    14f, FontWeight.Normal, tokens.primary,
-                                )
-                            }
-                            if (currency.code != "CNY") {
-                                Spacer(Modifier.height(14.dp))
+                        // ───────── Step 4：金额 ─────────
+                        4 -> {
+                            StepTitle("多少金额？")
+                            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Row(
+                                    Modifier
+                                        .border(1.dp, colors.border, RoundedCornerShape(16.dp))
+                                        .background(colors.bgCard, RoundedCornerShape(16.dp))
+                                        .clickable { showCurrencyPicker = true }
+                                        .padding(horizontal = 12.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    FText(currency.label, 14f, FontWeight.Normal, colors.textPrimary)
+                                    Spacer(Modifier.width(4.dp))
+                                    VanIcon(name = "arrow-down", size = 13.sp, color = colors.textPrimary)
+                                }
+                                Spacer(Modifier.height(32.dp))   // web .amount-display { margin: 32px 0 12px }
                                 Row(
                                     Modifier
                                         .fillMaxWidth()
+                                        // ⚠ 顺序不能反：web `.amount-display` 的 background 覆盖 padding 区域；
+                                        //   先 padding 再 background 会让白底只剩文字高度，整块比 web 矮 56dp。
+                                        .background(colors.bgCard, RoundedCornerShape(12.dp))
+                                        .clickable { showKeyboard = true }
+                                        .padding(vertical = 28.dp),
+                                    horizontalArrangement = Arrangement.Center,
+                                    // web `.amount-display { display:flex; align-items:baseline }`：
+                                    // 符号 28sp、数字 56sp，Bottom 对齐会把符号的盒底贴到数字盒底，
+                                    // 视觉上不在同一基线；两个文本都用 alignByBaseline() 对齐。
+                                ) {
+                                    FText(
+                                        currency.symbol, 28f, FontWeight.Normal, colors.textTertiary,
+                                        modifier = Modifier.alignByBaseline(),
+                                    )
+                                    Spacer(Modifier.width(4.dp))
+                                    FText(
+                                        amount.ifBlank { "0.00" }, 56f, FontWeight.Bold, colors.textPrimary,
+                                        modifier = Modifier.alignByBaseline(),
+                                    )
+                                }
+                                Spacer(Modifier.height(12.dp))
+                                if (currency.code != "CNY" && amount.isNotBlank()) {
+                                    FText(
+                                        "约 ¥ ${Money.formatMoney(exchangedCny(amount, exchangeRate, currency))}",
+                                        14f, FontWeight.Normal, tokens.primary,
+                                    )
+                                }
+                                if (currency.code != "CNY") {
+                                    Spacer(Modifier.height(14.dp))
+                                    Row(
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .background(colors.bgCard, RoundedCornerShape(10.dp))
+                                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    ) {
+                                        FText("汇率", 16f, FontWeight.Normal, colors.textSecondary)
+                                        Box(Modifier.weight(1f)) {
+                                            if (exchangeRate.isEmpty()) {
+                                                FText("如: 684.5125", 16f, FontWeight.Normal, colors.textTertiary)
+                                            }
+                                            BasicTextField(
+                                                value = exchangeRate,
+                                                onValueChange = { exchangeRate = filterRateInput(it) },
+                                                textStyle = TextStyle(color = colors.textPrimary, fontSize = scaledSp(16f)),
+                                                cursorBrush = SolidColor(tokens.primary),
+                                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                                singleLine = true,
+                                                modifier = Modifier.fillMaxWidth(),
+                                            )
+                                        }
+                                    }
+                                }
+                                Spacer(Modifier.height(8.dp))   // web .amount-tip { margin-top: 8px }（在汇率行之后）
+                                FText("点击金额区域唤起键盘", 12f, FontWeight.Normal, colors.textTertiary)
+                            }
+                            if (!showKeyboard) {
+                                NextBigButton(text = "下一步", enabled = canNext) { if (canNext) step += 1 }
+                            }
+                        }
+
+                        // ───────── Step 5：备注 + 确认 ─────────
+                        else -> {
+                            StepTitle(remarkTitle)
+                            if (isTransfer && ts == TransferMode.External) {
+                                Row(
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .padding(bottom = 12.dp)   // web `.payee-field { margin-bottom: 12px }`
                                         .background(colors.bgCard, RoundedCornerShape(10.dp))
-                                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                                        .padding(horizontal = 16.dp, vertical = 14.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 ) {
-                                    FText("汇率", 16f, FontWeight.Normal, colors.textSecondary)
+                                    FText("转给", 16f, FontWeight.SemiBold, colors.textPrimary)
                                     Box(Modifier.weight(1f)) {
-                                        if (exchangeRate.isEmpty()) {
-                                            FText("如: 684.5125", 16f, FontWeight.Normal, colors.textTertiary)
+                                        if (payee.isEmpty()) {
+                                            FText("请输入收款人（必填）", 16f, FontWeight.Normal, colors.textTertiary)
                                         }
                                         BasicTextField(
-                                            value = exchangeRate,
-                                            onValueChange = { exchangeRate = filterRateInput(it) },
+                                            value = payee,
+                                            onValueChange = { payee = it.take(30) },
                                             textStyle = TextStyle(color = colors.textPrimary, fontSize = scaledSp(16f)),
                                             cursorBrush = SolidColor(tokens.primary),
-                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                             singleLine = true,
                                             modifier = Modifier.fillMaxWidth(),
                                         )
                                     }
                                 }
+                            } else {
+                                AppField(
+                                    value = remark,
+                                    onValueChange = { remark = it },
+                                    placeholder = "备注（不填直接提交）",
+                                    maxlength = 50,
+                                    showWordLimit = true,
+                                    clearable = true,
+                                )
                             }
-                            Spacer(Modifier.height(8.dp))   // web .amount-tip { margin-top: 8px }（在汇率行之后）
-                            FText("点击金额区域唤起键盘", 12f, FontWeight.Normal, colors.textTertiary)
-                        }
-                        if (!showKeyboard) {
-                            NextBigButton(text = "下一步", enabled = canNext) { if (canNext) step += 1 }
-                        }
-                    }
 
-                    // ───────── Step 5：备注 + 确认 ─────────
-                    else -> {
-                        StepTitle(remarkTitle)
-                        if (isTransfer && ts == TransferMode.External) {
-                            Row(
+                            Spacer(Modifier.height(16.dp))
+                            Column(
                                 Modifier
                                     .fillMaxWidth()
-                                    .padding(bottom = 12.dp)   // web `.payee-field { margin-bottom: 12px }`
-                                    .background(colors.bgCard, RoundedCornerShape(10.dp))
-                                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    .background(colors.bgCard, RoundedCornerShape(12.dp))
+                                    .padding(16.dp),
                             ) {
-                                FText("转给", 16f, FontWeight.SemiBold, colors.textPrimary)
-                                Box(Modifier.weight(1f)) {
-                                    if (payee.isEmpty()) {
-                                        FText("请输入收款人（必填）", 16f, FontWeight.Normal, colors.textTertiary)
-                                    }
-                                    BasicTextField(
-                                        value = payee,
-                                        onValueChange = { payee = it.take(30) },
-                                        textStyle = TextStyle(color = colors.textPrimary, fontSize = scaledSp(16f)),
-                                        cursorBrush = SolidColor(tokens.primary),
-                                        singleLine = true,
-                                        modifier = Modifier.fillMaxWidth(),
-                                    )
+                                SummaryRow("方向", directionLabel, first = true)
+                                if (!isTransfer) SummaryRow("分类", categoryName.ifBlank { "-" })
+                                if (isTransfer && ts == TransferMode.Self) {
+                                    SummaryRow("转出账户", outCardLabel)
+                                    SummaryRow("转入账户", inCardLabel)
+                                } else if (isTransfer && ts == TransferMode.Withdraw) {
+                                    SummaryRow("转出账户", "余额")
+                                    SummaryRow("到账账户", inCardLabel)
+                                } else {
+                                    SummaryRow(if (isTransfer) "转出账户" else "账户", cardLabel.ifBlank { "-" })
                                 }
+                                SummaryRow(
+                                    label = "金额",
+                                    value = "${currency.symbol} ${amount.ifBlank { "0.00" }}",
+                                    amount = true,
+                                )
                             }
-                        } else {
-                            AppField(
-                                value = remark,
-                                onValueChange = { remark = it },
-                                placeholder = "备注（不填直接提交）",
-                                maxlength = 50,
-                                showWordLimit = true,
-                                clearable = true,
+
+                            Spacer(Modifier.height(20.dp))
+                            AppButton(
+                                text = confirmText,
+                                type = AppButtonType.Primary,
+                                block = true,
+                                round = true,
+                                size = AppButtonSize.Large,
+                                disabled = !canSubmit,
+                                loading = submitting,
+                                onClick = { doSubmit() },
                             )
                         }
-
-                        Spacer(Modifier.height(16.dp))
-                        Column(
-                            Modifier
-                                .fillMaxWidth()
-                                .background(colors.bgCard, RoundedCornerShape(12.dp))
-                                .padding(16.dp),
-                        ) {
-                            SummaryRow("方向", directionLabel, first = true)
-                            if (!isTransfer) SummaryRow("分类", categoryName.ifBlank { "-" })
-                            if (isTransfer && ts == TransferMode.Self) {
-                                SummaryRow("转出账户", outCardLabel)
-                                SummaryRow("转入账户", inCardLabel)
-                            } else if (isTransfer && ts == TransferMode.Withdraw) {
-                                SummaryRow("转出账户", "余额")
-                                SummaryRow("到账账户", inCardLabel)
-                            } else {
-                                SummaryRow(if (isTransfer) "转出账户" else "账户", cardLabel.ifBlank { "-" })
-                            }
-                            SummaryRow(
-                                label = "金额",
-                                value = "${currency.symbol} ${amount.ifBlank { "0.00" }}",
-                                amount = true,
-                            )
-                        }
-
-                        Spacer(Modifier.height(20.dp))
-                        AppButton(
-                            text = confirmText,
-                            type = AppButtonType.Primary,
-                            block = true,
-                            round = true,
-                            size = AppButtonSize.Large,
-                            disabled = !canSubmit,
-                            loading = submitting,
-                            onClick = { doSubmit() },
-                        )
                     }
                 }
             }
@@ -901,9 +962,16 @@ private fun StepNavButton(icon: String, enabled: Boolean, onClick: () -> Unit) {
 /** web `.qsa-title`：20px/700 居中 + 下距 20。 */
 @Composable
 private fun StepTitle(text: String) {
-    FText(
-        text, 20f, FontWeight.Bold, LocalAppColors.current.textPrimary,
+    // web `.qsa-title { font-size:20px; font-weight:700; text-align:center; margin:0 0 20px }`
+    BasicText(
+        text,
         Modifier.fillMaxWidth().padding(bottom = 20.dp),
+        style = TextStyle(
+            color = LocalAppColors.current.textPrimary,
+            fontSize = scaledSp(20f),
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+        ),
     )
 }
 
@@ -930,6 +998,11 @@ private fun BigButton(
     minHeight: Dp,
     iconSize: androidx.compose.ui.unit.TextUnit,
     labelSize: Float,
+    verticalPadding: Dp = 16.dp,
+    horizontalPadding: Dp = 8.dp,
+    iconGap: Dp = 6.dp,
+    subGap: Dp = 3.dp,
+    subSize: Float = 12f,
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
@@ -945,17 +1018,17 @@ private fun BigButton(
             .border(1.dp, if (active || pressed) borderColor else borderColor.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
             .clickable(interactionSource = interaction, indication = null, onClick = onClick)
             .heightIn(min = minHeight)
-            .padding(horizontal = 8.dp, vertical = 16.dp),
+            .padding(horizontal = horizontalPadding, vertical = verticalPadding),
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             if (icon != null) {
                 VanIcon(name = icon, size = iconSize, color = iconColor)
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(iconGap)) // grid-1 是 10dp，默认 6dp
             }
             FText(label, labelSize, FontWeight.SemiBold, colors.textPrimary)
             if (!sub.isNullOrEmpty()) {
-                Spacer(Modifier.height(3.dp))
-                FText(sub, 12f, FontWeight.Normal, colors.textTertiary)
+                Spacer(Modifier.height(subGap)) // grid-1 是 4dp，默认 3dp
+                FText(sub, subSize, FontWeight.Normal, colors.textTertiary) // grid-1 是 13px
             }
         }
     }
@@ -1061,8 +1134,11 @@ private fun QuickCardTile(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        // 银行图标：失败时露出下层兜底图标（对应 web van-image #error 插槽）
-        Box(Modifier.size(28.dp), contentAlignment = Alignment.Center) {
+        // 银行图标：web `QuickAdd.vue` 是二选一 —— 有 logo 且未失败才画 `van-image`，
+        // 无 logo / 加载失败走 `v-else` 兜底块（或 `#error` 插槽），**不会两层同时画**。
+        // 这里用 VanImage 的 loading/error 插槽承载兜底：成功时插槽不参与组合 ⇒ 不会再出现
+        // 「默认 credit/debit 图标 + 银行 logo 叠在一起」（SVG 带透明区时尤其明显）。
+        val fallbackIcon: @Composable () -> Unit = {
             Box(
                 Modifier
                     .size(28.dp)
@@ -1075,19 +1151,25 @@ private fun QuickCardTile(
                     color = if (card.isCredit) BankIconCredit else BankIconDebit,
                 )
             }
-            if (iconUrl.isNotBlank()) {
-                // 背景透明：VanImage 的 loading/error 盒默认会涂一层不透明 bgPage（暗色主题下即黑色），
-                // 会盖住下层兜底图标；透明后失败/加载中才露得出兜底 bankcard 图标（对齐 web #error 插槽）。
-                VanImage(
-                    src = AppConfig.fullFileUrl(iconUrl),
-                    width = 28.dp,
-                    height = 28.dp,
-                    radius = 5.dp,
-                    backgroundColor = Color.Transparent,
-                    showLoading = false,
-                    showError = false,
-                )
-            }
+        }
+        if (iconUrl.isBlank()) {
+            fallbackIcon()
+        } else {
+            val url = AppConfig.fullFileUrl(iconUrl)
+            // 与 BankIconView / CardFormShared 共用「SVG 固定 memoryCacheKey + 启动预热」的请求：
+            // 只传 src 会按 28dp 布局尺寸分键，预热命不中，第三页每次看起来都在重新加载。
+            VanImage(
+                src = url,
+                imageRequest = rememberBankIconRequest(url),
+                width = 28.dp,
+                height = 28.dp,
+                fit = ContentScale.Fit,   // web `fit="contain"`
+                radius = 5.dp,
+                // 透明底：否则 loading/error 盒会涂一层不透明 bgPage，暗色主题下像黑块
+                backgroundColor = Color.Transparent,
+                loadingSlot = fallbackIcon,
+                errorSlot = fallbackIcon,
+            )
         }
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {

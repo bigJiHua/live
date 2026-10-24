@@ -20,5 +20,8 @@ local.properties
 keystore.properties
 *.properties.local
 
+# 一键打包脚本内含签名口令，严禁入库（2026-10-20）
+打包Release.bat
+
 # 过程性文档/审计报告不入库（2026-10-18 审计后拍板：新增文档一律先进 docs/temp/）
 docs/temp/

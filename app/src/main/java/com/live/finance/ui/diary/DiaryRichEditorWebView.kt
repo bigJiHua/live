@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.doOnLayout
+import com.live.finance.core.WebViewAssetCache
 import com.live.finance.theme.AppTokens
 import com.live.finance.theme.LocalAppColors
 import com.live.finance.theme.LocalAppTokens
@@ -287,14 +288,13 @@ fun DiaryRichEditorWebView(
                         //   页面 html/body 的 height:100% 全部解析成 0 且之后不重解析
                         //   ⇒ 旧页只剩 min-height 兜底的 200px，工具栏再吃掉一半，
                         //   书写区只有 4 行文字高（2026-10-17 负责人报的问题）。
-                        //   与 CardWebScreen.kt 的 loadUrl 时序修复同因同解，不要退回直接 loadUrl。
+                        //   与旧卡片 WebView 页的 loadUrl 时序修复同因同解，不要退回直接 loadUrl。
                         wv.doOnLayout { v ->
                             if (!loaded && webViewRef === wv && v.height > 0) {
                                 loaded = true
-                                // ⚠ 必须清 file:// 缓存副本：assets 页面同样会被 WebView 缓存，
-                                //   只装新 APK 仍可能继续跑旧 index.html（2026-10-17 负责人反馈
-                                //   「日记改了无变化」的头号嫌疑，与 CardWebScreen loadUrl 前同款处理）。
-                                wv.clearCache(true)
+                                // 只在安装/升级后的首次打开清一次：assets 页面会被 WebView 缓存，
+                                //   旧实现每次 clearCache(true) 会连卡面/银行 logo 的 HTTP 缓存一起清。
+                                WebViewAssetCache.clearOncePerInstall(wv.context, wv)
                                 wv.loadUrl(EDITOR_URL)
                             }
                         }
@@ -408,7 +408,9 @@ private fun buildWebView(ctx: Context, state: RichEditorState): WebView {
             javaScriptCanOpenWindowsAutomatically = false
             setSupportMultipleWindows(false)
             textZoom = 100
-            cacheMode = WebSettings.LOAD_DEFAULT
+            // 2026-10-22：与卡片页同口径——图片有缓存直接用；本地 assets 由 WebViewAssetCache
+            // 按安装 token 清一次，不会跑旧 index.html。
+            cacheMode = WebSettings.LOAD_CACHE_ELSE_NETWORK
             if (Build.VERSION.SDK_INT >= 29) forceDark = WebSettings.FORCE_DARK_OFF
         }
         // 编辑器里可以有 `<a>`，点它不该把整页带走；图片等子资源不走这个回调，所以放行 asset 即可。

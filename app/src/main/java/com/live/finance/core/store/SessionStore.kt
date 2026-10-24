@@ -50,6 +50,12 @@ class SessionStore(private val context: Context) {
         private set
 
     /**
+     * 会话变化回调（[setToken] / [clear]）：供上层清进程内 GET 缓存。
+     * 存储层不直接依赖网络层，避免 core.store → core.net 的反向依赖。
+     */
+    @Volatile var onSessionChanged: (() -> Unit)? = null
+
+    /**
      * 加密存储。`by lazy` 保证只在首次访问时创建（首次会生成 Keystore 密钥，耗时）。
      * 任何异常都降级为明文，绝不让 App 因存储问题起不来。
      */
@@ -175,12 +181,14 @@ class SessionStore(private val context: Context) {
         target.edit().apply {
             if (value.isNullOrEmpty()) remove(KEY_TOKEN) else putString(KEY_TOKEN, value)
         }.commit()
+        onSessionChanged?.invoke()
     }
 
     suspend fun clear() = withContext(Dispatchers.IO) {
         token = null
         val target = if (isEncrypted) prefs else plainPrefs()
         target.edit().remove(KEY_TOKEN).commit()
+        onSessionChanged?.invoke()
     }
 
     private fun plainPrefs(): SharedPreferences =

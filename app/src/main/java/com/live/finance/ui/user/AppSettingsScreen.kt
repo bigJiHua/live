@@ -352,6 +352,46 @@ fun AppSettingsScreen(nav: NavHostController) {
                     },
                 )
             }
+
+            // ===== 存储（原生特有，2026-10-22）=====
+            SettingsSectionTitle("存储")
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(colors.bgCard),
+            ) {
+                SettingsLinkCell(
+                    "空间清理",
+                    "查看并清理图片、网页和动态数据缓存",
+                    "delete-o",
+                ) { nav.navigate(Routes.CACHE_CLEAN) }
+            }
+
+            // ===== 实验室（原生特有，2026-10-19）=====
+            // 液态玻璃调参 Demo：14 套预设 + 8 个滑块，负责人挑定后写回 MainScreen 的悬浮岛。
+            SettingsSectionTitle("实验室")
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(colors.bgCard),
+            ) {
+                SettingsLinkCell(
+                    "液态玻璃实验室",
+                    "三方案对比（A 参数微调 / B 推荐样式 / C 已保存自定义）",
+                    "eye-o",
+                ) { nav.navigate(Routes.LIQUID_GLASS_LAB) }
+                // 卡方实验室（2026-10-22）：统一卡片模组 / 卡包两种卡片页形态，
+                // 保存后正式「我的卡片」按所选形态渲染。
+                SettingsLinkCell(
+                    "卡方实验室",
+                    "卡片模组 / 卡包两种卡片页形态；保存后下次进入「我的卡片」生效",
+                    "credit-pay",
+                ) { nav.navigate(Routes.CARD_STYLE_LAB) }
+            }
         }
 
         // ── 基础API设定弹窗（无独立界面；API 地址 + 分享 URL）──

@@ -212,7 +212,9 @@ class RemoteCardRepository(private val client: ApiClient) : CardRepository {
         cardLevel = str(o, "card_level"),
         mainSub = str(o, "main_sub").ifEmpty { "主卡" },
         cardLength = str(o, "card_length").ifEmpty { "19" },
-        cardImg = str(o, "card_img"),
+        // web credit.vue/debit.vue 都是 `item.card_img || item.cardImg`：
+        // 后端/代理层若对信用卡返回 camelCase，只读 card_img 会丢卡面（借记卡正常、信用卡空）。
+        cardImg = str(o, "card_img").ifEmpty { str(o, "cardImg") },
         color = str(o, "color"),
         currency = str(o, "currency").ifEmpty { "CNY" },
         status = str(o, "status").ifEmpty { "正常" },

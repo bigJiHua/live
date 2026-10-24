@@ -93,6 +93,9 @@ object RouteTitles {
         Routes.RESOURCE_MANAGE to "文件资源管理",
         Routes.RESOURCE_LIST to "资源列表",
         Routes.APP_SETTINGS to "应用设置",
+        Routes.CACHE_CLEAN to "空间清理",
+        Routes.LIQUID_GLASS_LAB to "液态玻璃实验室",
+        Routes.CARD_STYLE_LAB to "卡方实验室",
         Routes.CATEGORY_MANAGE to "分类管理",
         Routes.BANK_CATEGORY_MANAGE to "银行分类管理",
 

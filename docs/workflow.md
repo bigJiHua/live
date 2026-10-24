@@ -14,7 +14,7 @@
 - 每加一个域：`ApiXxx 接口 + FakeXxxRepository + RemoteXxxRepository` → `AppGraph` 注册 `val xxx`（`useFake` 决定）→ 建 Screen → `AppRoot` 注册路由 → 入口(首页/账本/我的 MenuRow 或卡片页按钮)。
 - 复用件：网络 `ApiClient`、`Envelope/ApiResult`、`Money/MoneyColor/TimeFmt/FlowGrouping`、`vant-ui` 的 `Van*` 组件（用前先 grep 真实签名）。
 
-**3. 编译验证（每批改完就跑）**
+**3. 编译验证（每批改完先跑 debug 两变体）**
 ```javascript
 GRADLE_USER_HOME=D:/Google/Android-gradle cmd //c "gradlew.bat :app:assembleProdDebug :app:assembleFakeDebug --console=plain" > /d/Code/live/temp/appbuildNN.log 2>&1
 ```
@@ -23,14 +23,15 @@ GRADLE_USER_HOME=D:/Google/Android-gradle cmd //c "gradlew.bat :app:assembleProd
 
 **4. 看错改错（迭代到绿）**
 - 读 `e:` 行（Kotlin 编译器精确到文件:行:列）。
-- 修完**只重编 prod+fake 两变体**确认无回归 → 停，不打包（你自己 Run）。
+- 修完**只重编 prod+fake 两变体**确认无回归。
+- **交付打包（2026-10-22 起）**：跑 `APP\打包Release.bat` → `:app:assembleProdRelease` + `apksigner` 验签，产物 `app/build/outputs/apk/prod/release/app-prod-release.apk`。release 与 debug 签名不同，覆盖安装先卸载；R8 会剥离 `ApiCache` debug 日志。脚本末尾有 `pause`，自动化用 `cmd //c "打包Release.bat" < /dev/null`。
 
 **5. 记录/交付**
-- 每若干批改完，追加一条到 `APP/docs/07-变更核实清单.md`（改了什么、对应接口、编译是否过）。⚠ 路径已变更：原 `rebuild-app-Docs/07-变更核实清单.md` 目录**已不存在**（现为 `APP/docs/`）。
+- 每若干批改完，追加一条到 `D:\Code\live\temp\构造书\rebuild-app-Docs\07-变更核实清单.md`（改了什么、对应接口、编译/出包是否过）。⚠ `APP/docs/07-变更核实清单.md` 不存在；`APP/rebuild-app-Docs/07` 只是早期存根，别写那儿。
 - 关键非显然事实存进 memory（如分包规范、JSON 列防御解析、AES 协议）。
 
 ## 关键约束
-- **我从不自己 Run 或装手机**（无 Android 运行环境），只做「编译通过 + 两变体出 APK 在 `app/build/outputs/apk/…`」，**真机验证与打包由你做**。
+- **我从不自己 Run 或装手机**（无 Android 运行环境），只做「编译通过 + 出 APK」；**打包 release 由我做（2026-10-22 起，跑 `APP\打包Release.bat`），真机安装/验收由你做**。
 - **不臆造接口**：拿不准的路由/字段就去 `api/` 核实（我因此删过几个我先前误加的假接口：`accountBalance/upsert`、`account DELETE`、非分期的 `recurring/enter`）。
 - **web 不重构**（真相源，只读比对）；`vant-ui` 底座尽量不动（除非真机不可编译，如之前那个桌面-only `Path(String)`）。
 - **2026-10-17 起新增约束**：APK 内**不得注入任何后端地址/分享域名**（BYO-backend，地址由用户在登录页「接入站点」输入）；release 包签名步骤见 `D:\Code\live\APP-RELEASE-SIGNING.md`（正式版：`Docs/docs/app/release-signing.md`），不要把口令写进入库的 `gradle.properties`。

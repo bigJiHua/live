@@ -45,6 +45,7 @@ import com.google.gson.JsonNull
 import com.google.gson.JsonObject
 import com.live.finance.App
 import com.live.finance.core.nav.Routes
+import com.live.finance.core.net.ApiGetCache
 import com.live.finance.core.net.ApiResult
 import com.live.finance.core.net.failMessage
 import com.live.finance.data.model.Category
@@ -863,7 +864,7 @@ private fun FixedExpenseScreen() {
         VanPullRefresh(
             state = refreshState,
             isChildAtTop = { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0 },
-            onRefresh = { loadData() },
+            onRefresh = { ApiGetCache.clear(); loadData() },
             modifier = inner.fillMaxSize(),
         ) {
             LazyColumn(

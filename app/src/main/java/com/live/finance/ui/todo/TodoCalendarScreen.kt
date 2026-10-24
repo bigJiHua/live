@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import com.live.finance.App
 import com.live.finance.core.nav.Routes
+import com.live.finance.core.net.ApiGetCache
 import com.live.finance.core.net.ApiResult
 import com.live.finance.core.net.failMessage
 import com.live.finance.data.model.NewTodo
@@ -234,6 +235,7 @@ fun TodoCalendarScreen(nav: NavHostController) {
             state = refreshState,
             isChildAtTop = { scroll.value == 0 },
             onRefresh = {
+                ApiGetCache.clear() // 下拉刷新必须绕过 GET 缓存
                 scope.launch {
                     loadSelectedDateEvents()
                     refreshState.finishRefresh()

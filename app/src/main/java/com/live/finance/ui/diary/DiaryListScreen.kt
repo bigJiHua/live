@@ -51,8 +51,11 @@ import androidx.navigation.NavHostController
 import com.live.finance.App
 import com.live.finance.core.AppConfig
 import com.live.finance.core.nav.Routes
+import com.live.finance.core.net.ApiGetCache
 import com.live.finance.core.net.ApiResult
 import com.live.finance.core.net.failMessage
+import com.live.finance.data.local.DiaryListCache
+import com.live.finance.data.model.DiaryListSnapshot
 import com.live.finance.data.model.Moment
 import com.live.finance.data.model.User
 import com.live.finance.theme.LocalAppColors
@@ -65,15 +68,20 @@ import com.live.finance.theme.scaledSp
 import com.live.finance.ui.common.WebShadow
 import com.live.finance.ui.common.cssShadow
 import com.live.finance.ui.common.cssShadowCircle
+import coil.request.ImageRequest
 import com.live.finance.ui.flow.FText
 import com.live.vant.basic.VanEmpty
 import com.live.vant.basic.VanImage
 import com.live.vant.basic.VanLoading
 import com.live.vant.feedback.LocalVanToastController
 import com.live.vant.feedback.VanPullRefresh
+import com.live.vant.feedback.VanToastType
 import com.live.vant.feedback.rememberVanPullRefreshState
 import com.live.vant.icon.VanIcon
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -117,6 +125,8 @@ fun DiaryListScreen(nav: NavHostController) {
     var loading by remember { mutableStateOf(true) }       // 首屏 loading
     var loadingMore by remember { mutableStateOf(false) }
     var requesting by remember { mutableStateOf(false) }    // 独立防重（web `requesting`）
+    /** 是否允许触底自动分页：从本地快照恢复后先禁止，等用户真的滚动再开，避免返回详情时页脚 loading 自动卡住。 */
+    var allowPagination by remember { mutableStateOf(false) }
     var user by remember { mutableStateOf<User?>(null) }
     /** 已成功加载的页码，用于触底去重（避免「向上滚再往下滑」就重复打接口 —— 2026-09-19 真机反馈「频繁获取数据」）。 */
     val loadedPages = remember { mutableSetOf<Int>() }
@@ -132,40 +142,98 @@ fun DiaryListScreen(nav: NavHostController) {
     var fabHidden by remember { mutableStateOf(false) }
     var lastY by remember { mutableStateOf(0) }
 
-    suspend fun load(append: Boolean) {
+    fun diaryScope(): String = "${AppConfig.baseUrl}|${graph.session.token.orEmpty()}"
+
+    /** 把当前已加载的行（最多 100 条）落盘；分页加载后也更新，返回时可恢复到对应页数。 */
+    suspend fun persistCache(list: List<Moment>, totalCount: Int, totalPages: Int) {
+        val snap = DiaryListSnapshot(
+            savedAt = System.currentTimeMillis(),
+            scope = diaryScope(),
+            rows = list.take(100),
+            total = totalCount,
+            totalPages = totalPages,
+        )
+        withContext(Dispatchers.IO) { DiaryListCache.save(ctx, snap) }
+    }
+
+    /**
+     * 拉列表。
+     *
+     * @param silent true = **不清空当前内容、不显示整页 loading**（有本地快照时的后台刷新 / 下拉刷新）；
+     *               false = 首次进入且没有快照时显示整页加载态。
+     *
+     * ⚠ 异常必须在这里吞掉并复位状态：`graph.moment.list` 的 JSON 解析异常一旦穿透，
+     *   调用方（LaunchedEffect / 下拉刷新）的 finally 可能来不及收刷新头 ⇒ 「内容出来了但 loading 还在」。
+     */
+    suspend fun load(append: Boolean, silent: Boolean = false) {
         if (requesting) return
         requesting = true
-        if (append) loadingMore = true else { loading = true; page = 1 }
-        // ⚠ **必须用 try/finally 复位**：旧实现把复位写在末尾，一旦 `graph.moment.list` 抛异常或协程被取消（
-        //   LaunchedEffect 因 key 变化重启），`requesting` / `loadingMore` 永远为 true ⇒ 后续 load 全部早退，
-        //   表现为「**向下滑动卡在「加载中...」不动**（2026-09-19 真机反馈）。
+        if (append) loadingMore = true else if (!silent) loading = true
+        val targetPage = if (append) page else 1
         try {
-            when (val r = graph.moment.list(page, PAGE_SIZE)) {
+            when (val r = graph.moment.list(targetPage, PAGE_SIZE)) {
                 is ApiResult.Ok -> {
                     val d = r.data
                     val list = d?.list.orEmpty()
                     total = d?.total ?: 0
                     rows = if (append) rows + list else list
+                    page = targetPage
                     if (append) {
-                        loadedPages.add(page)
+                        loadedPages.add(targetPage)
+                        // 分页也更新快照：返回时能看到已加载过的多页，而不是退回第一页。
+                        if (d != null) persistCache(rows, d.total, d.totalPages)
                     } else {
                         loadedPages.clear()
                         loadedPages.add(1)
+                        // 动态页没有编辑功能：首屏/刷新成功后落盘，下次进入先读这份快照。
+                        if (d != null) persistCache(list, d.total, d.totalPages)
                     }
                 }
-                else -> toast.showFail(r, "加载失败")
+                // 静默刷新失败时保留屏上的旧快照；首次/空列表才提示。
+                else -> if (!silent || rows.isEmpty()) toast.showFail(r, "加载失败")
             }
+        } catch (t: Throwable) {
+            if (t is CancellationException) throw t
+            if (!silent || rows.isEmpty()) toast.show("加载失败", VanToastType.Fail)
         } finally {
             requesting = false
-            loading = false
+            if (!silent) loading = false
             loadingMore = false
         }
     }
 
     LaunchedEffect(Unit) {
-        // 头像/昵称兜底取当前登录用户（后端 moment 行里没有 user_name/avatar）
-        (graph.auth.getUserinfo() as? ApiResult.Ok)?.data?.let { user = it }
-        load(false)
+        // 1) 先读本地快照：有数据就立刻落屏，不闪整页 loading。
+        val cached = withContext(Dispatchers.IO) { DiaryListCache.load(ctx, diaryScope()) }
+        if (cached != null) {
+            rows = cached.rows
+            total = cached.total
+            // 恢复到已缓存的页数（最多 10 页 / 100 条），避免把已加载页当第 1 页重复拉。
+            val restoredPage = ((cached.rows.size + PAGE_SIZE - 1) / PAGE_SIZE).coerceAtLeast(1)
+            page = restoredPage
+            loading = false
+            allowPagination = false // 等用户真的滚动再分页
+            loadedPages.clear()
+            for (p in 1..restoredPage) loadedPages.add(p)
+        } else {
+            allowPagination = true
+        }
+
+        // 2) 头像/昵称兜底取当前登录用户（后端 moment 行里没有 user_name/avatar）。
+        try {
+            (graph.auth.getUserinfo() as? ApiResult.Ok)?.data?.let { user = it }
+        } catch (t: Throwable) {
+            if (t is CancellationException) throw t
+        }
+
+        // 3) 快照 30 分钟内直接用；过期则静默刷新（内容保持在屏上），没有快照才显示整页 loading。
+        if (cached != null) {
+            if (System.currentTimeMillis() - cached.savedAt >= DiaryListCache.TTL_MS) {
+                load(false, silent = true)
+            }
+        } else {
+            load(false, silent = false)
+        }
     }
 
     // 滚动：回顶显隐 + 浮钮收起弹起 + 触底加载
@@ -177,7 +245,10 @@ fun DiaryListScreen(nav: NavHostController) {
         derivedStateOf { gridState.firstVisibleItemIndex * 1_000_000 + gridState.firstVisibleItemScrollOffset }
     }
     LaunchedEffect(gridState) {
-        snapshotFlow { scrollPos }.collect { y ->
+        snapshotFlow { scrollPos to gridState.isScrollInProgress }.collect { (y, scrolling) ->
+            // 只有真正发生滚动/甩动才恢复自动分页；从详情返回时的首帧（isScrollInProgress=false）
+            // 不再因为恢复位置靠近底部而自动打下一页，避免页脚 loading 遮住列表。
+            if (scrolling) allowPagination = true
             showBackTop = y > 400
             val delta = y - lastY
             if (abs(delta) > 6) {
@@ -194,10 +265,10 @@ fun DiaryListScreen(nav: NavHostController) {
             last != null && last.index >= info.totalItemsCount - 4
         }
     }
-    LaunchedEffect(nearBottom, rows.size, total) {
+    LaunchedEffect(nearBottom, rows.size, total, allowPagination) {
         val next = page + 1
         // ⚠ 去重：向上滚再往下滑会重新触发 nearBottom，若不加 `next !in loadedPages` 会**反复打同一页接口**。
-        if (nearBottom && total > 0 && rows.size < total && !requesting && !loadingMore && next !in loadedPages) {
+        if (allowPagination && nearBottom && total > 0 && rows.size < total && !requesting && !loadingMore && next !in loadedPages) {
             page = next
             load(append = true)
         }
@@ -211,9 +282,15 @@ fun DiaryListScreen(nav: NavHostController) {
                 gridState.firstVisibleItemIndex == 0 && gridState.firstVisibleItemScrollOffset == 0
             },
             onRefresh = {
+                ApiGetCache.clear() // 下拉刷新必须绕过 GET/内存快照
                 scope.launch {
-                    load(false)
-                    refreshState.finishRefresh()
+                    try {
+                        // 有内容就静默刷新：不把已加载的瀑布流换成整页 loading。
+                        load(false, silent = rows.isNotEmpty())
+                    } finally {
+                        // 无论成功/失败/异常都必须收刷新头，避免 loading 永久挂着。
+                        refreshState.finishRefresh()
+                    }
                 }
             },
         ) {
@@ -336,10 +413,16 @@ private fun DiaryCard(
         // 封面（.card-cover 最大高 200，多图角标）
         if (item.coverImage.isNotBlank()) {
             Box(Modifier.fillMaxWidth().heightIn(max = 200.dp).clip(shape)) {
+                val coverUrl = AppConfig.fullFileUrl(item.coverImage)
                 VanImage(
-                    src = AppConfig.fullFileUrl(item.coverImage),
+                    src = coverUrl,
+                    // 固定 1080×600 + 固定 memory key：从详情返回时直接命中同一份位图，
+                    // 不再用白底 + 转圈占住封面（负责人报的「白色烙饼遮罩」就是它）。
+                    imageRequest = rememberDiaryCoverRequest(coverUrl),
                     modifier = Modifier.fillMaxWidth(),
                     fit = androidx.compose.ui.layout.ContentScale.Crop,
+                    backgroundColor = colors.bgThird,
+                    showLoading = false,
                     showError = false,
                 )
                 if (item.imageCount > 1) {
@@ -443,6 +526,24 @@ private fun DiaryCard(
                 }
             }
         }
+    }
+}
+
+/**
+ * 动态封面请求：固定 1080×600（cover 最大 200dp 高、全宽），固定 memoryCacheKey。
+ * 封面是原图，不能像 SVG 一样跨任意尺寸复用；固定 key 让列表重进/详情返回复用同一份位图，
+ * `diskCacheKey=url` 与普通 Coil 请求共享磁盘缓存。
+ */
+@Composable
+private fun rememberDiaryCoverRequest(url: String): ImageRequest {
+    val ctx = LocalContext.current
+    return remember(url) {
+        ImageRequest.Builder(ctx)
+            .data(url)
+            .size(1080, 600)
+            .memoryCacheKey("diary-cover:$url")
+            .diskCacheKey(url)
+            .build()
     }
 }
 

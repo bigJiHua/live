@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import com.live.finance.App
+import com.live.finance.core.net.ApiGetCache
 import com.live.finance.core.net.ApiResult
 import com.live.finance.core.net.failMessage
 import com.live.finance.core.net.failToastType
@@ -151,7 +152,7 @@ fun InstallmentListScreen(nav: NavHostController) {
         state = refreshState,
         successText = "刷新成功",
         isChildAtTop = { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0 },
-        onRefresh = { scope.launch { load("刷新失败").join(); refreshState.finishRefresh() } },
+        onRefresh = { ApiGetCache.clear(); scope.launch { load("刷新失败").join(); refreshState.finishRefresh() } },
     ) {
         ScreenScaffold { inner ->
             LazyColumn(state = listState, modifier = Modifier.fillMaxSize().then(inner)) {

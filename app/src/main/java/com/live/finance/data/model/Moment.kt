@@ -70,6 +70,21 @@ data class ShareViewResult(
 }
 
 /**
+ * 动态列表的本地缓存快照（2026-10-22）。
+ *
+ * 动态页没有编辑功能，列表数据变化很少；首页/列表来回切时没必要每次重拉。
+ * 文件由 `DiaryListCache` 用 `EncryptedFile` 加密落盘，`scope = 站点|token` 防止换账号/切站点串数据。
+ * 放在 `data.model` 是有意的：`proguard-rules.pro` 对整个包做了 Gson keep。
+ */
+data class DiaryListSnapshot(
+    val savedAt: Long = 0L,
+    val scope: String = "",
+    val rows: List<Moment> = emptyList(),
+    val total: Int = 0,
+    val totalPages: Int = 0,
+)
+
+/**
  * 后端详情/列表的 `content` 可能是 HTML（web 用 `v-html` 渲染）。Compose 没有等价能力，
  * 这里做「去标签 + 常见实体还原 + `<br>`/`</p>` 转换行」的纯文本降级，保证不显示尖括号。
  */

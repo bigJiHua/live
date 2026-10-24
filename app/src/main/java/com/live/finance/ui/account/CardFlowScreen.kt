@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import com.live.finance.App
 import com.live.finance.core.nav.Routes
+import com.live.finance.core.net.ApiGetCache
 import com.live.finance.core.net.ApiResult
 import com.live.finance.data.model.Card
 import com.live.finance.data.model.Category
@@ -249,6 +250,7 @@ fun CardFlowScreen(
                 state = refreshState,
                 isChildAtTop = { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0 },
                 onRefresh = {
+                    ApiGetCache.clear() // 下拉刷新必须绕过 GET 缓存
                     // 必须等这一次请求真的结束再收刷新头：原来 `scope.launch { onRefresh(); finishRefresh() }`
                     //   里 onRefresh 只是"又起了一个协程"就立刻返回 ⇒ finishRefresh 同帧把 Loading→Normal，
                     //   转圈一闪就没、isTouchable 立刻恢复，连着下拉会并发多个请求抢 rows/page。

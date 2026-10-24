@@ -6,8 +6,10 @@ import android.os.Build
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import com.live.finance.BuildConfig
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import java.util.Locale
 import java.util.concurrent.TimeUnit
@@ -42,7 +44,10 @@ class ClientContext(private val device: DeviceProfile) {
         return mutex.withLock {
             val now2 = System.currentTimeMillis()
             cached?.takeIf { now2 - cachedAt < CACHE_MS }?.let { return it }
-            val external = fetchExternal()
+            // ⚠ buildBody 在调用方（登录页 = Main）协程里执行；这里的 OkHttp execute 是阻塞调用，
+            //    不切 IO 会抛 NetworkOnMainThreadException，被 fetchJson 的 runCatching 吞掉
+            //    ⇒ loginLocation 永远为空（登录日志地点「未知」）。必须切 IO。
+            val external = withContext(Dispatchers.IO) { fetchExternal() }
             staticFields().entrySet().forEach { external.add(it.key, it.value) }
             external.also { cached = it; cachedAt = now2 }
         }

@@ -14,9 +14,15 @@ import com.live.finance.theme.MONEY_RED_IN
 import com.live.finance.theme.ThemePresets
 import com.live.finance.ui.common.MoneyColor
 import com.live.finance.core.net.ApiClient
+import com.live.finance.core.net.ApiGetCache
 import com.live.finance.core.net.ApiResult
+import com.live.finance.data.local.DiaryListCache
+import com.live.finance.core.glass.BarGlassSpec
 import com.live.finance.core.net.ClientContext
 import com.live.finance.core.net.DeviceProfile
+import com.live.finance.core.store.CardPageStyle
+import com.live.finance.core.store.CardStyleStore
+import com.live.finance.core.store.GlassStore
 import com.live.finance.core.store.SessionStore
 import com.live.finance.data.repo.AuthRepository
 import com.live.finance.data.repo.AssetRepository
@@ -116,7 +122,15 @@ class AppGraph(context: Context) {
      */
     val sessionBlocked = mutableStateOf<String?>(null)
     init {
-        client.onSessionBlocked = { msg -> if (sessionBlocked.value == null) sessionBlocked.value = msg }
+        // 会话变化（登录 setToken / 登出 clear）⇒ 进程内 GET 快照与动态本地快照全部失效，避免换账号后串数据。
+        session.onSessionChanged = {
+            ApiGetCache.clear()
+            DiaryListCache.clear(context)
+        }
+        client.onSessionBlocked = { msg ->
+            ApiGetCache.clear()
+            if (sessionBlocked.value == null) sessionBlocked.value = msg
+        }
     }
 
     /**
@@ -194,6 +208,22 @@ class AppGraph(context: Context) {
     /** 震动效果档（**原生特有**）：`light` / `medium` / `heavy`，键盘与全局点击共用（默认 medium = 原手感）。 */
     val hapticStrength: MutableState<String> = mutableStateOf(HapticStrength.MEDIUM.key)
 
+    /** 底部悬浮岛玻璃参数的持久层（2026-10-19，`finance_glass` SharedPreferences）。 */
+    val glassStore = GlassStore(context)
+
+    /** 卡片页形态的持久层（2026-10-22，`finance_card_style` SharedPreferences）。 */
+    val cardStyleStore = CardStyleStore(context)
+
+    /** 我的卡片呈现形态：`Module` = 卡片模组页，`Wallet` = 卡包页。默认卡片模组。 */
+    val cardPageStyle: MutableState<CardPageStyle> = mutableStateOf(CardPageStyle.Module)
+
+    /**
+     * 底部悬浮岛玻璃参数 —— **单一事实来源**（2026-10-19）：
+     * 实验室调参实时改这里（不落盘）⇒ MainScreen 立即用新值渲染；
+     * 点「保存设定」才 [persistBarGlass] 落盘，重启后 [init] 读回。
+     */
+    val barGlass: MutableState<BarGlassSpec> = mutableStateOf(BarGlassSpec())
+
     /** 启动就绪标记：session.load()（读 DataStore 持久 token）与主题加载完成后置 true，
      *  AppRoot 据此再合成 NavHost 决定首屏——避免首帧合成时 token 尚未从 DataStore 读出。 */
     val sessionReady: MutableState<Boolean> = mutableStateOf(false)
@@ -207,6 +237,8 @@ class AppGraph(context: Context) {
         haptics.value = prefs.haptics
         clickHaptics.value = prefs.clickHaptics
         hapticStrength.value = HapticStrength.resolve(prefs.hapticStrength).key
+        barGlass.value = glassStore.load()       // 悬浮岛玻璃参数（保存过的才覆盖默认值）
+        cardPageStyle.value = cardStyleStore.load() // 卡片页形态（默认卡片模组）
         MoneyColor.apply(prefs.moneyColorMode)   // 首帧前先落到全局收支配色
         sessionReady.value = true
 
@@ -241,6 +273,29 @@ class AppGraph(context: Context) {
         moneyColorMode.value = mode
         themeStore.saveMoneyColorMode(mode)
         MoneyColor.apply(mode)
+    }
+
+    /**
+     * 实时更新悬浮岛玻璃参数（**不落盘**）：实验室每次调参都调它，真实栏立即生效。
+     * 重启后回到上次「保存设定」的值。
+     */
+    fun setBarGlass(spec: BarGlassSpec) {
+        barGlass.value = spec.clamped()
+    }
+
+    /** 保存设定：把当前悬浮岛玻璃参数写入本地（重启仍生效）。 */
+    fun persistBarGlass() {
+        glassStore.save(barGlass.value)
+    }
+
+    /** 卡片页形态：内存即时更新（下一次进入我的卡片生效）。 */
+    fun setCardPageStyle(style: CardPageStyle) {
+        cardPageStyle.value = style
+    }
+
+    /** 卡片页形态：点「保存设定」时落盘（重启仍生效）。 */
+    fun persistCardPageStyle() {
+        cardStyleStore.save(cardPageStyle.value)
     }
 
     /** 切「文字大小」档位；越界一律夹到 [FONT_LEVEL_MIN]…[FONT_LEVEL_MAX]。 */

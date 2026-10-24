@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import com.live.finance.App
+import com.live.finance.core.net.ApiGetCache
 import com.live.finance.core.net.ApiResult
 import com.live.finance.core.net.failMessage
 import com.live.finance.core.net.failToastType
@@ -160,7 +161,7 @@ fun RepayListScreen(nav: NavHostController) {
         state = refreshState,
         isChildAtTop = { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0 },
         // 下拉刷新不该弹全屏遮罩（与账单列表页同一处理）⇒ silent
-        onRefresh = { scope.launch { load(silent = true).join(); refreshState.finishRefresh() } },
+        onRefresh = { ApiGetCache.clear(); scope.launch { load(silent = true).join(); refreshState.finishRefresh() } },
     ) {
         ScreenScaffold { inner ->
             LazyColumn(state = listState, modifier = Modifier.fillMaxSize().then(inner)) {

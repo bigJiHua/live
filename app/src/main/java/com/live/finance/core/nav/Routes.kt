@@ -143,6 +143,12 @@ object Routes {
     /** 资源列表带类型（对齐 web `/user/resource-list?type=post|product|bank|other`）。 */
     fun resourceList(type: String) = "$RESOURCE_LIST?type=$type"
     const val APP_SETTINGS = "user/app-settings"
+    /** 空间清理（原生特有，2026-10-22）：查看/清理图片、WebView、动态数据缓存。 */
+    const val CACHE_CLEAN = "user/cache-clean"
+    /** 液态玻璃实验室（原生调试页，2026-10-19）：14 套预设 + 可调参数，供负责人挑选底部栏效果。 */
+    const val LIQUID_GLASS_LAB = "user/liquid-glass-lab"
+    /** 卡方实验室（2026-10-22）：统一预览卡片模组 / 卡包两种卡片页形态，并保存正式页选用形态。 */
+    const val CARD_STYLE_LAB = "user/card-style-lab"
     const val CATEGORY_MANAGE = "user/category-manage"
     const val BANK_CATEGORY_MANAGE = "user/bank-category-manage"
 

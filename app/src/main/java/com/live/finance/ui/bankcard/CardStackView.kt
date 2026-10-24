@@ -1,5 +1,11 @@
 package com.live.finance.ui.bankcard
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -31,13 +37,17 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.request.ImageRequest
 import com.live.finance.core.AppConfig
 import com.live.finance.data.model.Card
+import com.live.finance.theme.LocalAppColors
 import com.live.finance.ui.common.rememberBankIconRequest
 import com.live.finance.ui.flow.FText
 import com.live.vant.basic.VanImage
@@ -124,6 +134,30 @@ fun CardStackView(
  * @param bankIconUrl 银行 logo 完整 URL（web `.bank-icon img`）；为空或加载失败 → `.bank-icon-mock` 首字块。
  * @param selected    是否「已弹出」那张（web `.is-selected`：换阴影 + 卡组织改浮动位 + 尾号挪左下）。
  */
+/**
+ * 卡面大图请求 —— 卡片堆、卡片模组实验室、卡包实验室、卡表单预览共用。
+ *
+ * 卡面是用户上传的照片，不能像银行 SVG 那样只按 URL 复用任意尺寸：
+ * - 固定解码尺寸 **1080×680**（标准银行卡 85.6×54 ≈ 1.586）；
+ * - 固定 `memoryCacheKey = card-face:<url>`：同一张卡在不同页面/槽位复用同一份位图；
+ * - `diskCacheKey = url`：与普通 Coil 请求共享磁盘缓存，网络只下一次。
+ *
+ * `.size(1080, 680)` 会在 request 上设置 SizeResolver，Coil Compose 不会再按布局尺寸覆盖
+ * ⇒ 卡片页 / 实验室 / 预览拿到的都是同一份 1080×680 位图。
+ */
+@Composable
+fun rememberCardFaceRequest(url: String): ImageRequest {
+    val ctx = LocalContext.current
+    return remember(url) {
+        ImageRequest.Builder(ctx)
+            .data(url)
+            .size(1080, 680)
+            .memoryCacheKey("card-face:$url")
+            .diskCacheKey(url)
+            .build()
+    }
+}
+
 @Composable
 fun BankCardFace(
     card: Card,
@@ -131,9 +165,17 @@ fun BankCardFace(
     showLast4Suffix: Boolean,
     modifier: Modifier = Modifier,
     bankIconUrl: String = "",
+    /**
+     * 卡组织 logo 资源 URL（web `item.cardOrgIconUrl`）：
+     * 由 `category.list("bank")` 按卡组织名匹配出的 `icon_url`。非空且加载成功就显示图片，
+     * 空或加载失败才回落 [CardOrgBadge] 组件（web `CardStack.vue:73-87` 同语义）。
+     */
+    orgIconUrl: String = "",
     selected: Boolean = false,
     /** 卡面兜底色（web `CardStack.default-color`）；credit 页为 `#ee0a24`。 */
     defaultColor: Color = Color(0xFF4A90E2),
+    /** 无阴影版（CardLabScreen 浮层弹卡专用）：真机 2026-10-20 反馈弹起时不要阴影 —— Compose 的 elevation 阴影是环境光弥散灰影，与 CSS `0 20px 40px` 定向投影观感完全不同，且飞行中跟着卡走很脏。 */
+    flat: Boolean = false,
 ) {
     // web 是 `item.color || props.defaultColor` ⇒ 用**原始 color**（不是模型里写死蓝兜底的 displayColor）
     val base = parseColor(card.color, defaultColor)
@@ -142,6 +184,7 @@ fun BankCardFace(
     //   而不是在卡面上摆一个破图图标（原生旧实现正是摆了 `photo-fail`，很难看）。
     var imgFailed by remember(imgUrl) { mutableStateOf(false) }
     val showImg = imgUrl != null && !imgFailed
+    var orgImgFailed by remember(orgIconUrl) { mutableStateOf(false) }
     val shape = RoundedCornerShape(20.dp)
     val grad = Brush.linearGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.45f)))
 
@@ -151,16 +194,23 @@ fun BankCardFace(
             .height(CARD_H.dp)
             // 阴影用 Compose 的 elevation `shadow()`：**走 RenderNode/GPU**，比 `cssShadow` 的
             // `Paint.setShadowLayer(blur 20~40)` 便宜一个数量级 —— 列表里每张卡都画模糊阴影正是
-            // 他反馈「切换 tab / 滑动掉帧」的主因。视觉上等同 CSS 的 `0 8px 20px rgba(0,0,0,.1)`
-            //（选中态 `0 20px 40px rgba(0,0,0,.35)` ⇒ 抬高 elevation）。
-            .shadow(if (selected) 16.dp else 6.dp, shape, clip = false)
+            // 他反馈「切换 tab / 滑动掉帧」的主因。视觉上等同 CSS 的 `0 8px 20px rgba(0,0,0,.1)`。
+            // 浮层弹卡（flat）不带阴影：web 弹出态虽有 `0 20px 40px .35`，但 elevation 模拟不出
+            // 定向投影的观感，用户明确不要。
+            .then(
+                if (flat) Modifier
+                else Modifier.shadow(if (selected) 16.dp else 6.dp, shape, clip = false),
+            )
             .clip(shape)
             .background(base)
             .then(if (showImg) Modifier else Modifier.background(grad)),
     ) {
         if (showImg) {
+            val faceUrl = imgUrl.orEmpty()
             VanImage(
-                src = imgUrl,
+                src = faceUrl,
+                // 与两个实验室/卡片堆共用固定 1080×680 位图；credit/debit 同一路径，只有无卡面图时走渐变。
+                imageRequest = rememberCardFaceRequest(faceUrl),
                 modifier = Modifier.matchParentSize().clip(shape),
                 fit = ContentScale.Crop,
                 showLoading = false,
@@ -182,7 +232,10 @@ fun BankCardFace(
         }
 
         // ===== 内容区（web `padding: 20px 5px 20px 20px`）=====
-        Box(Modifier.padding(start = 20.dp, top = 20.dp, end = 5.dp, bottom = 20.dp)) {
+        // ⚠ 必须 matchParentSize：web 的 header/footer-img 是占满卡宽的 flex/absolute 定位；
+        //   wrap 尺寸的 Box 里 align(TopEnd/BottomStart) 全部失效（2026-10-20 真机反馈
+        //   「有卡面时卡号不在右上角」的根因——尾号胶囊全挤到了左上）
+        Box(Modifier.matchParentSize().padding(start = 20.dp, top = 20.dp, end = 5.dp, bottom = 20.dp)) {
             if (showImg) {
                 if (selected) {
                     // `.card-footer-img{position:absolute; left:20px; bottom:20px}` + `.card-img-last4-bottom`
@@ -271,7 +324,35 @@ fun BankCardFace(
                         if (selected) Modifier.offset(x = (-10).dp, y = (-16).dp)  // `.card-org-floating{margin-bottom:16px}`
                         else Modifier.offset(x = (-12).dp, y = (-20).dp)          // `.card-org{right:12px; bottom:20px}`
                     ),
-            ) { CardOrgBadge(org = orgKey, width = w, height = h, filled = true) }
+            ) {
+                // web：`cardOrgIconUrl` 优先显示资源图，图片 404/解码失败才回落内置 CardOrgIcon。
+                if (orgIconUrl.isNotBlank() && !orgImgFailed) {
+                    // web 的 `<img>` 按 SVG 的 width/height 属性原尺寸展示（六张资源图实测：
+                    // 银联/万事达 80×48、大莱 76×48、visa/JCB 48×48、运通 45×45）；
+                    // 回退组件才是 80×40 / 运通 50×50。这里按 orgKey 给对应盒，保持右缘对齐。
+                    val imgW = when (orgKey) {
+                        "visa", "jcb" -> 48.dp
+                        "amex" -> 45.dp
+                        "diners" -> 76.dp
+                        else -> 80.dp
+                    }
+                    val imgH = if (orgKey == "amex") 45.dp else 48.dp
+                    VanImage(
+                        src = orgIconUrl,
+                        // 卡组织 logo 与银行 logo 同属 category 字典里的 SVG：走同一把缓存键，
+                        // 启动预热（BankIconWarmer 会预热 bank 分类全部 icon_url）直接命中。
+                        imageRequest = rememberBankIconRequest(orgIconUrl),
+                        modifier = Modifier.width(imgW).height(imgH),
+                        fit = ContentScale.Fit,
+                        showLoading = false,
+                        backgroundColor = Color.Transparent,
+                        // 只置位、不画东西：下一帧回落到 CardOrgBadge（web @error 同语义）
+                        errorSlot = { LaunchedEffect(Unit) { orgImgFailed = true } },
+                    )
+                } else {
+                    CardOrgBadge(org = orgKey, width = w, height = h, filled = true)
+                }
+            }
         }
     }
 }
@@ -336,4 +417,64 @@ fun parseColor(hex: String, fallback: Color): Color {
             else -> fallback
         }
     }.getOrDefault(fallback)
+}
+
+/**
+ * 卡堆加载骨架（两个实验室共用）：2~3 张叠好的空卡 + 轻呼吸，代替居中转圈。
+ *
+ * 卡面可能是整张照片，骨架只画卡形和银行行占位条，不暗示具体内容；
+ * 数据到达后由页面做「整堆淡入」，骨架同步淡出（见 LabCardStack / WalletStack）。
+ */
+@Composable
+fun CardStackSkeleton(
+    modifier: Modifier = Modifier,
+    cardHeight: Dp = 220.dp,
+    step: Dp = 64.dp,
+    count: Int = 3,
+) {
+    val colors = LocalAppColors.current
+    val n = count.coerceAtLeast(1)
+    val pulse = rememberInfiniteTransition(label = "cardStackSkeleton").animateFloat(
+        initialValue = 0.45f,
+        targetValue = 0.9f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(900, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "cardStackSkeletonPulse",
+    )
+    // 呼吸只走 graphicsLayer：状态在 layer 里读，不触发每帧重组
+    Box(modifier.fillMaxWidth().height(cardHeight + step * (n - 1)).graphicsLayer { alpha = pulse.value }) {
+        repeat(n) { i ->
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .offset(y = step * i)
+                    .height(cardHeight)
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(colors.bgThird)
+                    .border(1.dp, colors.border.copy(alpha = 0.55f), RoundedCornerShape(20.dp)),
+            ) {
+                Row(
+                    Modifier.fillMaxWidth().padding(start = 20.dp, top = 20.dp, end = 20.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        Modifier
+                            .size(40.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(colors.border.copy(alpha = 0.45f)),
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Box(
+                        Modifier
+                            .width(120.dp)
+                            .height(16.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(colors.border.copy(alpha = 0.45f)),
+                    )
+                }
+            }
+        }
+    }
 }

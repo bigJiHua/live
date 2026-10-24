@@ -291,14 +291,12 @@ private fun AppNavHost(transitioning: MutableState<Boolean>) {
         composable(Routes.MAIN) { MainScreen(nav, mainTab) }
         composable(Routes.FLOW_LIST) { FlowListScreen(nav) }
         composable(Routes.FLOW_CALENDAR) { com.live.finance.ui.flow.CalendarScreen(nav) }
-        // 银行卡管理：2026-10-11 起改为**离线 WebView** 版（原生 CardManageScreen 已备份到
-        //   temp/备份/CardManageScreen-native-20261011/，源码仍在仓库里，未删）。
-        //   换掉的原因：原生用 Column+forEach 全量渲染卡堆（CardStackView.kt:79-83，无虚拟化），
-        //   每张卡一个模糊 shadow + 两个 SubcomposeAsyncImage 子组合，切 tab 时 N 张卡同时进动画 ⇒ 卡顿。
-        //   WebView 版走 web 同一份视觉稿，视觉 1:1，且省掉原生那套重实现。
-        composable(Routes.CARD) { com.live.finance.ui.bankcard.CardWebScreen(nav, "debit") }
-        composable(Routes.CARD_DEBIT) { com.live.finance.ui.bankcard.CardWebScreen(nav, "debit") }
-        composable(Routes.CARD_CREDIT) { com.live.finance.ui.bankcard.CardWebScreen(nav, "credit") }
+        // 银行卡管理：原生实现，`CardPageHost` 按「卡方实验室」保存的形态选择
+        //   卡片模组页（CardLabScreen）或卡包页（CardWalletLabScreen）。
+        //   卡片离线 WebView 全链路已于 2026-10-23 撤销（web 构建/源码 + CardWebScreen/CardWebView + assets/card，备份在 temp/备份/card-webview-20261023/）。
+        composable(Routes.CARD) { com.live.finance.ui.bankcard.CardPageHost(nav, "debit") }
+        composable(Routes.CARD_DEBIT) { com.live.finance.ui.bankcard.CardPageHost(nav, "debit") }
+        composable(Routes.CARD_CREDIT) { com.live.finance.ui.bankcard.CardPageHost(nav, "credit") }
         composable(Routes.CARD_ADD) { com.live.finance.ui.bankcard.CardAddScreen(nav) }
         composable(Routes.CREDIT_FULL) { com.live.finance.ui.bankcard.CreditFullScreen(nav) }
         composable(Routes.CREDIT_FOREIGN_REGISTER) { com.live.finance.ui.bankcard.ForeignScreen(nav) }
@@ -332,6 +330,11 @@ private fun AppNavHost(transitioning: MutableState<Boolean>) {
         composable(Routes.ASSETS_TREND) { com.live.finance.ui.asset.AssetTrendScreen(nav) }
         composable(Routes.CATEGORY_MANAGE) { com.live.finance.ui.user.CategoryManageScreen(nav) }
         composable(Routes.APP_SETTINGS) { com.live.finance.ui.user.AppSettingsScreen(nav) }
+        composable(Routes.CACHE_CLEAN) { com.live.finance.ui.user.CacheCleanScreen(nav) }
+        // 液态玻璃实验室（原生调试页，2026-10-19）：预设对比 + 调参，选定后写回 MainScreen 的悬浮岛
+        composable(Routes.LIQUID_GLASS_LAB) { com.live.finance.ui.main.LiquidGlassLabScreen(nav) }
+        // 卡方实验室（2026-10-22）：统一入口，内嵌预览卡片模组 / 卡包两种形态并保存正式页选用
+        composable(Routes.CARD_STYLE_LAB) { com.live.finance.ui.bankcard.CardStyleLabScreen(nav) }
         composable(Routes.FIXED_ASSET) { com.live.finance.ui.fixed.FixedAssetListScreen(nav) }
         // 固定资产：详情 / 编辑 / 回收站（web `finance/fixed-asset/{detail, edit}/:id` + `/recycle`）
         composable(

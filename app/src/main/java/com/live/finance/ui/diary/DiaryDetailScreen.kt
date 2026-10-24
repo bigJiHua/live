@@ -46,6 +46,7 @@ import com.live.finance.core.AppConfig
 import com.live.finance.core.net.ApiResult
 import com.live.finance.core.net.failMessage
 import com.live.finance.data.model.Moment
+import com.live.finance.data.local.DiaryListCache
 import com.live.finance.data.model.User
 import com.live.finance.theme.LocalAppColors
 import com.live.finance.theme.vanGreen
@@ -207,6 +208,8 @@ fun DiaryDetailScreen(nav: NavHostController, id: String) {
             val targetId = if (deleteMain) detail?.id.orEmpty() else deleteChildId.orEmpty()
             when (val r = graph.moment.delete(targetId)) {
                 is ApiResult.Ok -> {
+                    // 删除会改变列表的条数/追文数：本地快照必须失效。
+                    DiaryListCache.clear(ctx)
                     toast.show("删除成功", VanToastType.Success)
                     if (deleteMain) {
                         nav.popBackStack()
