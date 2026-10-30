@@ -22,8 +22,11 @@ import com.live.finance.core.net.ClientContext
 import com.live.finance.core.net.DeviceProfile
 import com.live.finance.core.store.CardPageStyle
 import com.live.finance.core.store.CardStyleStore
+import com.live.finance.core.glass.NewBarSpec
 import com.live.finance.core.store.GlassStore
+import com.live.finance.core.store.NewBarStore
 import com.live.finance.core.store.SessionStore
+import com.live.finance.core.store.TabBarStyleStore
 import com.live.finance.data.repo.AuthRepository
 import com.live.finance.data.repo.AssetRepository
 import com.live.finance.data.repo.BudgetRepository
@@ -210,9 +213,29 @@ class AppGraph(context: Context) {
 
     /** 底部悬浮岛玻璃参数的持久层（2026-10-19，`finance_glass` SharedPreferences）。 */
     val glassStore = GlassStore(context)
+    private val newBarStore = NewBarStore(context)
 
     /** 卡片页形态的持久层（2026-10-22，`finance_card_style` SharedPreferences）。 */
     val cardStyleStore = CardStyleStore(context)
+
+    /** 底部 Tab 组件选择持久层（2026-10-23，`finance_tab_bar`）。 */
+    val tabBarStyleStore = TabBarStyleStore(context)
+
+    /** 底部 Tab 组件：false = 经典悬浮岛玻璃，true = 全新独立 Liquid Glass 组件。 */
+    val useNewTabBar: MutableState<Boolean> = mutableStateOf(false)
+
+    /**
+     * 玻璃 backdrop 的失效信号（2026-10-23）：内容 Box 的绘制**不会因子页面滚动/图片加载
+     * 自动重跑**（绘制失效停在滚动容器/图层边界），必须显式 bump 才会重录背景并刷新玻璃。
+     * - 嵌套滚动连接：底栏可见期间每个滚动帧 bump（滚动帧调度）。
+     * - Coil EventListener：图片加载成功/失败时 bump（非滚动类内容变化）。
+     * 只被玻璃绘制的 draw 阶段读取 ⇒ 只触发重绘，不触发重组。
+     */
+    val glassBackdropTick: MutableState<Int> = mutableStateOf(0)
+
+    fun bumpGlassBackdrop() {
+        glassBackdropTick.value++
+    }
 
     /** 我的卡片呈现形态：`Module` = 卡片模组页，`Wallet` = 卡包页。默认卡片模组。 */
     val cardPageStyle: MutableState<CardPageStyle> = mutableStateOf(CardPageStyle.Module)
@@ -223,6 +246,12 @@ class AppGraph(context: Context) {
      * 点「保存设定」才 [persistBarGlass] 落盘，重启后 [init] 读回。
      */
     val barGlass: MutableState<BarGlassSpec> = mutableStateOf(BarGlassSpec())
+
+    /**
+     * 新版独立底部 Tab（NewLiquidGlassTabBar）的材质/透镜参数（2026-10-27）。
+     * 语义与 [barGlass] 相同：实验室实时改内存、「保存设定」才落盘。
+     */
+    val newBarGlass: MutableState<NewBarSpec> = mutableStateOf(NewBarSpec())
 
     /** 启动就绪标记：session.load()（读 DataStore 持久 token）与主题加载完成后置 true，
      *  AppRoot 据此再合成 NavHost 决定首屏——避免首帧合成时 token 尚未从 DataStore 读出。 */
@@ -238,7 +267,9 @@ class AppGraph(context: Context) {
         clickHaptics.value = prefs.clickHaptics
         hapticStrength.value = HapticStrength.resolve(prefs.hapticStrength).key
         barGlass.value = glassStore.load()       // 悬浮岛玻璃参数（保存过的才覆盖默认值）
+        newBarGlass.value = newBarStore.load()   // 新版底栏参数（同上）
         cardPageStyle.value = cardStyleStore.load() // 卡片页形态（默认卡片模组）
+        useNewTabBar.value = tabBarStyleStore.load() // 底部 Tab 组件（默认经典悬浮岛）
         MoneyColor.apply(prefs.moneyColorMode)   // 首帧前先落到全局收支配色
         sessionReady.value = true
 
@@ -288,6 +319,16 @@ class AppGraph(context: Context) {
         glassStore.save(barGlass.value)
     }
 
+    /** 实时更新新版底栏参数（不落盘）：实验室每次调参都调它。 */
+    fun setNewBarGlass(spec: NewBarSpec) {
+        newBarGlass.value = spec.clamped()
+    }
+
+    /** 保存设定：把当前新版底栏参数写入本地（重启仍生效）。 */
+    fun persistNewBarGlass() {
+        newBarStore.save(newBarGlass.value)
+    }
+
     /** 卡片页形态：内存即时更新（下一次进入我的卡片生效）。 */
     fun setCardPageStyle(style: CardPageStyle) {
         cardPageStyle.value = style
@@ -296,6 +337,16 @@ class AppGraph(context: Context) {
     /** 卡片页形态：点「保存设定」时落盘（重启仍生效）。 */
     fun persistCardPageStyle() {
         cardStyleStore.save(cardPageStyle.value)
+    }
+
+    /** 底部 Tab 组件：内存即时切换（MainScreen 立即换组件）。 */
+    fun setUseNewTabBar(useNew: Boolean) {
+        useNewTabBar.value = useNew
+    }
+
+    /** 底部 Tab 组件：即时落盘（重启仍生效）。 */
+    fun persistTabBarStyle() {
+        tabBarStyleStore.save(useNewTabBar.value)
     }
 
     /** 切「文字大小」档位；越界一律夹到 [FONT_LEVEL_MIN]…[FONT_LEVEL_MAX]。 */

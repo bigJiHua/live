@@ -175,7 +175,8 @@ fun CardFlowScreen(
                     summaryExpense = data.filter { it.direction != 1 }.sumOf { it.amount }
                     hasSummary = true
                 }
-                else -> hasSummary = false
+                // 摘要失败保留上次数字：刷新失败不应把头部收支清空
+                else -> Unit
             }
             requesting = true
             when (val r = graph.flow.listByCard(card.id, 1, limit, startDate(), endDate(), directionFilter())) {

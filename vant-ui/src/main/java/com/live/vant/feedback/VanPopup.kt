@@ -11,6 +11,7 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -25,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.live.vant.basic.VanOverlay
@@ -108,6 +110,11 @@ fun VanPopup(
                         },
                     )
                     .background(bg)
+                    // ⚠ 面板必须是"实心"的：Compose 命中测试只认带 pointerInput 的节点，
+                    //   面板空白处（内边距、标题行中间、按钮间 gap）若没人接管，点击会落到背后
+                    //   铺满全屏的 VanOverlay 上，被误当成"点遮罩"收起。这里吞掉落在面板上的
+                    //   点按，关闭只保留「取消/关闭」与「点遮罩」两条路。
+                    .pointerInput(Unit) { detectTapGestures { } }
             .then(modifier),
             ) {
                 Box(content = content)

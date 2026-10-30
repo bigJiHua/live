@@ -87,9 +87,10 @@ fun AssetListScreen(nav: NavHostController) {
 
     suspend fun load() {
         loading = true
-        rows = when (val r = repo.list()) {
-            is ApiResult.Ok -> r.data ?: emptyList()
-            else -> { toast.showFail(r, "加载失败"); emptyList() }
+        when (val r = repo.list()) {
+            is ApiResult.Ok -> rows = r.data ?: emptyList()
+            // 刷新失败保留屏上旧数据：清空会让整页变「暂无登记记录」，用户分不清是没数据还是没加载出来
+            else -> toast.showFail(r, "加载失败")
         }
         loading = false
     }

@@ -111,8 +111,8 @@ fun BillLedgerScreen(nav: NavHostController, billId: String = "") {
                 finished = data.size < limit
                 if (!finished) page = p + 1 else page = p
             }
-            // web `loadFlowList` 的 catch → showToast('加载失败')
-            else -> { finished = true; if (reset) rows = emptyList(); toast.showFail(r, "加载失败") }
+            // web `loadFlowList` 的 catch → showToast('加载失败')；刷新失败保留旧流水，不清空明细
+            else -> { finished = true; toast.showFail(r, "加载失败") }
         }
         loading = false
         requesting = false

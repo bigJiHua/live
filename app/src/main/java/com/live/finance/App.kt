@@ -25,6 +25,7 @@ class App : Application() {
         // ⚠ 2026-10-10 修：原先包在 `ImageLoaderFactory { this }` 里，`this` 语义含糊（易拿不到真正的
         //   Application context），缓存目录/内存缓存可能没真正建起来 ⇒ 同源 logo 仍反复拉。这里直接以
         //   `this@App` 构建并 `setImageLoader(ImageLoader)`，context 明确无歧义。
+        graph = AppGraph(this)
         Coil.setImageLoader(
             ImageLoader.Builder(this@App)
                 .components { add(SvgDecoder.Factory()) }
@@ -36,9 +37,19 @@ class App : Application() {
                         .build()
                 }
                 .respectCacheHeaders(false)                 // 银行 logo / 静态资源照缓存，跳过服务端 no-store
+                // 🔔 玻璃 backdrop 脏信号（2026-10-23）：图片加载完成是「非滚动类内容变化」，
+                //   玻璃的背景 Picture 不会因子页重绘自动重录，必须在加载完成时显式失效一次
+                //   （只 bump 计数 ⇒ 只触发底栏玻璃重绘，不触发页面重组）。
+                .eventListener(object : coil.EventListener {
+                    override fun onSuccess(request: coil.request.ImageRequest, result: coil.request.SuccessResult) {
+                        graph.bumpGlassBackdrop()
+                    }
+                    override fun onError(request: coil.request.ImageRequest, result: coil.request.ErrorResult) {
+                        graph.bumpGlassBackdrop()
+                    }
+                })
                 .build(),
         )
-        graph = AppGraph(this)
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             // 🔒 安全整改 P1-28（2026-10-08）：启动时算自身签名 SHA-256，
             //   存 AppConfig 供 DeviceProfile 每请求上报（API 端 appSignatureGuard 白名单比对）。

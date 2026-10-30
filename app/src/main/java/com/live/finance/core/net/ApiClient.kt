@@ -7,8 +7,16 @@ import com.live.finance.BuildConfig
 import com.live.finance.core.AppConfig
 import com.live.finance.core.crypto.AesCbc
 import com.live.finance.core.store.SessionStore
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineName
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelChildren
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
@@ -87,6 +95,69 @@ class ApiClient(
      */
     var onSessionBlocked: ((String) -> Unit)? = null
 
+    /**
+     * 全局网络活动计数（2026-10-27 批次A2）：>0 = 有请求在飞。
+     *
+     * 消费方：GlobalNavBar 顶栏「一键锁定」左侧的活动指示器——用户由此察觉「系统正在/刚在后台更新数据」。
+     * 覆盖 [request]/[uploadRaw]/[upload]/[download] 全部真实网络出口；attempt() 内部重发
+     * （8401 重发 / 带票重发）算同一次业务请求不重复计；SWR 后台静默刷新（批次B）也计入，
+     * 这是「静默更新可感知」的落点。8303 的 PIN 弹窗等待期一并计入（实现从简：弹窗期间请求未决）。
+     */
+    val inFlight = MutableStateFlow(0)
+
+    /** 包住一次真实网络出口的计数壳：进入 +1，finally -1（成功/失败/异常/取消都归位）。 */
+    private inline fun <T> counted(block: () -> T): T {
+        inFlight.update { it + 1 }
+        try {
+            return block()
+        } finally {
+            inFlight.update { it - 1 }
+        }
+    }
+
+    // ── SWR 后台静默刷新（2026-10-27 批次B）──
+    // STALE 命中时的后台刷新跑在这里：独立 SupervisorJob ⇒ 与调用方协程解耦（页面离开取消不影响），
+    // 会话终止/切站点时用 cancelBackgroundRefresh() 取消全部在飞。
+    private val swrJob = SupervisorJob()
+    private val swrScope = CoroutineScope(swrJob + Dispatchers.IO + CoroutineName("api-swr"))
+
+    /** 会话终止/切站点时调用：取消全部在飞的后台刷新（其结果已无意义，且不得在清缓存后复活旧数据）。 */
+    fun cancelBackgroundRefresh() {
+        swrJob.cancelChildren()
+    }
+
+    /**
+     * STALE 命中触发的后台静默刷新。single-flight：同 key 同时只允许一个在飞（[ApiGetCache.markRefreshing]）。
+     * 一律 silent：401/8303/8304 只吞不弹——下次用户前台操作拿到同样的失败会走正常 forceLogin/PIN 流程，
+     * 保证最终一定知道会话失效，只是不打断当前的无感刷新。
+     */
+    private fun launchStaleRefresh(cacheKey: String, path: String, query: Map<String, String>?) {
+        if (!ApiGetCache.markRefreshing(cacheKey)) return // 已有同 key 在飞：复用那一次即可
+        swrScope.launch {
+            try {
+                val env = execute(
+                    method = "get", lower = "get", path = path, query = query,
+                    body = null, encrypted = false, routeTag = "", silent = true, cacheKey = cacheKey,
+                )
+                if (env.isSuccess) {
+                    // execute 内部已把新信封 put 进缓存，这里只广播（页面可选监听做原地更新）
+                    ApiGetCache.broadcast(cacheKey)
+                    if (BuildConfig.DEBUG) Log.d(TAG, "SWR REFRESHED $path")
+                } else {
+                    ApiGetCache.extendGrace(cacheKey, SWR_GRACE_MS)
+                    if (BuildConfig.DEBUG) Log.d(TAG, "SWR KEEP-STALE $path code=${env.code} msg=${env.message}")
+                }
+            } catch (e: CancellationException) {
+                throw e // 会话终止/切站点取消：正常路径，finally 会释放 single-flight 占位
+            } catch (e: Exception) {
+                ApiGetCache.extendGrace(cacheKey, SWR_GRACE_MS)
+                if (BuildConfig.DEBUG) Log.d(TAG, "SWR ERROR $path: ${e.message}")
+            } finally {
+                ApiGetCache.unmarkRefreshing(cacheKey)
+            }
+        }
+    }
+
     suspend fun get(path: String, query: Map<String, String>? = null) =
         request("get", path, query, null, encrypted = false)
 
@@ -124,7 +195,8 @@ class ApiClient(
                 parseEnvelope(resp.code, resp.body?.string() ?: "")
             }
         }
-        return withContext(Dispatchers.IO) {
+        return counted {
+        withContext(Dispatchers.IO) {
             try {
                 var env = sendOnce()
                 if (env.code == AppConfig.Pin.NONCE_REPLAY) {
@@ -147,6 +219,7 @@ class ApiClient(
             } catch (e: Exception) {
                 ApiResult.Fail(e.message ?: "上传异常")
             }
+        }
         }
     }
 
@@ -172,7 +245,8 @@ class ApiClient(
             val obj = runCatching { gson.fromJson(String(body), JsonObject::class.java) }.getOrNull()
             return obj?.get("code")?.takeIf { !it.isJsonNull }?.asInt == AppConfig.Pin.NONCE_REPLAY
         }
-        return withContext(Dispatchers.IO) {
+        return counted {
+        withContext(Dispatchers.IO) {
             try {
                 var (code, body, ct) = sendOnce()
                 if (code !in 200..299 && isNonceReplayBody(ct, body)) {
@@ -192,6 +266,7 @@ class ApiClient(
             } catch (e: Exception) {
                 ApiResult.Fail(e.message ?: "下载异常")
             }
+        }
         }
     }
 
@@ -217,7 +292,8 @@ class ApiClient(
                 parseEnvelope(resp.code, resp.body?.string() ?: "")
             }
         }
-        return withContext(Dispatchers.IO) {
+        return counted {
+        withContext(Dispatchers.IO) {
             try {
                 var env = sendOnce()
                 if (env.code == AppConfig.Pin.NONCE_REPLAY) {
@@ -242,6 +318,7 @@ class ApiClient(
                 ApiResult.Fail(e.message ?: "上传异常")
             }
         }
+        }
     }
 
     suspend fun request(
@@ -251,11 +328,15 @@ class ApiClient(
         body: JsonElement? = null,
         encrypted: Boolean = false,
         routeTag: String = "",
+        silent: Boolean = false,
     ): Envelope {
         val lower = method.lowercase()
+        // 批次B 铁律：silent 只允许 GET（SWR 后台刷新专用）——写操作的 8303 PIN 弹窗是安全语义，必须保留。
+        require(!silent || lower == "get") { "silent 仅允许 GET；写操作必须走前台 PIN/会话语义" }
 
-        // ── GET 进程内 TTL 缓存（2026-10-22）──
-        // 命中新鲜缓存直接返回，不发请求；过期/未命中照常走网络。
+        // ── GET 进程内 TTL 缓存 + SWR（2026-10-22 缓存 / 2026-10-27 SWR）──
+        // 命中新鲜缓存直接返回，不发请求；过期（STALE）先返回旧快照（调用方零等待），
+        // 同时触发一次 single-flight 的后台静默刷新；未命中照常走网络。
         // 只对「已接入站点」的 GET 生效：未接入时后面本来就会返回 noSiteEnvelope。
         val cacheKey = if (lower == "get" && AppConfig.hasSite && isCacheableGet(path)) {
             getCacheKey(path, query)
@@ -272,12 +353,38 @@ class ApiClient(
                     }
                     return hit.envelope
                 }
-                if (BuildConfig.DEBUG) Log.d(TAG, "STALE GET $path age=${age}ms/${hit.ttlMs}ms")
+                // STALE（批次B SWR）：旧快照秒回，后台拉新。这正是「数据静默更新、整体不刷新」的核心路径。
+                if (BuildConfig.DEBUG) Log.d(TAG, "STALE GET $path age=${age}ms/${hit.ttlMs}ms ⇒ SWR")
+                launchStaleRefresh(cacheKey, path, query)
+                return hit.envelope
             } else if (BuildConfig.DEBUG) {
                 Log.d(TAG, "MISS GET $path")
             }
         }
 
+        return execute(method, lower, path, query, body, encrypted, routeTag, silent, cacheKey)
+    }
+
+    /**
+     * 真实网络执行段（2026-10-27 批次B 自 request 拆出）：前台请求与 SWR 后台刷新共用一条链路，
+     * 8401 重发 / KEY_ERR 重握手 / 8303 带票重发等自愈逻辑天然共享。
+     *
+     * silent=true（仅 GET，见 [request] 的 require）时的语义分歧：
+     *  - 8303：不弹 PIN，直接把信封交回（SWR 调用方按失败处理 → 旧快照延长宽限）；
+     *  - 401/8304：只清缓存，**不调 onSessionBlocked**——后台刷新永不把用户踢下线，
+     *    下次前台请求拿到同样的失败会走正常 forceLogin 流程兜底。
+     */
+    private suspend fun execute(
+        method: String,
+        lower: String,
+        path: String,
+        query: Map<String, String>?,
+        body: JsonElement?,
+        encrypted: Boolean,
+        routeTag: String,
+        silent: Boolean,
+        cacheKey: String?,
+    ): Envelope {
         val isHandshake = path.contains(AppConfig.HANDSHAKE_PATH)
         val isSkip = AppConfig.SKIP_ENCRYPT_URLS.any { path.contains(it) }
         val needEncrypt = encrypted && !isHandshake && !isSkip
@@ -324,6 +431,8 @@ class ApiClient(
             }
         }
 
+        // 计入全局网络活动（批次A2）：从首个请求到 8401 重发/带票重发完成都算一次在飞。
+        return counted {
         var env = attempt()
         // nonce 复用（8401）：请求被判重放。对齐 web `nonceRetry.js` / webview-APP 同名模块。
         //
@@ -354,7 +463,7 @@ class ApiClient(
         // 后端此时已因 markSuccess 把 lock 记录置为 pin_status=1，查不到未解锁记录 ⇒ 又插一条
         // ⇒ 用户明明输对了 PIN，系统却被重新锁上。锁定后的弹窗改由 GlobalNavBar 调
         // `PinCoordinator.requestUnlock()` 主动弹（等价 web 的 showPinDialog）。
-        if (env.isPinVerify &&
+        if (env.isPinVerify && !silent &&
             !path.contains("/security/pin/route-verify") &&
             !path.contains("/lock-system")
         ) {
@@ -376,11 +485,18 @@ class ApiClient(
         when {
             pinCode == AppConfig.Pin.LOCKED -> {
                 ApiGetCache.clear()
-                onSessionBlocked?.invoke(env.message.ifEmpty { "PIN 已锁定，请重新登录" })
+                if (!silent) {
+                    swrJob.cancelChildren()
+                    onSessionBlocked?.invoke(env.message.ifEmpty { "PIN 已锁定，请重新登录" })
+                }
+                // silent（批次B）：后台刷新遇会话终止只吞不弹——旧快照已被 clear，下次前台请求兜底。
             }
             pinCode == null && (env.httpStatus == 401 || env.status == 401) -> {
                 ApiGetCache.clear()
-                onSessionBlocked?.invoke(env.message.ifEmpty { "登录已失效" })
+                if (!silent) {
+                    swrJob.cancelChildren()
+                    onSessionBlocked?.invoke(env.message.ifEmpty { "登录已失效" })
+                }
             }
         }
 
@@ -392,14 +508,18 @@ class ApiClient(
             }
         } else if (lower != "get" && env.isSuccess && !isReadOnlyPost(path)) {
             // 写成功 ⇒ 所有 GET 快照失效。宁可多清一次，也不能让用户看到刚改完的旧数据。
+            // 同时取消在飞的后台刷新：它们可能在写提交前发出、把写之前的旧数据塞回缓存（复活旧值）。
             ApiGetCache.clear()
+            swrJob.cancelChildren()
             if (BuildConfig.DEBUG) Log.d(TAG, "CLEAR after ${method.uppercase()} $path")
         } else if (lower == "get" && env.isSuccess && isSideEffectGet(path)) {
             // 少数 GET 会写库（如分期清单会自动入账）⇒ 不缓存，且成功后清掉别的 GET 快照。
             ApiGetCache.clear()
+            swrJob.cancelChildren()
             if (BuildConfig.DEBUG) Log.d(TAG, "CLEAR after side-effect GET $path")
         }
-        return env
+        env
+        }
     }
 
     /**
@@ -417,11 +537,14 @@ class ApiClient(
         return "${AppConfig.baseUrl}|$token|$path|$q"
     }
 
-    /** TTL 分级：字典/地理信息长；卡片/池/用户/安全状态中；账务列表与详情短。 */
+    /** TTL 分级：字典/地理信息长；卡片/池/用户/安全状态中；首页摘要与账单短。 */
     private fun ttlMsFor(path: String): Long = when {
         path.startsWith("/category") || path.startsWith("/geo") -> 30 * 60_000L
         path == "/card" || path == "/card/pool" || path == "/pool" ||
             path == "/auth/me" || path == "/security/pin/check" -> 10 * 60_000L
+        // 首页摘要三接口（批次B 起纳入 SWR，60s 档）：STALE 时先给旧快照再后台静默刷新。
+        // 2026-10-22 的「首页空白回归」根因是无快照白屏，SWR 的「永远先给旧数据」正是正解。
+        path == "/asset/home" || path == "/todo/reminders" || path == "/work/salary/day" -> 60_000L
         // 账单 GET 在「列表为空」时会触发后端重算，且账期变化比流水频繁 ⇒ 只给 60s。
         path == "/card/bill" -> 60_000L
         else -> 5 * 60_000L
@@ -433,17 +556,18 @@ class ApiClient(
      * - `/data-manager` 前缀：导出是 GET 启动任务、进度也是 GET 轮询，缓存会让「刷新状态」永远停在旧进度；
      * - `/recurring/installments`：GET 会自动入账（写库），不能读快照，见 [isSideEffectGet]；
      * - `/share` 前缀：公开分享内容可能被撤回，不适合留快照；
-     * - 首页摘要（`/asset/home`、`/todo/reminders`、`/work/salary/day`）：2026-10-22
-     *   首页空白回归后先不走缓存，保证从二级/三级页返回首页时一定重新拉最新数据。
+     * - `/geo/ip`：IP 定位是实时查询（客户端公网 IP 会变），且失败(空 address)的 200 响应缓存后会
+     *   阻止重试 ⇒ 秒批"IP定位失败"。
+     *
+     * ⚠ 首页三接口（/asset/home、/todo/reminders、/work/salary/day）曾因 2026-10-22 首页空白回归
+     *   被撤出缓存；2026-10-27 批次B 引入 SWR（STALE 先给旧快照再后台刷新）后重新纳入——
+     *   空白根因已由 SWR 语义消除。
      */
     private fun isCacheableGet(path: String): Boolean =
         !path.startsWith("/data-manager") &&
             !path.startsWith("/recurring/installments") &&
             !path.startsWith("/share") &&
-            path != "/asset/home" &&
-            path != "/todo/reminders" &&
-            path != "/work/salary/day" &&
-            path != "/geo/ip" // IP 定位是实时查询（客户端公网 IP 会变），且失败(空 address)的 200 响应缓存后会阻止重试 ⇒ 秒批"IP定位失败"
+            path != "/geo/ip"
 
     /** 有写副作用的 GET：不缓存，且在成功后清空其他 GET 快照。 */
     private fun isSideEffectGet(path: String): Boolean =
@@ -461,6 +585,9 @@ class ApiClient(
 
     private companion object {
         const val TAG = "ApiCache"
+
+        /** 刷新失败后旧快照的宽限时长：期间再次 STALE 命中不重新触发刷新，防后端故障时每次进页都打网络。 */
+        const val SWR_GRACE_MS = 60_000L
     }
 
     private suspend fun buildBody(

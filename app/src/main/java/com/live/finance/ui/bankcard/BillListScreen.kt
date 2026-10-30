@@ -187,8 +187,9 @@ fun BillListScreen(nav: NavHostController) {
                             .thenBy { Bill.parseMonthDay(it.billMonth, it.billDay) ?: LocalDate.MAX }
                     )
                 }
-                is ApiResult.Fail -> { toast(r.message.ifBlank { "加载失败" }, VanToastType.Fail); bills = emptyList() }
-                else -> bills = emptyList()
+                is ApiResult.Fail -> { toast(r.message.ifBlank { "加载失败" }, VanToastType.Fail) }
+                // 刷新失败保留旧账单：清空会让整页变空，也分不清「没账单」和「没加载出来」
+                else -> toast(r.failMessage("加载失败"), r.failToastType())
             }
             saveSnapshot()
             if (!silent) loading = false

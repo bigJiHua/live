@@ -30,11 +30,6 @@ class GlassStore(context: Context) {
             specular = prefs.getFloat(KEY_SPECULAR, d.specular),
             capsuleLight = prefs.getFloat(KEY_CAPSULE_LIGHT, d.capsuleLight),
             capsuleDark = prefs.getFloat(KEY_CAPSULE_DARK, d.capsuleDark),
-            rimWidthDp = prefs.getFloat(KEY_RIM_WIDTH_DP, d.rimWidthDp),
-            rimScale = prefs.getFloat(KEY_RIM_SCALE, d.rimScale),
-            rimTintRatio = prefs.getFloat(KEY_RIM_TINT, d.rimTintRatio),
-            rimBlurScale = prefs.getFloat(KEY_RIM_BLUR_SCALE, d.rimBlurScale),
-            rimStrength = prefs.getFloat(KEY_RIM_STRENGTH, d.rimStrength),
             collapseOnScroll = prefs.getBoolean(KEY_COLLAPSE_ON_SCROLL, d.collapseOnScroll),
         ).clamped()
 
@@ -43,25 +38,12 @@ class GlassStore(context: Context) {
         if (!prefs.getBoolean(KEY_FROST_V2, false)) {
             val migrated = spec.copy(
                 blurDp = maxOf(spec.blurDp, 20f),
-                rimWidthDp = 0f,
             ).clamped()
             save(migrated)
             prefs.edit().putBoolean(KEY_FROST_V2, true).apply()
             return migrated
         }
 
-        // 一次性迁移（2026-10-19）：旧存档里的 rim_scale / rim_blur_scale 是**边缘折射环**的参数
-        // （环已删除，参数被胶囊透镜复用），照搬会导致"静止在纯色背景上看不出透镜"。
-        // 胶囊透镜需要更强放大（≥1.6）+ 比主体更清晰（≤0.3）才读得出"放大镜"。
-        if (!prefs.getBoolean(KEY_LENS_V2, false)) {
-            val migrated = spec.copy(
-                rimScale = maxOf(spec.rimScale, 1.6f),
-                rimBlurScale = minOf(spec.rimBlurScale, 0.3f),
-            ).clamped()
-            save(migrated)
-            prefs.edit().putBoolean(KEY_LENS_V2, true).apply()
-            return migrated
-        }
         return spec
     }
 
@@ -76,11 +58,6 @@ class GlassStore(context: Context) {
             .putFloat(KEY_SPECULAR, s.specular)
             .putFloat(KEY_CAPSULE_LIGHT, s.capsuleLight)
             .putFloat(KEY_CAPSULE_DARK, s.capsuleDark)
-            .putFloat(KEY_RIM_WIDTH_DP, s.rimWidthDp)
-            .putFloat(KEY_RIM_SCALE, s.rimScale)
-            .putFloat(KEY_RIM_TINT, s.rimTintRatio)
-            .putFloat(KEY_RIM_BLUR_SCALE, s.rimBlurScale)
-            .putFloat(KEY_RIM_STRENGTH, s.rimStrength)
             .putBoolean(KEY_COLLAPSE_ON_SCROLL, s.collapseOnScroll)
             .apply()
     }
@@ -95,15 +72,8 @@ class GlassStore(context: Context) {
         private const val KEY_SPECULAR = "specular"
         private const val KEY_CAPSULE_LIGHT = "capsule_light"
         private const val KEY_CAPSULE_DARK = "capsule_dark"
-        private const val KEY_RIM_WIDTH_DP = "rim_width_dp"
-        private const val KEY_RIM_SCALE = "rim_scale"
-        private const val KEY_RIM_TINT = "rim_tint"
-        private const val KEY_RIM_BLUR_SCALE = "rim_blur_scale"
-        private const val KEY_RIM_STRENGTH = "rim_strength"
         /** 是否因滚动收起底栏（默认 true）。 */
         private const val KEY_COLLAPSE_ON_SCROLL = "collapse_on_scroll"
-        /** 胶囊透镜参数迁移标记（一次性；见 [load]）。 */
-        private const val KEY_LENS_V2 = "lens_v2"
         /** 「去透视」迁移标记：模糊提到 20dp、折射环宽归零（一次性；见 [load]）。 */
         private const val KEY_FROST_V2 = "frost_v2"
     }

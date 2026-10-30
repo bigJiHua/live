@@ -1,6 +1,9 @@
 package com.live.finance.ui.main
 
 import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -9,23 +12,34 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableIntState
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import com.live.finance.App
 import com.live.finance.core.nav.RouteTitles
 import com.live.finance.core.nav.Routes
 import com.live.finance.core.net.ApiResult
 import com.live.finance.theme.LocalAppColors
+import com.live.vant.basic.VanLoading
 import com.live.vant.feedback.LocalVanToastController
 import com.live.vant.feedback.VanToastPosition
 import com.live.vant.icon.VanIcon
@@ -99,25 +113,32 @@ fun GlobalNavBar(nav: NavHostController, mainTab: MutableIntState) {
             }
         },
         rightSlot = {
-            NavHot("lock", colors.textPrimary) {
-                scope.launch {
-                    val r = graph.auth.lockSystem()
-                    when (r) {
-                        // 锁定生效的标志恰恰是 `code:8303`：控制器插一条 pin_status=0 的锁记录并要求
-                        // 下次操作验证 PIN。若此前 pinGate 已弹框验证过，重发会再次拿到 8303
-                        // （verify 成功已把旧记录置 1，重发又新插一条）—— 都算锁定成功，不是失败。
-                        is ApiResult.Ok, is ApiResult.NeedPin -> {
-                            toast.show("系统已锁定", VanToastType.Fail, position = VanToastPosition.Top)
-                            // 锁定成功后必须立刻弹窗要求解锁，不能等下次请求 —— 否则用户停在当前页
-                            // 就没有任何解锁入口（web MainLayout 的 showPinDialog 同理）。
-                            // ⚠ 原先只有 fake 变体补弹：因为 prod 下 lock-system 的 8303 会由 pinGate
-                            //   触发弹窗；现在 lock-system 已排除出 pinGate 队列（避免"输对 PIN 又被
-                            //   重新锁上"），prod 也必须主动弹。
-                            graph.pinCoordinator.requestUnlock()
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // 网络活动指示器（2026-10-27 批次A2）：任何请求在飞时旋转，让静默更新可感知
+                NetActivityIndicator()
+                NavHot("lock", colors.textPrimary) {
+                    scope.launch {
+                        val r = graph.auth.lockSystem()
+                        when (r) {
+                            // 锁定生效的标志恰恰是 `code:8303`：控制器插一条 pin_status=0 的锁记录并要求
+                            // 下次操作验证 PIN。若此前 pinGate 已弹框验证过，重发会再次拿到 8303
+                            // （verify 成功已把旧记录置 1，重发又新插一条）—— 都算锁定成功，不是失败。
+                            is ApiResult.Ok, is ApiResult.NeedPin -> {
+                                toast.show("系统已锁定", VanToastType.Fail, position = VanToastPosition.Top)
+                                // 锁定成功后必须立刻弹窗要求解锁，不能等下次请求 —— 否则用户停在当前页
+                                // 就没有任何解锁入口（web MainLayout 的 showPinDialog 同理）。
+                                // ⚠ 原先只有 fake 变体补弹：因为 prod 下 lock-system 的 8303 会由 pinGate
+                                //   触发弹窗；现在 lock-system 已排除出 pinGate 队列（避免"输对 PIN 又被
+                                //   重新锁上"），prod 也必须主动弹。
+                                graph.pinCoordinator.requestUnlock()
+                            }
+                            is ApiResult.Fail ->
+                                toast.show(r.message.ifEmpty { "锁定失败" }, VanToastType.Fail, position = VanToastPosition.Top)
+                            else -> toast.show("锁定失败", VanToastType.Fail, position = VanToastPosition.Top)
                         }
-                        is ApiResult.Fail ->
-                            toast.show(r.message.ifEmpty { "锁定失败" }, VanToastType.Fail, position = VanToastPosition.Top)
-                        else -> toast.show("锁定失败", VanToastType.Fail, position = VanToastPosition.Top)
                     }
                 }
             }
@@ -144,5 +165,49 @@ private fun NavHot(name: String, color: Color, onClick: () -> Unit) {
         ) { onClick() },
     ) {
         VanIcon(name = name, size = 20.sp, color = color)
+    }
+}
+
+/**
+ * 顶栏网络活动指示器（2026-10-27 批次A2，负责人新增）——「一键锁定」左侧的 Loading 动态图标。
+ *
+ * 数据源 = `ApiClient.inFlight`（全部真实网络出口的 in-flight 计数，含批次B 的 SWR 后台静默刷新）：
+ *  - 计数 >0 ⇒ 图标旋转；归零 ⇒ 消失。用户由此察觉「系统正在/刚在后台更新过数据」。
+ *  - 只在 0↔非0 边界重组一次（`map { it > 0 }.distinctUntilChanged()`）：并行请求数增多不引起重组
+ *    （对齐底栏「胶囊 x 只在绘制期读」的零重组口径；旋转由 VanLoading 自绘，不走重组）。
+ *  - 快进慢出防闪烁：出现立即（snap），消失延迟 300ms 后 200ms 渐隐——进首页三连发、快速翻页不闪。
+ *  - 固定 16dp 槽位、alpha 显隐（不走 if 移除槽位）：显隐切换布局不跳，不挤压旁边的锁定键。
+ *  - 明确不做成败变色：保持纯「活动指示器」语义（失败闪红为后续候选，本期不做）。
+ */
+@Composable
+private fun NetActivityIndicator() {
+    val graph = App.of(LocalContext.current).graph
+    val busy by remember(graph.client) {
+        graph.client.inFlight.map { it > 0 }.distinctUntilChanged()
+    }.collectAsState(initial = false)
+
+    // 淡出完成前内容由 shown 保持渲染（否则 busy=false 一瞬间 if 就把转子拆了，alpha 动画落空）
+    var shown by remember { mutableStateOf(false) }
+    LaunchedEffect(busy) {
+        if (busy) shown = true else { delay(500); shown = false }
+    }
+    val alpha by animateFloatAsState(
+        targetValue = if (busy) 1f else 0f,
+        animationSpec = if (busy) snap() else tween(durationMillis = 200, delayMillis = 300),
+        label = "netIndicatorAlpha",
+    )
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier.size(16.dp).semantics {
+            if (busy) contentDescription = "数据同步中"
+        },
+    ) {
+        if (shown) {
+            VanLoading(
+                modifier = Modifier.alpha(alpha),
+                size = 14.sp,
+                color = LocalAppColors.current.textSecondary,
+            )
+        }
     }
 }

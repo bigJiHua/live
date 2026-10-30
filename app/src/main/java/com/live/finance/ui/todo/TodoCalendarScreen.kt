@@ -164,21 +164,27 @@ fun TodoCalendarScreen(nav: NavHostController) {
     suspend fun loadSelectedDateEvents() {
         loadingEvents = true
         val res = graph.todo.listByDate(selectedDate)
-        val list = (res as? ApiResult.Ok)?.data ?: emptyList()
         // web `loadSelectedDateEvents` 的 catch → showToast("加载事件失败")
-        if (res !is ApiResult.Ok) toast.show("加载事件失败", VanToastType.Fail)
-        // web：二次过滤 happen_date，再把「当日固定支出/分期事件」并进来
-        selectedEvents = list.filter { it.happenDate == selectedDate } + recurringOfDay(selectedDate)
+        // 失败保留旧事件列表：下拉刷新不得把当前选中日的事件区清空
+        if (res is ApiResult.Ok) {
+            val list = res.data ?: emptyList()
+            // web：二次过滤 happen_date，再把「当日固定支出/分期事件」并进来
+            selectedEvents = list.filter { it.happenDate == selectedDate } + recurringOfDay(selectedDate)
+        } else {
+            toast.show("加载事件失败", VanToastType.Fail)
+        }
         loadingEvents = false
     }
 
     suspend fun reloadAll() {
         loading = true
         val calRes = graph.todo.calendarMonth(year, month)
-        calendarMonth = (calRes as? ApiResult.Ok)?.data ?: TodoCalendarMonth()
+        // 失败保留旧日历与提醒：否则整张月历会变空
+        if (calRes is ApiResult.Ok) calendarMonth = calRes.data ?: TodoCalendarMonth()
         // web `loadCalendarMonth` 的 catch → showToast("加载日历失败")
-        if (calRes !is ApiResult.Ok) toast.show("加载日历失败", VanToastType.Fail)
-        reminders = (graph.todo.reminders(year, month) as? ApiResult.Ok)?.data ?: emptyList()
+        else toast.show("加载日历失败", VanToastType.Fail)
+        val remRes = graph.todo.reminders(year, month)
+        if (remRes is ApiResult.Ok && remRes.data != null) reminders = remRes.data
         loading = false
         loadSelectedDateEvents()
     }

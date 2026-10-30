@@ -19,6 +19,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -46,6 +48,7 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -69,6 +72,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
@@ -81,6 +85,7 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import com.live.finance.App
 import com.live.finance.core.glass.BarGlassSpec
+import com.live.finance.core.glass.NewBarSpec
 import com.live.finance.theme.LocalAppColors
 import com.live.finance.theme.LocalAppTokens
 import com.live.finance.theme.scaledSp
@@ -91,6 +96,8 @@ import com.live.finance.ui.flow.FText
 import com.live.vant.feedback.LocalVanToastController
 import com.live.vant.form.VanSwitch
 import com.live.vant.icon.VanIcon
+import kotlin.math.abs
+import kotlin.math.roundToInt
 
 /**
  * 液态玻璃实验室（原生调试页，2026-10-19）。
@@ -102,7 +109,7 @@ import com.live.vant.icon.VanIcon
  * ## 布局要点
  *  - 预览固定在最上方、不参与滚动：此前预览放在 `verticalScroll` 里，上滑时预览整体
  *    滚走、玻璃层与 bar 分离（负责人报「遮罩向上滚动脱离 bar」）——固定后此问题消失。
- *  - 参数微调改成步进器（−/＋）：滑块容易被滚动误触改值（负责人反馈），步进器只响应点按。
+ *  - 参数行：上方 −/数值/＋ 做精细步进，下方滑轨可自由拖动（拖动消费手势，不会带着面板滚动）。
  *  - 【微调参数】从下方弹面板，面板最大高度 52% 屏高，不遮顶部预览；
  *    【保存设定】落盘。
  *
@@ -125,26 +132,66 @@ fun LiquidGlassLabScreen(nav: NavHostController) {
     val tokens = LocalAppTokens.current
 
     // 预览的深浅切换在 GlassPreview 内部（右上角太阳/月亮图标，默认太阳=浅色）。
-    // 三方案并排（2026-10-19 负责人定稿，A/B/C 合并"你我的做法"）：
-    //  0 = A·我的参数（滑块可调的实时 spec）；
-    //  1 = B·我的设计（写死样式的行业做法，不跟滑块）；
-    //  2 = C·DIV 自定义（进实验室时的**已保存值**，用来对比未保存的调整）。
-    var plan by remember { mutableStateOf(0) }
-    var spec by remember { mutableStateOf(graph.barGlass.value) }
+    // 三方案并排：
+    //  0 = A·参数微调：**固定默认参数**（点它 + 保存可恢复默认）；
+    //  1 = B·推荐样式：固定推荐样式（预览仍走 mine 专用渲染）；
+    //  2 = C·自定义：当前工作 spec；任何参数微调后自动切到这里，不再改 A/B。
+    val presetA = remember { BarGlassSpec() }
+    val presetB = remember {
+        BarGlassSpec(
+            alphaLight = 0.55f,
+            alphaDark = 0.60f,
+            blurDp = 24f,
+            saturation = 1.30f,
+            highlight = 0.30f,
+            specular = 0f,
+            capsuleLight = 0.55f,
+            capsuleDark = 0.12f,
+        )
+    }
     val savedSpec = remember { graph.barGlass.value }
+    var customSpec by remember { mutableStateOf(savedSpec) }
+    var collapseOnScroll by remember { mutableStateOf(savedSpec.collapseOnScroll) }
+    // 有已保存的自定义就从 C 进入（不把用户的当前效果换成默认预览）；否则从 A 默认开始。
+    var plan by remember { mutableStateOf(if (savedSpec == BarGlassSpec()) 0 else 2) }
     var sheet by remember { mutableStateOf(false) }
+    // 新版底栏（NewLiquidGlassTabBar）的调参工作值：「底部 Tab 组件」开启时面板调这套。
+    var customNew by remember { mutableStateOf(graph.newBarGlass.value) }
+
+    /** A/B/C 当前选中的有效参数（行为开关 collapseOnScroll 三者共用）。 */
+    fun effectiveSpec(): BarGlassSpec = when (plan) {
+        0 -> presetA.copy(collapseOnScroll = collapseOnScroll)
+        1 -> presetB.copy(collapseOnScroll = collapseOnScroll)
+        else -> customSpec.copy(collapseOnScroll = collapseOnScroll)
+    }
 
     /**
-     * 实时生效：改内存 State（不落盘），点「保存设定」才落盘。
-     *
-     * ⚠ 必须合并保留 `collapseOnScroll`：预设里没有这个字段（构造默认 true），
-     *   直接套用会把「是否因滚动而收起」开关重置回开（负责人 2026-10-19 反馈"改一遍就恢复默认"）。
+     * 参数微调入口：**只写入 C·自定义**，然后把选择切到 C。
+     * A/B 是固定预设，绝不在这里被改写；实时更新仅用于预览/返回主页。
      */
-    fun apply(new: BarGlassSpec, manual: Boolean = false) {
-        val merged = new.copy(collapseOnScroll = spec.collapseOnScroll)
-        spec = merged
+    fun applyTuned(new: BarGlassSpec) {
+        val merged = new.copy(collapseOnScroll = collapseOnScroll)
+        customSpec = merged
+        plan = 2
         graph.setBarGlass(merged)
     }
+
+    /** 新版底栏调参入口：实时更新预览与真实栏（不落盘）。 */
+    fun applyTunedNew(new: NewBarSpec) {
+        customNew = new
+        graph.setNewBarGlass(new)
+    }
+
+    /** 保存设定：持久化当前选中的 A/B/C 参数；A 即恢复默认。 */
+    fun saveSelection() {
+        val target = effectiveSpec()
+        graph.setBarGlass(target)
+        graph.persistBarGlass()
+    }
+
+    // 每次重组明确读一次（而不是只在参数表达式里调用），保证 A/B/C 或 customSpec
+    // 变化时预览拿到的就是最新值。
+    val previewSpec = effectiveSpec()
 
     ScreenScaffold { inner ->
         Box(inner.fillMaxSize()) {
@@ -159,32 +206,43 @@ fun LiquidGlassLabScreen(nav: NavHostController) {
                         Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp),
                     )
                     FText(
-                        "调参实时生效：返回主页即可看到真实底部栏；满意后点「保存设定」持久化。",
+                        "调参实时生效；A/B 为固定预设，微调任意参数会自动切到 C·自定义；「保存设定」持久化。预览深浅可切换，真机跟随 App 主题；预览背景为示例，材质参数与真机一致。",
                         11f,
                         FontWeight.Normal,
                         colors.textTertiary,
                         Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp),
                     )
                     // ── 三方案并排（唯一的切换入口；深浅在预览右上角的太阳/月亮图标）──
-                    Row(
+                    // ⚠ 仅经典悬浮岛模式显示：新版底栏没有 A/B/C 预设，参数直接微调
+                    if (!graph.useNewTabBar.value) Row(
                         Modifier.padding(start = 16.dp, end = 16.dp, top = 10.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         ModeChip("A · 参数微调", plan == 0) { plan = 0 }
                         ModeChip("B · 推荐样式", plan == 1) { plan = 1 }
-                        ModeChip("C · 已保存自定义", plan == 2) { plan = 2 }
+                        ModeChip("C · 自定义", plan == 2) { plan = 2 }
                     }
-                    GlassPreview(
-                        spec = when (plan) {
-                            2 -> savedSpec
-                            else -> spec
-                        },
-                        mine = plan == 1,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(start = 16.dp, end = 16.dp, top = 8.dp)
-                            .height(200.dp),
-                    )
+                    if (graph.useNewTabBar.value) {
+                        // 新版独立组件：实验室同样用该组件自己的预览（独立实现）
+                        NewLiquidGlassTabBarPreview(
+                            spec = customNew,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 16.dp, end = 16.dp, top = 8.dp)
+                                .height(200.dp),
+                        )
+                    } else {
+                        GlassPreview(
+                            spec = previewSpec,
+                            // B 也不再走实验室专用画法：统一用真机渲染器 + presetB 参数，
+                            // 保证「预览看到的」就是「保存后真机上的」。
+                            mine = false,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 16.dp, end = 16.dp, top = 8.dp)
+                                .height(200.dp),
+                        )
+                    }
                 }
 
                 // ── 可滚动区：两个按钮 + 底栏行为 ────────────────
@@ -211,8 +269,20 @@ fun LiquidGlassLabScreen(nav: NavHostController) {
                         AppButton(
                             text = "保存设定",
                             onClick = {
-                                graph.persistBarGlass()
-                                toast.show("已保存，重启后仍生效")
+                                if (graph.useNewTabBar.value) {
+                                    // 新版底栏：没有 A/B/C 预设，保存当前微调值
+                                    graph.setNewBarGlass(customNew)
+                                    graph.persistNewBarGlass()
+                                    toast.show("已保存：新版底栏参数")
+                                } else {
+                                    saveSelection()
+                                    val label = when (plan) {
+                                        0 -> "A·默认参数"
+                                        1 -> "B·推荐样式"
+                                        else -> "C·自定义"
+                                    }
+                                    toast.show("已保存：$label")
+                                }
                             },
                             modifier = Modifier.weight(1f),
                             type = AppButtonType.Primary,
@@ -241,15 +311,45 @@ fun LiquidGlassLabScreen(nav: NavHostController) {
                             )
                         }
                         VanSwitch(
-                            checked = spec.collapseOnScroll,
+                            checked = collapseOnScroll,
                             onCheckedChange = { on ->
-                                // ⚠ 不能走 [apply]：apply 会用"当前 spec 的 collapseOnScroll"
-                                //   覆盖回来（预设合并用的），开关就永远关不掉（2026-10-19 踩过）。
-                                // 行为开关：即时生效 + 立即落盘（不必再点「保存设定」）。
-                                val merged = spec.copy(collapseOnScroll = on)
-                                spec = merged
-                                graph.setBarGlass(merged)
+                                // 行为开关独立于 A/B/C：即时生效 + 立即落盘（不必再点「保存设定」）。
+                                // 同步写 customSpec，之后切到 C 时不会把开关冲回默认。
+                                collapseOnScroll = on
+                                customSpec = customSpec.copy(collapseOnScroll = on)
+                                graph.setBarGlass(graph.barGlass.value.copy(collapseOnScroll = on))
                                 graph.persistBarGlass()
+                            },
+                            size = 24,
+                        )
+                    }
+
+                    SectionTitle("底部 Tab 组件")
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(colors.bgCard)
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            FText("新版 Liquid Glass 底部 Tab（独立组件）", 14f, FontWeight.Medium, colors.textPrimary)
+                            Spacer(Modifier.height(3.dp))
+                            FText(
+                                "64dp / 32 圆角 / 20px 真模糊 / 内部选中胶囊；与经典悬浮岛完全独立，不与旧组件共用代码。开启后实时生效并保存。",
+                                11f,
+                                FontWeight.Normal,
+                                colors.textTertiary,
+                            )
+                        }
+                        VanSwitch(
+                            checked = graph.useNewTabBar.value,
+                            onCheckedChange = { on ->
+                                graph.setUseNewTabBar(on)
+                                graph.persistTabBarStyle()
+                                toast.show(if (on) "已切换到新版底部 Tab" else "已切回经典底部 Tab")
                             },
                             size = 24,
                         )
@@ -272,8 +372,10 @@ fun LiquidGlassLabScreen(nav: NavHostController) {
                         ),
                 )
                 TuneSheet(
-                    spec = spec,
-                    onSpec = { apply(it, manual = true) },
+                    spec = if (graph.useNewTabBar.value) null else previewSpec,
+                    newSpec = if (graph.useNewTabBar.value) customNew else null,
+                    onSpec = { applyTuned(it) },
+                    onNewSpec = { applyTunedNew(it) },
                     onClose = { sheet = false },
                 )
             }
@@ -291,8 +393,15 @@ fun LiquidGlassLabScreen(nav: NavHostController) {
  */
 @Composable
 private fun GlassPreview(spec: BarGlassSpec, mine: Boolean, modifier: Modifier = Modifier) {
-    // 预览的深浅状态由预览自己持有：默认太阳（浅色），右上角图标切换
-    var dark by remember { mutableStateOf(false) }
+    // 预览的深浅默认跟随 App 当前主题：否则深色主题用户看到的是浅色预览，
+    // 保存后回到真实栏会判若两套（2026-10-23 负责人反馈「感觉被欺骗」）。
+    val previewTokens = LocalAppTokens.current
+    var dark by remember { mutableStateOf(previewTokens.isDark) }
+    // ⚠ 实时预览：spec/mine/dark 用 rememberUpdatedState，并在**绘制 lambda 内**读 .value。
+    //   只捕获普通参数时，drawWithCache 会复用旧绘制结果，调参后预览不刷新（2026-10-23 负责人报）。
+    val liveSpec = rememberUpdatedState(spec)
+    val liveMine = rememberUpdatedState(mine)
+    val liveDark = rememberUpdatedState(dark)
     val density = LocalDensity.current
     val picture = remember { AndroidPicture() }
     val node = remember { if (Build.VERSION.SDK_INT >= 31) RenderNode("labGlass") else null }
@@ -329,54 +438,54 @@ private fun GlassPreview(spec: BarGlassSpec, mine: Boolean, modifier: Modifier =
             Modifier
                 .fillMaxSize()
                 .onGloballyPositioned { origin = it.boundsInRoot().topLeft }
-                .drawWithCache {
+                .drawWithContent {
                     val w = size.width.toInt().coerceAtLeast(1)
                     val h = size.height.toInt().coerceAtLeast(1)
-                    onDrawWithContent {
-                        val rect = barRect
-                        if (Build.VERSION.SDK_INT < 31 || rect == null) {
-                            drawContent()
-                            return@onDrawWithContent
-                        }
-                        val pc = picture.beginRecording(w, h)
-                        val prev = drawContext.canvas
-                        drawContext.canvas = ComposeCanvas(pc)
+                    val rect = barRect
+                    if (Build.VERSION.SDK_INT < 31 || rect == null) {
                         drawContent()
-                        drawContext.canvas = prev
-                        picture.endRecording()
-                        drawIntoCanvas { it.nativeCanvas.drawPicture(picture) }
-                        val islandArea = Rect(
-                            rect.left - origin.x, rect.top - origin.y,
-                            rect.right - origin.x, rect.bottom - origin.y,
-                        )
-                        // C 方案（我的设计）：材料参数写死，不走滑块 ——
-                        // blur 24dp + 饱和 1.30 + 无环；tint 深浅两套（深=黑 60%，浅=白 55%）。
-                        // 行业口径：模糊承担质感，tint 只做轻微罩色（iOS "material" 思路）。
-                        val effSpec = if (mine) {
-                            spec.copy(blurDp = 24f, saturation = 1.30f, rimWidthDp = 0f, highlight = 0.30f, specular = 0f)
-                        } else {
-                            spec
-                        }
-                        val tint = if (mine) {
-                            if (dark) Color(0xFF101014).copy(alpha = 0.60f) else Color.White.copy(alpha = 0.55f)
-                        } else {
-                            Color.White.copy(alpha = if (dark) spec.alphaDark else spec.alphaLight)
-                        }
-                        renderGlass(
-                            picture = picture,
-                            area = islandArea,
-                            canvasW = w,
-                            canvasH = h,
-                            node = node,
-                            saturation = saturation,
-                            shadowPaint = shadowPaint,
-                            spec = effSpec,
-                            tint = tint,
-                            cornerRadius = corner,
-                        )
-                        // 透视/透镜已取消（2026-10-19「不做透视了」）⇒ 改为放大选中项图标+文字
-
+                        return@drawWithContent
                     }
+                    // 在绘制时读 State：参数变化会直接 invalidate draw（不依赖 drawCache 重建）
+                    val s = liveSpec.value
+                    val m = liveMine.value
+                    val d = liveDark.value
+                    val pc = picture.beginRecording(w, h)
+                    val prev = drawContext.canvas
+                    drawContext.canvas = ComposeCanvas(pc)
+                    drawContent()
+                    drawContext.canvas = prev
+                    picture.endRecording()
+                    drawIntoCanvas { it.nativeCanvas.drawPicture(picture) }
+                    val islandArea = Rect(
+                        rect.left - origin.x, rect.top - origin.y,
+                        rect.right - origin.x, rect.bottom - origin.y,
+                    )
+                    // B 方案（推荐样式）：材料参数写死，不走滑块 ——
+                    // blur 24dp + 饱和 1.30 + 无环；tint 深浅两套（深=黑 60%，浅=白 55%）。
+                    // 行业口径：模糊承担质感，tint 只做轻微罩色（iOS "material" 思路）。
+                    val effSpec = if (m) {
+                        s.copy(blurDp = 24f, saturation = 1.30f, highlight = 0.30f, specular = 0f)
+                    } else {
+                        s
+                    }
+                    val tint = if (m) {
+                        if (d) Color(0xFF101014).copy(alpha = 0.60f) else Color.White.copy(alpha = 0.55f)
+                    } else {
+                        Color.White.copy(alpha = if (d) s.alphaDark else s.alphaLight)
+                    }
+                    renderGlass(
+                        picture = picture,
+                        area = islandArea,
+                        canvasW = w,
+                        canvasH = h,
+                        node = node,
+                        saturation = saturation,
+                        shadowPaint = shadowPaint,
+                        spec = effSpec,
+                        tint = tint,
+                        cornerRadius = corner,
+                    )
                 },
         ) {
             SampleBackdrop(dark)
@@ -838,8 +947,12 @@ private fun RenderNode.recordBackdrop(
  */
 @Composable
 private fun BoxScope.TuneSheet(
-    spec: BarGlassSpec,
+    /** 经典悬浮岛参数（新版底栏模式下为 null）。 */
+    spec: BarGlassSpec?,
+    /** 新版底栏参数（经典模式下为 null）。 */
+    newSpec: NewBarSpec?,
     onSpec: (BarGlassSpec) -> Unit,
+    onNewSpec: (NewBarSpec) -> Unit,
     onClose: () -> Unit,
 ) {
     val colors = LocalAppColors.current
@@ -872,21 +985,39 @@ private fun BoxScope.TuneSheet(
                 .verticalScroll(rememberScrollState())
                 .padding(bottom = 16.dp),
         ) {
-            // 透视/透镜参数已下线（2026-10-19「不做透视了」）⇒ 只保留玻璃本体参数
-            Stepper("浅色 tint α", spec.alphaLight, 0.01f, 0.15f..0.80f, 2) { onSpec(spec.copy(alphaLight = it)) }
-            Stepper("深色 tint α", spec.alphaDark, 0.01f, 0.05f..0.60f, 2) { onSpec(spec.copy(alphaDark = it)) }
-            Stepper("模糊半径 dp", spec.blurDp, 1f, 0f..40f, 0) { onSpec(spec.copy(blurDp = it)) }
-            Stepper("饱和度", spec.saturation, 0.05f, 1.0f..2.0f, 2) { onSpec(spec.copy(saturation = it)) }
-            Stepper("上缘受光", spec.highlight, 0.01f, 0f..0.30f, 2) { onSpec(spec.copy(highlight = it)) }
-            Stepper("镜面描边", spec.specular, 0.01f, 0f..0.85f, 2) { onSpec(spec.copy(specular = it)) }
-            Stepper("胶囊 α(浅)", spec.capsuleLight, 0.01f, 0f..0.95f, 2) { onSpec(spec.copy(capsuleLight = it)) }
-            Stepper("胶囊 α(深)", spec.capsuleDark, 0.01f, 0f..0.60f, 2) { onSpec(spec.copy(capsuleDark = it)) }
+            if (newSpec != null) {
+                // ── 新版底栏（NewLiquidGlassTabBar）参数集 ──
+                Stepper("染色 α(浅)", newSpec.tintLight, 0.02f, 0f..0.85f, 2) { onNewSpec(newSpec.copy(tintLight = it)) }
+                Stepper("染色 α(深)", newSpec.tintDark, 0.02f, 0f..0.85f, 2) { onNewSpec(newSpec.copy(tintDark = it)) }
+                Stepper("模糊 px", newSpec.blurPx, 1f, 0f..40f, 0) { onNewSpec(newSpec.copy(blurPx = it)) }
+                Stepper("折射强度", newSpec.refraction, 0.5f, 0f..24f, 1) { onNewSpec(newSpec.copy(refraction = it)) }
+                Stepper("色散", newSpec.dispersion, 0.05f, 0f..1f, 2) { onNewSpec(newSpec.copy(dispersion = it)) }
+                Stepper("边缘白边", newSpec.fresnel, 0.05f, 0f..1f, 2) { onNewSpec(newSpec.copy(fresnel = it)) }
+                Stepper("透镜中心 ×", newSpec.lensCenter, 0.05f, 1f..1.5f, 2) { onNewSpec(newSpec.copy(lensCenter = it)) }
+                Stepper("透镜边缘 ×", newSpec.lensEdge, 0.05f, 1f..2.2f, 2) { onNewSpec(newSpec.copy(lensEdge = it)) }
+                Stepper("过渡带 dp", newSpec.lensBandDp, 1f, 4f..32f, 0) { onNewSpec(newSpec.copy(lensBandDp = it)) }
+                Stepper("胶囊 α(浅)", newSpec.capsuleLight, 0.02f, 0f..0.8f, 2) { onNewSpec(newSpec.copy(capsuleLight = it)) }
+                Stepper("胶囊 α(深)", newSpec.capsuleDark, 0.02f, 0f..0.8f, 2) { onNewSpec(newSpec.copy(capsuleDark = it)) }
+                Stepper("投影 α", newSpec.shadowAlpha.toFloat(), 2f, 0f..80f, 0) { onNewSpec(newSpec.copy(shadowAlpha = it.roundToInt())) }
+            } else {
+                val spec = spec!!
+                // ── 经典悬浮岛参数集（8 项全部接线有效，2026-10-27 AVD 实测）──
+                Stepper("浅色 tint α", spec.alphaLight, 0.01f, 0.15f..0.80f, 2) { onSpec(spec.copy(alphaLight = it)) }
+                Stepper("深色 tint α", spec.alphaDark, 0.01f, 0.05f..0.60f, 2) { onSpec(spec.copy(alphaDark = it)) }
+                Stepper("模糊半径 dp", spec.blurDp, 1f, 0f..40f, 0) { onSpec(spec.copy(blurDp = it)) }
+                Stepper("饱和度", spec.saturation, 0.05f, 1.0f..2.0f, 2) { onSpec(spec.copy(saturation = it)) }
+                Stepper("上缘受光", spec.highlight, 0.01f, 0f..0.30f, 2) { onSpec(spec.copy(highlight = it)) }
+                Stepper("镜面描边", spec.specular, 0.01f, 0f..0.85f, 2) { onSpec(spec.copy(specular = it)) }
+                Stepper("胶囊 α(浅)", spec.capsuleLight, 0.01f, 0f..0.95f, 2) { onSpec(spec.copy(capsuleLight = it)) }
+                Stepper("胶囊 α(深)", spec.capsuleDark, 0.01f, 0f..0.60f, 2) { onSpec(spec.copy(capsuleDark = it)) }
+            }
         }
     }
 }
 
 /**
- * 参数步进器（− / 值 / ＋）：只响应点按，不会像滑块那样被滚动误触改值。
+ * 参数行：上方 −/数值/＋ 做精细步进，下方轨道可自由滑动。
+ * 滑动与步进都写同一个 onChange；滑动按 step 取整，保持数值精度。
  */
 @Composable
 private fun Stepper(
@@ -898,21 +1029,125 @@ private fun Stepper(
     onChange: (Float) -> Unit,
 ) {
     val colors = LocalAppColors.current
-    Row(
-        Modifier.fillMaxWidth().padding(vertical = 5.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        FText(label, 13f, FontWeight.Medium, colors.textSecondary, Modifier.weight(1f))
-        StepButton("−", enabled = value > range.start + step * 0.01f) {
-            onChange((value - step).coerceIn(range.start, range.endInclusive))
+    Column(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            FText(label, 13f, FontWeight.Medium, colors.textSecondary, Modifier.weight(1f))
+            StepButton("−", enabled = value > range.start + step * 0.01f) {
+                onChange((value - step).coerceIn(range.start, range.endInclusive))
+            }
+            Box(Modifier.width(56.dp), contentAlignment = Alignment.Center) {
+                FText(fmt(value, decimals), 13f, FontWeight.Medium, colors.textPrimary)
+            }
+            StepButton("＋", enabled = value < range.endInclusive - step * 0.01f) {
+                onChange((value + step).coerceIn(range.start, range.endInclusive))
+            }
         }
-        Box(Modifier.width(56.dp), contentAlignment = Alignment.Center) {
-            FText(fmt(value, decimals), 13f, FontWeight.Medium, colors.textPrimary)
-        }
-        StepButton("＋", enabled = value < range.endInclusive - step * 0.01f) {
-            onChange((value + step).coerceIn(range.start, range.endInclusive))
-        }
+        GlassParamSlider(
+            value = value,
+            range = range,
+            step = step,
+            onValueChange = onChange,
+            modifier = Modifier.fillMaxWidth().padding(start = 6.dp, end = 6.dp, top = 2.dp),
+        )
     }
+}
+
+/** 细参数滑轨：拖动/点击都直接改值，松手后由上层按 step 落定。 */
+@Composable
+private fun GlassParamSlider(
+    value: Float,
+    range: ClosedFloatingPointRange<Float>,
+    step: Float,
+    onValueChange: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = LocalAppColors.current
+    val span = (range.endInclusive - range.start).takeIf { it > 0f } ?: 1f
+    val ratio = ((value - range.start) / span).coerceIn(0f, 1f)
+    // 绘制/手势闭包跨重组存活，必须读最新值，否则从 A/B 起调时会一直用旧 spec。
+    val liveRatio = rememberUpdatedState(ratio)
+    val currentOnValueChange = rememberUpdatedState(onValueChange)
+    Box(
+        modifier
+            .height(32.dp)
+            .drawBehind {
+                val pad = 9.dp.toPx()
+                val trackH = 4.dp.toPx()
+                val cy = size.height / 2f
+                val start = pad
+                val end = (size.width - pad).coerceAtLeast(start + 1f)
+                val usable = end - start
+                val thumbX = start + usable * liveRatio.value
+                val corner = CornerRadius(trackH / 2f)
+                drawRoundRect(
+                    color = colors.bgThird,
+                    topLeft = Offset(start, cy - trackH / 2f),
+                    size = Size(usable, trackH),
+                    cornerRadius = corner,
+                )
+                if (thumbX > start) {
+                    drawRoundRect(
+                        color = colors.primary,
+                        topLeft = Offset(start, cy - trackH / 2f),
+                        size = Size(thumbX - start, trackH),
+                        cornerRadius = corner,
+                    )
+                }
+                drawCircle(
+                    color = colors.primary,
+                    radius = 9.dp.toPx(),
+                    center = Offset(thumbX, cy),
+                )
+                drawCircle(
+                    color = Color.White,
+                    radius = 3.5.dp.toPx(),
+                    center = Offset(thumbX, cy),
+                )
+            }
+            .pointerInput(range, step) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    fun setFromX(x: Float) {
+                        val pad = 9.dp.toPx()
+                        val usable = (size.width - pad * 2f).coerceAtLeast(1f)
+                        val r = ((x - pad) / usable).coerceIn(0f, 1f)
+                        val raw = range.start + r * (range.endInclusive - range.start)
+                        val snapped = range.start + ((raw - range.start) / step).roundToInt() * step
+                        currentOnValueChange.value(snapped.coerceIn(range.start, range.endInclusive))
+                    }
+                    // ⚠ 方向锁（2026-10-27 负责人报「上下滚动列表容易误触滑块，值快速变大/变小」）：
+                    //   按下不再立即设值——横向移动超过触摸斜率才进入滑轨模式；
+                    //   竖向移动先行就让给列表滚动（本手势直接退出，不消费 move）；
+                    //   原地点击（未越斜率）在抬起时按点击位置设值。
+                    val startX = down.position.x
+                    val startY = down.position.y
+                    var active = false
+                    down.consume()
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                        if (!active) {
+                            val dx = change.position.x - startX
+                            val dy = change.position.y - startY
+                            val slop = viewConfiguration.touchSlop
+                            if (abs(dy) > slop && abs(dy) >= abs(dx)) break
+                            if (abs(dx) > slop) active = true
+                        }
+                        if (active) {
+                            setFromX(change.position.x)
+                            change.consume()
+                        }
+                        if (!change.pressed) {
+                            if (!active) setFromX(startX)
+                            break
+                        }
+                    }
+                }
+            },
+    )
 }
 
 @Composable

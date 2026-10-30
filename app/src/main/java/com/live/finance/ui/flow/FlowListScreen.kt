@@ -48,6 +48,7 @@ import com.live.finance.App
 import com.live.finance.core.nav.Routes
 import com.live.finance.core.net.ApiGetCache
 import com.live.finance.core.net.ApiResult
+import com.live.finance.core.net.showFail
 import com.live.finance.data.model.Card
 import com.live.finance.data.model.Category
 import com.live.finance.data.model.FlowRow
@@ -143,10 +144,17 @@ fun FlowListScreen(nav: NavHostController) {
 
     val isCurrentMonth = year == now.year && month == now.monthValue
 
+    // 汇总所属月份：同月下拉失败保留旧数字；换月请求失败则清空，避免把上个月的数冒充本月
+    var summaryMonth by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+
     suspend fun loadSummary() {
-        summary = when (val r = graph.flow.monthStats(year, month)) {
-            is ApiResult.Ok -> (r.data?.income ?: 0.0) to (r.data?.expense ?: 0.0)
-            else -> null
+        val target = year to month
+        when (val r = graph.flow.monthStats(year, month)) {
+            is ApiResult.Ok -> {
+                summary = (r.data?.income ?: 0.0) to (r.data?.expense ?: 0.0)
+                summaryMonth = target
+            }
+            else -> if (summaryMonth != target) summary = null
         }
     }
 
@@ -193,7 +201,8 @@ fun FlowListScreen(nav: NavHostController) {
         }
         val todayList = when (val r = graph.flow.listRange(today, today, dir, 1, 100)) {
             is ApiResult.Ok -> r.data.orEmpty()
-            else -> emptyList()
+            // 刷新失败必须保留旧行：旧实现把失败当「今天无数据」执行过滤，会把当天的流水从屏上删掉
+            else -> { toast.showFail(r, "刷新失败"); return }
         }
         if (todayList.isEmpty()) {
             rows = rows.filter { it.day != today }

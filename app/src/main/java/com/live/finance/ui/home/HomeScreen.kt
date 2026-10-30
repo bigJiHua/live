@@ -26,6 +26,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,8 +44,11 @@ import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import androidx.navigation.NavHostController
 import com.live.finance.App
+import com.live.finance.BuildConfig
 import com.live.finance.core.nav.Routes
+import com.live.finance.core.net.ApiGetCache
 import com.live.finance.core.net.ApiResult
+import com.live.finance.core.net.showFail
 import com.live.finance.data.model.AssetHome
 import com.live.finance.data.model.Todo
 import com.live.finance.theme.LocalAppColors
@@ -59,8 +63,14 @@ import com.live.finance.ui.common.MoneyColor
 import com.live.finance.ui.flow.FText
 import com.live.vant.basic.VanButton
 import com.live.vant.basic.VanButtonType
+import com.live.vant.feedback.LocalVanToastController
+import com.live.vant.feedback.VanPullRefresh
+import com.live.vant.feedback.rememberVanPullRefreshState
 import com.live.vant.icon.VanIcon
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.util.Calendar
 import kotlin.math.roundToInt
 
@@ -77,64 +87,130 @@ fun HomeScreen(nav: NavHostController) {
     var reminders by remember { mutableStateOf<List<Todo>>(emptyList()) }
     var salary by remember { mutableStateOf(0.0) }
     var showAmount by remember { mutableStateOf(true) }
+    val scope = rememberCoroutineScope()
+    val refreshState = rememberVanPullRefreshState()
+    val scrollState = rememberScrollState()
+    val toast = LocalVanToastController.current
 
+    // 首进 / 下拉 / SWR 广播三处可能并发触发加载 ⇒ 用递增序号只让**最后发起的那次**落屏，
+    // 防止先发后到的旧响应把刚刷新的新值覆盖回去。
+    val loadSeq = remember { mutableIntStateOf(0) }
+
+    // 首页三源**并行**加载（总资产 / 待办提醒 / 当日薪资）。首进 LaunchedEffect 与下拉刷新共用，
+    // 下拉时 onRefresh 已先 ApiGetCache.clear() 强制绕过 GET 缓存（全局口径，对齐其余 14 个页面）。
+    //
+    // ⚠ **失败/空响应绝不清空页面**（2026-10-27 负责人报「下拉刷新后页面一片空白」的根因）：
+    //   旧实现 `data = (r as? Ok)?.data` 会把断网、超时、401 等失败响应统统写成 null，
+    //   一次下拉就把屏上已有的金额/待办/薪资清零且无任何提示 ⇒ 看起来就是刷新把数据刷没了。
+    //   现在只有 Ok 且 data 非 null 才覆盖；失败保留旧值并提示，空 data 也保留旧值。
+    suspend fun loadAll() {
+        val seq = loadSeq.intValue + 1
+        loadSeq.intValue = seq
+        coroutineScope {
+            val home = async { graph.asset.home() }
+            val todo = async { graph.todo.reminders(cal.get(Calendar.YEAR), month) }
+            val pay = async { graph.work.daySalary(String.format("%04d-%02d-%02d", cal.get(Calendar.YEAR), month, day)) }
+            val h = home.await()
+            val t = todo.await()
+            val p = pay.await()
+            if (seq != loadSeq.intValue) return@coroutineScope  // 已有更新的一次加载，本次结果作废
+            if (BuildConfig.DEBUG) android.util.Log.d(
+                "HomeLoad",
+                "seq=$seq h=${h::class.simpleName} hdata=${(h as? ApiResult.Ok)?.data?.totalBalance} " +
+                    "t=${t::class.simpleName} p=${p::class.simpleName}",
+            )
+            when {
+                h is ApiResult.Ok && h.data != null -> data = h.data
+                h is ApiResult.Ok -> Unit   // 200 但无 data：保留旧值，不把首页清零
+                else -> toast.showFail(h, "首页数据加载失败")
+            }
+            if (t is ApiResult.Ok && t.data != null) reminders = t.data
+            if (p is ApiResult.Ok && p.data != null) salary = p.data
+        }
+    }
+
+    LaunchedEffect(Unit) { loadAll() }
+
+    // 批次B：SWR 后台静默刷新完成广播 → 屏上已有旧数据时**原地重取**（此时缓存已被后台刷新写新，
+    // loadAll 命中新鲜缓存零网络等待）——这就是「停在首页不动，数值无感浮出新值」的落地。
+    // cacheKey 形如 `baseUrl|token|path|query`（query 可为空 ⇒ 尾部带 `|`），**必须分段取 path 匹配**，
+    // 不能 endsWith —— 首版用 endsWith 被 query 空时的尾管道符坑过（2026-10-27 回测抓到）。
     LaunchedEffect(Unit) {
-        data = (graph.asset.home() as? ApiResult.Ok)?.data
-        reminders = (graph.todo.reminders(cal.get(Calendar.YEAR), month) as? ApiResult.Ok)?.data ?: emptyList()
-        val today = String.format("%04d-%02d-%02d", cal.get(Calendar.YEAR), month, day)
-        salary = (graph.work.daySalary(today) as? ApiResult.Ok)?.data ?: 0.0
+        ApiGetCache.staleBroadcast.collect { key ->
+            val path = key.split('|').getOrNull(2).orEmpty()
+            if (path == "/asset/home" || path == "/todo/reminders" || path == "/work/salary/day") {
+                loadAll()
+            }
+        }
     }
 
     Box(Modifier.fillMaxSize().background(colors.bgPage)) {
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 13.dp, vertical = 6.dp)) {
-            TotalAssetsCard(colors, data, showAmount, month, day,
-                onEye = { showAmount = !showAmount },
-                onDate = { nav.navigate(Routes.TODO_CALENDAR) },
-                onCards = { nav.navigate(Routes.CARD) },
-                onCredit = { nav.navigate(Routes.CREDIT_CENTER) },
-                onBill = { nav.navigate(Routes.BILL_LIST) },
-            )
-            Spacer(Modifier.height(16.dp))
-
-            MenuGridCard(colors, onFlow = { nav.navigate(Routes.FLOW_LIST) }, onCredit = { nav.navigate(Routes.CREDIT_CENTER) },
-                onAssets = { nav.navigate(Routes.ASSETS_LIST) }, onSalary = { nav.navigate(Routes.WORK_JOB_SETTING) })
-            Spacer(Modifier.height(16.dp))
-
-            InfoCard(
-                colors = colors,
-                salary = salary,
-                // web：`(res.data || []).filter(r => r.content && r.content !== "1")` —— 「1」是出差占位标记，不上横幅
-                reminders = reminders.filter { it.content.isNotBlank() && it.content != "1" },
-                // web：薪酬行 → /work/salary-calendar；未注册时退到已落地的薪资设置页，不点崩
-                onSalary = {
-                    nav.navigate(
-                        if (nav.graph.findNode(Routes.WORK_SALARY_CALENDAR) != null) Routes.WORK_SALARY_CALENDAR
-                        else Routes.WORK_JOB_SETTING,
-                    )
-                },
-                // web：待办提醒整行 → /todo/calendar（含右侧 > 引导）
-                onTodo = { nav.navigate(Routes.TODO_CALENDAR) },
-            )
-            Spacer(Modifier.height(12.dp))
-
-            Box(Modifier.padding(horizontal = 16.dp)) {
-                // web `Home/index.vue`：app-button primary plain round small icon=plus → `goToAddFlow()` = /finance/quick-add
-                AppButton(
-                    text = "快速登记流水",
-                    type = AppButtonType.Primary,
-                    plain = true,
-                    round = true,
-                    size = AppButtonSize.Small,
-                    icon = "plus",
-                    block = true,
-                    onClick = { nav.navigate(Routes.ACCOUNT_QUICK_ADD) },
+        VanPullRefresh(
+            state = refreshState,
+            // 只有内容滚到顶部时下拉才触发刷新（Vant 语义；放开会把任意位置的下拉都当成刷新）
+            isChildAtTop = { scrollState.value <= 0 },
+            onRefresh = {
+                ApiGetCache.clear()
+                scope.launch {
+                    try {
+                        loadAll()
+                    } finally {
+                        // 无论成功/失败/异常都必须收刷新头，loading 不许永久挂着
+                        refreshState.finishRefresh()
+                    }
+                }
+            },
+        ) {
+            Column(Modifier.fillMaxSize().verticalScroll(scrollState).padding(horizontal = 13.dp, vertical = 6.dp)) {
+                TotalAssetsCard(colors, data, showAmount, month, day,
+                    onEye = { showAmount = !showAmount },
+                    onDate = { nav.navigate(Routes.TODO_CALENDAR) },
+                    onCards = { nav.navigate(Routes.CARD) },
+                    onCredit = { nav.navigate(Routes.CREDIT_CENTER) },
+                    onBill = { nav.navigate(Routes.BILL_LIST) },
                 )
-            }
-            Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(16.dp))
 
-            RecentRecords(colors, data?.recent ?: emptyList(),
-                onDetail = { id -> nav.navigate(Routes.flowDetail(id)) }, onViewAll = { nav.navigate(Routes.FLOW_LIST) })
-            Spacer(Modifier.height(20.dp))
+                MenuGridCard(colors, onFlow = { nav.navigate(Routes.FLOW_LIST) }, onCredit = { nav.navigate(Routes.CREDIT_CENTER) },
+                    onAssets = { nav.navigate(Routes.ASSETS_LIST) }, onSalary = { nav.navigate(Routes.WORK_JOB_SETTING) })
+                Spacer(Modifier.height(16.dp))
+
+                InfoCard(
+                    colors = colors,
+                    salary = salary,
+                    // web：`(res.data || []).filter(r => r.content && r.content !== "1")` —— 「1」是出差占位标记，不上横幅
+                    reminders = reminders.filter { it.content.isNotBlank() && it.content != "1" },
+                    // web：薪酬行 → /work/salary-calendar；未注册时退到已落地的薪资设置页，不点崩
+                    onSalary = {
+                        nav.navigate(
+                            if (nav.graph.findNode(Routes.WORK_SALARY_CALENDAR) != null) Routes.WORK_SALARY_CALENDAR
+                            else Routes.WORK_JOB_SETTING,
+                        )
+                    },
+                    // web：待办提醒整行 → /todo/calendar（含右侧 > 引导）
+                    onTodo = { nav.navigate(Routes.TODO_CALENDAR) },
+                )
+                Spacer(Modifier.height(12.dp))
+
+                Box(Modifier.padding(horizontal = 16.dp)) {
+                    // web `Home/index.vue`：app-button primary plain round small icon=plus → `goToAddFlow()` = /finance/quick-add
+                    AppButton(
+                        text = "快速登记流水",
+                        type = AppButtonType.Primary,
+                        plain = true,
+                        round = true,
+                        size = AppButtonSize.Small,
+                        icon = "plus",
+                        block = true,
+                        onClick = { nav.navigate(Routes.ACCOUNT_QUICK_ADD) },
+                    )
+                }
+                Spacer(Modifier.height(12.dp))
+
+                RecentRecords(colors, data?.recent ?: emptyList(),
+                    onDetail = { id -> nav.navigate(Routes.flowDetail(id)) }, onViewAll = { nav.navigate(Routes.FLOW_LIST) })
+                Spacer(Modifier.height(20.dp))
+            }
         }
     }
 }

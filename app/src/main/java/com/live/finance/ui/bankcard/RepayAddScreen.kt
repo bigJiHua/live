@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -53,6 +54,7 @@ import com.live.vant.basic.VanLoading
 import com.live.vant.basic.VanTag
 import com.live.vant.basic.VanTagType
 import com.live.vant.feedback.VanPopup
+import com.live.vant.feedback.VanPopupPosition
 import com.live.vant.form.VanDatePicker
 import com.live.vant.form.VanKeyboardTheme
 import com.live.vant.form.VanNumberKeyboard
@@ -319,13 +321,23 @@ fun RepayAddScreen(nav: NavHostController, billId: String = "", mergePoolId: Str
         )
     }
     if (showDebitPicker) {
-        DebitCardPicker(
-            cards = debitCards, banks = banks, keyword = bankSearchKey,
-            onKeyword = { bankSearchKey = it },
-            selectedId = methodCardId,
-            onPick = { methodCardId = it; bankSearchKey = ""; showDebitPicker = false },
-            onClose = { showDebitPicker = false },
-        )
+        // 底部弹层（web `<app-popup position="bottom" round>`），高度占屏幕 1/2：
+        //   旧实现把 DebitCardPicker 直接放进页面根布局，既没有遮罩/入场动画，内容又按整屏高度铺开
+        //   ⇒ 真机上看起来就是一个占满屏的面板。这里按原设计套 VanPopup + 固定半屏。
+        VanPopup(
+            show = true,
+            onDismissRequest = { showDebitPicker = false; bankSearchKey = "" },
+            position = VanPopupPosition.Bottom,
+            round = true,
+        ) {
+            DebitCardPicker(
+                cards = debitCards, banks = banks, keyword = bankSearchKey,
+                onKeyword = { bankSearchKey = it },
+                selectedId = methodCardId,
+                onPick = { methodCardId = it; bankSearchKey = ""; showDebitPicker = false },
+                onClose = { showDebitPicker = false },
+            )
+        }
     }
     if (showDatePicker) {
         // ⚠⚠ **注意**：「打开即自动弹日期选择 + 卡死」的真正根因**不是这里**，而是上面两行
@@ -412,13 +424,20 @@ private fun DebitCardPicker(
             label.contains(key) || bank.lowercase().contains(key) || c.last4.contains(key)
         }
     }
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)).background(colors.bgCard)) {
+    Column(
+        Modifier.fillMaxWidth()
+            // web `.debit-card-popup{max-height:60vh}`；负责人要求「占屏幕 1/2、底部弹起」
+            .fillMaxHeight(0.5f)
+            .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+            .background(colors.bgCard),
+    ) {
         Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             FText("选择还款银行卡", 18f, FontWeight.SemiBold, colors.textPrimary, modifier = Modifier.weight(1f))
             VanIcon("cross", size = 18.sp, color = colors.textTertiary, onClick = { onClose() })
         }
         VanSearch(value = keyword, onValueChange = onKeyword, placeholder = "搜索银行")
-        LazyColumn(Modifier.fillMaxWidth().height(300.dp)) {
+        // 列表吃掉剩余高度（半屏内滚动），不再写死 300dp
+        LazyColumn(Modifier.fillMaxWidth().weight(1f)) {
             if (filtered.isEmpty()) {
                 item {
                     Box(Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {

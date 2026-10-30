@@ -282,7 +282,6 @@ fun CategoryManageScreen(nav: NavHostController, initialType: String = "expense"
                         iconUrl = c.iconUrl
                         showForm = true
                     },
-                    onDelete = { deleting = it },
                 )
             } else {
                 // 页签常驻顶部 = web `van-tabs sticky`；内容区在其内部滚动
@@ -302,7 +301,6 @@ fun CategoryManageScreen(nav: NavHostController, initialType: String = "expense"
                                 iconUrl = c.iconUrl
                                 showForm = true
                             },
-                            onDelete = { deleting = it },
                         )
                     },
                 )
@@ -355,7 +353,12 @@ fun CategoryManageScreen(nav: NavHostController, initialType: String = "expense"
                 ) {
                     FText("选择图标", 16f, FontWeight.Normal, colors.textSecondary)
                     Spacer(Modifier.weight(1f))
-                    Box(Modifier.clickable { showPicker = true }) {
+                    // 用户要求：**上下排布** —— 上 = Icon/Logo，下 = 「点击更换图标」；
+                    //   点图标或点文字都唤出图标选择弹窗（旧版把「点击更换图标」放右侧一行，容易被读成别处文案）。
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.clickable { showPicker = true },
+                    ) {
                         if (iconUrl.isNotBlank()) {
                             VanImage(
                                 src = AppConfig.fullFileUrl(iconUrl),
@@ -371,9 +374,8 @@ fun CategoryManageScreen(nav: NavHostController, initialType: String = "expense"
                                 contentAlignment = Alignment.Center,
                             ) { VanIcon(name = "plus", size = 24.sp, color = colors.textTertiary) }
                         }
-                    }
-                    if (iconUrl.isNotBlank()) {
-                        FText("点击更换图标", 12f, FontWeight.Normal, colors.textTertiary, Modifier.padding(start = 8.dp))
+                        Spacer(Modifier.height(4.dp))
+                        FText("点击更换图标", 12f, FontWeight.Normal, colors.textTertiary)
                     }
                 }
                 AppFieldBox(
@@ -384,6 +386,21 @@ fun CategoryManageScreen(nav: NavHostController, initialType: String = "expense"
                     maxlength = 50,
                     showWordLimit = true,
                 )
+                // 用户要求：删除从卡片右上角移到**编辑弹窗内、备注下面单独一行**，并带使用提示。
+                // 只在编辑态出现（新增时没有可删对象）。
+                if (editing != null) {
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .background(colors.bgCard)
+                            .clickable { deleting = editing }
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                    ) {
+                        FText("删除", 16f, FontWeight.Normal, colors.danger)
+                        Spacer(Modifier.height(4.dp))
+                        FText("如有使用非必要请勿删除，避免展示不佳", 12f, FontWeight.Normal, colors.textTertiary)
+                    }
+                }
             }
             // .dialog-actions{gap:12; margin-top:24}。用户要求：两个按钮**靠右下角**排布，
             // 且原来「自然宽度」太窄 ⇒ 各给一个最小宽度（Large 高 50 + 96dp 宽，够两只手点）。
@@ -427,11 +444,10 @@ fun CategoryManageScreen(nav: NavHostController, initialType: String = "expense"
                 FText(if (isBank) "选择银行图标" else "选择分类图标", 18f, FontWeight.SemiBold, colors.textPrimary)
                 VanIcon(name = "cross", size = 16.sp, color = colors.textPrimary, onClick = { showPicker = false })
             }
-            // .upload-section{padding-bottom:16; border:1px border; margin-bottom:16}
+            // .upload-section{padding-bottom:16; margin-bottom:16}（用户要求：去掉这条 1px 边框）
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .border(1.dp, colors.border)
                     .padding(bottom = 16.dp),
             ) {
                 // .upload-trigger{60×60; bg-primary; radius:8; gap:4; 11px tertiary}
@@ -505,6 +521,7 @@ fun CategoryManageScreen(nav: NavHostController, initialType: String = "expense"
                     is ApiResult.Ok -> {
                         cache[type] = cache[type].orEmpty().filter { it.id != target.id }
                         toast.show("已删除")
+                        closeForm() // 对象已删，编辑弹窗一并收起
                     }
                     is ApiResult.NeedPin -> toast.show("需先验证 PIN")
                     is ApiResult.Fail -> toast.show(r.message, VanToastType.Fail)
@@ -526,7 +543,6 @@ private fun CategoryBody(
     isBank: Boolean,
     onAdd: () -> Unit,
     onEdit: (Category) -> Unit,
-    onDelete: (Category) -> Unit,
 ) {
     val colors = LocalAppColors.current
     Column(
@@ -564,7 +580,6 @@ private fun CategoryBody(
                             isBank = isBank,
                             modifier = Modifier.weight(1f),
                             onEdit = { onEdit(c) },
-                            onDelete = { onDelete(c) },
                         )
                     }
                     repeat(2 - row.size) { Spacer(Modifier.weight(1f)) }
@@ -578,14 +593,13 @@ private fun CategoryBody(
     }
 }
 
-/** `.category-card`：白卡 + 右上编辑/删除 + 左图标 + 名称/备注。 */
+/** `.category-card`：白卡 + 右上编辑（删除已移到编辑弹窗内）+ 左图标 + 名称/备注。 */
 @Composable
 private fun CategoryCard(
     item: Category,
     isBank: Boolean,
     modifier: Modifier,
     onEdit: () -> Unit,
-    onDelete: () -> Unit,
 ) {
     val colors = LocalAppColors.current
     val shape = RoundedCornerShape(12.dp)
@@ -621,13 +635,12 @@ private fun CategoryCard(
                 }
             }
         }
-        // .card-actions{top:10; right:10; gap:10}
+        // .card-actions{top:10; right:10; gap:10}：只留编辑（删除已挪进编辑弹窗）
         Row(
             Modifier.align(Alignment.TopEnd).padding(top = 10.dp, end = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             VanIcon(name = "edit", size = 16.sp, color = colors.textTertiary, onClick = onEdit)
-            VanIcon(name = "delete", size = 16.sp, color = colors.textTertiary, onClick = onDelete)
         }
     }
 }

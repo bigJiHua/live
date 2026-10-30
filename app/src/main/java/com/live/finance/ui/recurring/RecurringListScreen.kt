@@ -1,7 +1,6 @@
 package com.live.finance.ui.recurring
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -704,7 +703,8 @@ private fun EventCard(
                     FText("月度处理记录", 14f, FontWeight.SemiBold, colors.textSecondary, Modifier.padding(bottom = 6.dp))
                     monthRecRows(item).forEach { m ->
                         Row(
-                            Modifier.fillMaxWidth().border(1.dp, colors.border).padding(vertical = 8.dp),
+                            // 用户要求：去掉这条莫名其妙的 1px 边框（web `.mr-row` 有 border，属主动偏离）
+                            Modifier.fillMaxWidth().padding(vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
@@ -768,7 +768,8 @@ private fun FixedExpenseScreen() {
                 is ApiResult.Fail -> toast.show(l.message.ifEmpty { "加载失败" })
                 else -> {}
             }
-            summary = (s as? ApiResult.Ok)?.data ?: RecurringSummary()
+            // 汇总失败保留旧值：下拉刷新不应把头部金额清零
+            if (s is ApiResult.Ok && s.data != null) summary = s.data
             loading = false
             if (refreshState.isLoading) refreshState.finishRefresh()
         }

@@ -8,7 +8,9 @@ import android.graphics.Picture as AndroidPicture
 import android.graphics.RectF as AndroidRectF
 import android.graphics.RenderEffect
 import android.graphics.RenderNode
+import android.graphics.RuntimeShader
 import android.graphics.Shader
+import android.provider.Settings
 import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.annotation.RequiresApi
@@ -76,6 +78,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
@@ -186,12 +189,25 @@ fun MainScreen(nav: NavHostController, tabState: MutableIntState) {
     //      - `ui/flow/FlowListScreen.kt`：「上滑看后续内容 → consumed.y 为负」，故 `scrolledPx - consumed.y`
     //      - `vant-ui/.../VanPullRefresh.kt`：下拉（= 手指下滑）时 `available.y > 0`
     val tabbarVisible = remember { mutableStateOf(true) }
+    // 玻璃 backdrop 的逐帧失效信号（2026-10-23）：内容 Box 的 draw（含录制 Picture + 垫玻璃）
+    // **不会因子页面滚动自动重跑**（Compose 的绘制失效会停在滚动容器的图层边界），
+    // 必须在滚动帧显式失效一次，玻璃后面的内容才会跟随滚动（负责人报「透背景固定」）。
+    // 由嵌套滚动连接 + Coil 图片事件共同 bump（AppGraph.glassBackdropTick）；
+    // 只在绘制阶段读 ⇒ 只触发重绘，不触发重组；滚动停止后自然不再刷新。
     // 悬浮岛玻璃参数（2026-10-19）：实验室调参实时写入 graph.barGlass ⇒ 这里读 State，
     // 从实验室返回主页立即是新值；「保存设定」后才落盘（重启仍生效）。
-    val graph = com.live.finance.App.of(LocalContext.current).graph
+    val context = LocalContext.current
+    val graph = com.live.finance.App.of(context).graph
     val scrollConnection = remember {
         object : NestedScrollConnection {
+            // 滚动帧信号：preScroll 对所有嵌套滚动（LazyColumn/verticalScroll）逐帧派发，
+            // 底栏可见期间每次滚动都让玻璃 backdrop 失效一次（下一帧重录最新背景）。
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (tabbarVisible.value) graph.bumpGlassBackdrop()
+                return Offset.Zero
+            }
             override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                if (tabbarVisible.value) graph.bumpGlassBackdrop()
                 // 实验室开关「是否因滚动而收起」关掉后：底栏始终固定，不参与滚动收起
                 if (!graph.barGlass.value.collapseOnScroll) return Offset.Zero
                 val dy = consumed.y
@@ -220,8 +236,50 @@ fun MainScreen(nav: NavHostController, tabState: MutableIntState) {
     val glassSpec = graph.barGlass.value
     val glassNodeBody = remember { if (Build.VERSION.SDK_INT >= 31) RenderNode("glassBody") else null }
 
+    /**
+     * 内容层（API29+）：每帧把页面内容画进这个**硬件** RenderNode，屏幕显示与玻璃取样共用同一份。
+     *
+     * ⚠ 为什么不再用「先 drawContent() 录进软件 Picture、再 drawContent() 画屏」：
+     *   同一帧里把内容（含 `VanPullRefresh` 的 graphicsLayer 等子图层）画进软件 Picture 后，
+     *   随后的那次 drawContent() 会拿到被首次绘制污染的图层快照 ⇒ 「从二级页返回首页后
+     *   金额 0.00 / 卡数 0 张，下拉刷新也不刷新屏，切 Tab 重建组合才恢复」（2026-10-27 负责人报）。
+     *   改为 RenderNode：内容只画一遍（硬件画布，子图层/阴影都保留），再整节点上屏。
+     */
+    val contentNode = remember { if (Build.VERSION.SDK_INT >= 29) RenderNode("mainContent") else null }
+    // 新版独立底部 Tab 组件的玻璃材质节点（NewLiquidGlassTabBar 专用，与经典版分离）
+    val newGlassNode = remember { if (Build.VERSION.SDK_INT >= 31) RenderNode("newGlassBackdrop") else null }
+
     val glassSaturation = remember { ColorMatrix() }
     val density = LocalDensity.current
+    val newGlassShadowPaint = remember(density) {
+        AndroidPaint(AndroidPaint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.argb(40, 0, 0, 0)
+            maskFilter = BlurMaskFilter(
+                with(density) { 18.dp.toPx() },
+                BlurMaskFilter.Blur.NORMAL,
+            )
+        }
+    }
+    // AGSL 折射 shader（API33+；33 以下走纯 blur 链）：SDF 边缘折射 + 色散 + Fresnel
+    val newGlassShader = remember {
+        if (Build.VERSION.SDK_INT >= 33) {
+            try {
+                RuntimeShader(NEW_GLASS_AGSL)
+            } catch (t: Throwable) {
+                null
+            }
+        } else {
+            null
+        }
+    }
+    // 系统「移除动画」（无障碍）开启时：玻璃退化为实底（无透明/模糊），保证可读性
+    val reduceGlassTransparency = remember(context) {
+        Settings.Global.getFloat(
+            context.contentResolver,
+            Settings.Global.ANIMATOR_DURATION_SCALE,
+            1f,
+        ) == 0f
+    }
     val glassShadowPaint = remember(density) {
         AndroidPaint(AndroidPaint.ANTI_ALIAS_FLAG).apply {
             color = android.graphics.Color.argb(GLASS_SHADOW_ALPHA, 0, 0, 0)
@@ -232,8 +290,12 @@ fun MainScreen(nav: NavHostController, tabState: MutableIntState) {
         }
     }
     var contentOrigin by remember { mutableStateOf(Offset.Zero) }
+    var contentSize by remember { mutableStateOf(IntSize.Zero) }
     var islandRect by remember { mutableStateOf<Rect?>(null) }
     val tokens = LocalAppTokens.current
+    // 底部 Tab 组件选择：true = 全新独立 Liquid Glass 组件（NewLiquidGlassTabBar），
+    // false = 经典悬浮岛。玻璃参数 classic spec 仍给经典版用。
+    val useNewTabBar = graph.useNewTabBar.value
 
     // transition: transform .3s ease, opacity .3s ease（岛的出现/收起动画在此外提，
     // backdrop 玻璃要与岛同步淡入淡出，必须共享同一份动画值）
@@ -278,55 +340,83 @@ fun MainScreen(nav: NavHostController, tabState: MutableIntState) {
             Modifier
                 .fillMaxSize()
                 .nestedScroll(scrollConnection)
-                .onGloballyPositioned { contentOrigin = it.boundsInRoot().topLeft }
-                .drawWithCache {
+                .onGloballyPositioned {
+                    contentOrigin = it.boundsInRoot().topLeft
+                    contentSize = it.size
+                }
+                // ⚠ 2026-10-27 追加146：原为 drawWithCache。drawWithCache 的绘制结果只在「缓存块里
+                //   读到的 State / 尺寸」变化时失效；页面数据由子节点重组更新时它**不失效** ⇒
+                //   「二级页返回首页后金额 0.00 / 卡数 0 张，下拉刷新也不刷新屏，切 Tab 重建组合才恢复」。
+                //   drawWithContent 每帧参与子内容失效链（内容变即重绘）；玻璃从内容 RenderNode 取样。
+                .drawWithContent {
                     val w = size.width.toInt().coerceAtLeast(1)
                     val h = size.height.toInt().coerceAtLeast(1)
-                    onDrawWithContent {
-                        // 岛不可见（还没量到位置 / 已收起）时**完全不录 Picture** ——
-                        // 录一次等于把整屏内容重放一遍，岛收起时这笔开销纯属白花；
-                        // 而「向下浏览」正是岛收起、帧数最多的场景。低版本同理直接画。
+                    // ⚠ 滚动帧信号：读取 tick 让本节点在滚动时失效重绘 ——
+                    //   内容 Box 的 draw **不会因子页面滚动自动重跑**（绘制失效停在
+                    //   滚动容器的图层边界），不读它的话玻璃后面永远是旧帧。
+                    //   岛不可见（还没量到位置 / 已收起）时**完全不录内容节点** ——
+                    //   录一次等于把整屏内容重放一遍，岛收起时这笔开销纯属白花；
+                    //   而「向下浏览」正是岛收起、帧数最多的场景。低版本同理直接画。
+                    // ⚠ 在绘制阶段读 State：滚动帧/图片加载事件 bump 时只触发重绘，不触发重组
+                    graph.glassBackdropTick.value
                         val rect = islandRect
-                        if (!glassBlur || rect == null || islandAlpha <= 0.01f) {
+                        if (!glassBlur || rect == null || islandAlpha <= 0.01f || contentNode == null) {
                             drawContent()
-                            return@onDrawWithContent
+                            return@drawWithContent
                         }
-                        // 1) 逐帧把内容录进 Picture（canvas 置换，drawContent 只执行一次）
-                        val pc = backdropPicture.beginRecording(w, h)
+                        // 1) 内容只画一遍：录进硬件 RenderNode（内部 graphicsLayer/阴影均保留）
+                        contentNode.setPosition(0, 0, w, h)
+                        val rec = contentNode.beginRecording(w, h)
                         val prev = drawContext.canvas
                         try {
-                            drawContext.canvas = ComposeCanvas(pc)
+                            drawContext.canvas = ComposeCanvas(rec)
                             drawContent()
                         } finally {
                             drawContext.canvas = prev
-                            backdropPicture.endRecording()
+                            contentNode.endRecording()
                         }
-                        // 2) 正常显示内容 —— ⚠ **不能用 drawPicture 回放**：
-                        //    快照不会随子页面状态变化重新录制；Picture 只留给玻璃当 backdrop 取样。
-                        //    （首页空白由「首页摘要不走 GET 缓存」单独兜住；这里恢复 10-19 的稳定玻璃顺序。）
-                        drawContent()
-                        // 3) 岛下垫液态玻璃
+                        // 2) 整节点上屏（屏幕与玻璃取样是同一份内容，永远一致）
+                        drawIntoCanvas { it.nativeCanvas.drawRenderNode(contentNode) }
+                        // 3) 岛下垫液态玻璃（取样内容节点）。
+                        //    新版独立组件：renderNewGlassBackdrop；经典组件：renderLiquidGlass。
                         val islandArea = Rect(
                             rect.left - contentOrigin.x, rect.top - contentOrigin.y,
                             rect.right - contentOrigin.x, rect.bottom - contentOrigin.y,
                         )
-                        renderLiquidGlass(
-                            picture = backdropPicture,
-                            area = islandArea,
-                            canvasW = w,
-                            canvasH = h,
-                            bodyNode = glassNodeBody,
-                            saturation = glassSaturation,
-                            shadowPaint = glassShadowPaint,
-                            spec = glassSpec,
-                            tint = Color.White.copy(
-                                alpha = (if (tokens.isDark) glassSpec.alphaDark else glassSpec.alphaLight) * islandAlpha,
-                            ),
-                            appear = islandAlpha,
-                        )
+                        if (useNewTabBar) {
+                            if (!reduceGlassTransparency) {
+                                renderNewGlassBackdrop(
+                                    picture = backdropPicture,
+                                    contentNode = contentNode,
+                                    area = islandArea,
+                                    canvasW = w,
+                                    canvasH = h,
+                                    node = newGlassNode,
+                                    agsl = newGlassShader,
+                                    shadowPaint = newGlassShadowPaint,
+                                    dark = tokens.isDark,
+                                    appear = islandAlpha,
+                                )
+                            }
+                        } else {
+                            renderLiquidGlass(
+                                picture = backdropPicture,
+                                contentNode = contentNode,
+                                area = islandArea,
+                                canvasW = w,
+                                canvasH = h,
+                                bodyNode = glassNodeBody,
+                                saturation = glassSaturation,
+                                shadowPaint = glassShadowPaint,
+                                spec = glassSpec,
+                                tint = Color.White.copy(
+                                    alpha = (if (tokens.isDark) glassSpec.alphaDark else glassSpec.alphaLight) * islandAlpha,
+                                ),
+                                appear = islandAlpha,
+                            )
+                        }
                         // 4) 胶囊透镜已删除（2026-10-19 负责人「不做透视了，效果极差」）——
                         //    改为在 FloatingIslandBar 里放**选中项的图标+文字**（真放大镜）。
-                    }
                 },
         ) {
             when (tab) {
@@ -337,18 +427,37 @@ fun MainScreen(nav: NavHostController, tabState: MutableIntState) {
             }
         }
 
-        FloatingIslandBar(
-            active = tab,
-            onSelect = { tab = it },
-            offsetY = islandOffsetY,
-            alpha = islandAlpha,
-            spec = glassSpec,
-            capsulePos = capsulePos,
-            onPositioned = { islandRect = it },
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(start = 16.dp, end = 16.dp, bottom = 20.dp),
-        )
+        if (useNewTabBar) {
+            // 全新独立底部 Tab 组件：只画胶囊/图标/边框；玻璃材质由上面的内容绘制链路垫出
+            // （系统减弱动效开启时走实底，无透明/模糊）
+            NewLiquidGlassTabBar(
+                active = tab,
+                onSelect = { tab = it },
+                visible = tabbarVisible.value,
+                solidBackground = reduceGlassTransparency,
+                spec = graph.newBarGlass.value,
+                // ⚠ 放大镜不再采样页面背景（137/138 两版均翻车：暗色空页出黑框/接缝），
+                //   页面只透过玻璃材质显示；胶囊透镜是 AGSL 连续变倍，组件内部自足
+                onPositioned = { islandRect = it },
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 16.dp, bottom = 20.dp),
+            )
+        } else {
+            FloatingIslandBar(
+                active = tab,
+                onSelect = { tab = it },
+                offsetY = islandOffsetY,
+                alpha = islandAlpha,
+                spec = glassSpec,
+                capsulePos = capsulePos,
+                onPositioned = { islandRect = it },
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(start = 16.dp, end = 16.dp, bottom = 20.dp),
+            )
+        }
 
         HomeExitDialog(show = showExitDialog, onClose = { showExitDialog = false })
     }
@@ -371,6 +480,7 @@ fun MainScreen(nav: NavHostController, tabState: MutableIntState) {
  */
 private fun DrawScope.renderLiquidGlass(
     picture: AndroidPicture,
+    contentNode: RenderNode? = null,
     area: Rect,
     canvasW: Int,
     canvasH: Int,
@@ -412,8 +522,12 @@ private fun DrawScope.renderLiquidGlass(
 
     clipPath(outline) {
         if (canBlur && blurNode != null) {
-            // ① 主体：真模糊 + 提饱和
-            blurNode.recordBackdrop(picture, src, canvasW, canvasH, blurPx, spec.saturation, saturation)
+            // ① 主体：真模糊 + 提饱和（优先从内容 RenderNode 取样，其次才是旧 Picture）
+            if (contentNode != null) {
+                blurNode.recordBackdropFromNode(contentNode, src, canvasW, canvasH, blurPx, spec.saturation, saturation)
+            } else {
+                blurNode.recordBackdrop(picture, src, canvasW, canvasH, blurPx, spec.saturation, saturation)
+            }
             drawIntoCanvas { it.nativeCanvas.drawRenderNode(blurNode) }
         }
         // ② tint 整块盖满圆角轮廓
@@ -576,6 +690,37 @@ private fun RenderNode.recordBackdrop(
     radiusPx: Float,
     saturate: Float,
     saturation: ColorMatrix,
+) {    val left = src.left.toInt()
+    val top = src.top.toInt()
+    val w = (src.right - src.left).toInt().coerceAtLeast(1)
+    val h = (src.bottom - src.top).toInt().coerceAtLeast(1)
+    setPosition(left, top, left + w, top + h)
+    saturation.setSaturation(saturate)
+    setRenderEffect(
+        RenderEffect.createChainEffect(
+            RenderEffect.createBlurEffect(radiusPx, radiusPx, Shader.TileMode.CLAMP),
+            RenderEffect.createColorFilterEffect(ColorMatrixColorFilter(saturation)),
+        ),
+    )
+    val rc = beginRecording(w, h)
+    rc.translate(-src.left, -src.top)
+    rc.drawPicture(picture, AndroidRectF(0f, 0f, canvasW.toFloat(), canvasH.toFloat()))
+    endRecording()
+}
+
+/**
+ * 同 [recordBackdrop]，但取样源是**内容 RenderNode**（2026-10-27）：
+ * 内容只画一遍进节点，屏幕与玻璃共用，避免软件 Picture 二次绘制污染子图层。
+ */
+@RequiresApi(Build.VERSION_CODES.S)
+private fun RenderNode.recordBackdropFromNode(
+    content: RenderNode,
+    src: AndroidRectF,
+    canvasW: Int,
+    canvasH: Int,
+    radiusPx: Float,
+    saturate: Float,
+    saturation: ColorMatrix,
 ) {
     val left = src.left.toInt()
     val top = src.top.toInt()
@@ -591,7 +736,7 @@ private fun RenderNode.recordBackdrop(
     )
     val rc = beginRecording(w, h)
     rc.translate(-src.left, -src.top)
-    rc.drawPicture(picture, AndroidRectF(0f, 0f, canvasW.toFloat(), canvasH.toFloat()))
+    rc.drawRenderNode(content)
     endRecording()
 }
 

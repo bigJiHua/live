@@ -128,8 +128,8 @@ fun RepayListScreen(nav: NavHostController) {
             if (!silent) loading = true
             when (val r = graph.repay.list(selectedCardId, billMonth)) {
                 is ApiResult.Ok -> { rows = r.data.orEmpty(); RepayListKeepAlive.put(currentKey(), RepayListKeepAlive.Snapshot(rows, cards)) }
-                is ApiResult.Fail -> { toast(r.message.ifBlank { "加载失败" }, VanToastType.Fail); rows = emptyList() }
-                else -> rows = emptyList()
+                // 刷新失败保留旧记录：清空会让整页变空
+                else -> toast(r.failMessage("加载失败"), r.failToastType())
             }
             if (!silent) loading = false
         }

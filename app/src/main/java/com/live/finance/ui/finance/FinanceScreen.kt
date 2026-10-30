@@ -24,6 +24,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,6 +43,7 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import com.live.finance.App
 import com.live.finance.core.nav.Routes
+import com.live.finance.core.net.ApiGetCache
 import com.live.finance.core.net.ApiResult
 import com.live.finance.core.net.failMessage
 import com.live.finance.data.model.MonthStats
@@ -62,11 +64,14 @@ import com.live.finance.ui.flow.FText
 import com.live.vant.feedback.LocalVanToastController
 import com.live.vant.feedback.VanPopup
 import com.live.vant.feedback.VanPopupPosition
+import com.live.vant.feedback.VanPullRefresh
+import com.live.vant.feedback.rememberVanPullRefreshState
 import com.live.vant.form.VanPicker
 import com.live.vant.form.VanPickerOption
 import com.live.vant.icon.VanIcon
 import java.util.Calendar
 import com.live.finance.core.net.showFail
+import kotlinx.coroutines.launch
 
 /**
  * 账本首页 —— 逐像素对齐 web `web/src/views/Finance/index.vue`（+ 全局 `style.css` 的 `.app-card`）。
@@ -102,11 +107,22 @@ fun FinanceScreen(nav: NavHostController) {
     var stats by remember { mutableStateOf(MonthStats()) }
     var pickerShown by remember { mutableStateOf(false) }
     var pickerValue by remember { mutableStateOf(listOf(0, 0)) }
+    val scope = rememberCoroutineScope()
+    val refreshState = rememberVanPullRefreshState()
+    val scrollState = rememberScrollState()
 
-    // web: onMounted → loadMonthStats()，onPickerConfirm 后再次 loadMonthStats()（切月即重取）
-    LaunchedEffect(year, month) {
-        when (val r = graph.flow.monthStats(year, month)) {
-            is ApiResult.Ok -> stats = r.data ?: MonthStats()
+    // web: onMounted → loadMonthStats()，onPickerConfirm 后再次 loadMonthStats()（切月即重取）。
+    // 首进 LaunchedEffect 与下拉刷新共用；刷新过程**不把 stats 置空**——旧数据保持渲染，新值到了才覆盖。
+    // 序号只让最后一次发起的请求落屏：连点切月/切月同时下拉时，先发后到的旧月份响应不得覆盖当前月份。
+    val statsSeq = remember { mutableIntStateOf(0) }
+    suspend fun loadMonthStats() {
+        val seq = statsSeq.intValue + 1
+        statsSeq.intValue = seq
+        val r = graph.flow.monthStats(year, month)
+        if (seq != statsSeq.intValue) return
+        when (r) {
+            // 200 但空 data 也保留旧值，避免刷新把金额清零
+            is ApiResult.Ok -> if (r.data != null) stats = r.data
             // 下面三个分支对齐 web 全局响应拦截器 `utils/request/interceptors/response.js`：
             ApiResult.Unauthorized -> {   // 业务 401 → forceLogin()
                 toast.show("登录已失效，请重新登录")
@@ -118,115 +134,134 @@ fun FinanceScreen(nav: NavHostController) {
         }
     }
 
+    LaunchedEffect(year, month) { loadMonthStats() }
+
     ScreenScaffold { inner ->
-        Column(
-            inner
-                .verticalScroll(rememberScrollState())
-                // web `.page-finance { padding: 8px 16px }`
-                // ⚠ **底部要留出悬浮玻璃岛的空间**：岛 `height:60dp` + `bottom:20dp` ⇒ 遮挡屏幕底部约 80dp。
-                //   主布局 `MainScreen` 现在内容区是**整屏高**（不再压 90dp），所以底部让位由各 Tab 页自己做。
-                //   否则滚到底时「财务把控中心」最后一行（理财管理等）会被岛盖住（2026-09-19 真机反馈「固定高度理财管理被遮挡」）。
-                .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 90.dp),
+        VanPullRefresh(
+            state = refreshState,
+            // 只有内容滚到顶部时下拉才触发刷新（Vant 语义）；onRefresh 先清 GET 缓存强制走网络
+            isChildAtTop = { scrollState.value <= 0 },
+            onRefresh = {
+                ApiGetCache.clear()
+                scope.launch {
+                    try {
+                        loadMonthStats()
+                    } finally {
+                        // 无论成功/失败/异常都必须收刷新头
+                        refreshState.finishRefresh()
+                    }
+                }
+            },
         ) {
-            // ───────── ① 月度收支头卡（web .app-card.finance-header） ─────────
-            WebCard(
-                shadow = WebShadow(0f, 4f, 12f, Color.Black.copy(alpha = 0.03f)),  // web box-shadow 覆盖值
-                contentPadding = PaddingValues(20.dp),
+            Column(
+                inner
+                    .verticalScroll(scrollState)
+                    // web `.page-finance { padding: 8px 16px }`
+                    // ⚠ **底部要留出悬浮玻璃岛的空间**：岛 `height:60dp` + `bottom:20dp` ⇒ 遮挡屏幕底部约 80dp。
+                    //   主布局 `MainScreen` 现在内容区是**整屏高**（不再压 90dp），所以底部让位由各 Tab 页自己做。
+                    //   否则滚到底时「财务把控中心」最后一行（理财管理等）会被岛盖住（2026-09-19 真机反馈「固定高度理财管理被遮挡」）。
+                    .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 90.dp),
             ) {
-                // 月份选择器：14px 次级色 + 数字 num-font（粗体）+ arrow-down（1em，继承 14px）
-                Row(
-                    Modifier
-                        .padding(bottom = 15.dp)  // web margin-bottom: 15px
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                        ) {
-                            pickerValue = listOf(
-                                (year - yearList.first()).coerceIn(0, yearList.lastIndex),
-                                (month - 1).coerceIn(0, monthList.lastIndex),
-                            )
-                            pickerShown = true
-                        },
-                    verticalAlignment = Alignment.CenterVertically,
+                // ───────── ① 月度收支头卡（web .app-card.finance-header） ─────────
+                WebCard(
+                    shadow = WebShadow(0f, 4f, 12f, Color.Black.copy(alpha = 0.03f)),  // web box-shadow 覆盖值
+                    contentPadding = PaddingValues(20.dp),
                 ) {
-                    BasicText(
-                        text = monthLabel(year, month),
-                        style = TextStyle(color = colors.textSecondary, fontSize = scaledSp(16f)),
-                    )
-                    Spacer(Modifier.width(4.dp))  // web gap: 4px
-                    VanIcon(name = "arrow-down", size = 14.sp, color = colors.textSecondary)
-                }
-
-                // van-row + 两个 span=12 的 van-col（无 gutter → 各占 50%）
-                // 金额缩略一律走共享件 Money.abbrev（= web formatAmount 同一算法：≥万/亿 缩写 + 2~3 位小数、无千分位）
-                Row(Modifier.fillMaxWidth()) {
-                    Column(Modifier.weight(1f)) {
-                        FText("本月总支出：", 12f, FontWeight.Normal, colors.textTertiary, Modifier.padding(bottom = 4.dp))
-                        FText(Money.abbrev(stats.expense), 24f, FontWeight.Bold, MoneyColor.expense)  // --money-expense
+                    // 月份选择器：14px 次级色 + 数字 num-font（粗体）+ arrow-down（1em，继承 14px）
+                    Row(
+                        Modifier
+                            .padding(bottom = 15.dp)  // web margin-bottom: 15px
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                            ) {
+                                pickerValue = listOf(
+                                    (year - yearList.first()).coerceIn(0, yearList.lastIndex),
+                                    (month - 1).coerceIn(0, monthList.lastIndex),
+                                )
+                                pickerShown = true
+                            },
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        BasicText(
+                            text = monthLabel(year, month),
+                            style = TextStyle(color = colors.textSecondary, fontSize = scaledSp(16f)),
+                        )
+                        Spacer(Modifier.width(4.dp))  // web gap: 4px
+                        VanIcon(name = "arrow-down", size = 14.sp, color = colors.textSecondary)
                     }
-                    Column(Modifier.weight(1f)) {
-                        FText("本月总收入：", 12f, FontWeight.Normal, colors.textTertiary, Modifier.padding(bottom = 4.dp))
-                        FText(Money.abbrev(stats.income), 24f, FontWeight.Bold, MoneyColor.income)  // --money-income
-                    }
-                }
 
-                // .header-footer { margin-top:18px; padding-top:15px; space-between; align-center }
-                Row(
-                    Modifier.fillMaxWidth().padding(top = 33.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Row {
-                        FText("结余：", 12f, FontWeight.Normal, colors.textTertiary, Modifier.alignByBaseline())
-                        // .net-assets .val：14px / 500（覆盖 num-font 的 bold）
-                        FText("￥${Money.abbrev(stats.balance)}", 16f, FontWeight.Medium, colors.textPrimary, Modifier.alignByBaseline())
-                    }
-                    // app-button plain size=small type=primary icon=plus + .quick-add-btn（0 15px / 32 / radius 8）
-                    AppButton(
-                        text = "记一笔",
-                        type = AppButtonType.Primary,
-                        plain = true,
-                        size = AppButtonSize.Small,
-                        icon = "plus",
-                        height = 32.dp,       // .quick-add-btn { height: 32px }
-                        hPadding = 15.dp,     // .quick-add-btn { padding: 0 15px }
-                        cornerRadius = 8.dp,  // .quick-add-btn { border-radius: 8px }
-                        onClick = { nav.navigate(Routes.ACCOUNT_ADD) },
-                    )
-                }
-            }
-
-            Spacer(Modifier.height(16.dp))  // web .finance-header { margin-bottom: 16px }
-
-            // ───────── ② 财务把控中心（web .app-card.menu-grid-wrapper） ─────────
-            WebCard(
-                shadow = WebShadow(0f, 4f, 16f, Color.Black.copy(alpha = 0.06f)),  // web --app-shadow
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 16.dp),
-            ) {
-                FText(
-                    "财务把控中心", 16f, FontWeight.Bold, colors.textPrimary,
-                    Modifier.padding(start = 10.dp).padding(bottom = 15.dp),
-                )
-                // app-grid：repeat(3, minmax(0,1fr))，无 gap；13 项 → 4 整行 + 末行 1 项（左对齐）
-                financeGrid(tokens).chunked(3).forEach { rowCells ->
+                    // van-row + 两个 span=12 的 van-col（无 gutter → 各占 50%）
+                    // 金额缩略一律走共享件 Money.abbrev（= web formatAmount 同一算法：≥万/亿 缩写 + 2~3 位小数、无千分位）
                     Row(Modifier.fillMaxWidth()) {
-                        rowCells.forEach { cell ->
-                            GridCell(
-                                entry = cell,
-                                modifier = Modifier.weight(1f),
-                                onClick = {
-                                    // 目标屏未落地的项（信用卡专项/资产结构登记）不跳转、不点崩
-                                    if (nav.graph.findNode(cell.route) != null) nav.navigate(cell.route)
-                                    else toast.show("该页面尚未实现")
-                                },
-                            )
+                        Column(Modifier.weight(1f)) {
+                            FText("本月总支出：", 12f, FontWeight.Normal, colors.textTertiary, Modifier.padding(bottom = 4.dp))
+                            FText(Money.abbrev(stats.expense), 24f, FontWeight.Bold, MoneyColor.expense)  // --money-expense
                         }
-                        repeat(3 - rowCells.size) { Spacer(Modifier.weight(1f)) }
+                        Column(Modifier.weight(1f)) {
+                            FText("本月总收入：", 12f, FontWeight.Normal, colors.textTertiary, Modifier.padding(bottom = 4.dp))
+                            FText(Money.abbrev(stats.income), 24f, FontWeight.Bold, MoneyColor.income)  // --money-income
+                        }
+                    }
+
+                    // .header-footer { margin-top:18px; padding-top:15px; space-between; align-center }
+                    Row(
+                        Modifier.fillMaxWidth().padding(top = 33.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Row {
+                            FText("结余：", 12f, FontWeight.Normal, colors.textTertiary, Modifier.alignByBaseline())
+                            // .net-assets .val：14px / 500（覆盖 num-font 的 bold）
+                            FText("￥${Money.abbrev(stats.balance)}", 16f, FontWeight.Medium, colors.textPrimary, Modifier.alignByBaseline())
+                        }
+                        // app-button plain size=small type=primary icon=plus + .quick-add-btn（0 15px / 32 / radius 8）
+                        AppButton(
+                            text = "记一笔",
+                            type = AppButtonType.Primary,
+                            plain = true,
+                            size = AppButtonSize.Small,
+                            icon = "plus",
+                            height = 32.dp,       // .quick-add-btn { height: 32px }
+                            hPadding = 15.dp,     // .quick-add-btn { padding: 0 15px }
+                            cornerRadius = 8.dp,  // .quick-add-btn { border-radius: 8px }
+                            onClick = { nav.navigate(Routes.ACCOUNT_ADD) },
+                        )
                     }
                 }
-            }
 
-            Spacer(Modifier.height(16.dp))  // web .menu-grid-wrapper { margin-bottom: 16px }
+                Spacer(Modifier.height(16.dp))  // web .finance-header { margin-bottom: 16px }
+
+                // ───────── ② 财务把控中心（web .app-card.menu-grid-wrapper） ─────────
+                WebCard(
+                    shadow = WebShadow(0f, 4f, 16f, Color.Black.copy(alpha = 0.06f)),  // web --app-shadow
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 16.dp),
+                ) {
+                    FText(
+                        "财务把控中心", 16f, FontWeight.Bold, colors.textPrimary,
+                        Modifier.padding(start = 10.dp).padding(bottom = 15.dp),
+                    )
+                    // app-grid：repeat(3, minmax(0,1fr))，无 gap；13 项 → 4 整行 + 末行 1 项（左对齐）
+                    financeGrid(tokens).chunked(3).forEach { rowCells ->
+                        Row(Modifier.fillMaxWidth()) {
+                            rowCells.forEach { cell ->
+                                GridCell(
+                                    entry = cell,
+                                    modifier = Modifier.weight(1f),
+                                    onClick = {
+                                        // 目标屏未落地的项（信用卡专项/资产结构登记）不跳转、不点崩
+                                        if (nav.graph.findNode(cell.route) != null) nav.navigate(cell.route)
+                                        else toast.show("该页面尚未实现")
+                                    },
+                                )
+                            }
+                            repeat(3 - rowCells.size) { Spacer(Modifier.weight(1f)) }
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(16.dp))  // web .menu-grid-wrapper { margin-bottom: 16px }
+            }
         }
     }
 

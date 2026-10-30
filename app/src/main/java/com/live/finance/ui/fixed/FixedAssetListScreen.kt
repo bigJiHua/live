@@ -44,6 +44,7 @@ import com.live.finance.core.AppConfig
 import com.live.finance.core.nav.Routes
 import com.live.finance.core.net.ApiGetCache
 import com.live.finance.core.net.ApiResult
+import com.live.finance.core.net.showFail
 import com.live.finance.data.model.FixedAsset
 import com.live.finance.theme.LocalAppColors
 import com.live.vant.basic.VanEmpty
@@ -58,6 +59,7 @@ import com.live.vant.basic.VanLoading
 import com.live.vant.basic.VanTag
 import com.live.vant.basic.VanTagSize
 import com.live.vant.basic.VanTagType
+import com.live.vant.feedback.LocalVanToastController
 import com.live.vant.feedback.VanPullRefresh
 import com.live.vant.feedback.rememberVanPullRefreshState
 import com.live.vant.icon.VanIcon
@@ -84,6 +86,7 @@ fun FixedAssetListScreen(nav: NavHostController) {
     val colors = LocalAppColors.current
     val tokens = LocalAppTokens.current
     val scope = rememberCoroutineScope()
+    val toast = LocalVanToastController.current
 
     var rows by remember { mutableStateOf<List<FixedAsset>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
@@ -96,9 +99,10 @@ fun FixedAssetListScreen(nav: NavHostController) {
 
     suspend fun load() {
         loading = true
-        rows = when (val r = graph.fixed.list()) {
-            is ApiResult.Ok -> r.data.orEmpty()
-            else -> emptyList()
+        when (val r = graph.fixed.list()) {
+            is ApiResult.Ok -> rows = r.data.orEmpty()
+            // 刷新失败保留旧列表，不清空整页
+            else -> toast.showFail(r, "加载失败")
         }
         loading = false
     }
