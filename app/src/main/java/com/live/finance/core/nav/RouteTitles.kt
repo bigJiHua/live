@@ -25,6 +25,7 @@ object RouteTitles {
         "finance/flow/{id}" to "收支详情",
         Routes.ACCOUNT_ADD to "新增收支明细",
         Routes.ACCOUNT_QUICK_ADD to "快速登记",
+        Routes.ACCOUNT_BATCH_ADD to "批量登记",
         Routes.ACCOUNT_STRUCTURE to "系统账户余额",
         Routes.ACCOUNT_BALANCE_FLOW to "余额流水明细",
 

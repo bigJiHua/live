@@ -31,6 +31,7 @@ object Routes {
     // 账户
     const val ACCOUNT_ADD = "finance/add"
     const val ACCOUNT_QUICK_ADD = "finance/quick-add"
+    const val ACCOUNT_BATCH_ADD = "finance/batch-add"
     const val ACCOUNT_STRUCTURE = "finance/structure"
     const val ACCOUNT_BALANCE_FLOW = "finance/balance-flow"
 

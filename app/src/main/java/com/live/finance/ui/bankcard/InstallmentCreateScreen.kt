@@ -30,6 +30,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -115,6 +116,9 @@ internal fun buildInstallmentSchedule(
 private val SEG_ITEM_W = 100.dp
 private val SEG_ITEM_H = 26.dp
 
+/** 微调键盘打开时滚动内容底部的额外留白（负责人定的 100dp），配合滚到底把预览列表抬到键盘上方。 */
+private val KEYBOARD_CLEARANCE = 100.dp
+
 /**
  * 创建分期 —— 一比一复刻 web `views/BankCard/Installment.vue`。
  *
@@ -153,6 +157,8 @@ fun InstallmentCreateScreen(nav: NavHostController) {
     var tailMode by remember { mutableStateOf("last") }
     var adjustedList by remember { mutableStateOf<List<Double>>(emptyList()) }
     var editIdx by remember { mutableStateOf(-1) }
+    // 微调键盘打开后是否已按过键：未按过时第一下数字 = 整体替换旧值（等价于全选输入）
+    var editTouched by remember { mutableStateOf(false) }
     var keyboardField by remember { mutableStateOf("amount") }
     var keyboardValue by remember { mutableStateOf("") }
     var showKeyboard by remember { mutableStateOf(false) }
@@ -163,6 +169,8 @@ fun InstallmentCreateScreen(nav: NavHostController) {
     // web `datePickerSel`：日期选择器自身的三列选中值（年/月/日），日列长度随年月联动
     var dateSel by remember { mutableStateOf(listOf(now.year, now.monthValue, 1)) }
     val scope = rememberCoroutineScope()
+    val pageScroll = rememberScrollState()
+    val adjustKeyboardOpen = showKeyboard && keyboardField == "adjust"
 
     val vanToast = LocalVanToastController.current
     fun toast(m: String, type: VanToastType = VanToastType.Text) = vanToast.show(m, type)
@@ -181,6 +189,14 @@ fun InstallmentCreateScreen(nav: NavHostController) {
     // 打开日期选择器时定位到当前首期日期（web `watch(showDatePicker, …)`）
     LaunchedEffect(showDatePicker) {
         if (showDatePicker) dateSel = listOf(firstEnterDate.year, firstEnterDate.monthValue, firstEnterDate.dayOfMonth)
+    }
+    // 微调键盘弹起：内容底部先补出键盘高度的滚动余量，再滚到底，把预览列表整体抬到键盘上方
+    LaunchedEffect(adjustKeyboardOpen) {
+        if (adjustKeyboardOpen) {
+            withFrameNanos { }
+            withFrameNanos { }
+            pageScroll.animateScrollTo(pageScroll.maxValue)
+        }
     }
 
     val periods = formPeriods
@@ -275,7 +291,7 @@ fun InstallmentCreateScreen(nav: NavHostController) {
     ScreenScaffold { inner ->
         Column(Modifier.fillMaxSize().then(inner).background(colors.bgPage)) {
             Column(
-                Modifier.weight(1f).verticalScroll(rememberScrollState())
+                Modifier.weight(1f).verticalScroll(pageScroll)
                     .padding(start = 16.dp, end = 16.dp, top = 12.dp),
             ) {
                 // ── .header-card：红色渐变 135deg，radius 12，padding 20，margin-bottom 16 ──
@@ -351,9 +367,12 @@ fun InstallmentCreateScreen(nav: NavHostController) {
                         adjustedTotal = adjustedTotal,
                         exceedLimit = exceedLimit,
                         red = red,
+                        editingIdx = if (adjustKeyboardOpen) editIdx else -1,
                         onEdit = { idx, value ->
                             editIdx = idx; keyboardField = "adjust"
-                            keyboardValue = String.format("%.2f", value); showKeyboard = true
+                            editTouched = false
+                            // 带出当前值；整数金额不带 ".00" 尾巴（3 而不是 3.00），⌫ 直接从个位删
+                            keyboardValue = trimAmountText(value); showKeyboard = true
                         },
                     )
                 }
@@ -365,6 +384,7 @@ fun InstallmentCreateScreen(nav: NavHostController) {
                     type = AppButtonType.Primary, block = true, round = true, disabled = !formReady || submitting, loading = submitting,
                 )
                 Spacer(Modifier.height(100.dp)) // .page-installment{ padding-bottom: 100px }
+                if (adjustKeyboardOpen) Spacer(Modifier.height(KEYBOARD_CLEARANCE))
             }
         }
     }
@@ -440,16 +460,43 @@ fun InstallmentCreateScreen(nav: NavHostController) {
         VanNumberKeyboard(
             show = true,
             text = keyboardValue,
-            // web `watch(keyboardValue)`：amount / fee **实时**写回表单（预览跟着动），adjust 在关闭时落库
+            // web `watch(keyboardValue)`：amount / fee **实时**写回表单；adjust 这里同样实时写回（web 是关闭才落库）
             onTextChange = { raw ->
-                keyboardValue = raw
-                val clean = raw.replace(Regex("[^\\d.]"), "")
+                val prev = keyboardValue
+                val next = when {
+                    keyboardField != "adjust" -> raw
+                    // 删除：顺手去掉全零小数尾巴 / 孤立小数点（3.00 → 3、3.5 再删 → 3），避免空按
+                    raw.length < prev.length -> tidyAdjustAfterDelete(raw)
+                    // 打开后第一下按数字 = 整体替换旧值，之后正常追加/删除
+                    !editTouched && raw.length > prev.length && raw.startsWith(prev) -> raw.removePrefix(prev)
+                    else -> raw
+                }
+                if (keyboardField == "adjust") editTouched = true
+                keyboardValue = next
+                val clean = next.replace(Regex("[^\\d.]"), "")
                 when (keyboardField) {
                     "amount" -> formAmount = clean
                     "fee" -> formFee = clean
+                    // 微调：边输边写回（行金额 / 合计 / 超额提示 / 按钮禁用态实时联动）；删空 = 0.00
+                    "adjust" -> {
+                        if (editIdx in adjustedList.indices) {
+                            val v = if (clean.isBlank()) 0.0 else {
+                                normalizeAdjustText(clean).toDoubleOrNull()
+                                    ?.let { Math.round(Math.min(it, 99999999.99) * 100.0) / 100.0 } ?: 0.0
+                            }
+                            adjustedList = adjustedList.toMutableList().also { it[editIdx] = v }
+                        }
+                    }
                     else -> Unit
                 }
             },
+            // 微调时键盘上方大字回显期次与当前金额（预览列表被键盘盖住也能看清）
+            displayLabel = if (keyboardField == "adjust") {
+                "第${(editIdx + 1).coerceAtLeast(1)}期金额"
+            } else null,
+            displayValue = if (keyboardField == "adjust") {
+                "￥${String.format("%.2f", adjustedList.getOrNull(editIdx) ?: 0.0)}"
+            } else null,
             theme = VanKeyboardTheme.Custom,
             closeButtonText = "完成",
             extraKey = listOf("."),
@@ -618,6 +665,8 @@ private fun PreviewCard(
     adjustedTotal: Double,
     exceedLimit: Boolean,
     red: Color,
+    /** 当前微调中的期次（键盘收起时传 -1）；非 -1 的行加高亮底 */
+    editingIdx: Int,
     onEdit: (Int, Double) -> Unit,
 ) {
     val colors = LocalAppColors.current
@@ -641,8 +690,14 @@ private fun PreviewCard(
         ) {
             dates.forEachIndexed { idx, d ->
                 val v = adjusted.getOrNull(idx) ?: standardPerPeriod
+                val editing = idx == editingIdx
                 Row(
-                    Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    // web 只有金额文字可点；触屏上几十 dp 的文字太难点，整行作为热区
+                    Modifier.fillMaxWidth()
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(if (editing) colors.bgThird else Color.Transparent)
+                        .clickable { onEdit(idx, v) }
+                        .padding(vertical = 4.dp),
                     horizontalArrangement = Arrangement.SpaceBetween, // .preview-item{ justify-content: space-between }
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -651,7 +706,7 @@ private fun PreviewCard(
                     // .pi-amount{ danger } + .editable{ text-decoration: underline dotted; cursor:pointer }
                     FText(
                         "￥${String.format("%.2f", v)}", 14f, color = red,
-                        modifier = Modifier.dottedUnderline(red).clickable { onEdit(idx, v) },
+                        modifier = Modifier.dottedUnderline(red),
                     )
                 }
             }
@@ -716,6 +771,24 @@ private fun DashedDivider(color: Color, dash: Dp = 4.dp, gap: Dp = 3.dp) {
     }
 }
 
+/** 微调键盘预填：整数金额去掉 ".00" 尾巴（3.00 → "3"、3.50 → "3.5"），⌫ 不会被小数零位吃掉。 */
+private fun trimAmountText(v: Double): String =
+    String.format("%.2f", v).trimEnd('0').trimEnd('.')
+
+/** 微调键盘删除后整理：去掉全零小数尾巴 / 孤立小数点（3.00 → 3、3.5 再删 → 3）。 */
+private fun tidyAdjustAfterDelete(raw: String): String {
+    val noZeroTail = raw.replace(Regex("\\.0+$"), "")
+    return if (noZeroTail.endsWith(".")) noZeroTail.dropLast(1) else noZeroTail
+}
+
+/** 微调金额文本归一化：整数 ≤ 8 位、小数 ≤ 2 位（实时写回与关闭落库共用同一口径）。 */
+private fun normalizeAdjustText(raw: String): String {
+    val parts = raw.replace(Regex("[^\\d.]"), "").split(".")
+    val head = parts.getOrNull(0).orEmpty().take(8)
+    val tail = parts.getOrNull(1).orEmpty().take(2)
+    return if (tail.isEmpty()) head else "$head.$tail"
+}
+
 /** 键盘落库（web `closeKeyboard` 原文：**各字段位数不同**）。 */
 private fun keyboardCommit(
     field: String,
@@ -737,7 +810,7 @@ private fun keyboardCommit(
         }
         // adjust：整数 ≤ 8、小数 ≤ 2，上限 99999999.99
         "adjust" -> {
-            val v = if (tail.isEmpty()) head.take(8) else "${head.take(8)}.${tail.take(2)}"
+            val v = normalizeAdjustText(raw)
             onAdjust(Math.min(v.toDoubleOrNull() ?: 0.0, 99999999.99))
         }
         // amount：整数 ≤ 8、小数 ≤ 2，上限 99999999.99

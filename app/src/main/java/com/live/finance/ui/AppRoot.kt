@@ -305,6 +305,7 @@ private fun AppNavHost(transitioning: MutableState<Boolean>) {
         }
         composable(Routes.ACCOUNT_ADD) { com.live.finance.ui.account.AddTransactionScreen(nav) }
         composable(Routes.ACCOUNT_QUICK_ADD) { com.live.finance.ui.account.QuickAddScreen(nav) }
+        composable(Routes.ACCOUNT_BATCH_ADD) { com.live.finance.ui.account.BatchAddScreen(nav) }
         composable(Routes.ASSETS_LIST) { com.live.finance.ui.asset.AssetListScreen(nav) }
         // 资产结构登记（新增；?copyId= 为「追加/复制继续」从历史记录复制明细）
         composable(

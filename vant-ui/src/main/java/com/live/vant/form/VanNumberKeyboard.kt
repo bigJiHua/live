@@ -22,8 +22,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -52,6 +54,9 @@ fun VanNumberKeyboard(
     modifier: Modifier = Modifier,
     theme: VanKeyboardTheme = VanKeyboardTheme.Default,
     title: String? = null,
+    /** 键盘上方的金额回显：左侧说明小字（如「第2期金额」），右侧当前值大字（如「￥123.45」）；null = 不显示 */
+    displayLabel: String? = null,
+    displayValue: String? = null,
     /** custom 主题右侧蓝色大按钮文字（如 "完成"）；传 null 显示默认主题 */
     closeButtonText: String? = null,
     /** 额外按键：["."] 或 ["0","."]（对应 Vant :extra-key） */
@@ -113,6 +118,29 @@ fun VanNumberKeyboard(
                         if (theme == VanKeyboardTheme.Custom) c.bgCard else c.bgThird,
                     ),
             ) {
+                // 金额回显条（可选）：做成输入框观感 —— 左说明小字 + 右当前值大字
+                if (displayValue != null) {
+                    Row(
+                        Modifier.fillMaxWidth()
+                            .padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 6.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(c.bgThird)
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        if (!displayLabel.isNullOrEmpty()) {
+                            androidx.compose.foundation.text.BasicText(
+                                displayLabel,
+                                style = TextStyle(color = c.textTertiary, fontSize = 14.sp),
+                            )
+                        }
+                        androidx.compose.foundation.text.BasicText(
+                            displayValue,
+                            style = TextStyle(color = c.textPrimary, fontSize = 26.sp, fontWeight = FontWeight.SemiBold),
+                        )
+                    }
+                }
                 // 标题栏（title 存在时显示；custom 主题右侧文字按钮）
                 if (!title.isNullOrEmpty()) {
                     Row(
@@ -134,8 +162,9 @@ fun VanNumberKeyboard(
                         )
                     }
                 }
-                // 按键区
-                Column(Modifier.fillMaxWidth().padding(top = 6.dp)) {
+                // 按键区：web `.van-number-keyboard__body{padding:6px 0 0 6px}` +
+                // `.van-key__wrapper{padding:0 6px 6px 0}` ⇒ 左右各 6px；原生此前只有键间距、外圈贴边。
+                Column(Modifier.fillMaxWidth().padding(start = 6.dp, end = 6.dp, top = 6.dp)) {
                     if (theme == VanKeyboardTheme.Custom && closeButtonText != null) {
                         // web custom 主题（NumberKeyboard.js genCustomKeys + renderSidebar）：
                         // **整个左区 3 列×4 行**收进同一个 weight(3f) 栏（1-9 后，extraKey 为 0/1/2 个时

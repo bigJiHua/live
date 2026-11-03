@@ -193,17 +193,31 @@ fun HomeScreen(nav: NavHostController) {
                 Spacer(Modifier.height(12.dp))
 
                 Box(Modifier.padding(horizontal = 16.dp)) {
-                    // web `Home/index.vue`：app-button primary plain round small icon=plus → `goToAddFlow()` = /finance/quick-add
-                    AppButton(
-                        text = "快速登记流水",
-                        type = AppButtonType.Primary,
-                        plain = true,
-                        round = true,
-                        size = AppButtonSize.Small,
-                        icon = "plus",
-                        block = true,
-                        onClick = { nav.navigate(Routes.ACCOUNT_QUICK_ADD) },
-                    )
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        // web `Home/index.vue`：app-button primary plain round small icon=plus → `goToAddFlow()` = /finance/quick-add
+                        AppButton(
+                            text = "快速登记",
+                            type = AppButtonType.Primary,
+                            plain = true,
+                            round = true,
+                            size = AppButtonSize.Small,
+                            icon = "plus",
+                            block = true,
+                            modifier = Modifier.weight(1f),
+                            onClick = { nav.navigate(Routes.ACCOUNT_QUICK_ADD) },
+                        )
+                        AppButton(
+                            text = "批量登记",
+                            type = AppButtonType.Primary,
+                            plain = true,
+                            round = true,
+                            size = AppButtonSize.Small,
+                            icon = "orders-o",
+                            block = true,
+                            modifier = Modifier.weight(1f),
+                            onClick = { nav.navigate(Routes.ACCOUNT_BATCH_ADD) },
+                        )
+                    }
                 }
                 Spacer(Modifier.height(12.dp))
 

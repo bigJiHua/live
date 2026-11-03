@@ -71,7 +71,9 @@ fun VanPopup(
     val bg = background ?: c.bgCard
 
     Dialog(
-        onDismissRequest = { if (closeOnClickOverlay) onDismissRequest() },
+        // 系统返回/系统级 dismiss 一律关；遮罩点击由 VanOverlay 按 closeOnClickOverlay 单独门控。
+        // 不能按 closeOnClickOverlay 门控这里：Dialog 获得焦点时返回会被它吞掉，外层 BackHandler 收不到。
+        onDismissRequest = { onDismissRequest() },
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
     ) {
         Box(Modifier.fillMaxSize().systemBarsPadding()) {
