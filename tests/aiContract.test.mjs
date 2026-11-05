@@ -1,12 +1,45 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { validateAiCapabilities, validateAiResult, validateAiDraft } from '../src/utils/aiContract.js';
+import { validateAiCapabilities, validateAiResult, validateAiDraft, validateAiSettings } from '../src/utils/aiContract.js';
 
 const apiRequire = createRequire(new URL('../../api/package.json', import.meta.url));
 const { createAiService } = apiRequire('./src/modules/ai/service');
 const { createAiRouter } = apiRequire('./src/modules/ai/api');
 const express = apiRequire('express');
+
+test('settings HTTP contract keeps Key server-side and applies only to current user', async () => {
+  const env = { AI_MODE: 'mock', NODE_ENV: 'development', AI_SYNTHETIC_DATA: 'true', AI_ALLOW_SESSION_SETTINGS: 'true' };
+  const app = express(); app.use(express.json());
+  let connectionChecks = 0;
+  const secret = 'synthetic-http-key';
+  app.use('/ai', createAiRouter({ env, service: createAiService({ env,
+    checkConnection: async settings => { assert.equal(settings.apiKey, secret); connectionChecks++; },
+    chat: async () => ({ role: 'assistant', content: '真实调用流程的测试替身回答' }),
+  }), guard: (req, res, next) => { if (!req.headers['x-test-user']) return res.sendStatus(401); req.userId = req.headers['x-test-user']; next(); } }));
+  const server = await new Promise(resolve => { const instance = app.listen(0, '127.0.0.1', () => resolve(instance)); });
+  const base = `http://127.0.0.1:${server.address().port}/ai`;
+  const send = (path, method, data, user = 'a') => fetch(`${base}${path}`, { method, headers: { 'Content-Type': 'application/json', 'x-test-user': user }, body: data ? JSON.stringify({ data }) : undefined });
+  try {
+    assert.equal((await fetch(`${base}/settings`)).status, 401);
+    const initial = validateAiSettings((await (await send('/settings','GET')).json()).data);
+    assert.equal(initial.configured, false);
+    assert.equal((await send('/settings','PUT', { apiUrl: 'https://evil.test', apiKey: secret, model: 'deepseek-flash' })).status, 400);
+    assert.equal(connectionChecks, 0);
+    const response = await send('/settings','PUT', { apiUrl: 'https://api.deepseek.com/v1', apiKey: secret, model: 'deepseek-flash' });
+    const body = await response.text(); assert.ok(!body.includes(secret));
+    const profile = validateAiSettings(JSON.parse(body).data); assert.equal(profile.configured, true);
+    assert.equal(validateAiSettings((await (await send('/settings','GET',null,'b')).json()).data).configured, false);
+    const capabilities = validateAiCapabilities((await (await send('/capabilities','GET')).json()).data);
+    assert.equal(capabilities.mode, 'deepseek'); assert.equal(capabilities.dataSource, 'synthetic');
+    const result = validateAiResult((await (await send('/chat','POST',{ message: '你好', scene: 'chat', consent: true, connectionId: profile.connectionId })).json()).data);
+    assert.equal(result.mode,'deepseek'); assert.equal(result.source,'synthetic');
+    assert.equal((await send('/chat','POST',{ message: '你好', scene:'chat', consent:true, connectionId:profile.connectionId },'b')).status,409);
+    assert.equal(validateAiSettings((await (await send('/settings','DELETE',{})).json()).data).configured,false);
+    assert.equal((await send('/chat','POST',{ message: '你好', scene:'chat', consent:true, connectionId:profile.connectionId })).status,409);
+    assert.throws(() => validateAiSettings({ ...profile, apiKey: secret }));
+  } finally { await new Promise(resolve => server.close(resolve)); }
+});
 
 test('Web rejects incompatible versions or formal-write capabilities', () => {
   for (const capabilities of [{ contractVersion: 2 }, { contractVersion: 1, formalWriteEnabled: true }]) {

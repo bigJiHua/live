@@ -28,3 +28,14 @@ export function validateAiDraft(value) {
   }
   return value;
 }
+
+export function validateAiSettings(value) {
+  if (!value || typeof value.enabled !== 'boolean' || typeof value.configured !== 'boolean' ||
+      value.apiUrl !== 'https://api.deepseek.com' || typeof value.model !== 'string' ||
+      !Array.isArray(value.models) || !value.models.includes(value.model) ||
+      (value.configured ? !isUuid(value.connectionId) : value.connectionId !== null) ||
+      (value.expiresAt !== null && !Number.isFinite(value.expiresAt)) || Object.hasOwn(value, 'apiKey')) {
+    throw new Error('连接设置响应不符合协议');
+  }
+  return value;
+}

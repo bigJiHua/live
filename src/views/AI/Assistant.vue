@@ -3,7 +3,7 @@
     <header class="chat-header">
       <router-link to="/finance" class="back-link" aria-label="返回账本"><van-icon name="arrow-left" /></router-link>
       <div class="chat-title"><strong>财务助手</strong><span>{{ initializing ? '连接中' : capability?.mode === 'mock' ? '模拟测试' : capability?.mode === 'deepseek' ? 'DeepSeek' : '未启用' }}</span></div>
-      <button class="new-chat" :disabled="busy" @click="newConversation"><van-icon name="plus" /> 新对话</button>
+      <div class="header-actions"><button class="settings-button" aria-label="连接设置" :disabled="busy" @click="settingsOpen = true"><van-icon name="setting-o" /></button><button class="new-chat" :disabled="busy" @click="newConversation"><van-icon name="plus" /> 新对话</button></div>
     </header>
 
     <div ref="scrollArea" class="chat-scroll" role="log" aria-label="聊天记录" aria-live="polite">
@@ -31,7 +31,8 @@
     <footer class="composer-area">
       <div class="composer-inner">
         <p v-if="initializing" class="connection-state" role="status">正在连接助手…</p>
-        <div v-else-if="!capability?.enabled" class="connection-state" role="alert">{{ capability?.message || connectionError || 'AI 尚未启用' }} <button @click="loadCapabilities">重新连接</button></div>
+        <div v-else-if="!capability?.enabled" class="connection-state" role="alert">{{ capability?.message || connectionError || 'AI 尚未启用' }} <button @click="settingsOpen = true">连接设置</button></div>
+        <p v-if="settingsNotice" class="connection-state" role="status">{{ settingsNotice }}</p>
         <label v-if="capability?.requiresConsent" class="consent"><input v-model="consent" type="checkbox" :disabled="busy" /><span>同意将对话和必要的查询数据发送至 DeepSeek。</span></label>
         <form class="composer" @submit.prevent="send()">
           <textarea ref="inputArea" v-model="input" aria-label="消息" rows="1" maxlength="1500" placeholder="发消息，或说说这笔收支…" :disabled="!capability?.enabled || busy" @input="resizeInput" @keydown="onKeydown" />
@@ -40,6 +41,7 @@
         <p class="composer-note"><span class="keyboard-hint">Enter 发送 · Shift + Enter 换行</span></p>
       </div>
     </footer>
+    <AiSettingsDialog v-model:show="settingsOpen" :data-source="capability?.dataSource" @configured="settingsChanged" @working="settingsBusy = $event" />
   </div>
 </template>
 
@@ -48,6 +50,7 @@ import { ref, computed, onMounted, nextTick } from 'vue';
 import { getAiCapabilities, askAi } from '@/utils/api/ai';
 import AiDraftCard from '@/components/ai/AiDraftCard.vue';
 import AiEvidenceCard from '@/components/ai/AiEvidenceCard.vue';
+import AiSettingsDialog from '@/components/ai/AiSettingsDialog.vue';
 
 defineOptions({ name: 'AiAssistant' });
 const capability = ref(null);
@@ -57,7 +60,10 @@ const input = ref('');
 const consent = ref(false);
 const chatBusy = ref(false);
 const draftBusy = ref(false);
-const busy = computed(() => chatBusy.value || draftBusy.value);
+const settingsBusy = ref(false);
+const settingsOpen = ref(false);
+const settingsNotice = ref('');
+const busy = computed(() => chatBusy.value || draftBusy.value || settingsBusy.value);
 const messages = ref([]);
 const conversationId = ref();
 const scrollArea = ref(null);
@@ -78,16 +84,22 @@ async function loadCapabilities() {
   catch (error) { capability.value = null; connectionError.value = error?.message || '助手连接失败'; }
   finally { initializing.value = false; }
 }
+async function settingsChanged(notice) {
+  messages.value = []; conversationId.value = undefined; input.value = ''; consent.value = false;
+  settingsNotice.value = notice;
+  await loadCapabilities(); nextTick(resizeInput);
+}
 function newConversation() {
   if (busy.value) return;
   messages.value = []; conversationId.value = undefined; consent.value = false; input.value = '';
+  settingsNotice.value = '';
   nextTick(resizeInput);
 }
 async function requestReply(text, entry) {
   chatBusy.value = true;
   await bottom();
   try {
-    const result = await askAi({ message: text, conversationId: conversationId.value, consent: consent.value });
+    const result = await askAi({ message: text, conversationId: conversationId.value, consent: consent.value, connectionId: capability.value.connectionId });
     conversationId.value = result.conversationId;
     Object.assign(entry, { pending: false, error: false, text: result.answer, draft: result.draft,
       evidence: result.trace.filter(item => ['query_finance_summary', 'query_transactions'].includes(item.tool)) });
@@ -98,6 +110,7 @@ async function requestReply(text, entry) {
 async function send(example) {
   const text = (typeof example === 'string' ? example : input.value).trim();
   if (!allowed.value || !text) return;
+  settingsNotice.value = '';
   messages.value.push({ id: ++sequence, role: 'user', text });
   messages.value.push({ id: ++sequence, role: 'assistant', pending: true });
   const entry = messages.value[messages.value.length - 1];
@@ -123,6 +136,7 @@ onMounted(loadCapabilities);
 </script>
 
 <style scoped>
+.header-actions{margin-left:auto;display:flex;align-items:center;gap:8px;flex-shrink:0}.settings-button{display:grid;place-items:center;width:34px;height:34px;border:1px solid var(--theme-border);border-radius:9px;background:transparent;color:var(--theme-text-secondary);font-size:18px}
 .chat-page{height:100%;display:flex;flex-direction:column;overflow:hidden;color:var(--theme-text-primary);background:var(--theme-bg-primary)}
 button{font:inherit;cursor:pointer}button:disabled{opacity:.45;cursor:default}.chat-header{flex-shrink:0;display:flex;align-items:center;gap:12px;height:64px;padding:0 24px;border-bottom:1px solid var(--theme-border)}
 .back-link{color:var(--theme-text-secondary);display:grid;place-items:center;width:32px;height:36px;font-size:20px}.chat-title{display:flex;align-items:center;gap:10px}.chat-title strong{font-size:16px}.chat-title span{font-size:10px;color:var(--van-primary-color);background:var(--van-primary-color-light);padding:3px 7px;border-radius:5px}.new-chat{margin-left:auto;border:1px solid var(--theme-border);border-radius:9px;background:transparent;color:var(--theme-text-secondary);font-size:12px;padding:8px 10px}
