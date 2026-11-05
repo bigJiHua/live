@@ -37,7 +37,7 @@
           <textarea ref="inputArea" v-model="input" aria-label="消息" rows="1" maxlength="1500" placeholder="发消息，或说说这笔收支…" :disabled="!capability?.enabled || busy" @input="resizeInput" @keydown="onKeydown" />
           <button type="submit" class="send-button" :disabled="!canSend" aria-label="发送消息"><van-icon :name="busy ? 'ellipsis' : 'arrow-up'" /></button>
         </form>
-        <p class="composer-note">{{ capability?.mode === 'mock' ? '虚构样例 · ' : '' }}草稿须核对，当前不入账。<span class="keyboard-hint">Enter 发送 · Shift + Enter 换行</span></p>
+        <p class="composer-note"><span class="keyboard-hint">Enter 发送 · Shift + Enter 换行</span></p>
       </div>
     </footer>
   </div>
