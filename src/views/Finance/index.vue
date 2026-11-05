@@ -36,6 +36,10 @@
     <div class="app-card menu-grid-wrapper">
       <div class="grid-section-title">财务把控中心</div>
       <app-grid :column-num="3" :border="false" clickable>
+        <app-grid-item @click="$router.push('/ai')">
+          <template #icon><van-icon name="chat-o" class="grid-icon blue" /></template>
+          <template #text><span class="grid-text">财务 AI 测试</span></template>
+        </app-grid-item>
         <app-grid-item @click="goFunction('assets')">
           <template #icon><van-icon name="gem" class="grid-icon purple" /></template>
           <template #text><span class="grid-text">系统账户余额</span></template>

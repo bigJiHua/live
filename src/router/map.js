@@ -70,6 +70,12 @@ const RouterMap = [
     redirect: "/home",
     children: [
       {
+        path: "ai",
+        name: "AiAssistant",
+        component: () => import("@/views/AI/Assistant.vue"),
+        meta: { title: "财务 AI 测试", hideTabbar: true },
+      },
+      {
         path: "home",
         name: "Home",
         component: () => import("../views/Home/index.vue"),

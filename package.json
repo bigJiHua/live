@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:ai": "node --test tests/aiContract.test.mjs"
   },
   "dependencies": {
     "@wangeditor/editor": "^5.1.23",
