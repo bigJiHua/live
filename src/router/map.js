@@ -73,7 +73,7 @@ const RouterMap = [
         path: "ai",
         name: "AiAssistant",
         component: () => import("@/views/AI/Assistant.vue"),
-        meta: { title: "财务 AI 测试", hideTabbar: true },
+        meta: { title: "财务助手", hideTabbar: true, chatLayout: true },
       },
       {
         path: "home",

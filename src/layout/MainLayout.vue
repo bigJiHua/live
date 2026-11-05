@@ -1,6 +1,7 @@
 <template>
-  <div class="app-wrapper">
+  <div class="app-wrapper" :class="{ 'app-wrapper--chat': route.meta.chatLayout }">
     <van-nav-bar
+      v-if="!route.meta.chatLayout"
       :title="pageTitle"
       fixed
       placeholder
@@ -224,6 +225,9 @@ const goHome = () => {
   height: calc(100vh - 90px);
   height: calc(100dvh - 90px);
 }
+
+.app-wrapper--chat { height: 100vh; height: 100dvh; overflow: hidden; }
+.app-wrapper--chat .main-body { height: 100%; }
 
 /* 4. 纯手撸悬浮岛导航栏核心 CSS (纯果味实现) */
 .floating-island-nav {

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { validateAiCapabilities, validateAiResult } from '../src/utils/aiContract.js';
+import { validateAiCapabilities, validateAiResult, validateAiDraft } from '../src/utils/aiContract.js';
 
 const apiRequire = createRequire(new URL('../../api/package.json', import.meta.url));
 const { createAiService } = apiRequire('./src/modules/ai/service');
@@ -13,6 +13,35 @@ test('Web rejects incompatible versions or formal-write capabilities', () => {
     assert.throws(() => validateAiCapabilities(capabilities));
   }
   assert.throws(() => validateAiResult({ contractVersion: 1, formalWriteEnabled: true }));
+});
+
+test('chat HTTP contract supports inline edit, review, follow-up and cancellation', async () => {
+  const env = { AI_MODE: 'mock' };
+  const app = express(); app.use(express.json());
+  app.use('/ai', createAiRouter({ env, service: createAiService({ env }), guard: (req, _, next) => { req.userId = req.headers['x-test-user'] || 'chat_user'; next(); } }));
+  const server = await new Promise(resolve => { const instance = app.listen(0, '127.0.0.1', () => resolve(instance)); });
+  const base = `http://127.0.0.1:${server.address().port}/ai`;
+  const send = (path, method, data, user = 'chat_user') => fetch(`${base}${path}`, { method, headers: { 'Content-Type': 'application/json', 'x-test-user': user }, body: JSON.stringify({ data }) });
+  try {
+    const result = validateAiResult((await (await send('/chat', 'POST', { message: '昨天午饭32元，支付宝付款', scene: 'chat', consent: false })).json()).data);
+    let draft = result.draft;
+    const fields = Object.fromEntries(['direction', 'amount', 'currency', 'transDate', 'categoryId', 'accountId', 'payMethod', 'remark'].map(key => [key, draft[key]]));
+    fields.amount = '35'; fields.accountId = 'mock_cash'; fields.payMethod = '现金';
+    assert.equal((await send(`/drafts/${draft.id}`, 'PUT', { version: 1, fields }, 'other_user')).status, 404);
+    draft = validateAiDraft((await (await send(`/drafts/${draft.id}`, 'PUT', { version: 1, fields })).json()).data);
+    assert.equal(draft.amount, '35'); assert.equal(draft.version, 2);
+    assert.equal((await send(`/drafts/${draft.id}`, 'PUT', { version: 1, fields })).status, 409);
+    draft = validateAiDraft((await (await send(`/drafts/${draft.id}/action`, 'POST', { version: 2, action: 'review' })).json()).data);
+    assert.equal(draft.status, 'reviewed'); assert.equal(draft.formalWriteEnabled, false);
+    const follow = validateAiResult((await (await send('/chat', 'POST', { message: '刚才这笔草稿多少钱？', scene: 'chat', consent: false, conversationId: result.conversationId })).json()).data);
+    assert.match(follow.answer, /35元/); assert.equal(follow.conversationId, result.conversationId);
+    assert.equal((await send('/chat', 'POST', { message: '你好', scene: 'chat', consent: false, conversationId: result.conversationId }, 'other_user')).status, 404);
+    draft = validateAiDraft((await (await send(`/drafts/${draft.id}/action`, 'POST', { version: 3, action: 'discard' })).json()).data);
+    assert.equal(draft.status, 'discarded');
+    assert.equal((await send(`/drafts/${draft.id}`, 'PUT', { version: 4, fields })).status, 409);
+    assert.equal((await send(`/drafts/${draft.id}/confirm`, 'POST', {})).status, 404);
+    for (const invalid of [{ ...draft, formalWriteEnabled: true }, { ...draft, status: 'committed' }, { ...draft, version: 0 }]) assert.throws(() => validateAiDraft(invalid));
+  } finally { await new Promise(resolve => server.close(resolve)); }
 });
 
 test('actual API HTTP responses match Web validators for query and draft', async () => {
