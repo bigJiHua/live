@@ -10,7 +10,7 @@ Golden Finance 是一款基于 **Vue 3 + Vite + Vant 4** 构建的移动端 PWA 
 
 > **更新日期**: 2026-06-30
 
-> **AI测试分支（2026-11-05）**：`feat/deepseek-ai-test`，与API同名分支配套。入口 `/ai`；查询与独立草稿，无正式入账。启动与验证见 [AI测试日志](logs/AI_TEST_2026-11-05.md)。
+> **AI测试分支（2026-11-05）**：`feat/ai-assistant`，与API同名分支配套。入口 `/ai`；查询与独立草稿，无正式入账。启动与验证见 [AI测试日志](logs/AI_TEST_2026-11-05.md)。
 
 ## 技术栈
 

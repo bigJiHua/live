@@ -29,5 +29,7 @@ codex.agent.md
 *.sw?
 src/views.zip
 
-# 环境变量文件
+# 环境变量文件（真实密钥只放本地，禁止提交）
 .env
+.env.local
+.env.*.local

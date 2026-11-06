@@ -42,17 +42,19 @@ export function generateCanvasFingerprint() {
     canvas.height = 50
 
     // 绘制文本
+    // 🐛 2026-11-06（追加163）：文本里不放 emoji —— emoji 字体异步加载，
+    //    加载前后 canvas 像素不同 ⇒ 指纹漂移 ⇒ device_crypto 查无此行 ⇒ 401 强制登出。
     ctx.textBaseline = 'top'
     ctx.font = '14px Arial'
     ctx.fillStyle = '#f60'
     ctx.fillRect(125, 1, 62, 20)
 
     ctx.fillStyle = '#069'
-    ctx.fillText('Browser Fingerprint 🔐', 2, 15)
+    ctx.fillText('Browser Fingerprint', 2, 15)
 
     // 绘制复杂图形
     ctx.fillStyle = 'rgba(102, 204, 0, 0.7)'
-    ctx.fillText('Fingerprint Test! 🎨', 4, 35)
+    ctx.fillText('Fingerprint Test!', 4, 35)
 
     // 添加更多细节
     ctx.beginPath()
@@ -106,9 +108,10 @@ export function generateBrowserFingerprint() {
       canvas: canvas.hash,
 
       // 屏幕
+      // 🐛 2026-11-06（追加163）：去掉 devicePixelRatio —— 窗口缩放/嵌入容器改尺寸
+      //    会改 DPR ⇒ 指纹漂移（本日 401 强制登出事故的根因之一，见 authSecurityData 401）。
       screenResolution: `${window.screen.width}x${window.screen.height}`,
       screenColorDepth: window.screen.colorDepth,
-      pixelRatio: window.devicePixelRatio,
 
       // 时区
       timezoneOffset: new Date().getTimezoneOffset(),
@@ -149,7 +152,23 @@ export function generateBrowserFingerprint() {
     //   旧变量名 fingerprintStr 悬空 ⇒ 每次调用抛 ReferenceError 被下方 catch 吞掉，
     //   所有用户永久走随机降级指纹（风控关联失效）。现提取为可独立单测的纯函数。
     const fingerprintStr = serializeFeatures(features)
-    const fingerprintHash = sha256Salted(fingerprintStr)
+    let fingerprintHash = sha256Salted(fingerprintStr)
+
+    // 🐛 2026-11-06（追加163）：指纹落地持久化 —— 特征采集仍可能受字体加载时序等
+    //    环境因素影响，任何一次漂移都会让 device_crypto 查无此行 ⇒ 401 强制登出。
+    //    同一浏览器配置一经算出即钉住（localStorage），后续加载直接复用；
+    //    仅清缓存（clearFingerprintCache）或用户清站点数据才会重算。
+    try {
+      const FP_PERSIST_KEY = 'finance_fp_v1'
+      const stored = localStorage.getItem(FP_PERSIST_KEY)
+      if (stored) {
+        fingerprintHash = stored
+      } else {
+        localStorage.setItem(FP_PERSIST_KEY, fingerprintHash)
+      }
+    } catch {
+      /* 存储不可用（隐私模式）⇒ 退回每次计算 */
+    }
 
     cachedFingerprint = {
       hash: fingerprintHash,
@@ -299,4 +318,9 @@ function sessionFallbackFingerprint() {
  */
 export function clearFingerprintCache() {
   cachedFingerprint = null
+  try {
+    localStorage.removeItem('finance_fp_v1')
+  } catch {
+    /* 存储不可用时无需清理 */
+  }
 }

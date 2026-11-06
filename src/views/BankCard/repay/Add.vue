@@ -185,7 +185,7 @@ import { showToast, showLoadingToast, closeToast } from '@/utils/toast';
 import { useRouter, useRoute } from "vue-router";
 import { createRepay, getBillDetail, getBillList, getCardList, getCreditPools, mergeRepay } from "@/utils/api/card";
 import { categoryApi } from "@/utils/api/category";
-import { formatMoney } from "@/utils/money";
+import { formatMoney, formatMoneyInput } from "@/utils/money";
 import { useUiTheme } from "@/composables/useUiTheme";
 import { apiErrorToast } from '@/utils/request/helpers'
 
@@ -306,7 +306,7 @@ const openKeyboard = (field) => {
 
 // 一键全额还款
 const fillFullAmount = () => {
-  formData.repayAmount = formatMoney(oweAmount.value);
+  formData.repayAmount = formatMoneyInput(oweAmount.value);
 };
 
 // 数字键盘输入
@@ -413,7 +413,7 @@ const loadBillData = async () => {
         });
       }
       oweAmount.value = total;
-      formData.repayAmount = formatMoney(total);
+      formData.repayAmount = formatMoneyInput(total);
       // 沿用入口账单的卡片信息展示（信息参考）
       if (entryBill) {
         formData.billId = entryBill.id;
@@ -483,7 +483,7 @@ const onSubmit = async () => {
       if (repayAmount <= 0) {
         return showToast("请输入还款金额");
       }
-      if (repayAmount > oweAmount.value) {
+      if (repayAmount > Number(formatMoneyInput(oweAmount.value))) {
         return showToast(`还款金额不能超过欠款 ¥${formatMoney(oweAmount.value)}`);
       }
     }

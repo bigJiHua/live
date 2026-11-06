@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test:ai": "node --test tests/aiContract.test.mjs"
+    "test:ai": "node --test tests/aiContract.test.mjs",
+    "test:money": "node --test tests/money.test.mjs",
+    "test:ui": "node --test tests/uiSafety.test.mjs"
   },
   "dependencies": {
     "@wangeditor/editor": "^5.1.23",
