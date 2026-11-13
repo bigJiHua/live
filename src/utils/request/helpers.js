@@ -25,7 +25,21 @@ import { showToast, showFailToast } from '@/utils/toast'
  *   · `'server'`   —— 拿到了响应但 HTTP **5xx**（远端 API 出故障）⇒ **灰**
  *   · `'business'` —— 其余（4xx / 业务体 status≠200），后端明确告诉了我们原因 ⇒ **红**
  */
-export function normalizeApiError(input, fallback = '请求失败') {
+function diagnosticIdentifiers(body, headers) {
+  const identifier = value => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value) ? value : null;
+  const header = name => {
+    try {
+      if (typeof headers?.get === 'function') return headers.get(name);
+      const key = Object.keys(headers || {}).find(key => key.toLowerCase() === name);
+      return key ? headers[key] : null;
+    } catch { return null; }
+  };
+  const traceId = identifier(body?.traceId) || identifier(header('x-ai-trace-id'));
+  const requestId = identifier(body?.requestId) || identifier(header('x-ai-request-id')) || identifier(header('x-request-id'));
+  return { ...(traceId ? { traceId } : {}), ...(requestId ? { requestId } : {}) };
+}
+
+export function normalizeApiError(input, fallback = '请求失败', responseContext) {
   // ① axios 错误对象（有 response 或 config）
   if (input && (input.isAxiosError || input.response || input.config)) {
     const body = input.response?.data
@@ -40,6 +54,8 @@ export function normalizeApiError(input, fallback = '请求失败') {
       (input.response ? `请求失败（${httpStatus}）` : '网络异常，请稍后重试')
     return {
       ...(bodyObj || {}),
+      ...diagnosticIdentifiers(bodyObj, input.response?.headers),
+      ...(Number.isInteger(httpStatus) ? { httpStatus } : {}),
       status: bodyObj?.status ?? httpStatus ?? -1,
       message,
       data: bodyObj?.data ?? null,
@@ -57,7 +73,8 @@ export function normalizeApiError(input, fallback = '请求失败') {
   // 拿不到 status（本地 `throw new Error(...)` 之类）⇒ 归 'business'（红）。
   // 宁可说「失败」也不要误报成「网络问题」。
   const kind = status === -1 ? 'business' : status >= 500 ? 'server' : 'business'
-  return { ...obj, status, message, kind }
+  return { ...obj, ...(responseContext ? diagnosticIdentifiers(obj, responseContext.headers) : {}),
+    ...(Number.isInteger(responseContext?.status) ? { httpStatus: responseContext.status } : {}), status, message, kind }
 }
 
 /**

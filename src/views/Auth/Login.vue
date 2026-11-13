@@ -392,12 +392,16 @@ const copyrightStart = import.meta.env.VITE_COPYRIGHT_START;
 // 密码显示遮罩：input 不持有明文，仅渲染掩码
 // secureOnly 下明文不落 ref/事件，掩码长度 = RSA 密文数组长度
 const pwdMask = computed(() => {
+  const len =
+    (pwdEncrypted.value?.length) || (password.value?.length) || 0;
   if (passwordReveal.value) {
     // 眼睛打开：展示明文（安全键盘走本地明文缓存 pwdPlain，普通模式走 password ref）
-    if (pwdEncrypted.value?.length) return pwdPlain.value.join("");
+    if (pwdEncrypted.value?.length) {
+      return pwdPlain.value.join("") || "*".repeat(len);
+    }
     if (password.value) return password.value;
   }
-  return "*".repeat((pwdEncrypted.value?.length) || (password.value?.length) || 0);
+  return "*".repeat(len);
 });
 
 // 密码框由 canvas 绘制（掩码/明文/光标），下列变化均需重绘
@@ -471,10 +475,9 @@ function drawPwdCanvas() {
   const inputColor = readVar("--van-field-input-text-color", "#323233");
   const placeholderColor = readVar("--van-field-placeholder-text-color", "#c8c9cc");
 
-  const maskLen = (pwdEncrypted.value?.length) || (password.value?.length) || 0;
-  const plain = pwdPlain.value.join("");
-  const revealed = passwordReveal.value && plain.length;
-  const text = revealed ? plain : "*".repeat(maskLen);
+  // 文字单源化自 pwdMask（眼睛关=掩码；眼睛开=明文，pwdPlain 优先、password ref 兜底），
+  // 避免此处明文取数与 pwdMask 分叉导致预填/普通模式下点眼睛无明文
+  const text = pwdMask.value;
   const empty = !text;
 
   if (empty) {
@@ -495,8 +498,7 @@ function drawPwdCanvas() {
 
   // 光标（仅在密码框激活时，画在末尾；闪烁由 cursorOn 控制）
   if (activeField.value === "password" && cursorOn.value) {
-    const prefix = revealed ? plain : "*".repeat(maskLen);
-    const caretW = ctx.measureText(prefix).width;
+    const caretW = ctx.measureText(text).width;
     const cx = x0 + offset + caretW;
     const h = Math.min(18, ir.height - 6);
     const primary = readVar("--theme-primary", "#07c160");

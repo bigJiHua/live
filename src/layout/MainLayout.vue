@@ -14,8 +14,8 @@
         </div>
       </template>
       <template #right>
-        <van-icon name="lock" size="20" @click="handleLockSystem" style="margin-right: 12px;" />
-        <van-icon name="expand" size="20" @click="toggleFullscreen" />
+        <van-icon name="lock" class="nav-right-icon" @click="handleLockSystem" />
+        <van-icon name="expand" class="nav-right-icon" @click="toggleFullscreen" />
       </template>
     </van-nav-bar>
 
@@ -52,6 +52,7 @@
         <van-icon name="user-o" class="nav-icon" />
         <span class="nav-text">我的</span>
       </router-link>
+
     </nav>
   </div>
 </template>
@@ -298,6 +299,7 @@ const goHome = () => {
   font-weight: 500;
 }
 
+
 /* 6. 核心：router-link 选中时的样式 (.router-link-active) */
 .nav-item.router-link-active {
   color: var(--theme-primary); /* 选中时的颜色（跟随主题主色） */
@@ -331,6 +333,19 @@ const goHome = () => {
    由 flex gap 分隔，热区边界清晰、不重叠 */
 :deep(.van-nav-bar__left .nav-left-icon) {
   font-size: 20px; /* 明确图标大小，避免回落默认导致视觉变小 */
+  padding: 10px;
+}
+
+/* 导航栏右侧按钮：与左侧 nav-left-icon 同规格热区（40×40px），图标间距统一走容器 gap */
+:deep(.van-nav-bar__right) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+}
+
+:deep(.van-nav-bar__right .nav-right-icon) {
+  font-size: 20px;
   padding: 10px;
 }
 </style>

@@ -269,7 +269,12 @@ const onKey = (k) => {
   if (k === "del") {
     // secureOnly：不发射明文删除事件，改发 secure del 协议，父组件 pop 密文数组
     if (props.secureOnly && isSecure.value) emit("secure", { type: "del" });
-    else emit("update:modelValue", props.modelValue.slice(0, -1));
+    else {
+      emit("update:modelValue", props.modelValue.slice(0, -1));
+      // 普通模式同样发 secure del：字符键已同步 push 父组件 pwdPlain（眼睛预览缓存），
+      // 删除键若不同步 pop 会导致明文与掩码长度错乱；父组件按 activeField 守卫误删
+      emit("secure", { type: "del" });
+    }
   } else if (k === "shift") {
     shifted.value = !shifted.value;
     emit("secure", { type: "func" });

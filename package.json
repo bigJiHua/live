@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test:ai": "node --test tests/aiContract.test.mjs",
+    "test:ai": "node --test tests/aiBudgetSettings.test.mjs tests/aiContract.test.mjs tests/aiBusiness.test.mjs tests/aiAgent.test.mjs tests/aiFinancialCheck.test.mjs tests/aiAuth.test.mjs tests/aiStream.test.mjs tests/aiDataset.test.mjs tests/aiErrorDiagnostics.test.mjs tests/aiChatJournal.test.mjs tests/aiConversationSync.test.mjs tests/aiAssistantUi.test.mjs tests/aiAssistantLifecycle.test.mjs tests/aiAssistantFailureOrder.test.mjs tests/aiMermaid.test.mjs tests/aiMarkdownCharts.test.mjs tests/aiLargeQuery.test.mjs tests/aiThinkingLifecycle.test.mjs tests/aiWebSearchGrantContract.test.mjs tests/aiReplyReveal.test.mjs tests/aiReplyViewport.test.mjs tests/aiPendingTask.test.mjs tests/aiPersonalization.test.mjs tests/aiPersonalizationUi.test.mjs tests/aiPersonalizationBackGuard.test.mjs",
     "test:money": "node --test tests/money.test.mjs",
     "test:ui": "node --test tests/uiSafety.test.mjs"
   },
@@ -23,6 +23,8 @@
     "exceljs": "^4.4.0",
     "jsencrypt": "^3.5.4",
     "jwt-decode": "^4.0.0",
+    "marked": "^15.0.12",
+    "mermaid": "10.9.3",
     "pinia": "^3.0.4",
     "sortablejs": "^1.15.7",
     "ua-parser-js": "^2.0.9",

@@ -16,8 +16,20 @@ export async function restoreAiHistory(entries, loadDraft, now = Date.now) {
     }));
   }
   return collapseAiDraftCards(entries.map(entry => {
-    const item = { role: entry.role, text: entry.content, ...(entry.ocr ? { ocr: entry.ocr } : {}),
-      ...(entry.trace ? { evidence: getAiQueryEvidence(entry.trace) } : {}) };
+    const failureRequestId = entry.failure ? (entry.failure.requestId || entry.requestId) : null;
+    const item = { role: entry.role, text: entry.content, ...(entry.createdAt ? { createdAt: entry.createdAt } : {}), ...(entry.ocr ? { ocr: entry.ocr } : {}),
+      ...(Number.isSafeInteger(entry.sentAt) && entry.sentAt > 0 ? { sentAt: entry.sentAt } : {}),
+      ...(entry.messageId ? { messageId: entry.messageId } : {}), ...(entry.requestId ? { requestId: entry.requestId } : {}),
+      ...(entry.trace ? { evidence: getAiQueryEvidence(entry.trace) } : {}),
+      ...(failureRequestId ? { requestId: failureRequestId, failure: entry.failure } : {}),
+      // 追加164：历史恢复带思考内容（折叠展示，仅 assistant 消息有）
+      ...(entry.role === 'assistant' && entry.thinking ? { thinking: entry.thinking } : {}) };
+    // 服务端保存的失败/中止轮次：显示服务端文案，并保留重试/读取回执入口。
+    if (entry.role === 'assistant' && failureRequestId) {
+      item.error = true;
+      item.turn = { requestId: failureRequestId, state: 'failed' };
+      if (entry.failure?.providerDetail) item.providerDetail = entry.failure.providerDetail;
+    }
     if (entry.role !== 'assistant' || !entry.draftId) return item;
     item.draftId = entry.draftId;
     const { draft, error } = drafts.get(entry.draftId);

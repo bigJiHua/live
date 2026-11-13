@@ -17,10 +17,9 @@
 
       <div class="category-grid" v-if="currentCategories.length > 0">
         <div v-for="item in currentCategories" :key="item.id" class="category-card">
-          <!-- 编辑 + 删除 按钮 右上角 -->
+          <!-- 编辑入口 右上角（删除功能已转移至编辑弹窗） -->
           <div class="card-actions">
             <van-icon name="edit" size="16" @click="handleEdit(item)" />
-            <van-icon name="delete" size="16" @click="handleDelete(item)" />
           </div>
 
           <div class="card-left">
@@ -95,6 +94,12 @@
             :maxlength="50"
             show-word-limit
           />
+        </div>
+
+        <!-- 删除分类：仅编辑态显示，红字链接（删除入口从卡片转移至此） -->
+        <div class="dialog-delete" v-if="editingItem" @click="handleDelete()">
+          <van-icon name="delete-o" size="14" />
+          <span>删除分类</span>
         </div>
 
         <div class="dialog-actions">
@@ -327,12 +332,16 @@ const handleConfirm = async () => {
   showAddDialog.value = false;
 };
 
+// 删除入口两处：卡片已移除，现仅编辑弹窗内（无参调用取当前编辑项）
 const handleDelete = async (item) => {
+  const target = item || editingItem.value;
+  if (!target) return;
   try {
-    await showConfirmDialog({ title: "确认删除", message: `删除「${item.name}」？` });
-    await apiDeleteCategory(item.id);
-    allCategories.value[activeType.value] = allCategories.value[activeType.value].filter(c => c.id !== item.id);
+    await showConfirmDialog({ title: "确认删除", message: `删除「${target.name}」？` });
+    await apiDeleteCategory(target.id);
+    allCategories.value[activeType.value] = allCategories.value[activeType.value].filter(c => c.id !== target.id);
     showToast("已删除");
+    showAddDialog.value = false;
   } catch (e) {}
 };
 
@@ -427,8 +436,7 @@ onMounted(() => loadCategories("expense"));
   color: var(--theme-text-primary);
 }
 .dialog-form {
-  background: var(--theme-bg-primary);
-  border-radius: 12px;
+  /* 背景继承弹窗自身（原 var(--theme-bg-primary) 在暗色模式下比弹窗更深，成了一块黑色 bg） */
   padding: 8px 0;
 }
 .dialog-actions {
@@ -436,8 +444,21 @@ onMounted(() => loadCategories("expense"));
   gap: 12px;
   margin-top: 24px;
 }
-.dialog-actions .van-button {
+/* 按钮是自定义 app-btn 组件（根元素非 van-button），原 .van-button 选择器从未命中导致未均分 */
+.dialog-actions .app-btn {
   flex: 1;
+}
+
+/* 删除分类红字链接（仅编辑态渲染） */
+.dialog-delete {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 20px;
+  font-size: 13px;
+  color: var(--van-danger-color, #ee0a24);
+  cursor: pointer;
 }
 
 /* 图标选择 */
@@ -446,7 +467,7 @@ onMounted(() => loadCategories("expense"));
   align-items: center;
   padding: 12px 16px;
   background: var(--theme-bg-secondary);
-  border: 1px solid var(--theme-border);
+
 }
 .icon-label {
   font-size: 14px;

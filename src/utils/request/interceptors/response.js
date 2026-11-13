@@ -9,6 +9,9 @@ import {
   buildNonceRetryConfig,
   NONCE_REPLAY_FALLBACK_MESSAGE,
 } from "../nonceRetry";
+import { refreshVolatileSecurityHeaders } from "../../securityHeaders";
+import { clearAesKey, getAesKey } from "../handshake";
+import { encrypt } from "../crypto";
 
 let isRedirecting = false;
 
@@ -104,13 +107,38 @@ async function onFulfilled(response) {
     return handlePinResponse(res, response);
   }
 
+  // 🔁 解密隧道失效自愈（2026-11-07）：400「请求数据非法」/KEY_ERR = 服务端解密失败
+  //    （Malformed UTF-8 ⇒ 前端缓存的握手 AES key 与当前服务端不一致）。本实例
+  //    validateStatus 恒真，HTTP 400 也走 onFulfilled，所以这里必须在业务 401 之前判定。
+  if (response.status === 400 && isDecryptFailure(res)) {
+    return replayAfterKeyReset(res, response);
+  }
+
   // 🚨 手机端关键：业务401也拦
   if (res.status === 401) {
     forceLogin(res.message);
-    return Promise.reject(normalizeApiError(res, "登录已失效"));
+    return Promise.reject(normalizeApiError(res, "登录已失效", response));
+  }
+
+  const isAiRequest = /(?:^|\/)ai(?:\/|$)/.test(String(response.config.url || '').split('?')[0]);
+  const hasBusinessProtocol = res && typeof res === 'object' && !Array.isArray(res) &&
+    (Number.isInteger(res.status) || typeof res.success === 'boolean' || res.ismessage === true);
+  if (isAiRequest && !hasBusinessProtocol) {
+    // A proxy connection failure may be an empty/non-JSON HTTP response. Keep
+    // that HTTP evidence instead of classifying an absent body as business data.
+    const httpStatus = Number.isInteger(response.status) ? response.status : -1;
+    const reason = httpStatus >= 500 ? 'AI 服务连接失败' : 'AI 服务器响应异常';
+    const message = `${reason}${httpStatus > 0 ? `（HTTP ${httpStatus}）` : ''}，请稍后读取回执。`;
+    const error = { ...normalizeApiError({ status: httpStatus, httpStatus, code: 'AI_HTTP_RESPONSE_INVALID', message }, message, response), kind: 'server' };
+    if (response.config?.suppressToast !== true) showToast({ type: 'info', message });
+    return Promise.reject(error);
   }
 
   if (res.ismessage === true) return res;
+  // An unavailable optional provider feature is described by the settings panel.
+  if (isAiRequest && res.code === 'AI_BALANCE_UNSUPPORTED') {
+    return Promise.reject(normalizeApiError(res, "当前供应商未提供用量余额查询", response));
+  }
 
   if (res.status === 200 || res.status === 202 || res.success) {
     const isWrite = config.encryptedMethods.includes(
@@ -124,19 +152,24 @@ async function onFulfilled(response) {
     return res;
   }
 
-  showFailToast(res.message || "业务异常");
+  // 后台恢复类请求（如进入聊天时加载历史提案）失败由页面内联提示，不弹全局 toast
+  if (response.config?.suppressToast !== true) showFailToast(res.message || "业务异常");
   // ⚠ reject 的必须是「归一化后的对象」：页面层普遍写 `catch (e) => showToast(e.message)`，
   //   直接抛后端体虽然也有 message，但走 AxiosError 的路径就会把英文文案透给用户。
-  return Promise.reject(normalizeApiError(res, "业务异常"));
+  return Promise.reject(normalizeApiError(res, "业务异常", response));
 }
 
 /**
  * ❌ 错误响应
  */
 async function onRejected(error) {
+  if (error.code === 'ERR_CANCELED' || error.config?.signal?.aborted) {
+    return Promise.reject({ status: -1, code: 'REQUEST_CANCELLED', message: '已请求停止', kind: 'business' });
+  }
   const response = error.response;
   const status = response?.status;
   const resData = response?.data;
+  const suppressToast = error.config?.suppressToast === true;
 
   // 🔁 nonce 复用（8401）：兜底一层。本实例因 `validateStatus: () => true` 通常不会走到这里，
   //    但若将来有人改掉该配置，这条能保证自愈逻辑依然生效。
@@ -149,8 +182,15 @@ async function onRejected(error) {
     return handlePinResponse(resData, response);
   }
 
+  // 🔁 解密隧道失效自愈（2026-11-07）：400「请求数据非法」/KEY_ERR = 服务端解密失败
+  //    （Malformed UTF-8 ⇒ 前端缓存的握手 AES key 与当前服务端不一致，典型于
+  //    多端/多服务器漂移场景）。清 key → 重新握手 → 用新 key 重新加密原明文重发一次。
+  if (status === 400 && isDecryptFailure(resData)) {
+    return replayAfterKeyReset(resData, response);
+  }
+
   if (resData?.ismessage) {
-    return Promise.reject(normalizeApiError(resData, "请求失败"));
+    return Promise.reject(normalizeApiError(resData, "请求失败", response));
   }
 
   // 🚨 真401（非 PIN 相关）
@@ -166,10 +206,13 @@ async function onRejected(error) {
 
   if (!response) {
     // ⚪ 灰 = 拿不到响应（本地连不上 / 超时 / 断网）—— 五色语义
-    showToast({ type: "info", message: "网络异常" });
+    if (!suppressToast) showToast({ type: "info", message: "网络异常" });
     return Promise.reject(normalizeApiError(error, "网络异常"));
   }
 
+  if (suppressToast) {
+    return Promise.reject(normalizeApiError(error, "请求失败"));
+  }
   if (status >= 500) {
     // ⚪ 灰 = 远端 5xx（API 故障），不是业务失败
     showToast({ type: "info", message: resData?.message || "服务器开小差了，请稍后重试" });
@@ -279,6 +322,64 @@ async function replayAfterNonceConflict(res, response) {
 }
 
 /**
+ * 🔁 解密隧道失效自愈（2026-11-07，补上挂账的「隧道缺失自动重握手」backlog）
+ *
+ * 触发：HTTP 400 + 「请求数据非法」/KEY_ERR——authSecurityData 解密失败
+ * （Malformed UTF-8），即前端缓存的握手 AES key 与当前服务端不一致。
+ * 典型场景：多端/多服务器链路漂移后，本机握手 key 在另一台服务端上不存在。
+ *
+ * 行为（一次性）：clearAesKey（内存+sessionStorage）→ getAesKey 触发重新握手 →
+ * 用 __rawEnvelope 保存的原始明文以新 key 重新加密 → 刷新一次性安全头 → 重发一次。
+ * 重发成功用户完全无感；再失败按普通 4xx 提示。请求从未进入业务层（在安全中间件
+ * 就被拒），重发不构成任何业务重复调用；`skipAutomaticRetry` 的请求不自动重试。
+ */
+function isDecryptFailure(resData) {
+  const message = resData?.message;
+  return message === "请求数据非法" || (typeof message === "string" && message.includes("KEY_ERR"));
+}
+
+async function replayAfterKeyReset(resData, response) {
+  const cfg = response?.config;
+  const envelope = cfg?.__rawEnvelope;
+
+  // 无原始明文（GET/未加密通道）或已重试过一次 ⇒ 不自愈，按普通 4xx 处理。
+  // ⚠ 这里刻意不受 skipAutomaticRetry（noReplay）阻断：该开关防的是「业务自动重发」
+  //   （8401 重放同一加密信封可能重复调用 AI）；而解密失败发生在安全中间件——
+  //   请求从未进入业务层，业务零副作用，且重发用新握手 key 重新加密（全新 nonce
+  //   全新信封），不构成任何形式的重放。
+  if (!cfg || !envelope || cfg.__keyRetried === true) {
+    showFailToast(resData?.message || "请求失败");
+    return Promise.reject(normalizeApiError(resData, "请求失败"));
+  }
+
+  console.warn("[key] 服务端解密失败，已重新握手并用新 key 重发一次");
+
+  clearAesKey();
+  let retried;
+  try {
+    const deviceData = envelope.deviceData;
+    const aesKey = await getAesKey(deviceData.fingerprint, deviceData);
+    const headers = { ...cfg.headers };
+    refreshVolatileSecurityHeaders(headers);
+    if (!aesKey) throw new Error("Handshake Failed");
+    retried = await axios({
+      ...cfg,
+      headers,
+      data: { _p: encrypt({ ...deviceData, data: envelope.payload, path: window.location.pathname }, aesKey) },
+      __keyRetried: true,
+      validateStatus: () => true,
+    });
+  } catch (e) {
+    // 重新握手/网络层失败 ⇒ 不再重试，按普通失败提示
+    showFailToast(resData?.message || "请求失败");
+    return Promise.reject(normalizeApiError(resData, "请求失败"));
+  }
+
+  // 重发结果走一遍 onFulfilled：成功即用户无感；仍失败按业务语义判定
+  return onFulfilled(retried);
+}
+
+/**
  * 处理 PIN 码相关响应
  * - 8303 需要验证 → 弹出 PIN 输入框，拦截当前请求
  * - 8302 PIN 错误 → 由 pin.js 内部处理
@@ -296,6 +397,11 @@ function handlePinResponse(resData, response) {
 
   // 8303 需要验证 → 拦截请求，弹出 PIN 输入框
   if (code === PIN_CODE.NEED_VERIFY) {
+    // AI and explicit business confirmations must never enter the PIN replay queue.
+    if (response.config.skipAutomaticRetry === true) {
+      return Promise.reject(normalizeApiError({ ...resData,
+        message: '请求被安全验证拦截，请先完成验证，再手动操作。此请求不会自动重发。' }));
+    }
     if (response.config.url?.includes("/security/pin/route-verify")) {
       return Promise.reject(resData);
     }

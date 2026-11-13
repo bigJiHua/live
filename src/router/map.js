@@ -63,6 +63,28 @@ const RouterMap = [
     meta: { title: "分享动态" },
   },
 
+  // --- AI 模型设置（独立路由页：全屏形态天然占历史条目，返回由 vue-router 原生回退到聊天界面） ---
+  {
+    path: "/ai/model-settings",
+    name: "AiModelSettings",
+    component: () => import("@/views/AI/ModelSettings.vue"),
+    meta: { title: "模型设置", hideTabbar: true },
+  },
+
+  {
+    path: "/ai/budget-settings",
+    name: "AiBudgetSettings",
+    component: () => import("@/views/AI/BudgetSettings.vue"),
+    meta: { title: "额度与超时", hideTabbar: true },
+  },
+
+  {
+    path: "/ai/personalization",
+    name: "AiPersonalization",
+    component: () => import("@/views/AI/Personalization.vue"),
+    meta: { title: "AI 个性化", hideTabbar: true },
+  },
+
   // --- 主布局容器 (包含底部 Tabbar 导航) ---
   {
     path: "/",

@@ -124,6 +124,7 @@
     <AssetForm
       v-model="showAddForm"
       :asset="editingAsset"
+      :prefill="aiPrefill"
       @success="loadList"
     />
   </div>
@@ -131,13 +132,16 @@
 
 <script setup>
 import { ref, computed, onMounted } from "vue";
-import { useRouter } from "vue-router";
+import { useRouter, useRoute } from "vue-router";
 import { showToast, showFailToast } from '@/utils/toast';
 import dayjs from "dayjs";
 import { getFixedAssetList } from "@/utils/api/fixedAsset";
 import AssetForm from "./components/AssetForm.vue";
+import { getAiProposal } from '@/utils/api/ai';
 
 const router = useRouter();
+const route = useRoute();
+const aiPrefill = ref(null);
 
 // 状态
 const loading = ref(false);
@@ -277,6 +281,7 @@ const showDetail = (item) => {
 
 // 打开新增表单
 const openAddForm = () => {
+  aiPrefill.value = null;
   editingAsset.value = null;
   showAddForm.value = true;
 };
@@ -286,7 +291,20 @@ const goRecycleBin = () => {
   router.push("/finance/fixed-asset/recycle");
 };
 
-onMounted(() => {
+onMounted(async () => {
+  const id = route.query.aiProposal;
+  if (typeof id === 'string' && /^[a-f\d-]{36}$/i.test(id)) {
+    try {
+      const proposal = await getAiProposal(id);
+      if (proposal.kind === 'fixedAsset.create' && proposal.actionUnavailable === true && proposal.status !== 'discarded') {
+        aiPrefill.value = proposal.fields;
+        showAddForm.value = true;
+      }
+    } catch { showFailToast('预填草稿已过期或无法读取，请回到聊天重新核对。'); }
+    // Keep draft details out of URLs; the server verifies ownership of the opaque ID.
+    const query = { ...route.query }; delete query.aiProposal;
+    await router.replace({ path: route.path, query });
+  }
   loadList();
 });
 </script>

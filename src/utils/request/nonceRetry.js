@@ -42,7 +42,7 @@ export function isNonceReplay(resData) {
  * @returns {object|null} 可重发的配置；已重发过则返回 null（调用方按普通错误处理）
  */
 export function buildNonceRetryConfig(config) {
-  if (!config || config.__nonceRetried) return null;
+  if (!config || config.__nonceRetried || config.skipAutomaticRetry === true) return null;
 
   const cfg = { ...config, __nonceRetried: true };
   refreshVolatileSecurityHeaders(cfg.headers);

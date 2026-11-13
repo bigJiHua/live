@@ -11,6 +11,7 @@ node_modules
 dist
 dist.zip
 dist-ssr
+bak/
 *.local
 build-error.txt
 build-output.txt
@@ -33,3 +34,15 @@ src/views.zip
 .env
 .env.local
 .env.*.local
+.env.development
+
+# 本地测试与夹具（仅本地运行，禁止提交）
+tests/
+test/
+__tests__/
+*.test.*
+*.spec.*
+
+# 本地联调证据与日志（含真实数据，禁止提交）
+logs/
+*.log

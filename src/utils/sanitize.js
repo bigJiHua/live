@@ -115,4 +115,92 @@ export function sanitizeText(dirty) {
   return div.innerHTML;
 }
 
-export default { sanitizeHtml, sanitizeText };
+// ==================== Mermaid SVG 白名单（追加172） ====================
+// AI 正文里的 ```mermaid 结构图由 AiMermaid 渲染成 SVG 后经本入口进 v-html。
+// 与主白名单完全独立：主配置禁 svg 是为富文本设的；SVG 画面需要显式放行一批
+// 图形标签。铁律不变——mermaid 输出未经 sanitizeMermaidSvg 不得进任何 v-html。
+const MERMAID_TAGS = [
+  'svg', 'g', 'defs', 'marker', 'clipPath',
+  'path', 'rect', 'circle', 'ellipse', 'line', 'polyline', 'polygon',
+  'text', 'tspan', 'textPath', 'title', 'desc',
+  // mermaid 主题样式走 <style>：内容由下方 CSS 危险模式清洗兜底
+  'style',
+  // mermaid 在 securityLevel:strict 下强制 htmlLabels（节点文字在 foreignObject 的 HTML 里，
+  // mermaid 自身已 DOMPurify 消毒，这里再过同一入口的白名单+CSS 清洗，双层不放行脚本/链接/图片）
+  'foreignObject', 'div', 'span', 'p', 'br', 'b', 'i', 'em', 'strong', 'small', 'sub', 'sup',
+  'table', 'thead', 'tbody', 'tr', 'td', 'th', 'ul', 'ol', 'li', 'h3', 'h4', 'code', 'pre', 'hr',
+];
+const MERMAID_ATTRS = [
+  'id', 'class', 'style', 'role', 'tabindex', 'aria-roledescription', 'aria-label',
+  'd', 'fill', 'fill-opacity', 'stroke', 'stroke-opacity', 'stroke-width', 'stroke-dasharray',
+  'stroke-linecap', 'stroke-linejoin', 'marker-end', 'marker-start', 'marker-mid',
+  'transform', 'transform-origin', 'x', 'y', 'x1', 'x2', 'y1', 'y2', 'cx', 'cy', 'r', 'rx', 'ry',
+  'width', 'height', 'points', 'viewBox', 'xmlns', 'version', 'preserveAspectRatio', 'overflow',
+  'markerWidth', 'markerHeight', 'refX', 'refY', 'orient', 'markerUnits',
+  'text-anchor', 'font-family', 'font-size', 'font-weight', 'font-style', 'letter-spacing',
+  'dominant-baseline', 'alignment-baseline', 'dy', 'dx', 'rotate', 'textLength', 'lengthAdjust',
+  'gradientUnits', 'gradientTransform', 'offset', 'stop-color', 'stop-opacity', 'spreadMethod',
+  'patternUnits', 'patternContentUnits', 'patternTransform', 'clip-path', 'mask', 'opacity',
+];
+// 图内链接、外部资源与动画一律禁；foreignObject 已放行（见上，内容走 HTML 白名单子集）
+const MERMAID_FORBID_TAGS = [
+  'script', 'iframe', 'frame', 'object', 'embed', 'audio', 'video',
+  'a', 'image', 'use', 'animate', 'animateMotion', 'animateTransform', 'set',
+  'form', 'input', 'button', 'textarea', 'select', 'link', 'meta', 'base', 'template',
+];
+const MERMAID_PURIFY_CONFIG = {
+  ALLOWED_TAGS: MERMAID_TAGS,
+  ALLOWED_ATTR: MERMAID_ATTRS,
+  FORBID_TAGS: MERMAID_FORBID_TAGS,
+  ALLOW_DATA_ATTR: false,
+  ALLOW_ARIA_ATTR: true,
+  ALLOW_UNKNOWN_PROTOCOLS: false,
+};
+// <style> 文本与 style 属性是 AI 可控 CSS（mermaid 的 themeCSS 指令可注入任意选择器）。
+// 只放行无外联、无定位逃逸、无表达式执行的安全子集；url 仅保留 #fragment（箭头 marker 引用）。
+const CSS_DANGEROUS_PATTERNS = [
+  /@import[^;]*;?/gi,
+  /@charset[^;]*;?/gi,
+  /@namespace[^;]*;?/gi,
+  /url\s*\(\s*(['"]?)\s*(?!#)[^)'"]*\1\s*\)/gi,
+  /position\s*:\s*(?:fixed|absolute)\b/gi,
+  /expression\s*\(/gi,
+  /behaviou?r\s*:/gi,
+  /javascript\s*:/gi,
+  /-moz-binding[^;]*;?/gi,
+];
+function scrubUnsafeCss(css) {
+  if (typeof css !== 'string' || !css) return css;
+  let out = css;
+  for (const pattern of CSS_DANGEROUS_PATTERNS) out = out.replace(pattern, 'none');
+  return out;
+}
+// DOMPurify 钩子够不到 <style> 的文本子节点与 style 属性值的稳定清洗——在消毒后的
+// 字符串上做（文本子节点已被实体化转义，不会误伤正文）。
+function scrubSvgCss(svg) {
+  return svg
+    .replace(/<style>([\s\S]*?)<\/style>/gi, (_, css) => `<style>${scrubUnsafeCss(css)}</style>`)
+    .replace(/\sstyle\s*=\s*"([^"]*)"/gi, (match, css) => {
+      const scrubbed = scrubUnsafeCss(css);
+      return scrubbed === css ? match : ` style="${scrubbed}"`;
+    });
+}
+
+/**
+ * 消毒 mermaid 渲染产物 SVG，供 AiMermaid 的 v-html 使用。
+ * 主富文本 sanitizeHtml 的白名单（禁 svg）不受影响；两条管道互不穿透。
+ * @param {unknown} dirty mermaid.render 产出的 SVG 字符串（AI 代码间接产物，不可信）
+ * @returns {string} 可安全渲染的 SVG；入参为空或非字符串时返回空串
+ */
+export function sanitizeMermaidSvg(dirty) {
+  if (!dirty || typeof dirty !== 'string') return '';
+  try {
+    return scrubSvgCss(DOMPurify.sanitize(dirty, MERMAID_PURIFY_CONFIG));
+  } catch (err) {
+    // 与 sanitizeHtml 同一降级原则：宁可显示为空，绝不放行原始内容
+    console.error('[sanitize] mermaid SVG 消毒失败，已降级为空内容:', err);
+    return '';
+  }
+}
+
+export default { sanitizeHtml, sanitizeText, sanitizeMermaidSvg };

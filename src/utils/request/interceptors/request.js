@@ -83,6 +83,10 @@ export function createRequestInterceptor(router) {
       const aesKey = await getAesKey(fp, deviceData)
 
       if (aesKey) {
+        // 🔁 解密失败自愈（2026-11-07）：保存原始明文与设备上下文，
+        //    响应侧收到 400「请求数据非法」（服务端解密失败）时用新握手 key
+        //    重新加密重发一次（见 response.js replayAfterKeyReset）。
+        requestConfig.__rawEnvelope = { deviceData, payload: requestConfig.data }
         requestConfig.data = {
           _p: encrypt(rawData, aesKey),
         }

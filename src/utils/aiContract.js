@@ -1,9 +1,10 @@
 export function validateAiCapabilities(value) {
-  if (!value || value.contractVersion !== 1 || value.formalWriteEnabled !== false ||
+  if (!value || ![1, 3].includes(value.contractVersion) || value.formalWriteEnabled !== false ||
       !['disabled', 'mock', 'deepseek'].includes(value.mode) || typeof value.enabled !== 'boolean' ||
       typeof value.requiresConsent !== 'boolean' || value.chatEnabled !== true || value.draftEditingEnabled !== true) {
     throw new Error('AI 接口版本或安全能力不匹配，请更新对应测试分支');
   }
+  if (value.businessVersion != null && ![2, 3].includes(value.businessVersion)) throw new Error('业务助手版本不匹配');
   if (value.ocrEnabled != null && (typeof value.ocrEnabled !== 'boolean' ||
       (value.ocrEnabled && (typeof value.ocrModel !== 'string' || !value.ocrModel.trim())))) {
     throw new Error('图片识别能力不符合协议');
@@ -36,12 +37,29 @@ export function validateAiDraft(value) {
   return value;
 }
 
+const endpointPattern = /^https:\/\/|^http:\/\/(localhost|127\.0\.0\.1)/;
+function isProviderProfile(value) {
+  return Boolean(value) && isUuid(value.connectionId) && typeof value.name === 'string' &&
+    value.name.length > 0 && value.name.length <= 60 && !/[\u0000-\u001f\u007f]/.test(value.name) &&
+    typeof value.apiUrl === 'string' && endpointPattern.test(value.apiUrl) &&
+    typeof value.model === 'string' && value.model.length <= 120 &&
+    typeof value.active === 'boolean' &&
+    (value.keyFingerprint === null || (typeof value.keyFingerprint === 'string' && value.keyFingerprint.length <= 64)) &&
+    !Object.hasOwn(value, 'apiKey');
+}
 export function validateAiSettings(value) {
   if (!value || typeof value.enabled !== 'boolean' || typeof value.configured !== 'boolean' ||
-      typeof value.apiUrl !== 'string' || !/^https:\/\/|^http:\/\/(localhost|127\.0\.0\.1)/.test(value.apiUrl) ||
+      typeof value.apiUrl !== 'string' || !endpointPattern.test(value.apiUrl) ||
       typeof value.model !== 'string' || value.model.length > 120 ||
+      typeof value.hasKey !== 'boolean' ||
       (value.configured ? !isUuid(value.connectionId) : value.connectionId !== null) ||
-      (value.expiresAt !== null && !Number.isFinite(value.expiresAt)) || Object.hasOwn(value, 'apiKey')) {
+      (value.activeConnectionId !== null && !isUuid(value.activeConnectionId)) ||
+      (value.configured !== Boolean(value.activeConnectionId)) ||
+      (value.expiresAt !== null && !Number.isFinite(value.expiresAt)) ||
+      !Array.isArray(value.profiles) || value.profiles.length > 20 ||
+      value.profiles.some(profile => !isProviderProfile(profile)) ||
+      value.profiles.filter(profile => profile.active).length > 1 ||
+      Object.hasOwn(value, 'apiKey')) {
     throw new Error('连接设置响应不符合协议');
   }
   return value;
@@ -114,11 +132,20 @@ export function validateAiBalance(value) {
   return value;
 }
 
-// 追加163 扩展：能力声明里的供应商主机名，用于界面文案；缺省或未知回退 DeepSeek（旧后端只支持官方）。
+// 供应商主机名 → 展示名（2026-11-06 商汤切换：多供应商通用映射，未知主机原样展示）
+export function aiProviderNameFromHost(host) {
+  const h = typeof host === 'string' ? host.trim().toLowerCase() : '';
+  if (!h || h === 'unknown') return '';
+  if (/(^|\.)deepseek\.com$/i.test(h)) return 'DeepSeek';
+  if (/(^|\.)sensenova\.cn$|(^|\.)sensetime\.com$/i.test(h)) return '商汤 SenseNova';
+  return host;
+}
+
+// 追加163 扩展：能力声明里的供应商主机名，用于界面文案；缺省或未知回退官方缺省展示。
 export function getAiProviderLabel(value) {
   if (!value?.enabled) return '未启用';
   if (value.mode === 'mock') return '模拟测试';
   const provider = typeof value.provider === 'string' ? value.provider.trim() : '';
   if (!provider || /^unknown$/i.test(provider)) return 'DeepSeek';
-  return /(^|\.)deepseek\.com$/i.test(provider) ? 'DeepSeek' : provider;
+  return aiProviderNameFromHost(provider) || provider;
 }

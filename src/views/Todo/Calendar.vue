@@ -789,6 +789,17 @@ const toggleEventComplete = async (event) => {
   }
 };
 
+// 从 remind_time 反推「提前天数」（库内无 remind_days 列，只有绝对提醒时间戳）。
+// 修 bug：此前编辑回填恒取 event.remind_days || 0 —— 字段不存在 ⇒ 永远显示 0，
+// 且再次保存会把 AI/手工设置的「提前 N 天」静默清掉（后端按 0 天重算 remind_time）。
+const deriveRemindDays = (event) => {
+  if (!event.need_remind || !event.remind_time || !event.happen_date) return 0;
+  const happen = dayjs(event.happen_date).startOf("day");
+  const remind = dayjs(Number(event.remind_time)).startOf("day");
+  const diff = happen.diff(remind, "day");
+  return diff >= 0 && diff <= 365 ? diff : 0;
+};
+
 // 打开编辑弹窗
 const openEditPopup = (event) => {
   editEvent.value = {
@@ -798,7 +809,7 @@ const openEditPopup = (event) => {
     priority: event.priority || 2,
     is_recurring: !!event.is_recurring,
     need_remind: !!event.need_remind,
-    remind_days: event.remind_days || 0,
+    remind_days: deriveRemindDays(event),
   };
   showEditPopup.value = true;
 };
@@ -873,8 +884,11 @@ onActivated(() => {
 <style scoped>
 .page-calendar {
   min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
   background: var(--theme-bg-primary);
-  padding-bottom: 120px;
+
 }
 
 .header {
@@ -1110,20 +1124,31 @@ onActivated(() => {
 
 .event-list {
   position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
   margin-top: 8px;
   background: var(--theme-bg-secondary);
   padding: 16px;
+  /* 卡片色直抵屏幕底：穿透悬浮岛背后（原页面 padding-bottom 120px 的留白并入这里，
+     叠加 webview 底部安全区，保证最后一条计划不被岛遮挡） */
+  padding-bottom: calc(16px + 120px + var(--nav-bottom-inset, 0px));
   border-radius: 16px 16px 0 0;
   min-height: 200px;
   z-index: 10;
 }
 .event-list-header {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   margin-bottom: 16px;
   font-size: 15px;
   font-weight: 600;
   color: var(--theme-text-primary);
+}
+/* 下拉刷新区铺满卡片剩余高度：内容少时空白处也能触发下拉 */
+.event-list :deep(.van-pull-refresh) {
+  flex: 1;
 }
 .event-count {
   margin-left: 8px;

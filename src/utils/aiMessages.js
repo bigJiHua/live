@@ -1,3 +1,8 @@
+// v1/OCR history still emits query evidence cards. V3 chat does not render
+// AiEvidenceCard (formally removed from the required component list in
+// BROWSER-ACCEPTANCE §1.6): its tool names are query_data/list_choices, so
+// this filter intentionally returns [] for V3 turns. Keep the helper because
+// restoreAiHistory() and OCR replies still depend on this folding contract.
 const QUERY_TOOLS = ['query_finance_summary', 'query_transactions'];
 
 export function getAiQueryEvidence(trace = []) {

@@ -5,16 +5,16 @@
       <div class="summary-main">
         <div class="summary-item">
           <span class="label">总预算</span>
-          <span class="value primary">¥{{ formatAmount(totalBudget) }}</span>
+          <span class="value primary">¥{{ compactAmount(totalBudget) }}</span>
         </div>
         <div class="summary-item">
           <span class="label">总支出</span>
-          <span class="value danger">¥{{ formatAmount(totalExpense) }}</span>
+          <span class="value danger">¥{{ compactAmount(totalExpense) }}</span>
         </div>
         <div class="summary-item">
           <span class="label">剩余</span>
           <span class="value" :class="totalBalance >= 0 ? 'success' : 'danger'">
-            ¥{{ formatAmount(totalBalance) }}
+            ¥{{ compactAmount(totalBalance) }}
           </span>
         </div>
       </div>
@@ -33,6 +33,14 @@
       <van-tab title="购物" name="买"></van-tab>
       <van-tab title="餐饮" name="吃"></van-tab>
     </van-tabs>
+
+    <!-- 本地搜索：纯前端过滤当前列表（非联网），关键词匹配预算标题（含年月/类型） -->
+    <van-search
+      v-model="searchKeyword"
+      class="budget-search"
+      shape="round"
+      placeholder="搜索预算（如 餐饮 / 2026-11）"
+    />
 
     <!-- 预算列表 -->
     <div class="budget-list" v-if="filteredList.length > 0">
@@ -93,7 +101,10 @@
       </div>
     </div>
 
-    <van-empty v-if="!loading && filteredList.length === 0" description="暂无预算" />
+    <van-empty
+      v-if="!loading && filteredList.length === 0"
+      :description="searchKeyword.trim() ? '未找到匹配的预算' : '暂无预算'"
+    />
 
     <van-loading v-if="loading" class="loading-center" vertical>加载中...</van-loading>
 
@@ -118,6 +129,7 @@ const loading = ref(false);
 const budgetList = ref([]);
 const stats = ref([]);
 const activeTab = ref("all");
+const searchKeyword = ref("");
 
 // 根据类型计算支出
 const calcExpense = (item) => {
@@ -142,9 +154,33 @@ const calcExpense = (item) => {
 };
 
 const filteredList = computed(() => {
-  if (activeTab.value === "all") return budgetList.value;
-  return budgetList.value.filter((item) => item.budget_type === activeTab.value);
+  let list =
+    activeTab.value === "all"
+      ? budgetList.value
+      : budgetList.value.filter((item) => item.budget_type === activeTab.value);
+  // 本地搜索：聚合多字段（标题/日期/类型中文名/周期中文名/金额/类型原值）
+  // 不区分大小写包含匹配——标签显示「出行」而标题写「交通」这类不一致也能命中
+  const keyword = searchKeyword.value.trim().toLowerCase();
+  if (keyword) {
+    list = list.filter((item) => {
+      const haystack = [
+        item.title,
+        item.plan_date,
+        getTypeName(item.budget_type),
+        getCycleName(item.cycle),
+        item.budget_type,
+        item.cycle,
+        formatAmount(item.budget_amount),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(keyword);
+    });
+  }
+  return list;
 });
+
 
 const totalBudget = computed(() => {
   return budgetList.value.reduce(
@@ -165,6 +201,20 @@ const totalProgress = computed(() => {
 });
 
 const formatAmount = (amount) => (parseFloat(amount) || 0).toFixed(2);
+
+// 金额计量单位折合：超过 9999.9999 折中文单位，长金额不再撑爆统计卡
+// - < 1万：原样两位小数
+// - 1万 ~ 1亿：折「万」（170200 → 17.02万、1702000 → 170.2万）——十万/百万/千万
+//   量级统一在「万」档内表达（中文习惯说 170.2万 而非 1.702十万）
+// - ≥ 1亿：折「亿」（170200000 → 1.702亿）；负值保留符号，3 位小数去尾零
+const compactAmount = (amount) => {
+  const n = parseFloat(amount) || 0;
+  const abs = Math.abs(n);
+  const sign = n < 0 ? "-" : "";
+  if (abs < 10000) return `${sign}${formatAmount(n)}`;
+  if (abs >= 1e8) return `${sign}${String(parseFloat((abs / 1e8).toFixed(3)))}亿`;
+  return `${sign}${String(parseFloat((abs / 1e4).toFixed(3)))}万`;
+};
 
 const getTypeName = (type) => {
   const names = { 行: "出行", 买: "购物", 吃: "餐饮" };
@@ -284,7 +334,8 @@ onMounted(() => {
 }
 
 .summary-item .value.success {
-  color: #90f0c8;
+  /* 统计卡是主题色渐变背景：剩余为正时用白色（绿底配浅绿字颜色不正、对比度差） */
+  color: #fff;
 }
 
 .summary-progress {
@@ -455,7 +506,18 @@ onMounted(() => {
 
 /* 预算卡片 */
 .budget-list {
-  padding: 0 12px;
+  padding: 0 12px 60px;
+  /* 固定高度、盒子内滚动：统计卡+Tabs+搜索框固定在上方，长列表不再撑开整页；
+     扣减含顶部三块(~228px)与底部 fixed Tabbar(~50px)，padding-bottom 兜底最后一张卡不被遮挡 */
+  max-height: calc(100dvh - 300px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 本地搜索框：背景跟随主题（Vant 默认白底在暗色模式下突兀） */
+.budget-search {
+  background: var(--theme-bg-primary);
 }
 
 .budget-card {

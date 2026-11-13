@@ -12,6 +12,7 @@ import { axiosWithNonceRetry } from './nonceRetry'
 let sessionAesKey = null
 let sessionRsaPublicKey = null
 let handshakePromise = null
+let handshakeGeneration = 0
 
 /**
  * 执行握手请求
@@ -47,12 +48,7 @@ async function fetchHandshakeKey(fp, deviceData) {
   })
 
   if (response.data?.status === 200) {
-    // 同时缓存 RSA 公钥（安全键盘字符级加密使用）
-    if (response.data.rsaPublicKey) {
-      sessionRsaPublicKey = response.data.rsaPublicKey
-      sessionStorage.setItem(`${config.aesKeyPrefix}rsa_${fp}`, response.data.rsaPublicKey)
-    }
-    return response.data.key
+    return { key: response.data.key, rsaPublicKey: response.data.rsaPublicKey }
   }
   
   throw new Error('Handshake Failed')
@@ -64,21 +60,29 @@ async function fetchHandshakeKey(fp, deviceData) {
 async function doHandshake(fp, deviceData) {
   if (handshakePromise) return handshakePromise
 
-  handshakePromise = (async () => {
+  const generation = handshakeGeneration
+  const pending = (async () => {
     try {
-      const key = await fetchHandshakeKey(fp, deviceData)
+      const { key, rsaPublicKey } = await fetchHandshakeKey(fp, deviceData)
+      if (generation !== handshakeGeneration) throw Object.assign(new Error('握手已更新，请重新读取请求状态'),
+        { code: 'AI_HANDSHAKE_STALE', kind: 'network' })
       
       // 存储到 sessionStorage
       sessionStorage.setItem(`${config.aesKeyPrefix}${fp}`, key)
       sessionAesKey = key
+      if (rsaPublicKey) {
+        sessionRsaPublicKey = rsaPublicKey
+        sessionStorage.setItem(`${config.aesKeyPrefix}rsa_${fp}`, rsaPublicKey)
+      }
       
       return key
     } finally {
-      handshakePromise = null
+      if (handshakePromise === pending) handshakePromise = null
     }
   })()
 
-  return handshakePromise
+  handshakePromise = pending
+  return pending
 }
 
 /**
@@ -101,11 +105,24 @@ export async function getAesKey(fp, deviceData) {
 
 /**
  * 清除 Key
+ * 🔁 2026-11-07 修复：此前只清内存，sessionStorage 的握手缓存原样留着，
+ *    下一次 getAesKey 又把旧 key 读回来——「清了等于没清」，解密失败自愈
+ *    （响应侧 replayAfterKeyReset）依赖这里真正清干净后重新握手。
  */
 export function clearAesKey() {
+  handshakeGeneration++
   sessionAesKey = null
   sessionRsaPublicKey = null
   handshakePromise = null
+  if (typeof window !== 'undefined' && window.sessionStorage) {
+    const prefix = config.aesKeyPrefix
+    const stale = []
+    for (let i = 0; i < sessionStorage.length; i++) {
+      const name = sessionStorage.key(i)
+      if (name && name.startsWith(prefix)) stale.push(name)
+    }
+    for (const name of stale) sessionStorage.removeItem(name)
+  }
 }
 
 /**

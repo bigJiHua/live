@@ -58,6 +58,8 @@ export default defineConfig({
     }),
   ],
   resolve: {
+    // mermaid 钉死 10.9.3（追加172 实测：v11 全系 flowchart 标签静默渲染为空，v10.9.3 正常）；
+    // 若升级依赖后图内文字消失，删除 node_modules/.vite 缓存并重启 dev 让预构建重建。
     alias: {
       '@': resolve(__dirname, 'src'),
     },

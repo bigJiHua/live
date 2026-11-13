@@ -1,6 +1,10 @@
 <template>
   <van-overlay :show="visible" z-index="9999" @click="onOverlayClick">
-    <div class="pin-verify-wrapper" @click.stop>
+    <div
+      class="pin-verify-wrapper"
+      :style="{ '--pin-kb-height': kbHeight + 'px' }"
+      @click.stop
+    >
       <div class="pin-verify-card">
         <div class="pin-title">安全验证</div>
         <div class="pin-desc">请输入 PIN 码以继续操作</div>
@@ -35,6 +39,7 @@
          z-index 10000 > overlay 9999，短屏上会把卡片下缘整个吃掉，点不到输入框和取消键） -->
     <div
       v-if="showKeyboard"
+      ref="kbOverlayRef"
       class="pin-keyboard-overlay"
       @click="showKeyboard = false"
     >
@@ -50,7 +55,7 @@
 </template>
 
 <script setup>
-import { ref, watch } from "vue";
+import { ref, watch, nextTick } from "vue";
 import { submitPin, cancelPinVerify } from "@/utils/request/pin";
 import { getRsaPublicKey } from "@/utils/request/handshake";
 import { getClientContext } from "@/utils/request/client";
@@ -70,6 +75,23 @@ const pinEncrypted = ref([]);
 const publicKey = ref("");
 const errorMessage = ref("");
 const showKeyboard = ref(false);
+
+// 键盘实际高度 → CSS 变量 --pin-kb-height：
+// 键盘弹出时卡片在「视口 - 键盘」剩余空间内居中，与键盘上下分区互不遮挡（矮屏兜底）
+const kbOverlayRef = ref(null);
+const kbHeight = ref(0);
+const measureKbHeight = () => {
+  kbHeight.value = kbOverlayRef.value?.offsetHeight || 0;
+};
+watch(showKeyboard, async (v) => {
+  if (v) {
+    // 等 v-if 挂载完成后再测，rAF 确保布局已计算
+    await nextTick();
+    requestAnimationFrame(measureKbHeight);
+  } else {
+    kbHeight.value = 0;
+  }
+});
 
 async function ensurePublicKey() {
   if (publicKey.value) return;
@@ -175,6 +197,11 @@ defineExpose({ show, hide, setError });
   align-items: center;
   justify-content: center;
   height: 100%;
+  /* 键盘弹出时（--pin-kb-height > 0）：居中区收缩为「视口 - 键盘」，
+     卡片自动上移，与键盘上下分区互不遮挡（此前全屏居中，矮屏上卡片下缘骑在键盘上，
+     键盘顶部按键被卡片挡住点不到） */
+  box-sizing: border-box;
+  padding-bottom: var(--pin-kb-height, 0px);
   /* 高于 .pin-keyboard-overlay(10000)：键盘弹出时卡片仍在最上层，输入区/取消按钮始终可点 */
   position: relative;
   z-index: 10001;
@@ -185,6 +212,10 @@ defineExpose({ show, hide, setError });
 .pin-verify-card {
   pointer-events: auto;
   width: 320px;
+  /* 极矮视口兜底：键盘上方剩余空间不足时，卡片压缩到剩余高度并内部滚动，顶部不被截断 */
+  max-height: 100%;
+  overflow-y: auto;
+  max-width: calc(100vw - 32px);
   background: var(--theme-bg-secondary);
   border-radius: 16px;
   padding: 28px 24px 20px;
