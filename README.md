@@ -1,5 +1,10 @@
 # vant-android — web 项目 Vant 组件的安卓原生 1:1 复刻
 
+> **仓库迁移通知（2026-11-13）**
+>
+> APP 代码已迁移至独立仓库 **[bigJiHua/live-APP](https://github.com/bigJiHua/live-APP)**，主线分支为 `main`。
+> 本仓库的 `android-app` 分支**已弃用并停止更新**，请勿再向此分支提交或拉取代码，后续开发请前往新仓库。
+
 > **声明**：`vant-ui` 为本项目内部自研 Compose 组件库（独立实现，不含 Vant 源码），
 > 与有赞/Vant 官方无隶属关系；图标字体取自 MIT 协议的 Vant 4.9.22。详见
 > [vant-ui/README.md](vant-ui/README.md)。
