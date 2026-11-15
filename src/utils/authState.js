@@ -24,6 +24,9 @@
  * - **页面刷新**：sessionStorage 保留 ⇒ 直接放行，无需请求
  * - **关闭标签页再打开**：标记丢失 ⇒ 首次调用 `ensureSession()` 时用 `/auth/me` 探测，
  *   Cookie 仍有效（默认 7 天）就能恢复标记，用户**无需重新登录**
+ * - **锁定态冷启动**：系统处于 PIN 锁定时 `/auth/me` 返回 `{code:8303, status:401}`——
+ *   这**不是**未登录（Cookie 已通过 authGuard），而是「已登录但待 PIN 验证」⇒
+ *   同样恢复标记放行路由，由业务请求的响应拦截器弹出 PIN 输入框完成验证
  *
  * ## 与服务端的关系
  * 服务端 `authGuard` 是**双通道**：Cookie（web）或 Bearer（APP / webview-APP）。
@@ -31,6 +34,12 @@
  */
 
 const MARK_KEY = 'finance_auth';
+
+/**
+ * PIN 门禁「需要验证」业务码（对齐 utils/request/pin.js 的 PIN_CODE.NEED_VERIFY = 8303）。
+ * 本文件零依赖约定（可被 Node ESM 直接加载做冒烟测试）⇒ 内联常量；若改动需与 pin.js 同步。
+ */
+const PIN_NEED_VERIFY_CODE = 8303;
 
 /**
  * 🔇 静默探测 /auth/me（2026-10-12 冲突修复②）
@@ -157,6 +166,17 @@ export async function ensureSession({ fetchMe } = {}) {
     const me = typeof fetchMe === 'function' ? await fetchMe() : await probeMe();
     if (me && (me.status === 200 || me.status === 202) && me.data) {
       markAuthed(me.data);
+      return true;
+    }
+    // 🔧 锁定态恢复（2026-11-15 生产实测缺陷）：全局 PIN 门禁对「系统已锁定」的请求
+    //    返回 `{code:8303, status:401}`（pinSecurityGuard.respond）。能走到这里说明
+    //    authGuard 已凭 Cookie 验签通过——语义是「已登录但待 PIN 验证」，不是未登录。
+    //    此前被误判成未登录 ⇒ 用户被踢回登录页重输账密（Cookie 明明还有效）。
+    //    现恢复标记放行路由：首个业务请求会经响应拦截器 isPinResponse 弹出 PIN
+    //    输入框（requestPinVerify），验证后自动续流，与在线时的锁定体验一致。
+    //    ⚠ 只认 8303：8304（PIN 临时锁定）在拦截器里是 forceLogin 语义，保持一致。
+    if (me && me.code === PIN_NEED_VERIFY_CODE) {
+      markAuthed();
       return true;
     }
     return false;

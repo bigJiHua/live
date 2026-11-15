@@ -70,6 +70,10 @@ function forceLogin(message) {
 // 注册 forceLogin 到 pin.js，避免循环依赖
 registerForceLogin(forceLogin);
 
+// 🔄 2026-11-15 审计修复：fileRequest 等旁路通道的 HTTP 401 分支复用同一入口
+//    （冷却护栏 + 统一文案 + callServer:false），不再各写一份裸跳转。
+export { forceLogin };
+
 export function createResponseInterceptor() {
   // ⚠ 两个处理器提成具名函数：nonce 复用自愈重发后需要把响应**重新送回同一套判定逻辑**
   //   （见 replayAfterNonceConflict），保证 PIN / 401 / 提示等业务处理完全一致。

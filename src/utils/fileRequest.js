@@ -13,7 +13,7 @@ import {
 } from "./request/nonceRetry";
 import { getLegacyToken } from "./authState";
 import { clearSession } from "./session";
-import router from "@/router";
+import { forceLogin } from "./request/interceptors/response";
 
 const baseUrl = "/api/v1";
 const TIMEOUT = 60000; // 文件上传超时时间设置为 60s
@@ -133,13 +133,10 @@ requestfile.interceptors.response.use(
     }
     const status = error.response?.status;
     if (status === 401) {
-      showToast({
-        message: "非法闯入-后端报错401",
-        position: "top",
-      });
-      // 🔒 安全整改 P0-8/P1-17：统一清会话痕迹（含遗留 token、登录标记、API 缓存）
-  clearSession({ callServer: false });
-  router.push("/login");
+      // 🔄 2026-11-15 审计修复：与主通道统一走 forceLogin（10s 冷却护栏 + 统一
+      //    「登录已失效」文案 + clearSession({callServer:false})），不再自写裸跳转。
+      forceLogin(resData?.message);
+      return Promise.reject(normalizeApiError(error, resData?.message || "登录已失效"));
     } else if (!error.response || status >= 500) {
       // ⚪ 灰 = 拿不到响应（本地连不上）或远端 5xx（API 故障）—— 五色语义
       showToast({
